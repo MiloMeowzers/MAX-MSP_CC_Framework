@@ -332,6 +332,34 @@ gain paths route through the new `*~`, `ovr_add` fed only via the reverse gate, 
   and flip back when reverse releases.
 
 Base for next edit: `ChopChop_v6_177.amxd`.
+**Live test (user): mute toggles work perfectly. A3 overlay fix BROKE the overlay on Reloop
+(normal + reverse) — relocates the whole region outside the playing area. Unusable. Also: B
+"completely out of step with A and constantly drifts" — now obvious because the mute toggles
+let you A/B cleanly.**
+
+### v6_178 — revert A3 (2026-09-03)
+
+`tools/phase1_file3b_revert_a3.py`. Rebuilt from v6_176 with ONLY the mute-toggle half of
+v6_177 re-applied. `ovr_*` overlay is back to v6_176 (pre-A3): ~1 slice lag under reverse,
+self-correcting on release — the accepted behaviour. Verified: no `ovr_rev*` boxes,
+`ovr_sub -> ovr_add` restored, 1,705,180 / 27 / 0 / byte-exact. **A3 is shelved** — any future
+attempt must not move the forward-mode region (v6_177 did, via the `gate 2 1` default path or
+the `ovr_add` reroute).
+
+### v6_179 — sample-lock karmaB to karma A (2026-09-03)
+
+`tools/phase1_file4_syncB_speed.py`. Base v6_178. Root cause of the B drift (flagged since the
+v6_176 log): karmaB's speed inlet was a private `bspeed sig~ 1`, independent of karma A's
+speed chain. Fix: feed `karmaB[2]` from `obj-7` (chain end, already feeding `obj-20[2]` and
+`karmaKeys[2]`); drop the orphaned `bspeed`. All three karma instances now share one speed
+signal incl. every transport/glitch modulation -> B tracks A exactly. **Reversed again in
+Phase 3-5** when karmaB becomes the independent transport-locked rolling voice.
+Verified: `obj-7` fans to A/Keys/B; 1,705,180 / 27 / 0 / byte-exact.
+
+**Expected on test:** overlay behaves as it did pre-v6_177. `A/B Mix` sweep and En A / En B
+toggling should now hold together with no drift / phasing — B is locked to A.
+
+Base for next edit: `ChopChop_v6_179.amxd`.
 
 ---
 
