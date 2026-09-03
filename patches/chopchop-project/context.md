@@ -244,4 +244,152 @@ and testable immediately. Phases 3-5 are the architectural risk and the focus of
 
 ### Stage
 
-ideation -> discussion -> (next) research
+ideation -> discussion -> research
+
+---
+
+## Research (2026-09-03)
+
+Object facts verified against `.claude/max-objects/` (the framework DB). Device topology read
+directly from `ChopChop_v6_174_BASE.amxd` JSON (scratchpad extractor
+`amxd_extract.py` / `amxd_scope.py`).
+
+### R1. Current device audio topology (read from the file)
+
+```
+plugin~ (device in) --+-- ingain_L/R (*~ ---inputGain) --> p Playback in 0,1   [karma A rec input; karmaB input]
+                      +-- p Audio Routing in 0,1                                [DRY: raw input, state-gated]
+
+p Playback out 0,1 (karma A audio L/R) --> p soloAndMuting --> plugout~         [WET]
+p Audio Routing out 0,1 -------------------------------------> plugout~         [DRY, summed at plugout~]
+```
+
+- **`karmaB` (`karma~ ---bufB 2`) and `karmaKeys` (`karma~ ---bufFreeze 2`) have no output
+  cords.** That is the A1 blocker, confirmed.
+- `p Playback` external outlets: 0,1 = karma A audio; 2 = position report (elem 0); 3,4 =
+  other report/status. Adding karmaB audio is best done **inside `p Playback`** (mix A+B before
+  `p soloAndMuting`) to keep the external outlet count stable — fewer new root cords for the
+  checklist.
+- `AB_MIX` `live.dial` -> `s ---abMix` (sender exists, **no receiver**). The crossfade belongs
+  in the in-`p Playback` mix.
+- `p Audio Routing` is a small **state-gated** signal path (2 in / 2 out, `gate~ 2` + `*~`
+  crossfade-to-silence on `---armed`/`---playing`/`---recording`/`---overdub`), not the master
+  mix. Leave it for the DRY monitor path.
+
+### R2. `p RollingB` — what it actually is (read from the file)
+
+`phasor~ @frequency 1n @lock 1 -> delta~ -> <~ -0.5 -> edge~ -> onebang`, then `t b b b`
+firing `overdub 0` + `record`, a `delay` whose time is `r ---size`, then `t b b b` -> `play` +
+`1 -> s ---bAudible`; the whole cycle gated by `gate 1 1` behind `r ---recordOn` (`sel 1`).
+
+- It is a **bar-edge-locked periodic re-record of karmaB, one loop-length per pass, self-
+  retriggering while `---recordOn`** — not yet a continuous ring, but the right skeleton.
+- **Orphaned both ends:** `r ---bRealign` has no sender; `s ---bAudible` has no receiver;
+  karmaB output unwired.
+- **Latent bug when revived:** it sends `record` from a playing state = overdub
+  (karma-loop-semantics S1). A true re-capture needs **`stop` before `record`**. Add it.
+- The `phasor~ @lock 1 -> delta~ -> <~ -0.5 -> edge~ -> onebang` chain is the **in-file,
+  proven, transport-derived bar-edge-once detector**. Reuse it verbatim for the handoff
+  trigger — it satisfies B1 (no karma~ report in the loop).
+
+### R3. `p Record_And_Quantize` — the quantise-grid primitive already exists
+
+`inlet -> sel 0 1 2 3 4 -> t 1n / t 2n / t 4n / t 8n / t 16n -> phasor~ @frequency 1n @lock 1
+-> p detect_edge -> onebang -> outlet`.
+
+Selectable transport-locked grid (whole/half/quarter/8th/16th), proven in-file. **This is D7.**
+Extend with an "off" bypass (route around `onebang`) and reuse the same shape for MIDI note-on
+quantise. `ButtonQuantize` (`live.menu`) already offers 16n/32n/64n for pad-trigger quantise
+via the `TriggerPoisition` subsystem — same pattern.
+
+### R4. MIDI infrastructure — there is none
+
+**No `notein` / `noteout` / `midiin` / `midiout` / `midiparse` / `makenote` / `kslider`
+anywhere in the device.** Pad input is Live-parameter-mapped `live.button`s
+(`pad_trigger_1..16`) producing message-domain indices 0-15. Consequences:
+
+- "MIDI-at-core" (D1 L3 / D8) means the **event model** is note-shaped
+  `(time, pitch/pad, velocity, duration)` — not routing through `notein`/`noteout`.
+- **`live.button` carries no velocity.** Sequencer velocity is synthetic (fixed, or from a
+  `live.dial` / aftertouch source added later).
+- A4's "pad hits as real MIDI notes on an Ableton track" needs the **LOM clip-write path**
+  (doc 09) — a genuine new subsystem, correctly deferred. The internal store must be
+  A4-shaped now.
+
+### R5. Object choices (DB-verified)
+
+| Need | Object | Notes |
+|---|---|---|
+| Per-voice slice player | **`groove~ ---thisBuffer 2`** (in=3 out=2, RNBO-ok) | inlet 0 = signal rate/increment (**negative = true reverse from current pos**, per phasor accumulator semantics); inlets 1,2 = loop min/max in **ms** (the slice region); `startloop`/`stop`; `set`. One object gives per-pad **pitch + direction**. |
+| Alt one-shot player | `wave~` (in=3 out=1, RNBO-ok) / `play~` (ms-position, needs external ramp) | `wave~` = 0-1 phase across a start/end ms window, strictly non-looping; `play~` has a done-bang but no built-in varispeed. |
+| Voice pool | **`poly~ <voice>.maxpat 16`** | I/O = the voice subpatcher's `in`/`out`/`in~`/`out~` count. `midinote`/`note` = auto voice-alloc + steal; `target N` = explicit home-voice-per-pad; `thispoly~` inside for `mute` / busy / `@steal`. |
+| Alt voice pool | `mc.groove~` N-chan | lighter, no subpatcher plumbing, **but** no built-in alloc/steal/choke — hand-rolled. `poly~` preferred. |
+| Transport lock | **`phasor~ @frequency 1n @lock 1`** | already 3x in-file, proven. `plugphasor~` (beat-synced 0-1 ramp) is an alt. |
+| Absolute bar/beat (if handoff needs counts) | `plugsync~` (9 outlets: state, bar, beat, ticks, timesig, tempo, ppq-ticks, samplecount, flags) | device currently reads tempo via `live.observer` instead; `plugin~`/`plugout~` already present so the plugin transport family is available. |
+| Bar-edge-once | `phasor~ @lock 1 -> delta~ -> <~ -0.5 -> edge~ -> onebang` | in-file (`p RollingB`); or `phasor~ @lock 1 -> p detect_edge -> onebang` (`p Record_And_Quantize`). |
+| Sequencer event store | **`detonate`** (8 params/event incl. delta-time, pitch, velocity, duration, chan; reads/writes SMF) | MIDI-at-core fit; A4 -> "write SMF / point at clip". Alt: `coll` (time-indexed lists, disk I/O, scriptable) if timing is quantised anyway; `mtr` (ms-accurate multitrack, `writejson`); `live.step` (M4L step-grid UI, 5 outlets) if a step UI is wanted over free recording. |
+| Per-voice env / declick | `line~` / `curve~` (done-bang) | single space-delimited list for multi-segment `line~` (MSP rule); karma~ seam: `ramp`/`snramp` 16 -> ~200-441. |
+
+RNBO-compat (only matters if A4 ever tempts an RNBO export — this device is a Max audio-effect
+M4L, so it does not): OK = `groove~`, `wave~`, `record~`, `phasor~`, `edge~`, `delta~`,
+`train~`, `makenote`, `midiformat`. Not OK = `poly~`, `play~`, `2d.wave~`, `index~`,
+`plugsync~`, `coll`, `mtr`, `detonate`, `seq~`, `karma~`.
+
+`karma~` is **not** in the framework DB (third-party). Verified I/O comes from the
+`karma-*` reference skills: stereo `karma~ <buf> 2` = 3 in / 3 out; inlet 0 = L audio + **all
+messages**; inlet 2 = **speed signal** (needs a live signal or it sits at 0); outlet 2 =
+status (`unpack f i i f f f`: pos0-1, play, rec, [elem3 unusable], endMs, windowMs).
+
+### R6. Signal-flow decisions for the build
+
+- **Voice layer reads the shared `---thisBuffer`.** Slice region per note = `sliceIndex *
+  (windowMs/16)` .. `+ windowMs/16` into `groove~`'s loop min/max. The existing
+  `reverseCompensation` / `* 0.0625` / quantize-grid math ports to computing these ms offsets.
+- **karmaB rolling:** revive `p RollingB` + `stop`-before-`record`; `---bRealign` <- arm/
+  handoff; `---bAudible` -> mix.
+- **Handoff:** `record_trigger` arms a `phasor~ @lock 1` bar-edge-once; on the edge, define
+  karmaB's loop from the ring (`stop` -> bounds/`window` -> `play`), swap `---abMix` /
+  routing so karmaB is the tape, re-arm karma A as roller. Transport-edge trigger only (B1);
+  never gate `---size` (B2).
+- **Loop length (D6):** point the `---capturedMs` receiver at the rolling-buffer length
+  (buffer resized ~120000 in phase 2), so `window = requestedMs / rollingMs` can exceed the
+  last committed size -> lengthening lands, still from device-owned values.
+- **Mix:** karmaB L/R crossfaded against karma A **inside `p Playback`**, `---abMix` receiver
+  drives it, sum -> `p soloAndMuting` -> `plugout~`. External outlet count unchanged.
+- **Slice audio storage:** shared-buffer-offsets for the engine (low memory, auto-tracks
+  re-capture); derive the 16 export clips at export time. `duplicate` works while karma~ is
+  attached but `crop` does not (karma-loop-semantics S5) — a pre-sized scratch dup buffer
+  avoids needing `crop`.
+
+### R7. Empirical tests to run first (scratch `.maxpat`, plain names, `transport` started)
+
+- **T1** `groove~ testbuf 2` reading while `record~ testbuf 2` writes the *same* buffer —
+  artefacts / dropouts? (rolling-B contention).
+- **T2** `poly~` note-on -> first-non-zero-sample latency of a pre-instantiated `groove~`
+  voice vs a karma~ `jump` (`edge~ -> timer`).
+- **T3** `poly~` `midinote` / `target` + `thispoly~ @steal 1` — 16 home voices + spill +
+  choke groups behave as intended.
+- **T4** karma~ `stop`->bounds->`play` vs bare `window` to define karmaB's loop from a running
+  ring: region lands where expected, no click; sweep `ramp`/`snramp` 16 -> 200.
+- **T5** `detonate` round-trip: record `(deltatime, pitch, velocity, duration)` vs transport,
+  play back faithful under a tempo change; SMF write/read.
+- **T6** `phasor~ @frequency 1n @lock 1 -> delta~ -> <~ -0.5 -> edge~ -> onebang` re-armed per
+  cycle: exactly one bang per armed bar edge, no drift over minutes.
+
+### R8. Tooling gap
+
+`chopchop-max-testing` SKILL.md references `scripts/amxd.py`, `inspect.py`, `trace.py`,
+`validate.py`, `sim.py` — **not present** (only SKILL.md ships). A minimal read-only
+extractor (`amxd_extract.py`, `amxd_scope.py`) was written to the scratchpad this session.
+**Before the first `.amxd` edit**, the full toolkit must be rebuilt or located — especially
+`validate.py` (per-scope dangling-cord / duplicate-id / inlet-outlet-range checks) and
+`sim.py` (message-graph simulator), both load-bearing for the doc 19 Part D checklist
+(file size 1,705,180; cycle sweep 27).
+
+### Build-phase open items
+
+- Trace `record_arm_toggle` (`obj-29`) connections at root — doc 19 A6 says it may be
+  standing in for something and must return to its reserved preroll purpose.
+- Decide `detonate` vs `coll` for the sequencer store after T5.
+- Decide `groove~` vs `wave~` per voice after T1/T2.
+- Confirm the `poly~` voice subpatcher I/O shape (audio out L/R + a done/free signal).
