@@ -376,20 +376,30 @@ status (`unpack f i i f f f`: pos0-1, play, rec, [elem3 unusable], endMs, window
 - **T6** `phasor~ @frequency 1n @lock 1 -> delta~ -> <~ -0.5 -> edge~ -> onebang` re-armed per
   cycle: exactly one bang per armed bar edge, no drift over minutes.
 
-### R8. Tooling gap
+### R8. Tooling — rebuilt (`patches/chopchop-project/tools/`)
 
-`chopchop-max-testing` SKILL.md references `scripts/amxd.py`, `inspect.py`, `trace.py`,
-`validate.py`, `sim.py` — **not present** (only SKILL.md ships). A minimal read-only
-extractor (`amxd_extract.py`, `amxd_scope.py`) was written to the scratchpad this session.
-**Before the first `.amxd` edit**, the full toolkit must be rebuilt or located — especially
-`validate.py` (per-scope dangling-cord / duplicate-id / inlet-outlet-range checks) and
-`sim.py` (message-graph simulator), both load-bearing for the doc 19 Part D checklist
-(file size 1,705,180; cycle sweep 27).
+`chopchop-max-testing` SKILL.md references `scripts/amxd.py` etc. — not shipped. Rebuilt this
+session as a stdlib-only package under `tools/`, all verified against v6_174:
+
+| Tool | Does | Verified |
+|---|---|---|
+| **`ccamxd.py`** | extract / inspect / **byte-preserving re-inject** of the main patcher blob. `--identity` `--scopes` `--dump SCOPE` `--find`. | no-op round-trip is **byte-exact**; `json.dumps(sep=(",",":"))` reproduces Max's bytes. Main blob slot 1,596,959; content 455,171; **headroom ~1.14 MB** of space padding for edits. Second small pretty patcher + embedded `.js` after the blob are never touched. |
+| **`validate.py`** | per-scope: dangling cords, outlet/inlet index vs `num*`, dup cords / ids / varnames; **elementary message-cycle sweep** (Johnson, patchline-only). `--baseline` diffs and fails on new problems or a changed cycle total. | baseline = **27 cycles, 0 problems** — matches doc 18 §1 exactly. |
+| **`cctrace.py`** | whole-device graph; crosses send/receive + subpatcher inlet/outlet walls. `--channel ---foo` (senders/receivers + orphan flag); `--box SCOPE:id --up/--down`. | reproduces audit orphan list (`---abMix`, `---bAudible`, `---enableA/B/Keys`, …). |
+| **`ccsim.py`** | best-effort message-value simulator (trigger/sel/route/gate/toggle/button/f/message/change/onebang/split/comparators/prepend + send-receive + subpatcher). Signal objects = hard stop. **Caveat: unmodeled objects pass on outlet 0** — `cctrace` is ground truth for reachability, `ccsim` adds value logic on top. | `w_fsize 8000 -> karma~ <= ['window', 1.0]` traced across 3 scopes + 2 sends. |
+
+The scratch prototypes `amxd_extract.py` / `amxd_scope.py` remain as thin wrappers.
+
+### R9. `record_arm_toggle` is fully unwired (build-phase item resolved)
+
+`cctrace --box "/:record_arm_toggle" --down` -> **no outgoing connections at all.** It is a
+dead root `live.toggle`, not "standing in" for anything (doc 19 A6). **Free to claim as the
+preroll arm control with zero rewiring.**
 
 ### Build-phase open items
 
-- Trace `record_arm_toggle` (`obj-29`) connections at root — doc 19 A6 says it may be
-  standing in for something and must return to its reserved preroll purpose.
 - Decide `detonate` vs `coll` for the sequencer store after T5.
 - Decide `groove~` vs `wave~` per voice after T1/T2.
 - Confirm the `poly~` voice subpatcher I/O shape (audio out L/R + a done/free signal).
+- `ccsim` unmodeled-and-non-outlet-0 objects seen so far: `pack`, `uzi`, `panel` (harmless),
+  `split` now modeled. Extend handlers if a build's critical path runs through one.
