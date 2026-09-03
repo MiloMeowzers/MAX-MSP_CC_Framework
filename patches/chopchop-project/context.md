@@ -560,6 +560,40 @@ what actually removes the delay and the pad-unsafe window.
 Basic preroll fill/LED unchanged.
 
 Base for next edit: `ChopChop_v6_185.amxd`.
+**Live test (user): 15 full INIT + capture at varied lengths -> NO failed captures (v6_185
+reliability fix confirmed). But more hiss/crackle "during the transfer" than the first run,
+worse near the loop start.** (Expected — v6_185 still runs the normal `clear` + karma
+record-pass on Record; stopping the ring right at Record press stacks record~'s hard stop +
+the buffer clear + karma record on one 120 MB buffer.)
+
+### v6_186 — Phase 3: LoopLength-bounded ring + the capture handoff (2026-09-03)
+
+`tools/phase3_file3_handoff.py`. Base v6_185. Two coupled changes:
+
+1. **`p Preroll` ring wraps at LoopLength, not 120 s.** `record~ ---thisBuffer 2 @loop 1` now
+   gets start 0 (inlet 2) and end `---size` (inlet 3), re-sent on ring start and LoopLength
+   change. v6_184/185 wrapped at the 120 s buffer end, so 0..LoopLength wasn't a contiguous
+   recent capture (the "tail" rotation, stale content in the window).
+   **ASSUMPTION: `record~ <buf> 2` inlets are 0=L sig+ctrl / 1=R sig / 2=start ms / 3=end ms.**
+   If wrong, the ring keeps wrapping at 120 s — user should check whether the captured loop is
+   now the *head* (contiguous, correct) rather than a rotated tail.
+2. **Capture handoff.** `gate 2` on `record_trigger -> recordon_send`, control `---prerollFull+1`:
+   full -> `s ---prerollCapture`; not full -> `s ---recordOn` (unchanged). New `p PrerollCapture`
+   on `r ---prerollCapture`: `s ---prerollLoop 1`; `s ---hasContent 1`; `s ---capturedMs 120000`
+   (overrides the size latch, last wins); `s ---karmaMsg "set ---thisBuffer, position 0.,
+   window <---size/120000>, play"`; `s ---regrid`. Keep-alive: `r ---sliceEdge -> counter 0 15
+   -> carry -> gate(---prerollLoop) -> jump 0. -> s ---karmaMsg` (resets karma's phantom
+   one-shot every LoopLength). `---prerollLoop` cleared by `---hasContent==0` (INIT) or
+   `---recordOn` (normal record). **No `clear`, no record pass** -> the crackle phase is gone.
+Verified: 1,705,180 / 27 / 0 / byte-exact; channels routed.
+
+**Expected on test:** with preroll FULL, hitting Record gives an **instant** looped capture —
+no `clear`, no wait, no crackle-during-transfer, pads/reverse/reloop usable immediately.
+Overlay still frozen during a preroll loop (pos report dead — v6_187). If preroll is NOT full,
+Record is exactly as before. Also check the captured loop is the *head* of your input now (ring
+end-point assumption).
+
+Base for next edit: `ChopChop_v6_186.amxd`.
 
 ## Phase status
 
