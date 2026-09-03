@@ -527,6 +527,39 @@ clean/no-content state, turn the ARM toggle on -> the FULL led lights after one 
 ARM+LED placement (OVERDUB panel right edge) is a first guess — say if it should move.
 
 Base for next edit: `ChopChop_v6_184.amxd`.
+**Live test (user): basic preroll works — toggle / FULL LED / LoopLength response all as
+expected; usable for instant capture while running and for 1->4 bar lengthening (glitch during
+the pass-into-running, clean after — predicted). Issues raised:
+(a) repeated full INIT -> failed captures (4 bars compressed to a few slices / wrong lengths /
+fragments); (b) preroll fill is visible in the waveform display (suppress, or a distinct tint);
+(c) Record still has a short delay + must wait a full loop length before all pads are usable,
+and pads hit during that window can stall/halt/corrupt (no handoff yet -> normal record pass);
+(d) waveform vanish/restart on capture is a misleading diag for a new user.**
+
+### v6_185 — Phase 3: rewrite p Preroll state machine (2026-09-03)
+
+`tools/phase3_file2_preroll_statemachine.py`. Base v6_184. Full replace of `p Preroll`'s
+inner patcher (a v6_184-added box, not round-tripped -> clean). Fixes for (a):
+- **Ring stops on `r ---recordOn` (record START)**, not on `---hasContent -> 1` (record end).
+  v6_184 kept `record~` writing `---thisBuffer` all through a normal capture, fighting karma
+  -> the fragments.
+- **`want = arm AND (hasContent==0)`** recomputed via `t i b` / `t b i` ordering; `change`
+  only de-dupes edges, and `want` genuinely goes 0 then 1 across capture->INIT so it never
+  sticks (v6_184's `pr_run` change stuck at 1).
+- **`delay 400` settle** before `reset, 1` -> `record~` when the ring becomes wanted, so
+  INIT's `clear` / `regrid` / `stop` / `window 1` / `position 0` all land first; repeated
+  INITs keep pushing the restart out.
+- `pr_running` flag gates the LoopLength-change restart.
+`p Preroll` 23->33 boxes. Verified 1,705,180 / 27 / 0 / byte-exact.
+
+**Still to do:** (b)/(d) waveform display during fill = v6_186; (c) the capture handoff
+(`set`+`window`+keep-alive on Record when preroll full) + pad-safety gating = v6_187 — that's
+what actually removes the delay and the pad-unsafe window.
+
+**Expected on test:** repeated full INIT -> clean captures, correct lengths, no fragments.
+Basic preroll fill/LED unchanged.
+
+Base for next edit: `ChopChop_v6_185.amxd`.
 
 ## Phase status
 
