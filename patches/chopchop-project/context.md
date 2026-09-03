@@ -411,6 +411,36 @@ both the toggle chain and `vmute_lbm`; 1,705,180 / 27 / 0 / byte-exact.
 mute their voice; `A/B Mix` still crossfades.
 
 Base for next edit: `ChopChop_v6_181.amxd`.
+**Live test (user): A audio OK now. B nothing at all; mute + A/B Mix have no audible effect.**
+
+### R10. karmaB was never mirroring karma A (root cause of the whole B saga)
+
+Traced in v6_181: **`obj-20` (karma A) inlet 0 is fed DIRECTLY by ~11 sources** —
+`obj-13[2]` (p MessagesToKarma: record/play/overdub/jump), `obj-18[1]` (`t l l` <- p
+Recording: record/play), `obj-28` (p INIT), `obj-31/38/43` (Reloop window palette), `obj-45`
+(`r ---karmaMsg`: window calc + main stream), `obj-46`/`reinit_*` (report/ramp config).
+**The `gB` gate only carries `kmsg_gate`'s side-stream** (`p glitching` / `p transport` /
+`r ---directJump`) — NOT record/play/stop/window. So karmaB never got a `record`. `p RollingB`
+was the *only* thing that made karmaB capture; v6_180 removed it -> karmaB silent, nothing for
+the mix/mutes to act on. The audit's "message fan-out exists, `kmsg_gate -> gA/gB/gK`" was
+describing the wrong stream. **`gA`/`gB`/`gK` + `---enableA/B/Keys` gate only the glitch
+side-stream, not the transport messages** — worth remembering for any per-voice message work.
+
+### v6_182 — mirror karma A's real message stream to karmaB (2026-09-03)
+
+`tools/phase1_file7_mirror_karmaB.py`. Base v6_181. For every `obj-20` inlet-0 feeder karmaB
+lacked, add the same cord to `karmaB[0]` — 11 cords, no new objects. Script asserts each
+source really feeds `obj-20[0]` first. karmaB now records / windows / INITs / reloops exactly
+when karma A does; `obj-34` (audio L) and the `gA`/`gB` side-stream were already parallel.
+Verified: `karmaB[0]` feeders == `obj-20[0]` feeders (minus `gA`, which has `gB`);
+1,705,180 / 27 / 0 / byte-exact.
+
+**Expected on test:** fresh load -> A audible. Record a loop -> **B captures the same loop**.
+`A/B Mix` now audibly crossfades A<->B (both on the same content -> roughly level-constant,
+minimal phasing since B is speed-locked to A). `En A` / `En B` drop their voice (audible once
+`A/B Mix` > 0).
+
+Base for next edit: `ChopChop_v6_182.amxd`.
 
 ---
 
