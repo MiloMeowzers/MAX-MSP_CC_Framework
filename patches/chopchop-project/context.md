@@ -129,13 +129,15 @@ locked to nothing musical — hence saturation under dense play and sync drift.
    transport-locked playthrough. A layer in its own right, manipulable *at all times*. All
    existing manipulation stays here: reverse, ping-pong, glitch, `window`, Reloop. Independent
    of whether pads are being struck.
-2. **Live pad layer** — a `poly~` voice pool reading the **shared captured buffer**,
-   MIDI-note driven. Adds **per-pad pitch and play-direction** (new capability). Replaces the
-   idea of a 3rd `karma~` for the sequencer voice — `poly~` is polyphonic and voice-steals,
-   so it does not saturate the way a 3rd monophonic playhead would.
-3. **Sequencer** — records the **MIDI note stream** off layer 2 (velocity, note-off, grid
-   quantise), replays through the same `poly~`. `seq~` is removed. Built MIDI-at-core so A4
-   (Ableton MIDI track + 16-clip audio export) is a mirror step, not a rearchitecture.
+2. **Live pad layer** — a `poly~` voice pool reading the **shared captured buffer**, driven by
+   **explicit `target N` routing** (one home voice per pad), NOT `midinote` auto-allocation
+   (see R7a — the auto-allocate + steal lifecycle proved fragile). Voice lifecycle is an
+   envelope/gate we own. Adds **per-pad pitch and play-direction** (new capability). Replaces
+   the idea of a 3rd `karma~` for the sequencer voice.
+3. **Sequencer** — records the pad-hit event stream off layer 2 as **`coll`** entries
+   (time-keyed: `time -> pad velocity duration ...`), replays through the same `poly~`. `seq~`
+   and `detonate` are both out (R7a). Event model is note-shaped so A4 (Ableton MIDI track +
+   16-clip audio export) is a `coll`->SMF/clip conversion step, not a rearchitecture.
 
 ### D2. `poly~` over 16-fixed voices
 
@@ -377,9 +379,29 @@ already does it" settle are not worth a Max session.
 | T5 | `detonate` rhythm round-trip vs a metronome; SMF write/read | **scratch** `t5_detonate_rhythm.maxpat` |
 | T6 | `phasor~ @1n @lock 1 -> delta~ -> <~ -0.5 -> edge~ -> onebang` bar-edge | **device already proves it** (`p RollingB`, `p Record_And_Quantize`) — reuse verbatim |
 
-Scratch patchers + `voice.maxpat` (play~ one-shot, real done-bang -> frees the poly~ slot) in
-`patches/chopchop-project/test-patchers/`, built by `tools/build_test_patchers.py` (fills its
-own buffer with 16 clicks via `uzi -> poke~`; no file drop, no `karma~`).
+### R7a. Scratch-patcher approach ABANDONED (2026-09-03)
+
+Three rebuilds, none usable in the M4L editor. What the runs actually told us (keep — these
+shape the design):
+
+- **`detonate` is out.** In the M4L/standalone editor it produced clicks but **stored nothing**
+  (`DET 0` on open, no accumulation). Whatever the cause, it is not a reliable store here.
+  -> **Sequencer store = `coll`** (time-keyed event lists, disk read/write, scriptable), not
+  `detonate`. SMF/A4 export becomes a `coll`->SMF conversion step (build-time Python tool or
+  a small `js`), not a `detonate write`.
+- **`poly~` + `midinote` auto-allocation is fragile.** Symptom: one note sounds, then silence
+  until reload — a stuck `thispoly~` busy/free lifecycle (voice never freed -> no free voices
+  -> subsequent notes dropped). Do **not** lean on `midinote`/`note` auto-allocation + steal.
+- **`target N` works reliably.** -> the voice layer uses **explicit `target`-based routing**:
+  one home voice per pad (`target <pad>` before each trigger), voice lifecycle driven by an
+  explicit envelope/gate we own, not by `poly~`'s note bookkeeping. Choke = re-`target` the
+  same voice (natural cut); overlap/poly = `target` a spillover voice deliberately.
+- karma~ questions never belonged in a from-scratch patcher (doc 02). They move to a
+  **duplicated-device prototype** during Phase 3-5.
+
+Net: the voice engine is `poly~` with **manual `target` routing** (not `midinote`), and the
+sequencer is **`coll`**. Both get validated for real inside a device copy, not in isolation.
+Test patchers + builder left in `test-patchers/` as a record; not maintained.
 
 ### R8. Tooling — rebuilt (`patches/chopchop-project/tools/`)
 
