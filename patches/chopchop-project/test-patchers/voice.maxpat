@@ -49,9 +49,24 @@
     "boxes": [
       {
         "box": {
+          "maxclass": "comment",
+          "text": "poly~ voice -- bang plays 1000..1250 ms of tbuf once, frees on line~ done",
+          "numinlets": 1,
+          "numoutlets": 0,
+          "patching_rect": [
+            40.0,
+            10.0,
+            600.0,
+            20.0
+          ],
+          "id": "obj-1"
+        }
+      },
+      {
+        "box": {
           "maxclass": "newobj",
-          "text": "buffer~ tbuf 6000 2",
-          "numinlets": 2,
+          "text": "in 1",
+          "numinlets": 1,
           "numoutlets": 1,
           "outlettype": [
             ""
@@ -67,31 +82,17 @@
       },
       {
         "box": {
-          "maxclass": "comment",
-          "text": "T1  --  does groove~ glitch while record~ writes the SAME buffer?  (rolling-karmaB contention)",
-          "numinlets": 1,
-          "numoutlets": 0,
-          "patching_rect": [
-            40.0,
-            10.0,
-            760.0,
-            20.0
-          ],
-          "id": "obj-1"
-        }
-      },
-      {
-        "box": {
           "maxclass": "newobj",
-          "text": "cycle~ 180",
-          "numinlets": 2,
-          "numoutlets": 1,
+          "text": "thispoly~",
+          "numinlets": 1,
+          "numoutlets": 2,
           "outlettype": [
-            ""
+            "signal",
+            "signal"
           ],
           "patching_rect": [
-            40.0,
-            100.0,
+            340.0,
+            50.0,
             120.0,
             22.0
           ],
@@ -101,15 +102,16 @@
       {
         "box": {
           "maxclass": "newobj",
-          "text": "*~ 0.4",
-          "numinlets": 2,
-          "numoutlets": 1,
+          "text": "t b b",
+          "numinlets": 1,
+          "numoutlets": 2,
           "outlettype": [
-            ""
+            "bang",
+            "bang"
           ],
           "patching_rect": [
             40.0,
-            140.0,
+            90.0,
             120.0,
             22.0
           ],
@@ -118,100 +120,78 @@
       },
       {
         "box": {
-          "maxclass": "toggle",
-          "numinlets": 1,
+          "maxclass": "message",
+          "text": "1",
+          "numinlets": 2,
           "numoutlets": 1,
+          "outlettype": [
+            ""
+          ],
           "patching_rect": [
-            240.0,
-            100.0,
-            45.0,
-            45.0
+            210.0,
+            90.0,
+            120.0,
+            22.0
           ],
           "id": "obj-5"
         }
       },
       {
         "box": {
-          "maxclass": "newobj",
-          "text": "record~ tbuf 2",
-          "numinlets": 3,
+          "maxclass": "message",
+          "text": "1000, 1250 250",
+          "numinlets": 2,
           "numoutlets": 1,
           "outlettype": [
-            "signal"
+            ""
           ],
           "patching_rect": [
-            240.0,
-            140.0,
+            40.0,
+            130.0,
             120.0,
             22.0
           ],
+          "w": 150,
           "id": "obj-6"
         }
       },
       {
         "box": {
-          "maxclass": "comment",
-          "text": "2) record ON",
-          "numinlets": 1,
-          "numoutlets": 0,
+          "maxclass": "newobj",
+          "text": "line~",
+          "numinlets": 2,
+          "numoutlets": 2,
+          "outlettype": [
+            "signal",
+            "bang"
+          ],
           "patching_rect": [
-            240.0,
-            80.0,
+            40.0,
+            170.0,
             120.0,
-            20.0
+            22.0
           ],
           "id": "obj-7"
         }
       },
       {
         "box": {
-          "maxclass": "flonum",
-          "numinlets": 1,
-          "numoutlets": 1,
-          "patching_rect": [
-            440.0,
-            100.0,
-            45.0,
-            45.0
-          ],
-          "id": "obj-8"
-        }
-      },
-      {
-        "box": {
           "maxclass": "newobj",
-          "text": "sig~ 1.",
+          "text": "play~ tbuf 2",
           "numinlets": 1,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            440.0,
-            140.0,
-            120.0,
-            22.0
-          ],
-          "id": "obj-9"
-        }
-      },
-      {
-        "box": {
-          "maxclass": "newobj",
-          "text": "groove~ tbuf 2",
-          "numinlets": 3,
-          "numoutlets": 2,
+          "numoutlets": 3,
           "outlettype": [
             "signal",
-            "signal"
+            "signal",
+            "bang"
           ],
           "patching_rect": [
-            440.0,
-            190.0,
+            40.0,
+            210.0,
             120.0,
             22.0
           ],
-          "id": "obj-10"
+          "id": "obj-8"
         }
       },
       {
@@ -224,8 +204,44 @@
             ""
           ],
           "patching_rect": [
-            600.0,
-            150.0,
+            210.0,
+            250.0,
+            120.0,
+            22.0
+          ],
+          "id": "obj-9"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "newobj",
+          "text": "out 3",
+          "numinlets": 1,
+          "numoutlets": 0,
+          "outlettype": [
+            ""
+          ],
+          "patching_rect": [
+            340.0,
+            130.0,
+            120.0,
+            22.0
+          ],
+          "id": "obj-10"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "newobj",
+          "text": "out~ 1",
+          "numinlets": 1,
+          "numoutlets": 0,
+          "outlettype": [
+            ""
+          ],
+          "patching_rect": [
+            40.0,
+            260.0,
             120.0,
             22.0
           ],
@@ -234,118 +250,20 @@
       },
       {
         "box": {
-          "maxclass": "message",
-          "text": "6000",
-          "numinlets": 2,
-          "numoutlets": 1,
+          "maxclass": "newobj",
+          "text": "out~ 2",
+          "numinlets": 1,
+          "numoutlets": 0,
           "outlettype": [
             ""
           ],
           "patching_rect": [
-            640.0,
             150.0,
+            260.0,
             120.0,
             22.0
           ],
           "id": "obj-12"
-        }
-      },
-      {
-        "box": {
-          "maxclass": "message",
-          "text": "startloop",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            560.0,
-            120.0,
-            120.0,
-            22.0
-          ],
-          "id": "obj-13"
-        }
-      },
-      {
-        "box": {
-          "maxclass": "comment",
-          "text": "3) rate 1.  then  4) startloop   5) listen for zipper/dropout while rec runs",
-          "numinlets": 1,
-          "numoutlets": 0,
-          "patching_rect": [
-            440.0,
-            90.0,
-            420.0,
-            20.0
-          ],
-          "id": "obj-14"
-        }
-      },
-      {
-        "box": {
-          "maxclass": "newobj",
-          "text": "*~ 0.5",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            440.0,
-            240.0,
-            120.0,
-            22.0
-          ],
-          "id": "obj-15"
-        }
-      },
-      {
-        "box": {
-          "maxclass": "meter~",
-          "numinlets": 1,
-          "numoutlets": 1,
-          "patching_rect": [
-            620.0,
-            240.0,
-            45.0,
-            45.0
-          ],
-          "id": "obj-16"
-        }
-      },
-      {
-        "box": {
-          "maxclass": "newobj",
-          "text": "ezdac~",
-          "numinlets": 2,
-          "numoutlets": 0,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            440.0,
-            300.0,
-            120.0,
-            22.0
-          ],
-          "id": "obj-17"
-        }
-      },
-      {
-        "box": {
-          "maxclass": "comment",
-          "text": "1) click ezdac (DSP on)",
-          "numinlets": 1,
-          "numoutlets": 0,
-          "patching_rect": [
-            440.0,
-            340.0,
-            220.0,
-            20.0
-          ],
-          "id": "obj-18"
         }
       }
     ],
@@ -353,7 +271,7 @@
       {
         "patchline": {
           "source": [
-            "obj-3",
+            "obj-2",
             0
           ],
           "destination": [
@@ -370,6 +288,18 @@
           ],
           "destination": [
             "obj-6",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-4",
+            1
+          ],
+          "destination": [
+            "obj-5",
             0
           ]
         }
@@ -381,7 +311,67 @@
             0
           ],
           "destination": [
+            "obj-3",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-3",
+            0
+          ],
+          "destination": [
+            "obj-10",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
             "obj-6",
+            0
+          ],
+          "destination": [
+            "obj-7",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-7",
+            0
+          ],
+          "destination": [
+            "obj-8",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-7",
+            1
+          ],
+          "destination": [
+            "obj-9",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-9",
+            0
+          ],
+          "destination": [
+            "obj-3",
             0
           ]
         }
@@ -393,104 +383,20 @@
             0
           ],
           "destination": [
-            "obj-9",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-9",
-            0
-          ],
-          "destination": [
-            "obj-10",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
             "obj-11",
             0
-          ],
-          "destination": [
-            "obj-10",
-            1
           ]
         }
       },
       {
         "patchline": {
           "source": [
+            "obj-8",
+            1
+          ],
+          "destination": [
             "obj-12",
             0
-          ],
-          "destination": [
-            "obj-10",
-            2
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-13",
-            0
-          ],
-          "destination": [
-            "obj-10",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-10",
-            0
-          ],
-          "destination": [
-            "obj-15",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-10",
-            0
-          ],
-          "destination": [
-            "obj-16",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-15",
-            0
-          ],
-          "destination": [
-            "obj-17",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-15",
-            0
-          ],
-          "destination": [
-            "obj-17",
-            1
           ]
         }
       }

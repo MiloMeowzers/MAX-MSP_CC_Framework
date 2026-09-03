@@ -361,20 +361,25 @@ status (`unpack f i i f f f`: pos0-1, play, rec, [elem3 unusable], endMs, window
   attached but `crop` does not (karma-loop-semantics S5) — a pre-sized scratch dup buffer
   avoids needing `crop`.
 
-### R7. Empirical tests to run first (scratch `.maxpat`, plain names, `transport` started)
+### R7. Verification plan — REVISED after two bad scratch-patcher batches
 
-- **T1** `groove~ testbuf 2` reading while `record~ testbuf 2` writes the *same* buffer —
-  artefacts / dropouts? (rolling-B contention).
-- **T2** `poly~` note-on -> first-non-zero-sample latency of a pre-instantiated `groove~`
-  voice vs a karma~ `jump` (`edge~ -> timer`).
-- **T3** `poly~` `midinote` / `target` + `thispoly~ @steal 1` — 16 home voices + spill +
-  choke groups behave as intended.
-- **T4** karma~ `stop`->bounds->`play` vs bare `window` to define karmaB's loop from a running
-  ring: region lands where expected, no click; sweep `ramp`/`snramp` 16 -> 200.
-- **T5** `detonate` round-trip: record `(deltatime, pitch, velocity, duration)` vs transport,
-  play back faithful under a tempo change; SMF write/read.
-- **T6** `phasor~ @frequency 1n @lock 1 -> delta~ -> <~ -0.5 -> edge~ -> onebang` re-armed per
-  cycle: exactly one bang per armed bar edge, no drift over minutes.
+**Rule re-learned:** no `karma~` in a from-scratch patcher (doc 02 / `chopchop-max-testing` —
+it has failed this project every time: "patchcord out of range", "can't load now"). karma~
+questions go to a **duplicated copy of the real device**. And questions the docs + "the device
+already does it" settle are not worth a Max session.
+
+| # | Question | Where it's answered |
+|---|---|---|
+| T1 | `groove~`/`play~` read while `record~` writes the same buffer | **docs**: standard; slice layer reads committed regions behind the head -> fine |
+| T2 | pre-instantiated `poly~`/`play~` voice: attack tight enough to replace `karma~` jump? | **scratch** `t2_poly_attack.maxpat` (poly~ only, metronome reference) |
+| T3 | `poly~` `midinote`/`target` stealing + choke, 4-voice | **scratch** `t3_poly_steal.maxpat` |
+| T4 | define shorter loop from running capture: bare `window` vs `stop->position->window->play`; `ramp`/`snramp` seam | **device-copy prototype**, Phase 3-5 (karma~) |
+| T5 | `detonate` rhythm round-trip vs a metronome; SMF write/read | **scratch** `t5_detonate_rhythm.maxpat` |
+| T6 | `phasor~ @1n @lock 1 -> delta~ -> <~ -0.5 -> edge~ -> onebang` bar-edge | **device already proves it** (`p RollingB`, `p Record_And_Quantize`) — reuse verbatim |
+
+Scratch patchers + `voice.maxpat` (play~ one-shot, real done-bang -> frees the poly~ slot) in
+`patches/chopchop-project/test-patchers/`, built by `tools/build_test_patchers.py` (fills its
+own buffer with 16 clicks via `uzi -> poke~`; no file drop, no `karma~`).
 
 ### R8. Tooling — rebuilt (`patches/chopchop-project/tools/`)
 

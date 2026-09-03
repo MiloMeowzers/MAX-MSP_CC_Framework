@@ -50,7 +50,7 @@
       {
         "box": {
           "maxclass": "newobj",
-          "text": "buffer~ tbuf 6000 2",
+          "text": "buffer~ tbuf 4000 2",
           "numinlets": 2,
           "numoutlets": 1,
           "outlettype": [
@@ -58,7 +58,7 @@
           ],
           "patching_rect": [
             40.0,
-            50.0,
+            46.0,
             120.0,
             22.0
           ],
@@ -68,49 +68,16 @@
       {
         "box": {
           "maxclass": "comment",
-          "text": "T2  --  fire a poly~ voice and a karma~ jump from the same bang; compare attack tightness on the two scope~ / by ear",
+          "text": "T2  --  does a pre-instantiated poly~/play~ voice fire tight enough to replace karma~ jump for slice triggering?  Fire repeatedly, watch the scope~ attack, judge by ear against the metronome.",
           "numinlets": 1,
           "numoutlets": 0,
           "patching_rect": [
             40.0,
             10.0,
-            820.0,
+            940.0,
             20.0
           ],
           "id": "obj-1"
-        }
-      },
-      {
-        "box": {
-          "maxclass": "message",
-          "text": "fill tbuf 0.",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            240.0,
-            50.0,
-            120.0,
-            22.0
-          ],
-          "id": "obj-3"
-        }
-      },
-      {
-        "box": {
-          "maxclass": "comment",
-          "text": "0) record a few seconds into tbuf first (drop audio on the buffer~, or wire an input) -- slices need transients to judge attack",
-          "numinlets": 1,
-          "numoutlets": 0,
-          "patching_rect": [
-            40.0,
-            86.0,
-            820.0,
-            20.0
-          ],
-          "id": "obj-4"
         }
       },
       {
@@ -119,10 +86,45 @@
           "numinlets": 1,
           "numoutlets": 1,
           "patching_rect": [
+            720.0,
             40.0,
-            120.0,
             45.0,
             45.0
+          ],
+          "id": "obj-3"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "comment",
+          "text": "2) fill buffer (16 clicks)",
+          "numinlets": 1,
+          "numoutlets": 0,
+          "patching_rect": [
+            760.0,
+            40.0,
+            190.0,
+            20.0
+          ],
+          "id": "obj-4"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "newobj",
+          "text": "uzi 16 1",
+          "numinlets": 2,
+          "numoutlets": 3,
+          "outlettype": [
+            "bang",
+            "bang",
+            "int"
+          ],
+          "patching_rect": [
+            720.0,
+            80.0,
+            120.0,
+            22.0
           ],
           "id": "obj-5"
         }
@@ -130,16 +132,15 @@
       {
         "box": {
           "maxclass": "newobj",
-          "text": "t b b",
-          "numinlets": 1,
-          "numoutlets": 2,
+          "text": "- 1",
+          "numinlets": 2,
+          "numoutlets": 1,
           "outlettype": [
-            "bang",
-            "bang"
+            ""
           ],
           "patching_rect": [
-            40.0,
-            160.0,
+            720.0,
+            114.0,
             120.0,
             22.0
           ],
@@ -148,15 +149,18 @@
       },
       {
         "box": {
-          "maxclass": "comment",
-          "text": "1) click ezdac   2) click this button to fire both",
-          "numinlets": 1,
-          "numoutlets": 0,
+          "maxclass": "newobj",
+          "text": "* 11025",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "outlettype": [
+            ""
+          ],
           "patching_rect": [
-            40.0,
-            200.0,
-            380.0,
-            20.0
+            720.0,
+            148.0,
+            120.0,
+            22.0
           ],
           "id": "obj-7"
         }
@@ -164,16 +168,16 @@
       {
         "box": {
           "maxclass": "newobj",
-          "text": "poly~ t2_voice.maxpat 4",
+          "text": "t b i",
           "numinlets": 1,
           "numoutlets": 2,
           "outlettype": [
-            "signal",
-            "signal"
+            "bang",
+            "int"
           ],
           "patching_rect": [
-            40.0,
-            240.0,
+            720.0,
+            182.0,
             120.0,
             22.0
           ],
@@ -183,15 +187,15 @@
       {
         "box": {
           "maxclass": "message",
-          "text": "midinote 60 100",
+          "text": "1.",
           "numinlets": 2,
           "numoutlets": 1,
           "outlettype": [
             ""
           ],
           "patching_rect": [
-            160.0,
-            200.0,
+            720.0,
+            216.0,
             120.0,
             22.0
           ],
@@ -201,15 +205,15 @@
       {
         "box": {
           "maxclass": "newobj",
-          "text": "sig~ 1.",
-          "numinlets": 1,
-          "numoutlets": 1,
+          "text": "poke~ tbuf",
+          "numinlets": 3,
+          "numoutlets": 0,
           "outlettype": [
             ""
           ],
           "patching_rect": [
-            360.0,
-            120.0,
+            720.0,
+            250.0,
             120.0,
             22.0
           ],
@@ -218,36 +222,31 @@
       },
       {
         "box": {
-          "maxclass": "newobj",
-          "text": "karma~ tbuf 2",
-          "numinlets": 3,
-          "numoutlets": 3,
-          "outlettype": [
-            "signal",
-            "signal",
-            ""
-          ],
+          "maxclass": "comment",
+          "text": "1) click ezdac",
+          "numinlets": 1,
+          "numoutlets": 0,
           "patching_rect": [
-            360.0,
-            200.0,
-            120.0,
-            22.0
+            40.0,
+            44.0,
+            140.0,
+            20.0
           ],
           "id": "obj-11"
         }
       },
       {
         "box": {
-          "maxclass": "message",
-          "text": "jump 0.5",
+          "maxclass": "newobj",
+          "text": "metro 8n",
           "numinlets": 2,
           "numoutlets": 1,
           "outlettype": [
-            ""
+            "bang"
           ],
           "patching_rect": [
-            360.0,
-            160.0,
+            300.0,
+            80.0,
             120.0,
             22.0
           ],
@@ -256,66 +255,66 @@
       },
       {
         "box": {
-          "maxclass": "message",
-          "text": "report 200",
-          "numinlets": 2,
+          "maxclass": "toggle",
+          "numinlets": 1,
           "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
           "patching_rect": [
-            500.0,
-            160.0,
-            120.0,
-            22.0
+            300.0,
+            116.0,
+            45.0,
+            45.0
           ],
           "id": "obj-13"
         }
       },
       {
         "box": {
-          "maxclass": "scope~",
+          "maxclass": "newobj",
+          "text": "transport",
           "numinlets": 2,
-          "numoutlets": 0,
-          "patching_rect": [
-            40.0,
-            320.0,
-            45.0,
-            45.0
+          "numoutlets": 9,
+          "outlettype": [
+            ""
           ],
-          "w": 200,
-          "h": 120,
+          "patching_rect": [
+            430.0,
+            80.0,
+            120.0,
+            22.0
+          ],
           "id": "obj-14"
         }
       },
       {
         "box": {
-          "maxclass": "scope~",
-          "numinlets": 2,
-          "numoutlets": 0,
-          "patching_rect": [
-            360.0,
-            320.0,
-            45.0,
-            45.0
-          ],
-          "w": 200,
-          "h": 120,
-          "id": "obj-15"
-        }
-      },
-      {
-        "box": {
-          "maxclass": "newobj",
-          "text": "*~ 0.5",
+          "maxclass": "message",
+          "text": "1",
           "numinlets": 2,
           "numoutlets": 1,
           "outlettype": [
             ""
           ],
           "patching_rect": [
-            40.0,
-            470.0,
+            430.0,
+            116.0,
+            120.0,
+            22.0
+          ],
+          "id": "obj-15"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "newobj",
+          "text": "click~",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "outlettype": [
+            "signal"
+          ],
+          "patching_rect": [
+            300.0,
+            156.0,
             120.0,
             22.0
           ],
@@ -324,6 +323,104 @@
       },
       {
         "box": {
+          "maxclass": "comment",
+          "text": "3) transport 1, metro toggle ON (reference grid)",
+          "numinlets": 1,
+          "numoutlets": 0,
+          "patching_rect": [
+            300.0,
+            46.0,
+            420.0,
+            20.0
+          ],
+          "id": "obj-17"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "button",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            40.0,
+            100.0,
+            45.0,
+            45.0
+          ],
+          "id": "obj-18"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "newobj",
+          "text": "poly~ voice.maxpat 4",
+          "numinlets": 1,
+          "numoutlets": 3,
+          "outlettype": [
+            "signal",
+            "signal",
+            ""
+          ],
+          "patching_rect": [
+            40.0,
+            140.0,
+            120.0,
+            22.0
+          ],
+          "id": "obj-19"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "message",
+          "text": "midinote 60 110",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "outlettype": [
+            ""
+          ],
+          "patching_rect": [
+            160.0,
+            100.0,
+            120.0,
+            22.0
+          ],
+          "id": "obj-20"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "comment",
+          "text": "4) hammer 'fire' -- attack should be instant, no lag vs the metro click",
+          "numinlets": 1,
+          "numoutlets": 0,
+          "patching_rect": [
+            40.0,
+            240.0,
+            560.0,
+            20.0
+          ],
+          "id": "obj-21"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "scope~",
+          "numinlets": 2,
+          "numoutlets": 0,
+          "patching_rect": [
+            40.0,
+            270.0,
+            45.0,
+            45.0
+          ],
+          "w": 300,
+          "h": 150,
+          "id": "obj-22"
+        }
+      },
+      {
+        "box": {
           "maxclass": "newobj",
           "text": "*~ 0.5",
           "numinlets": 2,
@@ -332,12 +429,12 @@
             ""
           ],
           "patching_rect": [
-            360.0,
-            470.0,
+            40.0,
+            440.0,
             120.0,
             22.0
           ],
-          "id": "obj-17"
+          "id": "obj-23"
         }
       },
       {
@@ -350,12 +447,12 @@
             ""
           ],
           "patching_rect": [
-            200.0,
-            520.0,
+            40.0,
+            490.0,
             120.0,
             22.0
           ],
-          "id": "obj-18"
+          "id": "obj-24"
         }
       }
     ],
@@ -363,8 +460,20 @@
       {
         "patchline": {
           "source": [
+            "obj-3",
+            0
+          ],
+          "destination": [
             "obj-5",
             0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-5",
+            2
           ],
           "destination": [
             "obj-6",
@@ -376,10 +485,10 @@
         "patchline": {
           "source": [
             "obj-6",
-            1
+            0
           ],
           "destination": [
-            "obj-9",
+            "obj-7",
             0
           ]
         }
@@ -387,19 +496,7 @@
       {
         "patchline": {
           "source": [
-            "obj-6",
-            0
-          ],
-          "destination": [
-            "obj-12",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-9",
+            "obj-7",
             0
           ],
           "destination": [
@@ -411,11 +508,35 @@
       {
         "patchline": {
           "source": [
-            "obj-12",
+            "obj-8",
+            1
+          ],
+          "destination": [
+            "obj-10",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-8",
             0
           ],
           "destination": [
-            "obj-11",
+            "obj-9",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-9",
+            0
+          ],
+          "destination": [
+            "obj-10",
             0
           ]
         }
@@ -427,7 +548,7 @@
             0
           ],
           "destination": [
-            "obj-11",
+            "obj-12",
             0
           ]
         }
@@ -435,19 +556,7 @@
       {
         "patchline": {
           "source": [
-            "obj-10",
-            0
-          ],
-          "destination": [
-            "obj-11",
-            2
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-8",
+            "obj-15",
             0
           ],
           "destination": [
@@ -459,7 +568,7 @@
       {
         "patchline": {
           "source": [
-            "obj-8",
+            "obj-12",
             0
           ],
           "destination": [
@@ -471,11 +580,11 @@
       {
         "patchline": {
           "source": [
-            "obj-11",
+            "obj-18",
             0
           ],
           "destination": [
-            "obj-15",
+            "obj-20",
             0
           ]
         }
@@ -483,11 +592,35 @@
       {
         "patchline": {
           "source": [
-            "obj-11",
+            "obj-20",
             0
           ],
           "destination": [
-            "obj-17",
+            "obj-19",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-19",
+            0
+          ],
+          "destination": [
+            "obj-22",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-19",
+            0
+          ],
+          "destination": [
+            "obj-23",
             0
           ]
         }
@@ -499,7 +632,7 @@
             0
           ],
           "destination": [
-            "obj-18",
+            "obj-23",
             0
           ]
         }
@@ -507,11 +640,23 @@
       {
         "patchline": {
           "source": [
-            "obj-17",
+            "obj-23",
             0
           ],
           "destination": [
-            "obj-18",
+            "obj-24",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-23",
+            0
+          ],
+          "destination": [
+            "obj-24",
             1
           ]
         }
