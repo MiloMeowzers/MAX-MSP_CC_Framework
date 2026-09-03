@@ -295,6 +295,43 @@ like level staying put / a subtle doubling in the middle, not a dropout. karmaKe
 silent.
 
 Base for next edit: `ChopChop_v6_176.amxd`.
+**Live test (user): full-A and full-B identical; 50/50 gives slight phasing + a small dip =
+A/B playheads not sample-locked (separate speed signals). Test-only condition (real A/B use =
+non-identical content). Accepted, noted for Phase 5 seam work.**
+
+### v6_177 — Phase 1 file 3: A/B hard-mute toggles + region-overlay-under-reverse (2026-09-03)
+
+`tools/phase1_file3_enables_reverse.py`. Base v6_176. **Two independent changes, bundled at
+user request** (each revertible on its own — A is the `en_*`/`vA_*`/`vB_*`/`voiceOn*` ids, B is
+the `ovr_rev*` ids + the `ovr_sub`->`ovr_add` reroute).
+
+**A — hard mute for karma A and karma B.** Two `live.toggle` params (`enableA` / `enableB`,
+enum off/on, initial 1) in the OVERDUB presentation panel (gap under the OVR AMT dial, pres
+y118), sending `---voiceOnA` / `---voiceOnB`. In `p Playback` each drives `$1 12 -> line~ 1.`
+into a new `*~` folded onto the file-2 gain signals: `A gain = (1-mix)*voiceOnA`,
+`B gain = mix*voiceOnB`. Toggle off -> `line~` ramps to 0 in 12 ms = that voice silenced,
+click-free. `---enableA/B` (the message-gate channel) left untouched. 6 root + 8 Playback boxes.
+
+**B — region overlay under reverse (roadmap A3).** Per-slice test was `((i-s+16)%16) < n` —
+right forward, wrong under reverse. Added `gate 2 1` on `---effectiveReverse` picking `ovr_sub`
+(i-s, outlet 0) or `ovr_revneg` (`* -1` = s-i, outlet 1) into `ovr_add`; `change -> t b i` sets
+the gate (`+1` -> 1|2) then re-fires `ovr_fire3` so the overlay repaints on a direction flip.
+`gate 2 1` defaults forward so a load with no `---effectiveReverse` still lights the region.
+6 root boxes; `ovr_sub->ovr_add` rerouted. `ovr_fire3` now has 4 recompute sources (added
+`ovr_revt`). doc 19 said "two objects" — it needed six for correct load + repaint behaviour.
+
+Checks: size 1,705,180; cycles 27; 0 problems; byte-exact round-trip. `cctrace` confirms both
+gain paths route through the new `*~`, `ovr_add` fed only via the reverse gate, and both
+`---voiceOn*` channels sender->receiver.
+
+**Expected on test:**
+- *En A / En B toggles* (OVERDUB panel): both on = as v6_176. Turn `En A` off -> only karmaB
+  audible; `En B` off -> only karma A. Both off -> silence. No clicks on toggle.
+- *Reverse overlay*: engage reverse with a shortened loop and a non-1 window — the lit region
+  on the pads/waveform should now sit *behind* the playhead (trailing it) instead of ahead,
+  and flip back when reverse releases.
+
+Base for next edit: `ChopChop_v6_177.amxd`.
 
 ---
 
