@@ -996,3 +996,127 @@ Verified: 1,883,883 / **27** cycles / 0 problems, size preserved.
 - Normal Record (ARM off, preroll does not intercept) unchanged.
 
 Base for next edit: `ChopChop_v6_201.amxd`.
+
+---
+
+## Phase 5/6 design spec — rolling-buffer architecture (2026-09-04, agreed with user)
+
+The device is rebuilt around a **rolling capture group** that is completely separate from the
+loop the device plays. Settled over a long design conversation; this section is the reference.
+
+### The three layers
+
+```
+  INPUT (dry + optional feedback)
+        |
+  [1] ROLLING CAPTURE GROUP  --------------------  the "tape" / history. Never heard directly.
+        - continuous, fixed short cadence (1 bar), transport-locked
+        - fills ring buffer(s) sized for the MAX master length
+        |   COMMIT  = grab the last <LoopLength> off the ring, fast-render into the master
+        v
+  [2] MASTER LOOP  ---------------------------------  one committed karma~, read-only between commits
+        - real, bounded, correct-length karma loop
+        - the existing slice engine runs on it UNCHANGED: jump / window / reverse / overlay / reloop
+        - OVERDUB layers onto it in real time, within bounds (karma-native)
+        |   master bed  +  voice hits  (summed, additive)
+        v
+  [3] VOICES + DSP  -------------------------------  performance layer, output-only by default
+        - poly~ voice pool, `target N` routing (NOT midinote), pitch/dir/env per pad
+        - coll sequencer drives the VOICES, not the tape
+        - DSP chain (soloAndMuting / glitch / pitchMod) post-master -> plugout~
+        - optional FEEDBACK gain: main mix -> back into [1]'s record input
+```
+
+### Buffer / karma roles (roles rotate, instances are fixed)
+
+| Instance | Reads | Job | Records? |
+|---|---|---|---|
+| `karmaMaster` | whichever buffer is currently frozen | committed loop; drives slices/overlay/output | never |
+| `karmaRoll1/2` (or ring readers) | rolling-pool buffers | the churn | yes, continuous |
+| `groove~` (v6_201 engine) | ring buffer | cold-start bridge + the READ side of every Commit render | no |
+| `poly~` pool | slices of `bufFreeze` | pad hits + sequenced layers | never (transient voices) |
+
+Buffers: a pool of ~4 (`buf1..buf4`) cycling through roles + `bufFreeze` for the voice
+layer. Recommend 4 so one buffer is always "cooling" and a `record`'s buffer-zero never lands
+on a swap edge. Existing device buffers: `---thisBuffer` / `---bufB` / `---bufFreeze` (all
+120000 ms) — reuse + add.
+
+### The four write / hold operations — keep the vocabulary separate
+
+| Op | Writes | From | Trigger | Purpose |
+|---|---|---|---|---|
+| **Roll** | rolling ring(s) | live input mix (+ feedback) | automatic, continuous while armed | keeps a real, recent, on-beat loop always available |
+| **Commit** | master slot | last `LoopLength` off the ring | **auto** on the first phrase boundary after arm; **manual** button after that (optional `follow` = every boundary) | put new material into the base loop — instant, because the audio already exists |
+| **Snapshot** ("Freeze" button, existing) | `bufFreeze` | master output, **clean or wet** (toggle) | manual | stable source for the poly/sequencer voices, immune to later base-layer DSP / overdubs |
+| **Overdub** (existing toggle) | master buffer | live input / voices, within loop bounds | manual hold | karma-native real-time layering onto the existing master, no length change |
+
+Roll is the only fully automatic one. The first Commit is automatic (it *is* the implicit
+first Record: establishes the master, sets `---hasContent`, fades in `karmaMaster`, hands the
+slice engine over, ends the `groove~` bridge). Every Commit after is manual. `hold` locks the
+current master against any Commit, manual or auto.
+
+### Decoupled: roll cadence vs master length
+
+The rolling chain runs at a **fixed short cadence (1 bar)**, always. **LoopLength governs
+only the master** — how much Commit grabs and the master loop's bounds. Running the whole
+chain at the master length (e.g. 8 bars) means up to 8 bars of dead time before a change can
+reach the output; decoupling makes responsiveness sub-bar regardless of master length.
+
+**Fast-render Commit:** on Commit, a `groove~` reads the last `LoopLength` off the ring at
+high speed (e.g. 8x) into `karmaMaster` recording at the same speed. A 4-bar master renders
+in ~1/2 bar wall-clock; 8 bars in ~1 bar. `karmaMaster` ends with a real, bounded karma loop
+(full slice/jump/overlay), crossfaded in against the old master.
+
+- Loop start = the commit point (bar-aligned, not snapped to the 4/8-bar phrase grid) — like
+  a hardware looper punch-in. Add phrase-grid snapping later only if wanted.
+- The render `groove~` source and `karmaMaster`'s record must be driven off the **same**
+  high-speed ramp so they stay locked and close at the right `maxpos`.
+- karma clamps record advance to `loop/1024` per sample (~375x for a 4-bar loop @ 48k) — 8x
+  is well inside it; render speed is a tunable with a ceiling.
+- Ring-wrap on the grab (`[writePos - LoopLength, writePos]` crossing the `@loop 1` boundary):
+  size the ring >> LoopLength and clamp for now; proper fix is `poke~`/`count~` with a
+  modular read (rolling-buffer doc "Alternative Approach").
+- "Lengthen 1->4 bars" falls straight out — the ring always holds the max length, so set
+  LoopLength to 4 and Commit.
+
+### The two gains
+
+- **Feedback gain** (main mix -> Roll input): 0 = Roll captures dry input only, every Commit
+  is a clean new loop. >0 = Roll captures the processed/performed result, so a Commit reshapes
+  what the loop *is* (not just layers on it like Overdub). Bounded: both gains <1 => decays.
+- **Commit crossfade gain** (rendered loop -> master): unity = replace; below unity = blend
+  into the existing master. N/A for the first (auto) Commit — nothing to fade against.
+
+### Why infinite regress can't happen
+
+1. Master buffer is **read-only between commits** — pads `jump`/`window`, never write. Slicing
+   the master can't change the master.
+2. Voice layer is **output-only by default** — `poly~` -> output bus, not to any record input.
+   Layering pad hits doesn't accumulate. `coll` fires transient voices; nothing grows.
+3. The one accumulating path (main mix -> Roll input) is a **single feedback gain, default 0**,
+   and it's a mix not a multiply.
+
+### Control surface
+
+`Arm` · `Commit` (+ crossfade gain, + `follow`, + `hold`) · `Freeze/Snapshot` (+ clean/wet)
+· `Overdub` · `Feedback gain`.
+
+### Build order
+
+- **v6_202** — the rolling substrate: continuous ring + fixed 1-bar transport-locked cadence
+  + write-position tracking + repoint the v6_201 `groove~` to grab `[writePos - LoopLength,
+  writePos]`. Monitor tap + diagnostics. No master/slice change yet.
+- **v6_203** — fast-render Commit into `karmaMaster`; crossfade; auto-first / manual-after
+  lifecycle; `---hasContent` handover.
+- **v6_204** — Snapshot clean/wet split; feedback gain into the Roll input.
+- **v6_205+** — `poly~` voice layer (`target N`), `coll` sequencer, per-pad pitch/direction.
+
+### Open verification items (test in Max, do not assume)
+
+- karma record fidelity at 8x (ipoke~ interpolation, the `loop/1024` clamp interaction).
+- `groove~` behaviour when `loopstart > loopend` (wrapping grab) — assume it does NOT wrap;
+  design around it.
+- Exact sample offset between `phasor~ @lock 1` wrap and the audible bar in Live 12.
+- Whether a per-bar `record` buffer-zero on the rolling karmas is a CPU problem at the device
+  buffer size (argues for smaller dedicated roll buffers, or `poke~` ring instead of karma
+  record passes for layer [1]).
