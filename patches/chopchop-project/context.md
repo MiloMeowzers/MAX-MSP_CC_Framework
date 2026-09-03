@@ -885,3 +885,70 @@ where the rolling karma is already in a real recorded state). Options for the us
 
 Recommendation: **option 1** — it reuses proven in-file machinery, gives a real loop (real pos
 report, real lengthening in Phase 4), and matches the agreed D-series architecture.
+
+---
+
+### karma~ research pass — source + help file + project skills (2026-09-04)
+
+User supplied `karma~.maxhelp` + `karma1.0/` (with **full C source** `karma~.c`, 2148 lines).
+Also read the project skills `karma-loop-semantics`, `max-msp-karma-technical`,
+`chopchop-size-window-architecture` (in `Downloads/chopchop/Updated skills/`).
+
+**Version is karma 1.0**, confirmed — `karma_dsp64` posts the literal string
+`"64bit_v1.0stereo"` (the line seen in ChopChop's Max console). No newer external anywhere in
+the supplied tree. So the 1.0 C source is authoritative for this device.
+
+**Complete message vocabulary** (`class_addmethod` in `karma~.c`, matches the help file's
+message boxes exactly): `position` `window` `jump` `stop` `play` `record` `append` `set`
+`overdub` `report` `ramp` `snramp` `snrcurv` `interp`. Attributes: `report` `ramp` `snramp`
+`snrcurv` `interp` only.
+
+- **`loopstart` / `loopend` / `@phaseout` / `buffer` / `crop` / `resize` / `sync` / `speed`
+  messages DO NOT EXIST.** The `Rolling Buffer, Pre Roll and Overdub Implementation.md` doc in
+  the user's tree is AI-generated and its "Verified" message claims for those are wrong — do
+  not build on that doc's specifics. Its *architecture* (always-rolling `record~` dual buffer
+  + role swap, "Mode 2 Pre-Roll") is sound and matches Rodrigo's own live-looping approach.
+- **`set <buf>` on a buffer karma did not record → loop = the whole allocation.** Confirmed in
+  source (`karma_bufchange`: `x->loop = x->end = x->bframes-1`) and in `karma-loop-semantics`
+  §6 (measured: 19999.98 ms end on a 20000 ms buffer). `window` is always a fraction of that.
+- **`crop` fails ("can't resize"), `size`/`sizeinsamps` fail in M4L ("can't resize now")** —
+  DSP is always running in a M4L device. `karma-loop-semantics` §5. So there is **no message
+  that turns a `record~`-pre-filled buffer region into a real bounded karma loop.**
+- **A real loop is only ever established by a karma record pass.** `stop` / `play` / `record`
+  all *close* an initial loop and define its length (`karma-loop-semantics` §1–2). Canonical
+  flow: `stop → record → (loop duration) → stop|play|record`. karma's `record` has **zero
+  latency** — `karma_record` from a stopped state zeroes the buffer and starts writing in the
+  same signal block. The "wait" in ChopChop is its own `p Record_And_Quantize` transport-
+  `phasor~` downbeat gate, not karma.
+- **`karma_record` from a stopped state ZEROES THE ENTIRE BUFFER** (`for i<frms: b[i]=0`) then
+  records. From a *playing* state it overdubs, no wipe. This is why a "record" reaching karma
+  mid-handoff wipes the waveform.
+- **Speed inlet is signal-preferential and "nothing connected / value 0 → records/plays at
+  speed 0"** (`max-msp-karma-technical` skill; source: at `speed==0`, `dir=0`, `sprale=0`,
+  `dpos` frozen → no motion). ChopChop's `obj-7 = *~ 1.` multiplies the `sig~ 1` speed chain
+  by `p transport` outlet 1 = Live's `is_playing`, so **transport stopped ⇒ karma speed 0**.
+  This is a deliberate "looper only runs while Ableton plays" choice but it is entangled with
+  the handoff failure.
+
+**Unresolved by static analysis:** the observed inversion (MAN `set/window/play` plays with
+SPD 0 / transport off, does NOT play with SPD 1 / transport on) is backwards from the 1.0
+source, which says speed 0 = frozen. Needs an in-Max probe (below). What IS certain: the
+normal real-record path (`record → delay(---size) → play`) works with transport running
+(confirmed by every prior device test) — only the `set`+`window` phantom fails.
+
+**Conclusion / recommendation unchanged and now well-supported:** drop `set`+`window` preroll.
+Two real routes:
+- **(A) minimal** — give `p Record_And_Quantize` an "off/bypass" (skill R3 already proposes
+  this) so `record` fires the instant the button is hit from a clean state. Loop still needs
+  one LoopLength to *complete* (real pass) but starts immediately; enable pads against the
+  in-progress loop. No ring, no phantom, ~small edit.
+- **(B) full (Phase 5 forward)** — karma B runs a continuous **real** record pass while armed
+  (its speed must be kept nonzero regardless of arm state). On capture, `stop`/`play` karma B
+  → real loop closed instantly → swap B into the output role, A starts a fresh record. Real
+  pos reports, real `window`, Phase-4 lengthening all fall out. This is the rolling-buffer
+  doc's Mode 2.
+
+**Probe to run before building either:** on v6_199_USEREDIT, transport RUNNING, clean state,
+do a NORMAL capture (Record with ARM off, so preroll does not intercept) at a 4-bar
+LoopLength. Confirm it makes a clean on-beat 4-bar loop with working pads. If yes (expected),
+the real-record path is the foundation and `set`+`window` is abandoned for good.
