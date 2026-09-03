@@ -441,6 +441,42 @@ minimal phasing since B is speed-locked to A). `En A` / `En B` drop their voice 
 `A/B Mix` > 0).
 
 Base for next edit: `ChopChop_v6_182.amxd`.
+**Live test (user): all working. Phase 1 (A1 steps 1-3) COMPLETE at v6_182 —
+karmaB audible, `---abMix` crossfade, A/B hard-mute toggles, karmaB truly mirrors karma A,
+B speed-locked to A.**
+
+### v6_183 — Phase 2: resize `---bufB` / `---bufFreeze` to 120,000 ms (2026-09-03)
+
+`tools/phase2_resize_buffers.py`. Base v6_182. Both were hardcoded at 20000 ms in
+`p BufferSwitching` with no reduction guard (only `---thisBuffer` has one). Edited the size
+arg in the two existing `buffer~` declarations to `120000` — no boxes added/reordered, so the
+order-sensitivity rule doesn't apply. ~42 MB/buffer stereo; ~127 MB across the four; applied
+on next device load. Prereq for Phase 3 (rolling capture wants a generous ring on `---bufB`).
+Verified: both decls updated, box order unchanged, 1,705,180 / 27 / 0 / byte-exact.
+
+**Expected on test:** no audible change now; captures over 20 s into B/Keys no longer wrap
+(not reachable until Phase 3/karmaKeys input exist — this is groundwork).
+
+Base for next edit: `ChopChop_v6_183.amxd`.
+
+---
+
+## Phase status
+
+- **Phase 1 — karmaB audible + mixable + mirror** — DONE (v6_175-182).
+- **Phase 2 — resize `---bufB` / `---bufFreeze`** — DONE (v6_183).
+- **Phase 3 — transport-locked rolling capture on karmaB** — next. Rebuild `p RollingB`:
+  `stop` before `record`, a real `---bRealign` sender, `---bAudible` receiver, continuous
+  ring rather than a one-shot. Prototype in a duplicated device first (karma~ timing).
+- Phase 4 — window-into-rolling-buffer loop model (loop lengthening).
+- Phase 5 — A/B alternate-role handoff + instant start.
+- Phase 6+ — `poly~` slice layer (`target` routing), pad modes, per-pad pitch/direction,
+  `coll` MIDI-note sequencer.
+
+Deferred / smaller: A3 region overlay under reverse (shelved — user: 1-slice lag acceptable);
+`karmaKeys` output + audio input (A1 step 5, needs a design call); `---enableA/B/Keys`
+message-gate senders (separate channel from the mute toggles — gates only the glitch
+side-stream, see R10).
 
 ---
 
