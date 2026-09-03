@@ -952,3 +952,47 @@ Two real routes:
 do a NORMAL capture (Record with ARM off, so preroll does not intercept) at a 4-bar
 LoopLength. Confirm it makes a clean on-beat 4-bar loop with working pads. If yes (expected),
 the real-record path is the foundation and `set`+`window` is abandoned for good.
+
+### v6_201 — Phase 3 file 18: preroll playback moves to groove~ (2026-09-04)
+
+`tools/phase3_file18_groove_preroll_engine.py`. Base **v6_199_USEREDIT** (logic-only, no
+presentation change). Implements option C from the karma research pass.
+
+**p Playback (obj-118) — new groove~ engine:**
+- `gv` = `groove~ ---thisBuffer 2`, fed by a private `gv_sig` (`sig~ 1.`) on inlet 0 — a
+  clean forward rate that is **NOT** multiplied by `is_playing` (that gate is what made the
+  karma phantom transport-dependent).
+- `gv_r` (`r ---gvMsg`) → gv[0]; `gv_lsr` (`r ---gvLoopStart`) → gv[1]; `gv_ler`
+  (`r ---gvLoopEnd`) → gv[2].
+- `gv[0]/gv[1]` → `gvxL/gvxR` (`*~`), gain from `gv_gate` (`line~`) ← `gv_gm` (`$1 15`) ←
+  `gv_gr` (`r ---prerollLoop`): 0 normally, ramps to 1 on capture.
+- `gv_plr` (`r ---prerollLoop`) → `sel 0` → `stop` → gv[0]: any INIT stops groove~.
+- `gvmixL/gvmixR` (`+~`) inserted between `bmixL/bmixR` and the p Playback audio outlets
+  (`obj-23/obj-25`); groove~ sums in on `gvmix[1]`.
+
+**p PrerollCapture — rewritten**, phantom removed (`pc_lm/pc_szdiv/pc_szclamp/pc_msg/
+pc_kmsg/pc_t` dropped). `pc_trig` → `pc_seq` (`t b b b b b b`) fires, in order:
+`s ---gvLoopEnd` = current `---size` · `s ---gvLoopStart` = 0 · `s ---gvMsg set ---thisBuffer`
+· `s ---gvMsg loop 1` · `s ---gvMsg startloop` · `s ---prerollLoop 1` + `s ---dbgHandoff 1`.
+
+**root:** `obj-123[0]` (soft INIT — also full INIT and load) → `ri_pl0 "0"` →
+`s ---prerollLoop`, so a Full INIT now both stops groove~ and closes its gain.
+
+**p Preroll:** ring bounded to `[0, ---size]` — `pr_settle` (ring-start bang) → `pr_sp0 "0"`
+→ `pr_rec[2]` (start ms); `(r ---size)` + `pr_settle` → `pr_endf` (`f`) → `pr_rec[3]`
+(end ms). `record~ ---thisBuffer 2` inlets 2/3 = start/end ms, DB- and sample-patch-verified.
+
+New channels: `---gvMsg` `---gvLoopStart` `---gvLoopEnd` `---prerollLoop`.
+Verified: 1,883,883 / **27** cycles / 0 problems, size preserved.
+
+**Expected on test** (v6_199_USEREDIT layout, no edit needed):
+- Clean state, transport running, 4-bar LoopLength. Arm → input → FUL LED lights.
+- Hit Record → **groove~** plays `[0, 4 bars]` of the ring immediately, looping. Should be
+  audible with **transport running** (the case the phantom failed). HND reads 1.
+- **PLY (`---karmaPlaying`) will stay 0** during a groove~ preroll loop — groove~ is not
+  karma. Judge by ear + HND, not PLY, for this build.
+- Full INIT → groove~ stops, gain closes, ring left silent (per your requirement).
+- Pads / slice / reverse / overlay do **not** act on the groove~ loop yet — that's file 19.
+- Normal Record (ARM off, preroll does not intercept) unchanged.
+
+Base for next edit: `ChopChop_v6_201.amxd`.
