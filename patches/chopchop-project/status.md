@@ -1,3 +1,3 @@
 stage: build
-progress: toolkit rebuilt; T1-T6 scratch patchers awaiting Max verification
+progress: v6_175 shipped (Phase 1 file 1: karmaB summed into output) - awaiting Live test
 created: 2026-09-03T03:54:30.518730+00:00

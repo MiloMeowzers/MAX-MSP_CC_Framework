@@ -246,7 +246,28 @@ and testable immediately. Phases 3-5 are the architectural risk and the focus of
 
 ### Stage
 
-ideation -> discussion -> research
+ideation -> discussion -> research -> build
+
+---
+
+## Build log
+
+### v6_175 — Phase 1 file 1: karmaB audible (2026-09-03)
+
+`tools/phase1_karmab_audible.py`. Inside `p Playback`: inserted `bmixL` / `bmixR`
+(`+~`) so `karma A` (obj-20) and `karmaB` sum into the existing L/R outlets (obj-23 /
+obj-25). 2 new boxes, 2 cords removed (`obj-20[0]->obj-23`, `obj-20[1]->obj-25`), 6 added.
+No `---abMix` yet (file 2). karmaKeys still silent (file with its own routing later).
+
+Checks: file size 1,705,180 (identical); cycle sweep 27 (unchanged); 0 structural problems;
+byte-exact round-trip; `cctrace` confirms `karmaB[0/1] -> bmix -> obj-23/25 -> p soloAndMuting
+-> plugout~`, and `karma A` path preserved through the same `+~`.
+
+**Expected on test:** karmaB records/plays in lockstep with A (gB open, shared messages,
+`bspeed sig~ 1`), so after a normal capture the loop should be ~+6 dB / doubled — that is the
+wire proven. File 2 swaps the raw sum for the `---abMix` crossfade.
+
+Base for next edit: `ChopChop_v6_175.amxd`.
 
 ---
 
