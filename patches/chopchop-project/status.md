@@ -1,3 +1,3 @@
 stage: build
-progress: v6_198: arm always loads off + full INIT turns arm off (ring stops) + diag layout matched to user edit. Handoff = v6_197 bare bisect.
+progress: ADOPTED ChopChop_v6_199_USEREDIT.amxd as new base (user re-laid the diag strip). File size now 1883883. All future builds start from user file, logic-only edits. Awaiting SPD/RON diagnostic data.
 created: 2026-09-03T03:54:30.518730+00:00

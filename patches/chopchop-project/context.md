@@ -1120,3 +1120,44 @@ in ~1/2 bar wall-clock; 8 bars in ~1 bar. `karmaMaster` ends with a real, bounde
 - Whether a per-bar `record` buffer-zero on the rolling karmas is a CPU problem at the device
   buffer size (argues for smaller dedicated roll buffers, or `poke~` ring instead of karma
   record passes for layer [1]).
+
+### v6_202 — Phase 5 file 1: rolling substrate (2026-09-04)
+
+`tools/phase3_file19_rolling_substrate.py`. Base v6_201. Logic-only; **no presentation
+layout change**. First increment of the rolling-buffer architecture — the continuous ring +
+fixed cadence that Commit/render (v6_203) will sit on.
+
+- **`buffer~ ---rollBuf 120000 2`** added in `p Playback/p BufferSwitching`.
+- **`p RollCapture`** (new root subpatcher, x2600 y560, 2 audio inlets ← `ingain_L/R`):
+  `record~ ---rollBuf 2 @loop 1` runs continuously while `---prerollArm == 1` (`sel 1 0` →
+  `1`+`reset` on arm, `0` on disarm). `phasor~ @frequency 1n @lock 1 → delta~ → <~ 0. →
+  edge~` = 1-bar transport-locked cadence → `counter` → `s ---dbgBar`. `snapshot~` on the
+  `record~` sync outlet, banged by the bar edge → `* 120000.` → `s ---rollWritePos` (ring
+  write position in ms latched at each bar mark).
+- **`p Preroll`**: `p_l/p_r → pr_rec` cut — the old bounded ring no longer writes
+  `---thisBuffer` (karma A's buffer). `---prerollFull` / FUL-LED timer logic untouched.
+- **`p PrerollCapture`**: groove~ now grabs from `---rollBuf`, region
+  `[writePos − ---size, writePos]`. `pc_setb` → `set ---rollBuf`. `pc_wef` (`f`, cold-fed by
+  `r ---rollWritePos`, latched by `pc_seq[4]`) → `s ---gvLoopEnd` and → `pc_ssub (−) ←
+  pc_szf(---size)` → `pc_swrap (expr ($f1<0.)?($f1+120000.):$f1)` → `s ---gvLoopStart`. The
+  fixed `0` loopstart (`pc_ls`) removed.
+- **Diag repoint** (logic only, both fields obsolete under groove~): `dg_spd_r`
+  `r ---dbgSpeed` → **`r ---dbgBar`** (SPD field = bar counter), `dg_frc_r` `r ---windowVal`
+  → **`r ---rollWritePos`** (FRC field = ring write pos ms).
+
+New channels: `---rollBuf` (buffer), `---dbgBar`, `---rollWritePos`.
+Verified: 1,883,883 / **27** cycles / 0 problems, size preserved.
+
+**Expected on test** (v6_199_USEREDIT layout, no edit):
+- Arm, transport running. **SPD field** should now tick up once per bar, locked to Live's
+  transport (it's the `phasor~ @lock 1` bar counter). **FRC field** shows the ring write
+  position in ms, advancing ~one bar's worth each bar, wrapping near 120000.
+- Let it roll a few bars, hit Record → groove~ plays the last `LoopLength` ending at the most
+  recent bar mark, from `---rollBuf`. Do it again 2 bars later → a different, more recent
+  slice. Responsiveness is one bar regardless of LoopLength.
+- If the grabbed audio is stale / wrong length / glitches at the wrap: the `record~` sync
+  outlet scaling assumption (0–1 × 120000 = ms) is wrong — first open item in the spec.
+- Full INIT still stops groove~ and closes the gate (v6_201 behaviour).
+- No master / slice / karma change — PLY stays 0 for a groove~ preroll, as in v6_201.
+
+Base for next edit: `ChopChop_v6_202.amxd`.
