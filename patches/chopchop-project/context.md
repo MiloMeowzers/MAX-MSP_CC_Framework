@@ -459,6 +459,36 @@ Verified: both decls updated, box order unchanged, 1,705,180 / 27 / 0 / byte-exa
 
 Base for next edit: `ChopChop_v6_183.amxd`.
 
+### Preroll design (agreed 2026-09-03) + prototype
+
+Scope narrowed by the user: preroll is **only** for the very first capture from a clean state
+(`---hasContent == 0`); once running, normal functionality already works. Aim = remove the
+wait on the first `record`. Preroll buffer length = selected LoopLength; LoopLength menu
+change -> resize/restart preroll; add an LED beside the arm toggle for "preroll full".
+
+Mechanism (from web research — `record~` loop-mode circular buffer is the documented
+primitive; karma-loop-semantics §3/§6 give the karma side):
+- `record~ ---thisBuffer 2 @loop 1` writes the device input into a ring while armed +
+  clean-state. karma A isn't playing then, so no read/write conflict; no separate buffer
+  (M4L can't resize buffers at runtime, §5).
+- "Full" = `delay LoopLength` after `record~` start -> LED. Menu change -> restart.
+- On first Record with (arm + full + clean): stop `record~`, **skip the `clear
+  ---thisBuffer`**, send karma A `set ---thisBuffer, position 0., window (LoopLength/120000),
+  play`, set `---hasContent 1` and `---capturedMs = 120000` so the existing window math
+  yields the right fraction, regrid. Loop is then a window into 120000 ms -> Phase 4
+  (lengthening) falls out.
+
+**Open question the prototype answers:** does `karma~ set + window + play` on a
+`record~`-filled buffer (no karma record pass) give a clean bounded loop? Everything hinges
+on it.
+
+**`ChopChop_v6_183_PREROLL_TEST.amxd`** (`tools/build_preroll_prototype.py`) — v6_183 + a
+throwaway root rig near x2600 y180: `record~ ---thisBuffer 2 @loop 1` fed from
+`ingain_L/R`; buttons [1 fill start] / [2 fill stop] / [3 window .033] / [3b .5] / [3c 1.]
+(the 3s send `set ---thisBuffer, position 0., window <f>, play` via `s ---karmaMsg`);
+number boxes on `---karmaPos` / `---karmaRep4` (loop end ms) / `---karmaRep5` (window ms) /
+`---karmaPlaying`. 1,705,180 / 27 / 0 / byte-exact. **Not a version bump** — discard after.
+
 ---
 
 ## Phase status
