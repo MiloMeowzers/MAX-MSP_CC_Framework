@@ -50,7 +50,7 @@
       {
         "box": {
           "maxclass": "comment",
-          "text": "T5  --  4n metronome = the grid.  Tap a rhythm on the 4 pads (each tap clicks AND records to detonate).  'start' replays -> replayed clicks should sit where you tapped, against the same metro.  Then 'write t5.mid' / 'read' / 'start'.",
+          "text": "T5  --  4n metronome = the grid. Tap a rhythm on the 4 pads (tap = click + record to detonate). 'start' replays -> replayed clicks should land where you tapped, vs the same metro. Then 'write t5.mid' / 'read' / 'start'.",
           "numinlets": 1,
           "numoutlets": 0,
           "patching_rect": [
@@ -255,21 +255,6 @@
       },
       {
         "box": {
-          "maxclass": "comment",
-          "text": "4) 'record'  5) tap a rhythm  6) 'start' replays",
-          "numinlets": 1,
-          "numoutlets": 0,
-          "patching_rect": [
-            40.0,
-            246.0,
-            460.0,
-            20.0
-          ],
-          "id": "obj-13"
-        }
-      },
-      {
-        "box": {
           "maxclass": "newobj",
           "text": "click~",
           "numinlets": 1,
@@ -283,7 +268,7 @@
             120.0,
             22.0
           ],
-          "id": "obj-14"
+          "id": "obj-13"
         }
       },
       {
@@ -308,7 +293,7 @@
             120.0,
             22.0
           ],
-          "id": "obj-15"
+          "id": "obj-14"
         }
       },
       {
@@ -326,7 +311,7 @@
             120.0,
             22.0
           ],
-          "id": "obj-16"
+          "id": "obj-15"
         }
       },
       {
@@ -344,7 +329,7 @@
             120.0,
             22.0
           ],
-          "id": "obj-17"
+          "id": "obj-16"
         }
       },
       {
@@ -362,7 +347,7 @@
             120.0,
             22.0
           ],
-          "id": "obj-18"
+          "id": "obj-17"
         }
       },
       {
@@ -380,7 +365,7 @@
             120.0,
             22.0
           ],
-          "id": "obj-19"
+          "id": "obj-18"
         }
       },
       {
@@ -397,6 +382,21 @@
             244.0,
             120.0,
             22.0
+          ],
+          "id": "obj-19"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "comment",
+          "text": "4) 'record'  5) tap a rhythm  6) 'start' replays  7) write / read / start",
+          "numinlets": 1,
+          "numoutlets": 0,
+          "patching_rect": [
+            40.0,
+            244.0,
+            200.0,
+            20.0
           ],
           "id": "obj-20"
         }
@@ -464,7 +464,7 @@
           ],
           "patching_rect": [
             40.0,
-            390.0,
+            380.0,
             120.0,
             22.0
           ],
@@ -528,7 +528,7 @@
             0
           ],
           "destination": [
-            "obj-14",
+            "obj-13",
             0
           ]
         }
@@ -540,7 +540,19 @@
             0
           ],
           "destination": [
-            "obj-15",
+            "obj-14",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-10",
+            0
+          ],
+          "destination": [
+            "obj-13",
             0
           ]
         }
@@ -560,11 +572,11 @@
       {
         "patchline": {
           "source": [
-            "obj-10",
+            "obj-11",
             0
           ],
           "destination": [
-            "obj-15",
+            "obj-13",
             0
           ]
         }
@@ -584,11 +596,11 @@
       {
         "patchline": {
           "source": [
-            "obj-11",
+            "obj-12",
             0
           ],
           "destination": [
-            "obj-15",
+            "obj-13",
             0
           ]
         }
@@ -608,11 +620,11 @@
       {
         "patchline": {
           "source": [
-            "obj-12",
+            "obj-15",
             0
           ],
           "destination": [
-            "obj-15",
+            "obj-14",
             0
           ]
         }
@@ -624,7 +636,7 @@
             0
           ],
           "destination": [
-            "obj-15",
+            "obj-14",
             0
           ]
         }
@@ -636,7 +648,7 @@
             0
           ],
           "destination": [
-            "obj-15",
+            "obj-14",
             0
           ]
         }
@@ -648,7 +660,7 @@
             0
           ],
           "destination": [
-            "obj-15",
+            "obj-14",
             0
           ]
         }
@@ -660,30 +672,6 @@
             0
           ],
           "destination": [
-            "obj-15",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-20",
-            0
-          ],
-          "destination": [
-            "obj-15",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-15",
-            0
-          ],
-          "destination": [
             "obj-14",
             0
           ]
@@ -692,7 +680,19 @@
       {
         "patchline": {
           "source": [
-            "obj-15",
+            "obj-14",
+            0
+          ],
+          "destination": [
+            "obj-13",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-14",
             1
           ],
           "destination": [
@@ -704,7 +704,7 @@
       {
         "patchline": {
           "source": [
-            "obj-15",
+            "obj-14",
             0
           ],
           "destination": [
@@ -728,7 +728,7 @@
       {
         "patchline": {
           "source": [
-            "obj-14",
+            "obj-13",
             0
           ],
           "destination": [

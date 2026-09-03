@@ -1,42 +1,46 @@
 # ChopChop scratch verification patchers
 
-Regenerate: `python ../tools/build_test_patchers.py`. Open each in **Max 9
-standalone** (not the device), DSP on. Step 1 is always "click ezdac", then the
-numbered comments left→right. If an object box is red (failed to create),
-report that first — don't judge behaviour off a broken patch.
+Regenerate: `python ../tools/build_test_patchers.py`. Max 9 standalone, DSP on.
+All 5 files must stay in **one folder** (t2/t3 load `voice.maxpat` by name).
 
-## Why only three tests here
+Third rewrite. Everything is now a **synthesised blip** (`cycle~ * line~`
+envelope) — no `buffer~`, no `poke~`, no `play~`, no file loading. So the only
+thing t2/t3 test is: *does `poly~` route a trigger to a voice that makes
+sound?*
 
-The first two batches over-reached. Lesson applied:
+## Run in this order
 
-- **No karma~ in a scratch patcher.** doc 02 and `chopchop-max-testing`: a
-  from-scratch karma~ harness has failed this project every time ("patchcord
-  out of range", "can't load now"). Every karma~ question is deferred to a
-  prototype inside a **duplicated copy of the real device**, where karma~ is
-  already wired correctly.
-- Questions answerable from documentation + the fact that **the device already
-  does it** are not worth a Max session (see "Answered without a test" below).
+1. **`t0_sanity.maxpat`** — no `poly~` at all. Click `ezdac~`, then `blip`.
+   - **Hear a 330 Hz tone each click** → audio path is fine, go on.
+   - **Silent** → it's DSP/audio setup (audio not enabled, wrong output device,
+     sample rate) — *not* the patch. Fix that first; nothing else will sound.
 
-## The three that need your ears/eyes
+2. **`t2_poly_attack.maxpat`** — `poly~ voice.maxpat 4`. Click `ezdac~`, then
+   `fire` (sends `midinote 60 110`).
+   - **Blip fires, tight, no lag vs the metro click** → `poly~` slice layer is
+     viable; report how the attack looks on the `scope~`.
+   - **`poly~` object is red** → it can't find `voice.maxpat` (keep the folder
+     together).
+   - **`poly~` loads but silent** → click the **`bang`** box next to `fire`
+     instead, and tell me which of the two produces sound. That isolates whether
+     `midinote` voice-routing is the problem vs the voice patch itself.
 
-| File | Question | Decision it feeds |
-|---|---|---|
-| `voice.maxpat` | (support) `play~` one-shot voice: bang → play 1000–1250 ms of `tbuf` once, free the poly~ slot on `line~` done. | the voice-subpatcher shape for the `poly~` slice layer (D1 L2). |
-| `t2_poly_attack.maxpat` | Fire a pre-instantiated `poly~`/`play~` voice repeatedly against a running metronome. Is the trigger→sound edge tight — no perceptible lag, clean attack on the `scope~`? | whether `poly~` one-shots can carry live pad triggering (D1 L2) instead of `karma~` jumps. |
-| `t3_poly_steal.maxpat` | Machine-gun 6 notes into a 4-voice `poly~` → only 4 sound (stealing). `target 2, 1` then a note → `VOICE` print reads `2`. | the voice-management mechanism: home-voice-per-pad + choke default + spill (D2/D3). |
-| `t5_detonate_rhythm.maxpat` | Tap a rhythm on 4 pads (each tap clicks + records to `detonate`). `start` replays against the same 4n metronome — do the replayed clicks land where you tapped? Then `write t5.mid` / `read` / `start`. | `detonate` vs `coll` for the MIDI-at-core sequencer store (D1 L3 / D8). |
+3. **`t3_poly_steal.maxpat`** — machine-gun the six `midinote` boxes → at most
+   4 blips overlap (older cut). `target 2, 1` then a note → `VOICE` prints `2`.
 
-## Answered without a test (state if you disagree)
+4. **`t5_detonate_rhythm.maxpat`** — no `poly~`. `transport 1`, metro toggle on.
+   `record`, tap a rhythm on the 4 pads, `start` replays — do the replayed
+   clicks land where you tapped, against the same metro? Then `write t5.mid`,
+   `read`, `start` again.
 
-- **T1 — `groove~`/`play~` reading a `buffer~` while `record~` writes it.**
-  Standard Max; every live-looper and granular patch does it. The only artifact
-  is reading the exact sample under the record head. The slice layer reads
-  *committed* regions (behind the head), so no contention. → **fine.**
-- **T4 — defining a shorter loop from a running karma~ capture (bare `window`
-  vs `stop→position→window→play`), and the `ramp`/`snramp` seam.** Genuinely
-  unresolved (karma-coordinate-conventions §3) — but this is a **karma~**
-  question, so it goes to a device-copy prototype in Phase 3–5, not here.
-- **T6 — `phasor~ @frequency 1n @lock 1 → delta~ → <~ -0.5 → edge~ → onebang`
-  bar-edge detection.** Already proven: the device's own `p RollingB` and
-  `p Record_And_Quantize` both use this exact chain and the device runs. Reuse
-  verbatim for the Phase-4 handoff trigger.
+## Not tested here (answered from docs / the device itself)
+
+- **`groove~`/`play~` reading a `buffer~` while `record~` writes it** — standard
+  Max; the slice layer reads committed regions behind the record head. Fine.
+- **karma~ loop-definition from a running capture, `ramp`/`snramp` seam** — a
+  karma~ question, so it's prototyped inside a **duplicated copy of the real
+  device** in Phase 3–5, never a from-scratch patcher (doc 02: that has failed
+  every time).
+- **`phasor~ @1n @lock 1 → delta~ → <~ -0.5 → edge~ → onebang` bar-edge** — the
+  device's `p RollingB` and `p Record_And_Quantize` already use this exact chain
+  and run. Reuse verbatim.

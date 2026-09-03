@@ -50,13 +50,13 @@
       {
         "box": {
           "maxclass": "comment",
-          "text": "poly~ voice -- bang plays 1000..1250 ms of tbuf once, frees on line~ done",
+          "text": "poly~ voice -- ANY input to in 1 fires a 600 ms 300 Hz blip and reports the voice index out (out 3). thispoly~ busy on trigger, free on line~ done.",
           "numinlets": 1,
           "numoutlets": 0,
           "patching_rect": [
             40.0,
             10.0,
-            600.0,
+            720.0,
             20.0
           ],
           "id": "obj-1"
@@ -66,7 +66,7 @@
         "box": {
           "maxclass": "newobj",
           "text": "in 1",
-          "numinlets": 1,
+          "numinlets": 0,
           "numoutlets": 1,
           "outlettype": [
             ""
@@ -83,39 +83,21 @@
       {
         "box": {
           "maxclass": "newobj",
-          "text": "thispoly~",
+          "text": "t b b b",
           "numinlets": 1,
-          "numoutlets": 2,
+          "numoutlets": 3,
           "outlettype": [
-            "signal",
-            "signal"
-          ],
-          "patching_rect": [
-            340.0,
-            50.0,
-            120.0,
-            22.0
-          ],
-          "id": "obj-3"
-        }
-      },
-      {
-        "box": {
-          "maxclass": "newobj",
-          "text": "t b b",
-          "numinlets": 1,
-          "numoutlets": 2,
-          "outlettype": [
+            "bang",
             "bang",
             "bang"
           ],
           "patching_rect": [
             40.0,
-            90.0,
+            88.0,
             120.0,
             22.0
           ],
-          "id": "obj-4"
+          "id": "obj-3"
         }
       },
       {
@@ -128,8 +110,27 @@
             ""
           ],
           "patching_rect": [
-            210.0,
-            90.0,
+            220.0,
+            88.0,
+            120.0,
+            22.0
+          ],
+          "id": "obj-4"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "newobj",
+          "text": "thispoly~",
+          "numinlets": 1,
+          "numoutlets": 2,
+          "outlettype": [
+            "signal",
+            "signal"
+          ],
+          "patching_rect": [
+            300.0,
+            128.0,
             120.0,
             22.0
           ],
@@ -139,7 +140,7 @@
       {
         "box": {
           "maxclass": "message",
-          "text": "1000, 1250 250",
+          "text": "1, 0 600",
           "numinlets": 2,
           "numoutlets": 1,
           "outlettype": [
@@ -147,11 +148,11 @@
           ],
           "patching_rect": [
             40.0,
-            130.0,
+            128.0,
             120.0,
             22.0
           ],
-          "w": 150,
+          "w": 110,
           "id": "obj-6"
         }
       },
@@ -167,7 +168,7 @@
           ],
           "patching_rect": [
             40.0,
-            170.0,
+            162.0,
             120.0,
             22.0
           ],
@@ -177,21 +178,37 @@
       {
         "box": {
           "maxclass": "newobj",
-          "text": "play~ tbuf 2",
-          "numinlets": 1,
-          "numoutlets": 3,
+          "text": "cycle~ 300",
+          "numinlets": 2,
+          "numoutlets": 1,
           "outlettype": [
-            "signal",
-            "signal",
-            "bang"
+            "signal"
           ],
           "patching_rect": [
-            40.0,
-            210.0,
+            180.0,
+            162.0,
             120.0,
             22.0
           ],
           "id": "obj-8"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "newobj",
+          "text": "*~",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "outlettype": [
+            "signal"
+          ],
+          "patching_rect": [
+            40.0,
+            196.0,
+            120.0,
+            22.0
+          ],
+          "id": "obj-9"
         }
       },
       {
@@ -204,26 +221,8 @@
             ""
           ],
           "patching_rect": [
-            210.0,
-            250.0,
-            120.0,
-            22.0
-          ],
-          "id": "obj-9"
-        }
-      },
-      {
-        "box": {
-          "maxclass": "newobj",
-          "text": "out 3",
-          "numinlets": 1,
-          "numoutlets": 0,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            340.0,
-            130.0,
+            220.0,
+            196.0,
             120.0,
             22.0
           ],
@@ -241,7 +240,7 @@
           ],
           "patching_rect": [
             40.0,
-            260.0,
+            234.0,
             120.0,
             22.0
           ],
@@ -258,12 +257,30 @@
             ""
           ],
           "patching_rect": [
-            150.0,
-            260.0,
+            140.0,
+            234.0,
             120.0,
             22.0
           ],
           "id": "obj-12"
+        }
+      },
+      {
+        "box": {
+          "maxclass": "newobj",
+          "text": "out 3",
+          "numinlets": 1,
+          "numoutlets": 0,
+          "outlettype": [
+            ""
+          ],
+          "patching_rect": [
+            300.0,
+            200.0,
+            120.0,
+            22.0
+          ],
+          "id": "obj-13"
         }
       }
     ],
@@ -275,6 +292,18 @@
             0
           ],
           "destination": [
+            "obj-3",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-3",
+            2
+          ],
+          "destination": [
             "obj-4",
             0
           ]
@@ -287,7 +316,7 @@
             0
           ],
           "destination": [
-            "obj-6",
+            "obj-5",
             0
           ]
         }
@@ -295,7 +324,7 @@
       {
         "patchline": {
           "source": [
-            "obj-4",
+            "obj-3",
             1
           ],
           "destination": [
@@ -307,11 +336,11 @@
       {
         "patchline": {
           "source": [
-            "obj-5",
+            "obj-3",
             0
           ],
           "destination": [
-            "obj-3",
+            "obj-6",
             0
           ]
         }
@@ -319,8 +348,44 @@
       {
         "patchline": {
           "source": [
-            "obj-3",
+            "obj-6",
             0
+          ],
+          "destination": [
+            "obj-7",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-7",
+            0
+          ],
+          "destination": [
+            "obj-9",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-8",
+            0
+          ],
+          "destination": [
+            "obj-9",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-7",
+            1
           ],
           "destination": [
             "obj-10",
@@ -331,35 +396,11 @@
       {
         "patchline": {
           "source": [
-            "obj-6",
+            "obj-10",
             0
           ],
           "destination": [
-            "obj-7",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-7",
-            0
-          ],
-          "destination": [
-            "obj-8",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-7",
-            1
-          ],
-          "destination": [
-            "obj-9",
+            "obj-5",
             0
           ]
         }
@@ -368,18 +409,6 @@
         "patchline": {
           "source": [
             "obj-9",
-            0
-          ],
-          "destination": [
-            "obj-3",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-8",
             0
           ],
           "destination": [
@@ -391,11 +420,23 @@
       {
         "patchline": {
           "source": [
-            "obj-8",
-            1
+            "obj-9",
+            0
           ],
           "destination": [
             "obj-12",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-5",
+            0
+          ],
+          "destination": [
+            "obj-13",
             0
           ]
         }
