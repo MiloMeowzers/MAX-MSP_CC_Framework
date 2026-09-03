@@ -594,6 +594,30 @@ Record is exactly as before. Also check the captured loop is the *head* of your 
 end-point assumption).
 
 Base for next edit: `ChopChop_v6_186.amxd`.
+**Live test (user): preroll fills + refills on LoopLength change, but Record -> no audio / no
+playstate.**
+
+### v6_187 — fix the handoff (2026-09-03)
+
+`tools/phase3_file4_handoff_fixes.py`. Base v6_186. Causes of "no audio on Record":
+1. **`rc_gate` was `gate 2` = closed by default** -> a Record click before `---prerollFull`
+   ever fired routed nowhere (not `---recordOn`, not `---prerollCapture`). -> `gate 2 1` +
+   `loadbang 1 -> rc_gate` control. Record now always routes: control 1 = normal (default),
+   control 2 = handoff (when `---prerollFull`).
+2. **`record~` start/end inlets 2/3 were an unverified assumption** and the extra cords may
+   have disturbed the ring. Reverted: `pr_rec` back to 2 inlets, `pr_startpt`/`pr_endptf`
+   removed. Ring wraps at 120 s again (rotated capture, functional) — proper LoopLength
+   bounding waits until the `record~ <buf> 2` inlet layout is confirmed.
+3. **`pc_fracf` had no default** -> a missing `---size` -> `window 0` -> silence. Now
+   `f 0.0667` (~4 bar / 120 s).
+Verified: 1,705,180 / 27 / 0 / byte-exact.
+
+**Expected on test:** Record with preroll NOT full -> normal capture (as v6_185). Record with
+preroll FULL -> instant windowed loop (audible, playstate set), no clear/record pass. Overlay
+still frozen during a preroll loop. Ring capture is rotated (not head-aligned) until the
+`record~` inlet layout is verified.
+
+Base for next edit: `ChopChop_v6_187.amxd`.
 
 ## Phase status
 
