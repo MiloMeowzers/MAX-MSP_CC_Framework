@@ -115,17 +115,133 @@ change, never applied.
    `anthropic-skills:chopchop-max-testing` skill). No from-scratch test harness — test against
    a copy of the real device.
 
-### Still to resolve in /max-discuss
+## Decisions (discussion, 2026-09-03)
 
-- The unified architecture for A1 + preroll + quantise/faithful-record, including the ordering
-  of codependent pieces and what ships as which sequential file.
-- Whether preroll's continuous-capture design can coexist with karma~'s "record until buffer
-  full then auto-play" native behaviour, or needs the bootstrap-append approach / a second
-  buffer (`---dummy` history to be investigated).
-- Where quantisation lives (the `TriggerPoisition` quantize-grid subsystem: `phasor~` locked
-  to `16n`/`32n`/`64n`, `p detect_edge`, `switch`, `onebang`) and how much of the reported
-  lag is that vs. the commit-on-slice-edge latency vs. karma~ ramp/snramp (currently 16).
+The framing shifted during discussion: the problem is not "wire up karmaB", it is that one
+`karma~` currently does capture + continuous-loop playback + live slice triggering + sequenced
+playback through a single playhead and a single `seq~` event queue. That model has no
+polyphony, no collision policy, and a sequencer timebase (`phasor~ 0.3`, free-running ~3.3 s)
+locked to nothing musical — hence saturation under dense play and sync drift.
+
+### D1. Three separated layers, distinct audio paths
+
+1. **Scrub layer** — `karma A` (with `karma B` alternating, see D5): the continuous
+   transport-locked playthrough. A layer in its own right, manipulable *at all times*. All
+   existing manipulation stays here: reverse, ping-pong, glitch, `window`, Reloop. Independent
+   of whether pads are being struck.
+2. **Live pad layer** — a `poly~` voice pool reading the **shared captured buffer**,
+   MIDI-note driven. Adds **per-pad pitch and play-direction** (new capability). Replaces the
+   idea of a 3rd `karma~` for the sequencer voice — `poly~` is polyphonic and voice-steals,
+   so it does not saturate the way a 3rd monophonic playhead would.
+3. **Sequencer** — records the **MIDI note stream** off layer 2 (velocity, note-off, grid
+   quantise), replays through the same `poly~`. `seq~` is removed. Built MIDI-at-core so A4
+   (Ableton MIDI track + 16-clip audio export) is a mirror step, not a rearchitecture.
+
+### D2. `poly~` over 16-fixed voices
+
+16-fixed was seriously considered (deterministic, trivial per-pad state, no allocator). What
+it costs: **same-pad overlap** — a pad always chokes its own previous sound, so no overlapping
+release tails, rolls/ratchets that stack, or two copies of a pitched slice ringing together.
+Since per-pad pitch + direction is wanted, that overlap matters. Export is **not** a
+differentiator — the 16 clips derive from the 16 slice *regions* of the master capture
+regardless of the voice engine.
+Decision: `poly~`, structured with **per-pad choke groups on by default** (behaves exactly
+like 16-fixed for rhythm), lifted per-pad for pitched/atmospheric use. A `@voices 16` pool
+with a home-voice per pad (for 16-fixed-like determinism + per-pad state) is the likely
+shape — exact mechanism is a research item.
+
+### D3. Collision policy — switchable
+
+Per-pad choke (default; rhythm/drums) <-> poly (atmospheric/pitched layering). Implemented as
+`poly~` choke groups. Note: mapping slices directly, a single pad array is mono anyway; the
+poly aspect earns its keep once per-pad direction + pitch are enabled.
+
+### D4. Pad mode control
+
+Each pad press is routed by a mode switch: **affect scrub playhead / affect live voices /
+affect both**. Reloop and similar are scrub-layer modes — the mode switch decides whether a
+press *also* fires live voices.
+
+### D5. Preroll / instant-start — `karma A`/`B` alternate roles
+
+Two `karma~` instances; whichever is not the current tape is the transport-locked rolling
+capture. On Record press the roles swap at a transport edge — audio already exists, so start
+is instant. Handoff trigger comes from the **transport phasor** (a value the device owns),
+never from `karma~`'s position report (rule B1 — that stack-overflowed v6_170).
+**A/B-mix** = current-loop vs. previous-loop crossfade (`---abMix` finally gets a receiver).
+
+### D6. Loop length unification (subsumes A7)
+
+The rolling capture runs continuously at a generous **max length** — buffer sized like A
+(~120,000 ms), not the 20,000 ms `---bufB` has now — transport-locked. The committed loop is
+a **movable window into that rolling buffer**. So `---capturedMs` becomes the rolling-buffer
+length, not the last committed size, and the window scales **up** as freely as **down**, into
+audio that was actually rolling, with **no re-record**. Genuinely new material beyond the ring
+still needs a fresh capture. Preroll, loop-lengthening and A/B "previous loop" are then one
+mechanism.
+Watch: this must not reintroduce the report-feedback loop (B1) or defer `---size` (B2). The
+window still comes from device-owned quantities.
+
+### D7. Quantise — selectable grid
+
+Bar / beat / 16th / off. Applied to MIDI note-on input into the recorder *and* to loop-bound
+snapping on capture. Reuse the `ButtonQuantize` index-lookup pattern (`live.menu` left/index
+outlet -> `route` -> value messages; the float outlet gives normalised position, not the
+value).
+
+### D8. A4 — architecture-supporting now, full build later
+
+Not implementing full Ableton clip/MIDI integration in this project, but every decision above
+must keep it a straight-line continuation: sequencer is MIDI notes from the start; the 16
+slice regions are the export unit; pad hits are already note events.
+
+### D9. Unchanged constraints
+
+JSON-edit workflow; doc 19 Part D delivery checklist — file size **1,705,180**, per-scope
+patchline-only cycle sweep **27**, **one variable per file / sequential files**; test on a
+duplicated `.amxd` in Max 9 / Live 12; revert after two bad builds (C2).
+
+## Revised phase plan (each phase = one or more sequential single-variable files)
+
+1. `karmaB` / `karmaKeys` outputs -> mix stage; `---abMix` receiver; `---enableA/B/Keys`
+   senders. Plumbing, no behavioural change to A. Step 1 alone testable (B audible). [A1 1-3]
+2. Resize `---bufB` / `---bufFreeze` to ~120,000 ms. Own file (buffer decls order-sensitive). [A1 4]
+3. Transport-locked rolling capture on `karma B` — revive `p RollingB`
+   (`phasor~ @frequency 1n @lock 1` -> `delta~`/`edge~` -> `onebang`). `---bRealign` sender
+   (arm state), `---bAudible` receiver.
+4. Window-into-rolling-buffer loop model — `---capturedMs` = rolling length; window scales up
+   and down; loop lengthening lands. [A7]
+5. A/B alternate-role handoff + instant start; `---abMix` = current vs. previous loop. [preroll]
+6. `poly~` live pad voice layer reading the shared buffer; MIDI-note driven; per-pad choke
+   default.
+7. Pad mode control (scrub / live / both).
+8. Per-pad pitch + play-direction.
+9. MIDI-note sequencer replacing `seq~`; grid quantise; replay through `poly~`. [A2 / A4 core]
+10. Selectable collision policy (choke <-> poly).
+11. *(follow-on project)* A4 — Ableton MIDI track + `create_audio_clip` x16 with shared markers.
+
+Reordering allowed but not silently (roadmap rule). Phases 1-2 are safe plumbing, shippable
+and testable immediately. Phases 3-5 are the architectural risk and the focus of research.
+
+## Open items for /max-research
+
+- `poly~` / `groove~` voice reading a `buffer~` that `karma B` is simultaneously recording
+  into — read/write contention. Test on a duplicated device.
+- Note-on latency of a pre-instantiated `poly~` voice vs. `karma~` `jump` + ramp (expected
+  tighter; measure).
+- Shared-buffer-offsets vs. 16 `duplicate`d slice buffers for the `poly~` layer.
+- `poly~` voice-management mechanism for home-voice-per-pad + choke groups + spill.
+- How much of `reverseCompensation` / `* 0.0625` / the quantize-grid math transfers to
+  computing `poly~` voice start offsets.
+- `p RollingB`'s current internals and original intent; `---dummy` (200 ms stereo, orphaned)
+  history — was it the start of this?
+- `record_arm_toggle` current state (doc 19 A6: reserved for preroll, may be standing in).
+- Transport-edge detection for the handoff that satisfies B1/B2 (no report feedback, no
+  `---size` deferral).
+- Whether the rolling window model needs `append` at all, or is pure `window`/bounds.
+- `karma~` `ramp` / `snramp` 16 -> toward 441 for the handoff seam (one-message change,
+  never tried).
 
 ### Stage
 
-ideation -> discussion
+ideation -> discussion -> (next) research
