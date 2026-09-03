@@ -818,3 +818,70 @@ preroll arm control with zero rewiring.**
 - Confirm the `poly~` voice subpatcher I/O shape (audio out L/R + a done/free signal).
 - `ccsim` unmodeled-and-non-outlet-0 objects seen so far: `pack`, `uzi`, `panel` (harmless),
   `split` now modeled. Extend handlers if a build's critical path runs through one.
+
+---
+
+### v6_199_USEREDIT — adopted as the permanent base (2026-09-04)
+
+User re-laid the diagnostic strip (2-col grid, x942 / x1040) and cleared the DEBUG panel of
+its display boxes (`diag_gain_disp`, `diag_ovr_disp`, `diagpr_*`, `obj-31/41/46` — some `r`
+objects now orphaned, harmless). `ccamxd` handles the re-saved file (1,883,883 B; identity
+MISMATCH = JSON reformat only; 639 root boxes / 32 scopes / 27 cycles / 0 problems; stable
+across round-trips). **All future edits start here and are LOGIC-ONLY — the presentation
+layout is not to be touched.**
+
+Visible diagnostics in this base: PLY (`r ---karmaPlaying`), FRC (`r ---windowVal`, flonum),
+HC, FUL, SIZ (`r ---size`) in col 1; CAP (`r ---capturedMs`, flonum), HND (`r ---dbgHandoff`),
+SPD (`r ---dbgSpeed` — `snapshot~ 120` on `obj-7` out in `p Playback`, the shared karma speed
+signal), RON (`r ---recordOn`) in col 2. MAN button (`mk_btn` → `set ---thisBuffer, window
+0.05, jump 0., play` → `s ---karmaMsg`) at pres x803.
+
+### DIAGNOSIS — the `set`+`window` handoff cannot sustain under a running transport
+
+Clean-state test on v6_199_USEREDIT (4-bar, Arm → input → FULL LED → Record), strip readings:
+
+| | armed, LED green | Record clicked | MAN, transport OFF |
+|---|---|---|---|
+| PLY | 0 | 0 | **1** |
+| FRC | 1.0 | 1.0 | 1.0 |
+| HC  | 0 | 0 | 0 |
+| SPD | **1.0** | **1.0** | **0** |
+| RON | 0 | 0 | 0 |
+| HND | 0 | 1.0 | 1.0 |
+
+- **`---recordOn` / quantise-record chain is NOT involved.** RON stays 0. With preroll FULL,
+  `rc_gate` routes the Record click to `s ---prerollCapture` *only* — never `s ---recordOn` —
+  so `p RecordArming` never arms `p Record_And_Quantize`. The "record button chain fighting"
+  theory (quantise engine) is ruled out.
+- **`p RollingB` is fully disconnected** in this base (no lines to/from it in `p Playback`).
+  Not a factor.
+- **The MAN button sends a byte-identical `set/window/jump/play` over the identical
+  `---karmaMsg` route** (→ `obj-45` → `obj-20[0]` / `karmaB[0]`, bypassing all gates). It
+  **fails identically to the handoff with transport running**, and **succeeds with transport
+  stopped**. Starting the transport also kills an already-sustaining MAN loop ("waveform
+  cleared, silence").
+- The only variable that tracks success/failure is transport state == SPD (0 vs 1). SPD is
+  `obj-7` out = `sig~ 1` × … × `is_playing` (`p transport` outlet 1). Transport running →
+  karma speed signal = 1; stopped → 0.
+
+**Conclusion:** `karma~ set ---thisBuffer, window X, play` on a `record~`-filled buffer with
+**no karma record pass** only enters/holds a play state when the speed signal is 0. The
+v6_183_PREROLL_TEST prototype ("preroll is viable") was validated with the transport stopped,
+which is why it looked clean. Under normal M4L use (transport running) the mechanism does not
+work. This invalidates the Phase-3 handoff design (v6_186/187, `p PrerollCapture`).
+
+**Redesign required.** The handoff must end with karma establishing a **real bounded loop**
+(a genuine record pass that adopts the preroll ring content, or an A/B alternate-role handoff
+where the rolling karma is already in a real recorded state). Options for the user:
+1. **Pull Phase 5 forward** — karma B rolls a real transport-locked record pass while armed
+   (reuse the `p RollingB` / `phasor~ @lock 1 → delta~ → <~ → edge~ → onebang` bar-edge
+   detector, R2); on Record, B already holds a real loop → swap B into the A role, no phantom.
+2. **karma A short adopt-pass** — on Record: `stop` → very short real `record` (one scheduler
+   tick, input muted) to force karma to write loop points, then immediately define the loop
+   region over the pre-filled ring bytes and `play`. Needs karma loop-point message research
+   (no `karma~` in the framework DB; `loop` is not valid — only `jump`/`position`/`window`).
+3. Accept preroll as a **transport-stopped-only** instant-start (niche) and make the normal
+   transport-running path as fast as possible instead.
+
+Recommendation: **option 1** — it reuses proven in-file machinery, gives a real loop (real pos
+report, real lengthening in Phase 4), and matches the agreed D-series architecture.
