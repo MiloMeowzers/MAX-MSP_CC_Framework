@@ -388,6 +388,29 @@ Verified: karmaB msg feeders now `gB` / `bk_ramp` / `bk_snramp` / `obj-34` only;
 B follows A's length changes / reloop / reverse exactly, no 1-bar snap-back.
 
 Base for next edit: `ChopChop_v6_180.amxd`.
+**Live test (user): no audio output on fresh load (A still captures correctly).**
+
+### v6_181 — default the A/B mute gains to unity on load (2026-09-03)
+
+`tools/phase1_file6_mute_loadinit.py`. Base v6_180. The p Playback audio path is
+byte-identical from v6_177 through v6_180 (diffs confirm — the only changes were karmaB's
+speed inlet and one karmaB message cord), and v6_177's mute toggles worked **because they
+were clicked**. On a clean load nothing drives `vA_l` / `vB_l`: `line~ 1.` did not present
+1.0 at instantiation here, and a `parameter_enable` `live.toggle` does not bang its outlet on
+device load (Live restores param values *after* loadbang — the reason this device has INIT
+chains). So `vA_x = xf_a * vA_l = 1 * 0 = 0` -> karma A silent, nothing to correct it.
+
+Fix: `loadbang -> [1 15( -> vA_l / vB_l` in p Playback. Both mute `line~` ramp to unity at
+load; a moved toggle still drives its own `line~`. Verified: `vA_l`/`vB_l` inlet 0 now fed by
+both the toggle chain and `vmute_lbm`; 1,705,180 / 27 / 0 / byte-exact.
+
+**Lesson:** any param-driven *signal* chain added to this device needs an explicit load-init
+(`loadbang` or `live.thisdevice`); never assume the `live.*` control fires on load.
+
+**Expected on test:** audio present on a fresh load with nothing touched; En A / En B still
+mute their voice; `A/B Mix` still crossfades.
+
+Base for next edit: `ChopChop_v6_181.amxd`.
 
 ---
 
