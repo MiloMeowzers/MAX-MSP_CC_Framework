@@ -268,6 +268,33 @@ byte-exact round-trip; `cctrace` confirms `karmaB[0/1] -> bmix -> obj-23/25 -> p
 wire proven. File 2 swaps the raw sum for the `---abMix` crossfade.
 
 Base for next edit: `ChopChop_v6_175.amxd`.
+**Live test (user): records fine, no phasing — A/B are sample-aligned. Wire confirmed.**
+
+### v6_176 — Phase 1 file 2: ---abMix crossfade (2026-09-03)
+
+`tools/phase1_file2_abmix.py`. Base v6_175. Replaces the raw `bmixL/bmixR` sum with a linear
+A/B crossfade off the existing `AB_MIX` dial (0-100, initial 0 -> `s ---abMix`, previously
+orphaned):
+
+```
+r ---abMix -> / 100. -> [$1 20( -> line~ --+-- (mix)   -> *~ on karmaB L/R  (B gain)
+                                           \- !-~ 1. -> *~ on karma A L/R   (1-mix, A gain)
+*~ outputs -> bmixL / bmixR (unchanged) -> obj-23 / obj-25
+```
+
+9 new boxes; 4 file-1 direct cords removed and re-routed through the `*~`. Linear xfade =
+constant level for coherent A/B. Dial initial 0 and nothing forces `---abMix` on load, so
+`line~` rests at 0 -> A full / B silent = v6_174 default. Safe.
+
+Checks: size 1,705,180 (identical); cycles 27; 0 structural problems; byte-exact round-trip;
+`cctrace` confirms `xf_l` feeds all four `*~` gains and A/B reach `bmixL/R` only through them.
+
+**Expected on test:** `A/B Mix` at 0 = only A (as before); sweep up = crossfade to karmaB;
+at 100 = only karmaB. Since B currently records the same content as A, the sweep should sound
+like level staying put / a subtle doubling in the middle, not a dropout. karmaKeys still
+silent.
+
+Base for next edit: `ChopChop_v6_176.amxd`.
 
 ---
 
