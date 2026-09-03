@@ -360,6 +360,34 @@ Verified: `obj-7` fans to A/Keys/B; 1,705,180 / 27 / 0 / byte-exact.
 toggling should now hold together with no drift / phasing — B is locked to A.
 
 Base for next edit: `ChopChop_v6_179.amxd`.
+**Live test (user): 179 fixes drift + overlay. But observed spurious records/overdubs into B,
+B at a different length than A (capturing A at 4 bars, testing reloop), and B following A into
+reverse then snapping back to forward after ~1 bar while A stays reversed.**
+
+### v6_180 — disconnect the half-built p RollingB from karmaB (2026-09-03)
+
+`tools/phase1_file5_disconnect_rollingB.py`. Base v6_179. Diagnosis (confirmed by the user's
+symptoms): `p RollingB` fires once per load (onebang armed only by `loadbang`; `r ---bRealign`
+has no sender), sending karmaB `overdub 0 / record / [delay] / play / record` with **no `stop`
+first**. That leaves karmaB mid-overdub recording device input unbidden, at a loop length set
+by that stray pass rather than the user's capture. Then:
+- karmaB mirrors A's `window` via `gB`, but `window` scales as a fraction of the *captured*
+  length -> different absolute region on B (the length mismatch).
+- v6_179 shares A's speed, so B follows A into reverse; `p RollingB`'s `delay` (fallback
+  **2000 ms ~= 1 bar @ 120**) then fires `play`/`record` into B, snapping it back — the
+  "reverse on B for one bar" symptom.
+
+Fix: remove the single cord `rollingB[0] -> karmaB[0]`. karmaB now sees only A's real
+record/play/stop/window via `gB` (+ `bk_ramp`/`bk_snramp` declick at load, + the audio input)
+= a true mirror of A. `p RollingB` left intact, outlet dangling, for **Phase 3** to rebuild
+(needs `stop` before `record` + a real `---bRealign` trigger).
+Verified: karmaB msg feeders now `gB` / `bk_ramp` / `bk_snramp` / `obj-34` only;
+1,705,180 / 27 / 0 / byte-exact.
+
+**Expected on test:** no records into B you didn't ask for; B captures with A, same length;
+B follows A's length changes / reloop / reverse exactly, no 1-bar snap-back.
+
+Base for next edit: `ChopChop_v6_180.amxd`.
 
 ---
 
