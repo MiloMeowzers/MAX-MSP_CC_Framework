@@ -491,6 +491,43 @@ number boxes on `---karmaPos` / `---karmaRep4` (loop end ms) / `---karmaRep5` (w
 
 ---
 
+### Preroll prototype results (v6_183_PREROLL_TEST / TEST2)
+
+- `set ---thisBuffer, window X, play` **does loop the window cleanly and indefinitely** (no
+  clicks, any message ordering) — BUT on a `set` (never-recorded) buffer karma treats it as a
+  one-shot of the full buffer length: it loops the window for ~120 s wall-clock then goes
+  silent for the remainder before wrapping. A periodic `jump 0.` / re-`play` keep-alive removes
+  that gap (or a handoff to a real record pass makes it moot).
+- **Pads / slice-jump and Reverse / Reloop WORK on a `set`+`window` loop.** The slice path
+  sends `jump` (absolute over capture), doesn't need karma's pos report.
+- **karma's pos report is dead (stuck at 0) on a `set` buffer** -> the playhead overlay won't
+  track from it. Fix: drive the overlay from the keep-alive clock's phase during a preroll loop.
+- `loop` is **not** a karma message ("karma doesn't understand loop"). Use `jump` / `position`.
+- "tail not head" = `record~ @loop 1` ring rotation; fixed by `reset`-ing the write head on arm.
+
+Conclusion: preroll is viable. Build = ring+LED (file 1), capture handoff + keep-alive
+(file 2), overlay source swap (file 3).
+
+### v6_184 — Phase 3 file 1: preroll ring + FULL LED (2026-09-03)
+
+`tools/phase3_file1_preroll_ring.py`. Base v6_183. Adds `p Preroll` (subpatcher at root):
+`record~ ---thisBuffer 2 @loop 1` fed `ingain_L/R`, runs only while `---prerollArm == 1` AND
+`---hasContent == 0`; `reset, 1` on start / `0` on stop; `r ---size` drives a `delay` -> after
+one full ring pass `s ---prerollFull 1`. LoopLength change resets the ring + restarts the
+delay + `---prerollFull 0`; `---hasContent -> 1` force-stops it. Root: `record_arm_toggle`
+(obj-29, was dead) -> `s ---prerollArm` and promoted into the OVERDUB panel right edge with an
+"ARM" label; a `led` (`r ---prerollFull`) + "FULL" label beside it. **No behaviour change to
+normal operation** — the ring only writes `---thisBuffer` while `---hasContent == 0`, and the
+capture handoff (file 2) isn't built, so a normal Record still clears + records as before.
+Verified: 1,705,180 / 27 / 0 / byte-exact; `p Preroll` 23 boxes / 33 lines; channels connected.
+
+**Expected on test:** (1) normal record/playback unchanged. (2) With the device in its
+clean/no-content state, turn the ARM toggle on -> the FULL led lights after one LoopLength.
+(3) Change LoopLength while armed -> led goes dark, relights after the new LoopLength.
+ARM+LED placement (OVERDUB panel right edge) is a first guess — say if it should move.
+
+Base for next edit: `ChopChop_v6_184.amxd`.
+
 ## Phase status
 
 - **Phase 1 — karmaB audible + mixable + mirror** — DONE (v6_175-182).
