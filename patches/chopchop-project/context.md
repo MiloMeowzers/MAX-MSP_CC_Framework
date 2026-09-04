@@ -1455,11 +1455,47 @@ slices, overlay tracks.
 
 Base for next edit: `ChopChop_v6_207.amxd`.
 
+### Correction — v6_203's render WORKS; rebuild minimally from it (2026-09-04)
+
+User re-tested `generated/ChopChop_v6_203.amxd` (byte-identical to their
+Downloads copy, MD5 3c4a58e1): **"it has the full loop playing"** -- the
+fast-render transcription is sound.  The failures were (a) the timer-driven
+auto-commit thrashing it, and (b) a slight tempo error (loop length =
+`renderMs * (obj-7 + 7)`, exact only when `obj-7 == 1`).  v6_204's from-scratch
+`p PrerollCapture` rebuild + the broken clamp ternary sent me down a 3-build
+detour (v6_205/206 groove~/selector~ rewrite -- all discarded).
+
+### v6_208 -- Phase 5 file 7: v6_203 minus auto-commit, plus reinit (2026-09-04)
+
+`tools/phase3_file25_v203_minus_autocommit.py`.  **Base v6_203.**  The minimal
+change: strip ONLY the 12-box auto-commit cluster from `p PrerollCapture`
+(`pc_full/pc_fsel/pc_hcr/pc_hcinv/pc_fgate/pc_fpend/pc_fpf/pc_fbarr/pc_fbang/
+pc_fchk/pc_fclr/pc_fcs`) and every line touching it (incl. `pc_gate[1] ->
+pc_fpend`, the defer arm).  Add the `report 20`/`snramp 16`/`ramp 16` reinit to
+`p FastRender` off `fr_cl[2]` (chase-overlay wiring, matches the normal
+`---recordOn` reinit).
+
+**Everything else is v6_203 verbatim** -- `play~ ---rollBuf` + `line~` position
+ramp render, the `+~` speed boost (obj-7 + 7), `renderMs = pc_rmsx = sizeMs/8`,
+the wrap router.  Diff: `/p_prcap/` 40->28 boxes, `/p_fastrender/` 28->32.
+Record (on FUL) is the only Commit; a would-wrap grab routes to `pc_gate`
+outlet 1 -> nowhere (press Record again next bar).
+
+Verified: 1,883,883 / **28** cycles (v6_203 was 29 -- the removed `pc_fpf`
+latch) / 0 problems, size preserved.
+
+**Expected on test:** Arm (silent), FUL LED, press Record ONCE -> the full loop
+plays and keeps playing (no auto-commit to wreck it), chase overlay tracks,
+pads / reverse / reloop work.  Tempo may still be slightly off -> that is
+v6_209, isolated (make karma's record speed exactly 8, not obj-7 + 7).
+
+Base for next edit: `ChopChop_v6_208.amxd`.
+
 ---
 
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_207.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_208.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
