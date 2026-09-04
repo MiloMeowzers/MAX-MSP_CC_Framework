@@ -1326,11 +1326,57 @@ Verified: 1,883,883 / **28** cycles / 0 problems, size preserved.
 
 Base for next edit: `ChopChop_v6_204.amxd`.
 
+### v6_204 test (user) — handover OK; the render pass is empty + full-length (2026-09-04)
+
+Decisive diagnostic: karma A **plays**, chase overlay **tracks**, PLY 1, SPD/FRC track.
+But the committed loop is the **whole 120000 ms buffer, empty** (slices "super slow", audio
+dies instantly). So the handover works — the **render pass itself** is the whole problem:
+
+1. It recorded **silence**. The render source was `play~ ---rollBuf` (position-driven) piped
+   `send~`/`receive~` -> `selector~` -> karma. The user's bench test that proved 8x render
+   used **`groove~` (rate-driven) straight into karma**. (Mistake: I switched to `play~`
+   purely to make a future wrapped-grab two-segment read easy — an edge case ~10% of the
+   time — and traded away the verified mechanism. Reverted.)
+2. The loop closed at the **buffer end** (`frames-1`) not `sizeMs`. karma's record head
+   advances at the **speed-inlet rate**; v6_204 fed `obj-7 + 7` (a `+~` boost on an unknown
+   base) which can exceed 8x and race the buffer end before `play` lands.
+
+### v6_205 — Phase 5 file 4: groove~ render source + exact 8x + diags (2026-09-04)
+
+`tools/phase3_file22_groove_render.py`. Base v6_204. Logic-only. `p Playback` +
+`p FastRender` + one `p PrerollCapture` expr + a diag repoint.
+
+- **Render source is now `gv2` `groove~ ---rollBuf 2`** (the verified pattern): loop points
+  via `---gv2Lo`/`---gv2Hi` -> `gv2` inlets 1/2, then `set ---rollBuf` + `loop 1`, then a
+  **float position** (= lo) into `gv2` inlet 0 to play. `gv2` audio -> `fr_recL/recR`
+  `selector~` input 2 -> `obj-20[0]/[1]` (**direct patchcords**, no `send~`/`receive~`).
+  `play~` / `send~ ---renderL~R` / `receive~` all removed.
+- **karma-A speed during the render is EXACTLY `sig~ 8.`** via `fr_spd` `selector~ 2`
+  (`[1]` = `obj-7`, `[2]` = `sig~ 8.`, ctl = `---renderActive + 1`). `gv2` rate is a matching
+  `selector~` (`sig~ 0.` idle / `sig~ 8.` render). The `+~` boost is gone. So karma advances
+  exactly 8x -> `play` at `renderMs` closes the loop at `renderMs*8 = end - start ~= sizeMs`.
+- **`play` via `deferlow`** so karma processes `record` first (kills a same-tick race).
+  `renderMs` floored: `pc_spanx` -> `expr ($f2-$f1<480.)?60.:(($f2-$f1)/8.)`.
+- **Reinit fires before `record`** (report 20 / snramp 16 / ramp 16 -> `s ---karmaMsg`).
+- **Diag repoint** (logic only): SPD `dg_spd_r` -> `r ---karmaRep4` (**karma loop END ms**:
+  ~sizeMs = the render finally worked; ~120000 = still broken). FRC `dg_frc_r` ->
+  `r ---frRenderMs` (the `renderMs` FastRender used).
+
+New channels: `---gv2Msg ---gv2Lo ---gv2Hi ---frRenderMs`. Removed: `---renderL~ ---renderR~`.
+Verified: 1,883,883 / **28** cycles / 0 problems, size preserved.
+
+**Expected on test:** Arm (silent), FUL LED, press Record -> a committed loop whose length
+(SPD field = `---karmaRep4`) reads ~`sizeMs` (a few thousand ms), NOT ~120000; real audio in
+it; slices at the right rate; overlay tracks. FRC field shows `renderMs` (a few hundred ms).
+If SPD still shows ~120000 or the loop is empty, those two numbers say where it broke.
+
+Base for next edit: `ChopChop_v6_205.amxd`.
+
 ---
 
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_204.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_205.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
