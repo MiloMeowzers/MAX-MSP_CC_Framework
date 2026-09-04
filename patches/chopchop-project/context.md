@@ -1161,3 +1161,57 @@ Verified: 1,883,883 / **27** cycles / 0 problems, size preserved.
 - No master / slice / karma change — PLY stays 0 for a groove~ preroll, as in v6_201.
 
 Base for next edit: `ChopChop_v6_202.amxd`.
+
+---
+
+## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
+
+**Base file:** `generated/ChopChop_v6_202.amxd` (1,883,883 bytes). Every build is a
+**logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
+box positions**. Builds must be testable with no editing (the user is firm on this).
+
+**Workflow:** hand-edit the `.amxd` JSON via `tools/` (`ccamxd.py` load/save, `validate.py`
+sweep — baseline **27** message cycles / 0 problems / byte-size preserved). One build script
+per version in `tools/phase3_fileNN_*.py`, model on the latest. Commit every save with
+`git -c user.email="sisericm@gmail.com" -c user.name="Claude"`. Send the `.amxd` with
+SendUserFile. Update this file's build log every version.
+
+**Design reference:** the "Phase 5/6 design spec" section above is the agreed architecture —
+rolling capture group (churn) → read-only master loop (karma, slice engine unchanged) →
+voices+DSP (additive). Four write ops kept as separate vocabulary: **Roll** (auto, continuous)
+· **Commit** (auto first, manual after; grabs one LoopLength off the ring, fast-renders into
+karmaMaster at ~8×) · **Snapshot** (existing Freeze btn, → bufFreeze, clean/wet) · **Overdub**
+(existing, karma-native). Roll cadence is fixed 1-bar, decoupled from master LoopLength. Two
+gains: feedback (main mix → roll input, default 0) and commit crossfade.
+
+**Built & awaiting user test — v6_202 (rolling substrate):** `buffer~ ---rollBuf`, `p
+RollCapture` (continuous `record~ @loop 1` + `phasor~ @frequency 1n @lock 1` 1-bar cadence +
+`counter`→`s ---dbgBar` + `snapshot~` on record~ sync → `s ---rollWritePos`). `p Preroll` no
+longer writes `---thisBuffer`. `p PrerollCapture` grabs `[writePos−---size, writePos]` off
+`---rollBuf`. Diag: **SPD field = bar counter**, **FRC field = ring write pos ms** (repointed,
+no layout change). Test = arm, watch SPD tick per bar locked to transport; FRC climb+wrap;
+Record → groove~ plays the recent LoopLength slab; repeat 2 bars later → newer slab.
+
+**Immediate next — v6_203 (fast-render Commit):** the grabbed ring slab rendered into
+`karma~ ---thisBuffer` (= karmaMaster / obj-20 in p Playback) as a **real bounded loop** — a
+`groove~` reads the slab at ~8× while karmaMaster `record`s at the same rate off a shared
+high-speed ramp, closing on the ramp end (`play`/`stop`) so the loop length is correct.
+Crossfade groove~-bridge → karmaMaster. Lifecycle: **first Commit automatic** on the first
+1-bar mark after arm from clean state (sets `---hasContent`, hands the slice engine over, ends
+the groove~ bridge); every Commit after = manual (existing Record button, preroll-full path).
+Then hand the existing slice/`jump`/`window`/overlay system onto karmaMaster unchanged.
+
+**Open verification items (test in Max, don't assume) — see spec section:**
+1. karma record fidelity at 8× (ipoke~ interp, `loop/1024` per-sample clamp ≈ 375× ceiling).
+2. `record~` sync-outlet units — v6_202 assumes 0–1 × 120000 = ms; if the v6_202 grab sounds
+   stale/misaligned this is why → switch to explicit sample counting.
+3. `groove~` with `loopstart > loopend` — assume it does NOT wrap; design around it.
+4. `phasor~ @lock 1` wrap vs audible-bar offset in Live 12.
+5. per-bar buffer-zero cost if layer-1 uses karma record passes (argues for `poke~` ring).
+
+**karma~ is v1.0** (posts `64bit_v1.0stereo`). Messages: position/window/jump/stop/play/
+record/append/set/overdub/report/ramp/snramp/snrcurv/interp ONLY. No loopstart/loopend/crop/
+resize/sync. `groove~` DOES have `@loopstart`/`@loopend` (ms) + inlets 1/2 = loop min/max.
+karma `set` on a foreign buffer = whole allocation. karma `record` from stop zeroes the whole
+buffer. Speed inlet signal-preferential, value 0 = frozen. Source: `C:\Users\Brown\Downloads\
+chopchop\karma1.0\karma~(win64)\karma~.c` + `karma~.maxhelp` + user's `maxpat samples/`.
