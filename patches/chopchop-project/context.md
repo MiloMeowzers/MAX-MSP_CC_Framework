@@ -1631,11 +1631,46 @@ chase / reverse all correct.
 
 Base for next edit: `ChopChop_v6_212.amxd`.
 
+### v6_212 test (user) -- FAST-RENDER WORKS (2026-09-04)
+
+Loop bounded to `sizeMs` (FRC `---karmaRep4` = 13709 ~= SIZ 13714), SPD
+(`---frRenderMs`) = 1714, `ply 1 / hc 1 / ful 0`, real recorded loop (survives
+source-off), independent A/B muting + mix confirmed, **reverse works, overlay
+chase normal**.  The `pc_seq` 6->7 outlet fix was the breakthrough.
+
+Two residual issues:
+- **Buffer B loops `renderMs` (2 beats), not `sizeMs`** -- karma B gets the
+  render's `record`/`play` on `---karmaMsg` too, at 1x (no boost), so its
+  initial loop closes at renderMs.
+- **Buffer A degrades after ~2 beats** (artifacts / "bit reduction") -- karma A
+  records at `obj-7 + 7`, not exactly 8x; when `obj-7` != 1 the karma record
+  rate and `play~`'s exact-8x read rate drift and the audio resamples badly.
+
+### v6_213 -- Phase 5 file 12: exact-8 speed + karma B out of the render (2026-09-04)
+
+`tools/phase3_file30_exact8_and_bgate.py`.  Base v6_212.  Logic-only, `p Playback`:
+
+1. **karma-A render speed EXACTLY `sig~ 8.`**  Drop `fr_add (+~)` /
+   `fr_boost (line~)` / `fr_bsel` / `fr_b7` / `fr_b0`; new `fr_spd (selector~ 2)`
+   -- [1] = `obj-7`, [2] = `fr_s8 (sig~ 8.)`, ctl = `fr_ract (+ 1)` on
+   `r ---renderActive`.  Out -> `obj-20[2]`.  render -> exactly 8x, else `obj-7`.
+2. **karma B out of the render.**  `obj-45[0] -> karmaB[0]` now via
+   `fr_bg (gate 1 1)`, control `fr_bra -> fr_bginv (== 0)` -- open only when NOT
+   rendering, so B's own loop length is not clobbered.
+
+1,883,883 / **28** cycles / 0 problems, size preserved.
+
+**Expected on test:** press Record -> A holds a clean full-length 4-bar loop
+with NO degradation after 2 beats; B keeps its own loop (still slight A/B
+phasing -- that is the A/B rework, later).  SPD ~= 1714, FRC ~= 13714.
+
+Base for next edit: `ChopChop_v6_213.amxd`.
+
 ---
 
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_212.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_213.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
