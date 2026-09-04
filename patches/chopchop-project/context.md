@@ -1666,11 +1666,46 @@ phasing -- that is the A/B rework, later).  SPD ~= 1714, FRC ~= 13714.
 
 Base for next edit: `ChopChop_v6_213.amxd`.
 
+### v6_213 test (user) -> v6_214: play~ out, groove~ in (2026-09-04)
+
+v6_213: karma A degraded even sooner than v6_212 AND the last 2 beats (slices
+15-16) rendered as SILENCE.  The `selector~` on karma-A speed was worse than the
+`+~` boost; `play~ ---rollBuf` on a `line~` position ramp is the likely cause of
+the "bit reduction" artifacts + the dropped tail (user's bench test used
+`groove~`, rate-driven).  The v6_213 karma-B gate worked (B not reported).
+
+### v6_214 -- Phase 5 file 13: groove~ render source (2026-09-04)
+
+`tools/phase3_file31_groove_render_on_working_base.py`.  Base v6_213.
+
+1. **Revert karma-A render speed to v6_212's `+~` boost** (`obj-7 + 7`): drop
+   `fr_spd (selector~)` / `fr_s8`; restore `fr_add / fr_boost / fr_bsel /
+   fr_b7 (7. 0) / fr_b0 (0. 0)`.
+2. **Render source play~ -> groove~** (the probe pattern).  `p FastRender`:
+   drop `fr_stt / fr_fmt / fr_line / fr_play / fr_sL / fr_sR`.  `p Playback`:
+   drop `fr_rvL / fr_rvR`, add `gv2 (groove~ ---rollBuf 2)` with a
+   `selector~`-switched rate (`sig~ 0.` idle / `sig~ 8.` render), loop points
+   via `r ---gv2Lo/Hi -> gv2[1]/[2]`, messages via `r ---gv2Msg -> gv2[0]`,
+   `gv2` audio -> `fr_recL[2] / fr_recR[2]`.  FastRender sends
+   `s ---gv2Hi = end`, `s ---gv2Lo = start`, then `set ---rollBuf` / `loop 1` /
+   renderActive 1 / start-float (groove~ plays the slab at 8x) / karma
+   stop+record.
+3. Keep the v6_213 karma-B gate + the record-source selectors.
+
+1,883,883 / **28** cycles / 0 problems, size preserved.
+
+**Expected on test:** clean full-length 4-bar loop in A -- no early degradation,
+no silent tail.  If the tail is still silent it is a substrate issue (`---rollEndMs`
+ahead of the `record~ ---rollBuf` write head) -> next build grabs `end` one bar
+back with `renderMs = (end - start)/8`.
+
+Base for next edit: `ChopChop_v6_214.amxd`.
+
 ---
 
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_213.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_214.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
