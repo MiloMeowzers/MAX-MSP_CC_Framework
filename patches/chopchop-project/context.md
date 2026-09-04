@@ -1842,3 +1842,32 @@ resize/sync. `groove~` DOES have `@loopstart`/`@loopend` (ms) + inlets 1/2 = loo
 karma `set` on a foreign buffer = whole allocation. karma `record` from stop zeroes the whole
 buffer. Speed inlet signal-preferential, value 0 = frozen. Source: `C:\Users\Brown\Downloads\
 chopchop\karma1.0\karma~(win64)\karma~.c` + `karma~.maxhelp` + user's `maxpat samples/`.
+
+---
+
+### 2026-09-04 — worktree fork incident (process note, read before every handover)
+
+The v6_202 handover (`CONTINUATION.md` in the predecessor worktree, `chopchop-project-max-
+new-e831de`) was picked up correctly in substance — this worktree's `context.md` inherited the
+full Phase 5/6 spec and every karma fact, and the fast-render Commit built here (v6_203-v6_216)
+correctly implements that design. **But the handover created a brand-new worktree/branch
+(`chopchop-v6-203-fast-render-03e1c4`) instead of continuing in the existing one.** Both lines
+kept being worked — this one to v6_216, the original stalled at v6_202 — and the user lost a
+day discovering the two had diverged before either could be trusted as current.
+
+Nothing was undocumented. The design transferred exactly as written. What failed was **branch
+continuity**: a new chat, given the continuation prompt, defaulted to spinning up a fresh
+worktree rather than resuming in place, and nothing in the prompt explicitly forbade that.
+
+**Fixed:** `CONTINUATION.md` now states the exact worktree path and branch up front, in a
+warning block, and says explicitly not to create a new worktree — ask the user first if unsure
+how to point a tool at an existing one. The predecessor worktree's `status.md` now says
+`stage: superseded` and names this one as the line to resume. Do this for every future
+handover: name the live worktree explicitly, mark any stalled predecessor as superseded, and
+treat "which worktree is current" as a fact that must be stated, not inferred.
+
+**Also fixed the same day:** the rolling-buffer architecture diagram existed only as a
+rendered chat widget in the design-discussion session — never saved to disk, so no worktree
+had it even though the prose spec transferred fine. Now `reference/rolling_buffer_flow.svg`,
+linked from the spec section above. Lesson: a visualisation is not "documented" until it is a
+file in the repo, no matter how thoroughly the prose next to it is written up.
