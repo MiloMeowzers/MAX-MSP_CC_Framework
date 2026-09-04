@@ -1268,15 +1268,75 @@ Base for next edit: `ChopChop_v6_203.amxd`.
 
 ---
 
+### v6_203 test (user) — auto-Commit rejected; handover incomplete (2026-09-04)
+
+- SPD wraps at **34** (not ~59) — correct: `ringBars = floor(120000/barMs)` = 34 at the
+  user's tempo (barMs ≈ 3530, ~68 BPM). Not a bug.
+- **½-bar silence dropouts**, one ~1 LoopLength after FUL (the auto-Commit) and again
+  "around 194 bars" where **all play stopped and did not restart**. The auto-Commit
+  machinery (defer/retry latch re-arming; `p FastRender`'s render `delay` getting reset)
+  is the cause.
+- **No waveform / no chase overlay** after the Commit: a normal Record fires a `reinit`
+  (`report 20` + `snramp 16` + `ramp 16` → karma, via `---recordOn` →
+  `Playback/reinit_onlybang`). The fast-render path skipped it, so karma never streamed
+  position → frozen display.
+- **A/B mutes do nothing** — `---enableA/---enableB/---enableKeys` have **no senders in the
+  base** (feed `gate 1 1`, default open). Pre-existing v6_199 issue, not a v6_203 regression.
+- **User design ruling:** *no auto-first Commit.* It is just "arm = delayed record" + a
+  pointless second press and undermines the preroll. **Record is the only Commit**; the
+  device stays silent until the user presses it. The preroll value is: Record can be pressed
+  a beat or two late and still Commit the last *bar-aligned* LoopLength instantly.
+
+### v6_204 — Phase 5 file 3: Record-only Commit + karma handover fix (2026-09-04)
+
+`tools/phase3_file21_no_autocommit_handover.py`. Base v6_203. Logic-only; no presentation
+change. Only `p PrerollCapture` and `p FastRender` change.
+
+- **Auto-first Commit removed entirely.** The whole arming cluster (`pc_full/pc_fsel/
+  pc_hcr/pc_hcinv/pc_fgate/pc_fpend/pc_fpf/pc_fbarr/pc_fbang/pc_fchk/pc_fclr/pc_fcs`)
+  is gone. `p PrerollCapture` now responds only to `r ---prerollCapture`, which
+  `rc_gate` fires on a **Record press while `---prerollFull`** (unchanged root wiring).
+  Device is silent until Record.
+- **Defer/retry latch removed.** No `gate 2`, no `pc_fpend` re-arm. A grab that would cross
+  the ring seam is **clamped**: `start = max(end − sizeMs, 0)`, `renderMs = (end − start)/8`
+  — Commit `[0, end]` (shorter that once, contiguous, valid). The `/PrerollCapture/` message
+  cycle is gone → **28 cycles** (was 29; the remaining +1 vs the 27 baseline is the
+  `/RollCapture/` bar-synced-arm latch).
+- **Handover fixed.** `p FastRender` close step now also fires `report 20` → `snramp 16` →
+  `ramp 16` to `s ---karmaMsg` (→ obj-20) right after `play`, matching the `---recordOn`
+  reinit — so the chase overlay and the position/window displays come back.
+- Untouched: the bar-locked substrate (`p RollCapture`), the groove~ bridge, the karma-A
+  speed boost + record-source `selector~`s (`p Playback`), the `p Preroll` `pr_rec`
+  retirement.
+
+**Not fixed here:** the orphaned `---enableA/B/Keys` (A/B mutes). Separate piece — likely
+folded into the "A/B = master vs ring" rework.
+
+Verified: 1,883,883 / **28** cycles / 0 problems, size preserved.
+
+**Expected on test** (v6_199_USEREDIT layout, no edit):
+- Arm, transport running → the roll starts on the next bar; **nothing is audible**.
+- SPD counts 0..33 and wraps; FRC shows the grab end climbing per bar.
+- FUL LED lights one LoopLength after the roll starts.
+- **Press Record** (any time after FUL, on or slightly off the beat) → one Commit: a real
+  karma loop in `---thisBuffer`, PLY 1, **chase overlay + waveform + window displays live**,
+  pads / reverse / reloop all working. A brief groove~ bridge covers the ~½-bar render.
+- No dropouts, no periodic stop (there is no auto machinery left to misfire).
+- If the master is silent: check the A/B mix dial is toward A.
+
+Base for next edit: `ChopChop_v6_204.amxd`.
+
+---
+
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_203.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_204.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
 **Workflow:** hand-edit the `.amxd` JSON via `tools/` (`ccamxd.py` load/save, `validate.py`
-sweep — baseline was 27; **v6_203 = 29** message cycles / 0 problems / byte-size preserved,
-the +2 are two clear-after-fire latch loops). One build script per version in
+sweep — baseline was 27; **v6_204 = 28** message cycles / 0 problems / byte-size preserved,
+the +1 is the bar-synced-arm latch loop). One build script per version in
 `tools/phase3_fileNN_*.py`, model on the latest. Commit every save with
 `git -c user.email="sisericm@gmail.com" -c user.name="Claude"`. Send the `.amxd` with
 SendUserFile. Update this file's build log every version.
@@ -1289,32 +1349,34 @@ karmaMaster at ~8×) · **Snapshot** (existing Freeze btn, → bufFreeze, clean/
 (existing, karma-native). Roll cadence is fixed 1-bar, decoupled from master LoopLength. Two
 gains: feedback (main mix → roll input, default 0) and commit crossfade.
 
-**Built & awaiting user test — v6_203 (bar-locked substrate + fast-render Commit).** Full
-detail in the build-log entry above. In short: the grab window is now an **exact integer-bar**
-region computed from a transport bar counter (`fold*barMs`), not a `snapshot~` of the
-`record~` sync outlet — this kills the v6_202 "2 beats off" failure. Arm starts the roll on
-the next transport bar. First Commit fires **automatically** one LoopLength after arm (on the
-FUL edge, next bar): `p FastRender` runs a `play~`-at-8× read of the ring into
-`karma ---thisBuffer` recording at speed 8, `play` closes it → a real bounded karma loop the
-existing slice engine drives unchanged. Every Commit after = the manual Record button.
-`p Preroll`'s dead `record~ ---thisBuffer` fully retired so it can't fight the render.
+**Built & awaiting user test — v6_204 (Record-only Commit + handover fix).** Full detail in
+the build-log entry above. In short: the grab window is an **exact integer-bar** region from a
+transport bar counter (`fold*barMs`) — kills the v6_202 "2 beats off". Arm starts the roll on
+the next bar; **nothing is audible until the user presses Record.** Record (any time after the
+FUL LED, on or slightly off the beat) → one Commit: `p FastRender` does a `play~`-at-8× read
+of the ring into `karma ---thisBuffer` recording at speed 8, `play` closes it, then
+`report 20`/`snramp 16`/`ramp 16` wake karma → a real bounded karma loop with a live chase
+overlay, driven by the existing slice engine unchanged. Seam-crossing grabs are clamped to
+`[0,end]` (no defer). The auto-first Commit and its retry latch are **gone** (they caused the
+v6_203 dropouts + eventual stop).
 
-**Test focus:** does the committed loop come out exactly LoopLength and start on a bar line
-(no extra beats); do pads / reverse / reloop / window / overlay work on it after the auto
-first Commit; is the committed master audible (if not → A/B mix dial). Unverified items 1–5
-are listed at the end of the build-log entry above.
+**Test focus:** device silent until Record; then does the committed loop come out the right
+length + on the bar; do pads / reverse / reloop / window / **chase overlay + waveform** work;
+no dropouts / no periodic stop. If the master is silent → A/B mix dial toward A.
 
-**If v6_203 tests clean → v6_204:** the wrapped-grab two-segment `play~` read (remove the
-one-bar defer), Snapshot clean/wet split, feedback gain into the roll input. Then v6_205+
+**Next (v6_205):** the wrapped-grab two-segment `play~` read (so a seam grab is full length,
+not clamped); the A/B-as-master-vs-ring rework incl. wiring `---enableA/B` (the mutes are
+dead in the base); Snapshot clean/wet split; feedback gain into the roll input. Then v6_206+
 the `poly~` voice layer.
 
-**Superseded verification notes (kept for context):**
+**Verification notes:**
 1. karma record fidelity at 8× — **confirmed** viable from `karma~.c` + user bench test.
-2. `record~` sync-outlet units — **moot**, v6_203 drops the sync outlet entirely.
-3. `groove~` with `loopstart > loopend` — still assumed no-wrap; v6_203's bridge never
-   wraps (uses `[max(0,start), end]`), the render `play~` is position-driven so a wrapped
-   region is a two-segment `line~` (deferred to v6_204).
-4. `phasor~ @lock 1` wrap vs audible-bar offset in Live 12 — still open (item 3 above).
+2. `record~` sync-outlet units — **moot**, dropped since v6_203.
+3. `groove~` `loopstart > loopend` — bridge never wraps (`[max(0,start), end]`); render
+   `play~` is position-driven, seam grabs clamped for now (two-segment = v6_205).
+4. `phasor~ @lock 1` wrap vs audible-bar offset in Live 12 — still open. A residual fixed
+   offset rotates the committed loop by that amount; not the v6_202 "2 beats" (that was the
+   non-integer grab).
 5. per-bar buffer-zero — N/A, v6_203 keeps the cheap `record~` ring (no karma passes in
    layer 1).
 
