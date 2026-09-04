@@ -1491,11 +1491,49 @@ v6_209, isolated (make karma's record speed exactly 8, not obj-7 + 7).
 
 Base for next edit: `ChopChop_v6_208.amxd`.
 
+### v6_208 test (user) -> v6_209: the wrap gate was blocking ---commitGo (2026-09-04)
+
+v6_208: clean full loop plays, instant start -- BUT `ply 0` / `ful 1` / `cap 0`,
+no waveform / overlay / chase, reverse dead, audio stops at bar 77.  So karma A
+never takes over; the audio is the **groove~ bridge** (`---rollBuf` via `gv`),
+which never fades (---prerollLoop stayed 1) and breaks when the ring wraps.
+
+**Root cause:** v6_203's `p PrerollCapture` routes the commit list
+`pc_pk -> pc_gate (gate 2) -> pc_go`.  `gate 2` has NO init arg -> control 0 ==
+**closed by default**, opened only by `pc_wrapx -> pc_wsel` on o6.  With the
+auto-commit firing `pc_seq` repeatedly a later pass got the gate open; a single
+manual Commit does not -> `---commitGo` never fires -> FastRender never runs.
+**v6_204 -- the one build whose handover worked (`ply 1`, overlay tracking) --
+had NO gate** (`pc_pk -> pc_go` direct).
+
+### v6_209 -- Phase 5 file 8: bypass the gate + bound renderMs + diags (2026-09-04)
+
+`tools/phase3_file26_cap_renderms_diag.py`.  Base v6_208.  Logic-only.
+
+1. **Bypass the wrap gate.**  Delete `pc_gate` / `pc_wsel` / `pc_wrapx` + their
+   lines; `pc_pk[0] -> pc_go` direct.  `---commitGo` fires on every Commit.  A
+   would-wrap grab sends a slightly-off list; FastRender's `line~`/`play~`
+   clamps the position.  `pc_gvlo` (clamps `---gvLoopStart` >= 0) kept.
+2. **Bound renderMs.**  `pc_rmsx` `expr $f1/8.` -> `expr min(max($f1/8.,60.),4000.)`.
+3. `s ---frRenderMs` from `fr_unpk[2]` in FastRender.
+4. **Diag repoint:** SPD `dg_spd_r` -> `r ---frRenderMs` (renderMs used); FRC
+   `dg_frc_r` -> `r ---karmaRep4` (karma loop END ms).
+
+Render mechanism still v6_203's verbatim.  Verified: 1,883,883 / **28** cycles /
+0 problems, size preserved.
+
+**Expected on test:** press Record -> **FUL LED goes OFF**, `ply` -> 1, chase
+overlay + waveform live, reverse works, the loop keeps playing.  SPD field =
+renderMs used (a few hundred ms; 4000 = it was capped -> `---size` is wrong).
+FRC field = karma loop END ms (~`---size` = transfer worked).
+
+Base for next edit: `ChopChop_v6_209.amxd`.
+
 ---
 
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_208.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_209.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
