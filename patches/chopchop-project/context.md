@@ -1529,11 +1529,44 @@ FRC field = karma loop END ms (~`---size` = transfer worked).
 
 Base for next edit: `ChopChop_v6_209.amxd`.
 
+### v6_209 test (user) -> v6_210: revert the broken renderMs bound (2026-09-04)
+
+v6_209: **gate bypass worked** -- instant start, correct loop, `ply 1`, `HC 1`,
+muting silences it (== hearing karma A), waveform draws.  BUT: SPD
+(`---frRenderMs`) = **0**; karma A stays in **record / overdub** (flashing red,
+never leaves; turn off the input and the waveform erases); FRC (`---karmaRep4`)
+= **119999.98** (whole buffer).  `size` / `cap` = 13714 (correct 4-bar length).
+
+Cause: v6_209's `pc_rmsx` = `expr min(max($f1/8.,60.),4000.)` emits NOTHING in
+this device's Max -- the same silent failure as the earlier ternaries.
+**Confirmed rule: this Max only tolerates a SINGLE simple op in `expr`** --
+`$f1/8.` fine, `$f1-$f2` fine, `round($f2/$f1)*$f1` fine; `min()`/`max()`/nested
+calls / arithmetic-in-a-ternary-condition all silently fail.  With renderMs 0,
+`record` then `delay 0` then `play` fire in one tick and `play` can't close the
+record pass -> karma stuck recording, unbounded loop.
+
+### v6_210 -- Phase 5 file 9: pc_rmsx revert (2026-09-04)
+
+`tools/phase3_file27_revert_rmsx.py`.  Base v6_209.  ONE box text edit:
+
+  pc_rmsx : `expr min(max($f1/8.,60.),4000.)`  ->  `expr $f1/8.`
+
+renderMs is back to `sizeMs/8` (~1714 ms for the 4-bar loop), giving karma a
+real recording window before `play` closes it at `maxpos ~= sizeMs`.  Gate
+bypass + diags from v6_209 stay.  1,883,883 / **28** cycles / 0 problems.
+
+**Expected on test:** press Record -> FUL off, `ply` 1, the red record light
+**stops** after ~1-2 s, the loop settles to the correct length and keeps
+playing, waveform + chase + reverse work.  SPD (`---frRenderMs`) ~= 1714,
+FRC (`---karmaRep4`) ~= 13714 (NOT 119999).
+
+Base for next edit: `ChopChop_v6_210.amxd`.
+
 ---
 
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_209.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_210.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
