@@ -1742,11 +1742,49 @@ FRC should land consistently close to `---size` run to run (not drifting).
 
 Base for next edit: `ChopChop_v6_215.amxd`.
 
+### v6_215 test (user) -> v6_216: settle gap before the capture starts (2026-09-04)
+
+Results ranged flawless -> degraded; user noticed the number of clean beats
+correlates with when FRC/SPD "lock in" from the stale in-progress value.  Also:
+RON=1 turning up even on fresh INIT+Arm+single-press tests (confirmed via
+AskUserQuestion this is NOT repeat-press-without-rearm; the `rc_gate` FUL-race
+theory doesn't explain it -- lower priority, separate issue).
+
+Diagnosis for the quality/length variability: `fr_spd` / `fr_g2r` (the
+selectors onto the shared `sig~ 8.`) only take effect on the NEXT DSP vector
+after `---renderActive` arrives, but karma's `record` and gv2's position/start
+fired in the SAME instant as that control message -- no guaranteed settle.  The
+first sliver of every capture could start before both sides had actually
+locked onto exactly 8x, and how much of the loop that transient touched would
+vary run to run.
+
+### v6_216 -- Phase 5 file 15: settle delay (2026-09-04)
+
+`tools/phase3_file33_settle_delay.py`.  Base v6_215.  `p FastRender` only.
+Insert `delay 5` between "renderActive on" (switches both selectors) and the
+actual capture start (gv2 position-float + karma stop/record):
+
+  fr_o[0] -> fr_settle (delay 5) -> fr_o2 (t b b): o1 -> fr_pos_f (gv2 plays),
+  o0 -> fr_ks (karma stop/record)
+
+5 ms is well over one DSP vector, so `fr_spd`/`fr_g2r` are already outputting
+`sig~ 8.` before anything is recorded.  Commit-to-play wall clock grows by 5 ms;
+renderMs / SPD unaffected.  1,883,883 / **28** cycles / 0 problems, size
+preserved.
+
+**Expected on test:** captures should be consistently clean start-to-end, FRC
+should land close to `---size` more consistently.  If variability persists,
+next step is closing the render on gv2's own sync-outlet wrap (sample-accurate)
+instead of the scheduler `delay renderMs` -- needs groove~'s loop-points sync
+behaviour verified first.
+
+Base for next edit: `ChopChop_v6_216.amxd`.
+
 ---
 
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_215.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_216.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
