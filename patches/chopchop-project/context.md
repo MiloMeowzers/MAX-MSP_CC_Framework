@@ -1562,11 +1562,44 @@ FRC (`---karmaRep4`) ~= 13714 (NOT 119999).
 
 Base for next edit: `ChopChop_v6_210.amxd`.
 
+### v6_210 test (user) -> v6_211: pc_szsnap was the dead link all along (2026-09-04)
+
+v6_210: SPD (`---frRenderMs`) STILL 0, karma still stuck recording, FRC
+(`---karmaRep4`) still 119999.98.  So reverting `pc_rmsx` did nothing -- the
+break is one link further up: **`pc_szsnap` = `expr round($f2/$f1)*$f1`** has
+`round()` AND `*` = two ops -> emits NOTHING in this device's Max.  It never
+outputs -> `pc_rmsx` (fed by it) never fires -> `pc_pk[2]` stays 0 -> renderMs
+= 0 -> `record` + `delay 0` + `play` same tick -> karma can't close the pass.
+**Dead since v6_203.**  Every "loop playing" so far has been the groove~ bridge
+with karma A stuck.  (Also this run: Armed LED went out, A/B lost sync --
+secondary, revisit after renderMs is real.)
+
+### v6_211 -- Phase 5 file 10: drop pc_szsnap (2026-09-04)
+
+`tools/phase3_file28_drop_szsnap.py`.  Base v6_210.  Logic-only.
+
+`pc_szsnap` only re-quantised `---size` to an integer bar count, and `---size`
+is ALREADY bar-quantised in `p TempoTranslate`.  So:
+
+  delete box `pc_szsnap` + its 4 lines
+  + `pc_szf[0] -> pc_startx[1]`   (start = end - ---size)
+  + `pc_szf[0] -> pc_rmsx[0]`     (renderMs = ---size / 8)
+
+Every `expr` in the commit path is now a single op: `$f1-$f2`, `$f1/8.`,
+`($f1<0.)?0.:$f1` (single-var ternary, on the confirmed-safe list).  1,883,883 /
+**28** cycles / 0 problems, size preserved.
+
+**Expected on test:** SPD (`---frRenderMs`) ~= **1714** (NOT 0), the red record
+light **stops** after ~1-2 s, FRC (`---karmaRep4`) ~= **13714** (NOT 119999),
+loop settles to the right length + keeps playing, waveform/chase/reverse work.
+
+Base for next edit: `ChopChop_v6_211.amxd`.
+
 ---
 
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_210.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_211.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
