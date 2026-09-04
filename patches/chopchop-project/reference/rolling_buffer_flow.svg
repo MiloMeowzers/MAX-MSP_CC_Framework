@@ -1,0 +1,74 @@
+<svg width="680" height="620" viewBox="0 0 680 620" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>ChopChop rolling-buffer architecture: capture group, committed master loop, voice and DSP layers</title>
+<desc>Three stacked layers. Bottom: a rolling capture group of two buffer plus karma pairs that always record and play in transport-locked alternation. Middle: hitting Record freezes the newest complete loop as a single stable Master karma, on which the existing slice, window, jump, reverse and overlay engine operates unchanged. Top: a poly voice pool and a coll sequencer add slice hits on top of the master bed, then the DSP chain goes to output. An optional feedback path sends the processed mix back into the capture group so the loop can evolve. A small groove object bridges the very first cycle before any karma loop exists.</desc>
+<style>
+  text { font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
+  .t  { font-size: 14px; fill: #1a1a1a; }
+  .ts { font-size: 12px; fill: #555; }
+  .th { font-size: 14px; font-weight: 600; fill: #1a1a1a; }
+  .box { fill: #ffffff; stroke: #888; stroke-width: 1; }
+  .arr { stroke: #333; stroke-width: 1.5; marker-end: url(#arrow); fill: none; }
+  .leader { stroke: #999; stroke-width: 0.5; stroke-dasharray: 3 3; }
+  .zone1 { fill: #F1EFE8; stroke: #5F5E5A; }
+  .zone2 { fill: #E1F5EE; stroke: #0F6E56; }
+  .zone3 { fill: #FAECE7; stroke: #993C1D; }
+  .zone4 { fill: #EEEDFE; stroke: #534AB7; }
+</style>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+  </marker>
+</defs>
+
+<rect class="zone1" x="40" y="52" width="562" height="118" rx="12"/>
+<text class="th" x="52" y="72">1 . rolling capture group  -  always running while armed</text>
+<g><rect class="box" x="56" y="86" width="150" height="66"/>
+<text class="t" x="131" y="114" text-anchor="middle">device in</text>
+<text class="ts" x="131" y="134" text-anchor="middle">dry + feedback mix</text></g>
+<g><rect class="box" x="228" y="86" width="236" height="66"/>
+<text class="t" x="346" y="110" text-anchor="middle">bufA karmaA   /   bufB karmaB</text>
+<text class="ts" x="346" y="132" text-anchor="middle">one records while the other plays</text></g>
+<g><rect class="box" x="486" y="86" width="102" height="66"/>
+<text class="t" x="537" y="112" text-anchor="middle">swap</text>
+<text class="ts" x="537" y="132" text-anchor="middle">per loop length</text></g>
+
+<line class="arr" x1="150" y1="170" x2="150" y2="232"/>
+<text class="ts" x="166" y="196">record  -  freeze the newest complete loop</text>
+<text class="ts" x="166" y="214">as the master; capture target moves off it</text>
+
+<rect class="zone2" x="40" y="232" width="562" height="132" rx="12"/>
+<text class="th" x="52" y="252">2 . master loop  -  one committed karma, stable</text>
+<g><rect class="box" x="56" y="266" width="196" height="80"/>
+<text class="t" x="154" y="298" text-anchor="middle">master karma</text>
+<text class="ts" x="154" y="318" text-anchor="middle">real on-beat loop, any length</text></g>
+<g><rect class="box" x="272" y="266" width="200" height="80"/>
+<text class="t" x="372" y="292" text-anchor="middle">slice engine (unchanged)</text>
+<text class="ts" x="372" y="312" text-anchor="middle">jump . window . reverse</text>
+<text class="ts" x="372" y="330" text-anchor="middle">overlay . reloop</text></g>
+<g><rect class="box" x="492" y="266" width="96" height="80"/>
+<text class="t" x="540" y="298" text-anchor="middle">overdub</text>
+<text class="ts" x="540" y="318" text-anchor="middle">onto master</text></g>
+
+<line class="arr" x1="150" y1="364" x2="150" y2="426"/>
+<text class="ts" x="166" y="390">master plays the bed; the voice layer</text>
+<text class="ts" x="166" y="408">adds slice hits on top, it is not the loop</text>
+
+<rect class="zone3" x="40" y="426" width="562" height="132" rx="12"/>
+<text class="th" x="52" y="446">3 . performance + dsp</text>
+<g><rect class="box" x="56" y="460" width="196" height="80"/>
+<text class="t" x="154" y="492" text-anchor="middle">poly~ voice pool</text>
+<text class="ts" x="154" y="512" text-anchor="middle">target N . pitch . dir . env</text></g>
+<g><rect class="box" x="272" y="460" width="150" height="80"/>
+<text class="t" x="347" y="492" text-anchor="middle">coll sequencer</text>
+<text class="ts" x="347" y="512" text-anchor="middle">drives voices</text></g>
+<g><rect class="box" x="442" y="460" width="146" height="80"/>
+<text class="t" x="515" y="492" text-anchor="middle">dsp chain</text>
+<text class="ts" x="515" y="512" text-anchor="middle">to plugout~</text></g>
+
+<path d="M 602 492 H 636 V 100 H 602" fill="none" stroke="#534AB7" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+<text class="ts" x="628" y="300" transform="rotate(90 628 300)" text-anchor="middle">optional: processed mix into next capture</text>
+
+<rect class="zone4" x="330" y="186" width="180" height="30" rx="6"/>
+<text class="ts" x="420" y="205" text-anchor="middle" fill="#3C3489">groove~ bridge - first cycle only</text>
+<line class="leader" x1="420" y1="216" x2="420" y2="266"/>
+</svg>

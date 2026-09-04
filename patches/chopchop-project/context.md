@@ -1003,6 +1003,8 @@ Base for next edit: `ChopChop_v6_201.amxd`.
 
 The device is rebuilt around a **rolling capture group** that is completely separate from the
 loop the device plays. Settled over a long design conversation; this section is the reference.
+Diagram: `reference/rolling_buffer_flow.svg` (open directly in a browser — plain static SVG,
+no tooling needed). Same content as the prose below, laid out as the three stacked layers.
 
 ### The three layers
 
