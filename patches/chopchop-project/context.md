@@ -1372,11 +1372,49 @@ If SPD still shows ~120000 or the loop is empty, those two numbers say where it 
 
 Base for next edit: `ChopChop_v6_205.amxd`.
 
+### v6_205 test (user) + v6_206 fix — broken expr ternaries (2026-09-04)
+
+v6_205: instant playback but "insanely quick", overlay whizzing.  Diag: FRC
+(`---frRenderMs`) = **0**; SPD (`---karmaRep4` = karma loop END ms) = static
+**85.33 ms** (== 4096 samples == karma's minimum-loop clamp); cap/ful = 13714
+(the intended 4-bar length -- so `---size` is fine).
+
+-> `renderMs` reached FastRender as 0 -> `delay 0` -> `play` the same tick as
+`record` -> karma's initial-loop `maxpos` ~= 0 -> loop clamped to 4096.
+
+Root cause: the **arithmetic-in-condition `expr` ternaries** added in v6_204 /
+v6_205 emit NOTHING in Max's `expr`, so `pc_pk`'s renderMs inlet kept its
+default `0.`.  (v6_204's `pc_startx` ternary broke identically -> `start` stuck
+at 0 -> `renderMs = end/8` -> often huge -> that build's whole-buffer loop.
+The v6_202 `pc_swrap` ternary worked because it was single-var, no arithmetic
+in the condition.)
+
+### v6_206 -- Phase 5 file 5: expr fix (2026-09-04)
+
+`tools/phase3_file23_expr_fix.py`.  Base v6_205.  Logic-only, two `expr` text
+edits in `p PrerollCapture`, nothing else:
+
+  pc_startx : ($f1-$f2<0.)?0.:($f1-$f2)         -> `expr max($f1-$f2,0.)`
+  pc_spanx  : ($f2-$f1<480.)?60.:(($f2-$f1)/8.) -> `expr max(($f2-$f1)/8.,60.)`
+
+  start    = max(end - sizeMs, 0)         (clamp a seam-crossing grab)
+  renderMs = max((end - start) / 8, 60)   (>= 60; <= sizeMs/8 by construction)
+
+Verified: 1,883,883 / **28** cycles / 0 problems, size preserved.
+
+**Expected on test:** press Record -> **SPD (`---karmaRep4`) should read ~13712**
+(the loop END ms -- NOT 85, NOT 120000), **FRC (`---frRenderMs`) ~1714**, real
+audio in the loop, slices at a sane rate, overlay tracks normally.  If Record is
+pressed soon after arm (fold small) the loop is shorter (only that much was
+captured) but still valid.
+
+Base for next edit: `ChopChop_v6_206.amxd`.
+
 ---
 
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_205.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_206.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
