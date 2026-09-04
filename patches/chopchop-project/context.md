@@ -1701,11 +1701,52 @@ back with `renderMs = (end - start)/8`.
 
 Base for next edit: `ChopChop_v6_214.amxd`.
 
+### v6_214 test (user, 5 runs) -> v6_215: share ONE isolated sig~ 8. (2026-09-04)
+
+Every genuine 8x render (SPD 1714.25) came out degraded -- "hollow, no bass, no
+top," described as CONSTANT not transient -- and the final loop length (FRC)
+drifted run to run at the identical nominal renderMs.  The one flawless,
+dead-on-length capture (test 1, SPD 0, ~4-bar start delay matching `---size`)
+never ran the fast-render at all -- `---prerollFull` was caught mid-transition
+and the press fell through to the untouched real-time record path.
+
+Never-yet-tried combination, found by re-reading the two single-variable swaps
+together: v6_213 made karma's speed an isolated `sig~ 8.` (`selector~`) but
+still read through `play~`; v6_214 switched to `groove~` but reverted karma's
+speed to `obj-7 + 7`.  `obj-7` = is_playing x pitchMod x the glitch engine's
+rate output -- a live signal chain, not guaranteed rock-stable at 1.0.  A
+continuously wobbling `obj-7` explains both symptoms at once: karma's actual
+record rate drifts a hair off groove~'s exact-8x read rate for the whole
+render (-> uniform "hollow" artifact), and karma's final length is
+`renderMs * actual_speed`, which drifts run to run with whatever `obj-7` was
+doing (-> FRC drift).  The bench probe was clean because both sides there were
+isolated constants with nothing derived from a live signal chain.
+
+### v6_215 -- Phase 5 file 14: one shared sig~ 8. for both sides (2026-09-04)
+
+`tools/phase3_file32_shared_exact8.py`.  Base v6_214.  `p Playback` only.
+Bypass `obj-7` for karma-A speed too, sharing the SAME `sig~ 8.` box that
+already drives `gv2`'s rate:
+
+  new `fr_spd (selector~ 2)`: [1] = `obj-7`, [2] = `fr_s8b` (the existing
+  `sig~ 8.`, fanned -- not a second copy), ctl = `fr_ract`.  Out -> `obj-20[2]`.
+  Remove the `+~` boost chain (`fr_add / fr_boost / fr_bsel / fr_b7 / fr_b0`).
+
+`gv2`'s rate and karma-A's speed are now the identical `sig~ 8.` object during
+the render -- no path through `obj-7`/pitchMod/glitch while rendering.
+
+1,883,883 / **28** cycles / 0 problems, size preserved.
+
+**Expected on test:** genuine 8x renders (SPD ~1714) should now be clean, and
+FRC should land consistently close to `---size` run to run (not drifting).
+
+Base for next edit: `ChopChop_v6_215.amxd`.
+
 ---
 
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_214.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_215.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
