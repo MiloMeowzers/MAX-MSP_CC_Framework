@@ -1164,15 +1164,120 @@ Base for next edit: `ChopChop_v6_202.amxd`.
 
 ---
 
+### v6_202 test (user) — FAILED on beat alignment (2026-09-04)
+
+- LoopLength 4, master 4. "No tempo / beat alignment in the preroll — everything off from the
+  start." Loop plays **½ bar + 4 bars + ½ bar** before repeating (≈ 2 extra beats). SPD field
+  (`---dbgBar`) "never stops increasing, reached 159" — a free-running counter, meaningless.
+  FRC (`---rollWritePos`) climbs and wraps at 120000 (units were fine; the earlier "12000"
+  was a typo).
+- **Diagnosis:** `record~` sync-outlet units are OK, so the offset is *structural* — the
+  committed grab region wasn't an exact integer-bar window. The bar-edge latch
+  (`phasor~ @lock 1 → edge~ → snapshot~`) picked a position a couple of beats off a bar line,
+  and the ring wrap at 120000 ms is not a bar boundary so straddling grabs hit `groove~` with
+  `loopstart > loopend` (no wrap).
+- **karma record-speed verified from `karma~.c` 1.0** (+ user bench test with a scratch patch):
+  `record` advances `dpos` by `speed*srscale` per sample (clamped to `loop/1024` ≈ 375× for a
+  4-bar loop); loop length = `maxpos` reached; ipoke~ **linear**-interpolates the gaps for
+  speed>1. So an 8× record pass fed 8×-fast audio → a real bounded loop of the correct length
+  at 1× pitch. Fast-render is viable. (Scratch rig:
+  `test-patchers/fastrender_probe.maxpat` — note: karma status does NOT report in a bare
+  editor patcher, so the probe measures loop period with `delta~→edge~→timer`, not karma's
+  status outlet.)
+- **Architecture decided with the user:** fast-render Commit **from the `record~` ring**
+  (not the A/B real-loop swap). Ring stays the always-full bar-aligned stage; Commit
+  transcribes the last LoopLength into `karma ---thisBuffer` at 8× (~½ bar, groove~-bridged),
+  yielding a real karma master the existing slice engine runs on unchanged. Deferring
+  fast-render to a later version was rejected as throwaway work.
+
+### v6_203 — Phase 5 file 2: bar-locked substrate + fast-render Commit (2026-09-04)
+
+`tools/phase3_file20_fastrender_commit.py`. Base v6_202. Logic-only; **no presentation
+change**. Fixes the v6_202 beat-alignment failure and restores a real karma master
+(v6_185-level function: slice / reverse / DSP / UI / overlay all live on it again).
+
+- **`p TempoTranslate`**: `+ s ---barMs` (bar length ms, tapped off `r_barms`).
+- **`p RollCapture` reworked** — position tracking no longer uses the `record~` sync outlet:
+  - Ring bar-bounded: `r ---barMs → floor(120000/barMs) = ringBars → ringBars*barMs =
+    ---ringUsedMs → record~ inlet 3` (inlet 2 = 0). `record~ ---rollBuf` now wraps on an
+    exact integer-bar boundary.
+  - Grab end: `edge~ → t b b`; a free counter (`s ---dbgBar` unchanged) → `(cnt − armRef)`
+    → `% ringBars` = **fold** → `fold*barMs = s ---rollEndMs`. An exact integer-bar position —
+    **no phasor snapshot, so no 2-beat offset.** `armRef` latched on the arm bar so fold
+    restarts at 0.
+  - **Bar-synced Arm:** `sel 1 0` on `---prerollArm`. Armed → `pendf=1`. `t b b[0]` (bar
+    edge) → `pendf` (bang) → `sel 1` → `reset, 1` to `record~` **on the downbeat**, latch
+    `armRef`, clear pending. Disarm → `0` to `record~`.
+  - Drift realign: `fold == 0` (`sel 0`) → bare `reset` to `record~` (head snaps to bar 0
+    exactly when it would wrap).
+  - `+ s ---rollFold` (fold, 0..ringBars−1).
+- **`p Preroll`**: fully retire `pr_rec` (`record~ ---thisBuffer`) — v6_202 cut its audio;
+  now cut its reset/1/0 control too so it can't fight karma's fast-render pass on the same
+  buffer. FUL-LED / `---prerollFull` timer chain untouched.
+- **`p PrerollCapture` → the Commit orchestrator** (auto first, manual after):
+  - Auto-first: `r ---prerollFull → sel 1 → gate` (open while `---hasContent == 0`) → arm
+    `pc_fpf`; next `r ---dbgBar` tick → `s ---prerollCapture` (same trigger the manual Record
+    path uses). Fires once, then `---hasContent 1` closes the gate.
+  - On `---prerollCapture`: `t b b b b b b`. o6 latch `end/barMs/size/ringUsed`;
+    `sizeMs = round(size/barMs)*barMs`; `start = end − sizeMs`; `wrap = start < 0`.
+    o5..o2 the groove~ bridge (`set ---rollBuf`, loop points, `startloop`, `---prerollLoop 1`).
+    o0: if not wrap → `s ---commitGo [start end sizeMs/8]`; if wrap → re-arm the next-bar
+    retry (defer one bar; the wrapped two-segment `play~` read is a v6_204 item).
+- **`p FastRender`** (NEW root subpatcher, on `r ---commitGo`): `unpack f f f` → build
+  `line~` list `"start 0. end renderMs"` → `line~ → play~ ---rollBuf 2 → send~ ---renderL/R`.
+  Sequence: `s ---renderActive 1` (→ speed 8, karma rec source → play~) → `stop` → `record`
+  → `delay renderMs` → `s ---renderActive 0` (speed → 1) → `play` (closes the loop) →
+  `s ---regrid` → `s ---hasContent 1` → `delay 25 → s ---prerollLoop 0` (fade the bridge).
+- **`p Playback`**: `obj-7 → +~ (+ fr_boost line~) → obj-20[2]` — `fr_boost` jumps to 7 while
+  `---renderActive` (karma-A speed = 1+7 = 8 during the pass, 1 otherwise); karmaB / keys /
+  `sp_snap` keep the un-boosted `obj-7`. Karma-A **record source** (`obj-34/obj-29`) routed
+  through `selector~ 2` per channel — input 1 = live, input 2 = `receive~ ---renderL/R`,
+  control = `---renderActive + 1`. `loadmess 0 → s ---renderActive` inits to the live path.
+- **Diag repoint** (logic only): SPD field `dg_spd_r` → `r ---rollFold` (bar-in-ring, wraps);
+  FRC field `dg_frc_r` → `r ---rollEndMs` (grab end, ms).
+
+New channels: `---barMs ---rollEndMs ---ringUsedMs ---rollFold ---renderActive ---renderL~
+---renderR~ ---commitGo`. Dropped: `---rollWritePos`.
+Verified: 1,883,883 / **29** cycles / 0 problems, size preserved. The **+2 cycles** vs the
+27 baseline are two standard clear-after-fire latch loops (`rc_pendf↔rc_pchk↔rc_pclr` in
+RollCapture; `pc_fpf↔pc_fchk↔pc_fclr` in PrerollCapture) — same idiom as `p Preroll`'s
+`pr_want` chain; each terminates in one pass.
+
+**Unverified — test in Max / Live 12:**
+1. `record~ ---rollBuf 2` inlets 2/3 = loop start/end ms (v6_201 log says verified; relied on).
+2. `play~` position-ramp at 8× into `karma record` at speed 8 → a clean real loop (karma
+   source + user bench test say yes; confirm end-to-end in the device).
+3. `phasor~ @frequency 1n @lock 1` bar edge vs the audible downbeat in Live 12 — a residual
+   offset rotates the committed loop by that fixed amount (not the v6_202 "2 beats", which
+   was the non-integer grab).
+4. `selector~ 2` click on the speed signal during the record pass (instant `line~` steps).
+5. `---abMix` default must route karma A audible — if the committed master is silent, check
+   the A/B mix dial is toward A.
+
+**Expected on test** (v6_199_USEREDIT layout, no edit):
+- Arm with transport running → the roll starts on the next bar. **SPD** now shows the
+  bar-in-ring counter (wraps 0..~59), **FRC** the grab end in ms.
+- One LoopLength later the FUL LED lights and the **first Commit fires automatically** on the
+  next bar: `---hasContent → 1`, a real karma loop appears in `---thisBuffer`, PLY goes 1,
+  pads / reverse / reloop / window / overlay all work on it. Brief groove~ bridge covers the
+  ~½-bar render.
+- After that, the **Record button** Commits again from the current ring (manual), same path.
+- Loop should be exactly LoopLength and start on a bar line — no extra beats.
+
+Base for next edit: `ChopChop_v6_203.amxd`.
+
+---
+
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_202.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_203.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
 **Workflow:** hand-edit the `.amxd` JSON via `tools/` (`ccamxd.py` load/save, `validate.py`
-sweep — baseline **27** message cycles / 0 problems / byte-size preserved). One build script
-per version in `tools/phase3_fileNN_*.py`, model on the latest. Commit every save with
+sweep — baseline was 27; **v6_203 = 29** message cycles / 0 problems / byte-size preserved,
+the +2 are two clear-after-fire latch loops). One build script per version in
+`tools/phase3_fileNN_*.py`, model on the latest. Commit every save with
 `git -c user.email="sisericm@gmail.com" -c user.name="Claude"`. Send the `.amxd` with
 SendUserFile. Update this file's build log every version.
 
@@ -1184,30 +1289,34 @@ karmaMaster at ~8×) · **Snapshot** (existing Freeze btn, → bufFreeze, clean/
 (existing, karma-native). Roll cadence is fixed 1-bar, decoupled from master LoopLength. Two
 gains: feedback (main mix → roll input, default 0) and commit crossfade.
 
-**Built & awaiting user test — v6_202 (rolling substrate):** `buffer~ ---rollBuf`, `p
-RollCapture` (continuous `record~ @loop 1` + `phasor~ @frequency 1n @lock 1` 1-bar cadence +
-`counter`→`s ---dbgBar` + `snapshot~` on record~ sync → `s ---rollWritePos`). `p Preroll` no
-longer writes `---thisBuffer`. `p PrerollCapture` grabs `[writePos−---size, writePos]` off
-`---rollBuf`. Diag: **SPD field = bar counter**, **FRC field = ring write pos ms** (repointed,
-no layout change). Test = arm, watch SPD tick per bar locked to transport; FRC climb+wrap;
-Record → groove~ plays the recent LoopLength slab; repeat 2 bars later → newer slab.
+**Built & awaiting user test — v6_203 (bar-locked substrate + fast-render Commit).** Full
+detail in the build-log entry above. In short: the grab window is now an **exact integer-bar**
+region computed from a transport bar counter (`fold*barMs`), not a `snapshot~` of the
+`record~` sync outlet — this kills the v6_202 "2 beats off" failure. Arm starts the roll on
+the next transport bar. First Commit fires **automatically** one LoopLength after arm (on the
+FUL edge, next bar): `p FastRender` runs a `play~`-at-8× read of the ring into
+`karma ---thisBuffer` recording at speed 8, `play` closes it → a real bounded karma loop the
+existing slice engine drives unchanged. Every Commit after = the manual Record button.
+`p Preroll`'s dead `record~ ---thisBuffer` fully retired so it can't fight the render.
 
-**Immediate next — v6_203 (fast-render Commit):** the grabbed ring slab rendered into
-`karma~ ---thisBuffer` (= karmaMaster / obj-20 in p Playback) as a **real bounded loop** — a
-`groove~` reads the slab at ~8× while karmaMaster `record`s at the same rate off a shared
-high-speed ramp, closing on the ramp end (`play`/`stop`) so the loop length is correct.
-Crossfade groove~-bridge → karmaMaster. Lifecycle: **first Commit automatic** on the first
-1-bar mark after arm from clean state (sets `---hasContent`, hands the slice engine over, ends
-the groove~ bridge); every Commit after = manual (existing Record button, preroll-full path).
-Then hand the existing slice/`jump`/`window`/overlay system onto karmaMaster unchanged.
+**Test focus:** does the committed loop come out exactly LoopLength and start on a bar line
+(no extra beats); do pads / reverse / reloop / window / overlay work on it after the auto
+first Commit; is the committed master audible (if not → A/B mix dial). Unverified items 1–5
+are listed at the end of the build-log entry above.
 
-**Open verification items (test in Max, don't assume) — see spec section:**
-1. karma record fidelity at 8× (ipoke~ interp, `loop/1024` per-sample clamp ≈ 375× ceiling).
-2. `record~` sync-outlet units — v6_202 assumes 0–1 × 120000 = ms; if the v6_202 grab sounds
-   stale/misaligned this is why → switch to explicit sample counting.
-3. `groove~` with `loopstart > loopend` — assume it does NOT wrap; design around it.
-4. `phasor~ @lock 1` wrap vs audible-bar offset in Live 12.
-5. per-bar buffer-zero cost if layer-1 uses karma record passes (argues for `poke~` ring).
+**If v6_203 tests clean → v6_204:** the wrapped-grab two-segment `play~` read (remove the
+one-bar defer), Snapshot clean/wet split, feedback gain into the roll input. Then v6_205+
+the `poly~` voice layer.
+
+**Superseded verification notes (kept for context):**
+1. karma record fidelity at 8× — **confirmed** viable from `karma~.c` + user bench test.
+2. `record~` sync-outlet units — **moot**, v6_203 drops the sync outlet entirely.
+3. `groove~` with `loopstart > loopend` — still assumed no-wrap; v6_203's bridge never
+   wraps (uses `[max(0,start), end]`), the render `play~` is position-driven so a wrapped
+   region is a two-segment `line~` (deferred to v6_204).
+4. `phasor~ @lock 1` wrap vs audible-bar offset in Live 12 — still open (item 3 above).
+5. per-bar buffer-zero — N/A, v6_203 keeps the cheap `record~` ring (no karma passes in
+   layer 1).
 
 **karma~ is v1.0** (posts `64bit_v1.0stereo`). Messages: position/window/jump/stop/play/
 record/append/set/overdub/report/ramp/snramp/snrcurv/interp ONLY. No loopstart/loopend/crop/
