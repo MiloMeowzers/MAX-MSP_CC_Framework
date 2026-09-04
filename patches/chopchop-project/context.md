@@ -1595,11 +1595,47 @@ loop settles to the right length + keeps playing, waveform/chase/reverse work.
 
 Base for next edit: `ChopChop_v6_211.amxd`.
 
+### v6_211 test (user) -> v6_212: THE ROOT CAUSE -- pc_seq outlet miscount (2026-09-04)
+
+v6_211: handover fully works now (ply 1, hc 1, FUL off, waveform fills, red
+light stops after a few s, a REAL recorded loop -- audio survives source-off,
+mutes confirm audio in both A and B, only minor A/B phasing).  BUT SPD
+(`---frRenderMs`) STILL 0, FRC (`---karmaRep4`) still 119999.98, ~35 bars of
+silence before the loop starts.
+
+**Found it.**  `pc_seq` -- the trigger that latches `end`/`size`/`renderMs` at
+the top of every Commit -- was built (file 20, v6_203) with text
+`t b b b b b b` = **6 args -> 6 outlets (0..5)** but `numoutlets: 7` in the
+JSON, and it drives outlet index **6** for the latch step
+(`pc_seq[6] -> pc_endf / pc_szf / pc_bmf / pc_ruf`).  Max drops the invalid
+outlet-6 cords on load -> `end`/`size` never latch -> `pc_startx`/`pc_rmsx`
+never fire -> `pc_pk` emits `[0, 0, 0]` -> `---commitGo` renderMs = 0 -> karma
+`delay 0` -> can't close its record pass.  **This has been the real bug the
+whole time** -- every `expr` fix (v6_204..v6_211) was downstream of a chain
+getting no input.  `validate.py` missed it: it trusts the stored `numoutlets`
+(7), not the trigger arg count (6).  TODO: make validate count `trigger` args.
+
+### v6_212 -- Phase 5 file 11: pc_seq 6->7 outlets (2026-09-04)
+
+`tools/phase3_file29_fix_pcseq_outlets.py`.  Base v6_211.  ONE box text edit:
+
+  pc_seq : `t b b b b b b`  ->  `t b b b b b b b`   (7 outlets, matching the
+                                                     wiring: uses 0,2,3,4,5,6)
+
+1,883,883 / **28** cycles / 0 problems, size preserved.
+
+**Expected on test:** press Record -> SPD (`---frRenderMs`) ~= **1714**, the red
+record light stops after ~1-2 s (not ~35 bars), FRC (`---karmaRep4`) ~= **13714**
+(NOT 119999), the loop is the RIGHT length and plays immediately, waveform /
+chase / reverse all correct.
+
+Base for next edit: `ChopChop_v6_212.amxd`.
+
 ---
 
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_211.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_212.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
