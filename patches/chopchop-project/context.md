@@ -1410,11 +1410,56 @@ captured) but still valid.
 
 Base for next edit: `ChopChop_v6_206.amxd`.
 
+### v6_206 test (user) + course correction (2026-09-04)
+
+v6_206 still gave an 85 ms loop (SPD `---karmaRep4` static 85.333, `---size` 3428
+= 1 bar this run).  User: "you had this transfer working in the earlier build...
+build from **203** -- it had a working fast render; the issue was not wiring it
+into everything else, and the timer-driven auto-commit that killed it."  Also
+noted (correctly) that the user had originally suggested deferring fast-render
+and was talked out of it.
+
+**On-disk diff confirmed the user is right:**
+- **v6_203** `pc_rmsx = expr $f1/8.` (plain) -> `renderMs = sizeMs/8`, always.
+  Sound.  v6_203's render mechanism = `play~ ---rollBuf` + `line~` position ramp
+  + `+~` speed boost (obj-7 + 7).
+- **v6_204** replaced the start calc with an **arithmetic-in-condition `expr`
+  ternary** (`($f1-$f2<0.)?0.:($f1-$f2)`) -> emits nothing in Max -> `start`
+  stuck at 0 -> `renderMs = end/8` -> often huge -> that build's whole-buffer
+  loop.  v6_205/206 then rewrote the render source (groove~/selector~) chasing
+  the wrong cause, and v6_205 added a *second* broken ternary (`pc_spanx`).
+
+### v6_207 -- Phase 5 file 6: back to v6_204, expr fix only (2026-09-04)
+
+`tools/phase3_file24_v204_expr_only.py`.  **Base v6_204** (drop the v6_205/206
+groove~/selector~ rewrite).  v6_204 already is "v6_203 minus the auto-commit,
+plus the handover reinit".  ONLY the two clamp exprs change -- exactly 2 leaf
+boxes, no line changes, nothing else:
+
+  pc_startx : ($f1-$f2<0.)?0.:($f1-$f2)  ->  `expr max($f1-$f2,0.)`
+  pc_spanx  : ($f2-$f1)/8.               ->  `expr max(($f2-$f1)/8.,60.)`
+
+  start    = max(end - sizeMs, 0)        (a seam-crossing grab -> [0, end])
+  renderMs = max((end - start) / 8, 60)
+
+Render mechanism is v6_203's, untouched: `play~ ---rollBuf` + `line~` position
+ramp, `+~` boost (obj-7 + 7) for karma speed, record-source `selector~`s, the
+`report 20`/`snramp 16`/`ramp 16` reinit after `play`.  Record-only Commit (no
+auto-commit, no defer/retry latch).
+
+Verified: 1,883,883 / **28** cycles / 0 problems, size preserved.
+
+**Expected on test:** Record -> SPD (`---karmaRep4`) ~= `---size` (the loop END
+ms; NOT 85, NOT 120000), FRC (`---frRenderMs`) ~= `---size`/8, real audio, sane
+slices, overlay tracks.
+
+Base for next edit: `ChopChop_v6_207.amxd`.
+
 ---
 
 ## ▶ CONTINUATION STATE (2026-09-04) — read this first on resume
 
-**Base file:** `generated/ChopChop_v6_206.amxd` (1,883,883 bytes). Every build is a
+**Base file:** `generated/ChopChop_v6_207.amxd` (1,883,883 bytes). Every build is a
 **logic-only** edit on the user-relaid v6_199 layout — **never touch presentation / openrect /
 box positions**. Builds must be testable with no editing (the user is firm on this).
 
