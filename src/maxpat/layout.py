@@ -948,55 +948,139 @@ def _boxes_between(
     return obstacles
 
 
-def _route_around_obstacles(
+_ROUTE_CLEAR = 4.0  # Gap kept between a routed cord and any box edge
+
+
+def _segment_hits(
+    x1: float, y1: float, x2: float, y2: float,
+    rects: list[tuple[float, float, float, float]],
+) -> bool:
+    """True if the axis-aligned segment crosses any (left, top, right, bottom) rect."""
+    lo_x, hi_x = min(x1, x2), max(x1, x2)
+    lo_y, hi_y = min(y1, y2), max(y1, y2)
+    for left, top, right, bottom in rects:
+        if lo_x < right and hi_x > left and lo_y < bottom and hi_y > top:
+            return True
+    return False
+
+
+def _path_clear(
+    points: list[tuple[float, float]],
+    rects: list[tuple[float, float, float, float]],
+) -> bool:
+    """True if every segment of an orthogonal polyline avoids every rect."""
+    for (x1, y1), (x2, y2) in zip(points, points[1:]):
+        if _segment_hits(x1, y1, x2, y2, rects):
+            return False
+    return True
+
+
+def _path_cost(points: list[tuple[float, float]]) -> float:
+    """Manhattan length plus a fixed penalty per bend."""
+    length = sum(
+        abs(x2 - x1) + abs(y2 - y1)
+        for (x1, y1), (x2, y2) in zip(points, points[1:])
+    )
+    return length + 20.0 * max(0, len(points) - 2)
+
+
+def _route_clear_path(
+    patcher: Patcher,
+    src_box: Box,
+    dst_box: Box,
     src_ox: float,
     src_oy: float,
     dst_ix: float,
     dst_iy: float,
-    obstacles: list[Box],
-) -> list[float]:
-    """Generate midpoints that route around obstacles.
+) -> list[float] | None:
+    """Find a short orthogonal route that crosses no box, or None.
 
-    For each obstacle, determines whether to go left or right, then creates
-    a dog-leg path around it.
+    Two shapes are tried, cheapest clear route wins:
+
+    - **Z**: down from the outlet, one horizontal run at a free height, down
+      into the inlet (2 midpoints).
+    - **Lane**: a short drop below the outlet, across to a clear vertical
+      lane beside the boxes in the way, down the lane, across above the
+      inlet, then into it (4 midpoints).
+
+    Every segment is checked against every other box (padded by
+    ``_ROUTE_CLEAR``), so a route never doubles back over itself and never
+    passes through an object. Returns None when no clear route exists; the
+    caller then keeps a plain L-shape rather than zig-zagging.
     """
-    # Sort obstacles by y position (top to bottom)
-    obstacles.sort(key=lambda b: b.patching_rect[1])
+    pad = _ROUTE_CLEAR
+    rects: list[tuple[float, float, float, float]] = []
+    for box in patcher.boxes:
+        if box.id in (src_box.id, dst_box.id):
+            continue
+        bx, by, bw, bh = box.patching_rect
+        rects.append((bx - pad, by - pad, bx + bw + pad, by + bh + pad))
 
-    # Corridor center for left/right decision
-    corridor_cx = (src_ox + dst_ix) * 0.5
+    # The cord leaves the outlet downward and enters the inlet from above.
+    start = (src_ox, src_oy)
+    end = (dst_ix, dst_iy)
 
-    midpoints: list[float] = []
-    current_x = src_ox
-    current_y = src_oy
+    # Candidate heights for horizontal runs: just outside every box edge,
+    # plus the points right below the source and right above the destination.
+    levels = {src_oy + 8.0, dst_iy - 8.0, (src_oy + dst_iy) * 0.5}
+    for left, top, right, bottom in rects:
+        levels.add(top - 2.0)
+        levels.add(bottom + 2.0)
 
-    for obs in obstacles:
-        bx, by, bw, bh = obs.patching_rect
-        obs_cx = bx + bw * 0.5
+    best: list[tuple[float, float]] | None = None
+    best_cost = float("inf")
 
-        # Choose side: route away from obstacle center
-        if obs_cx >= corridor_cx:
-            # Obstacle is right of center -> route left
-            route_x = bx - _COLLISION_PAD - 3.0
-        else:
-            # Obstacle is left of center -> route right
-            route_x = bx + bw + _COLLISION_PAD + 3.0
+    def consider(points: list[tuple[float, float]]) -> None:
+        nonlocal best, best_cost
+        cost = _path_cost(points)
+        if cost < best_cost and _path_clear(points, rects):
+            best, best_cost = points, cost
 
-        pre_y = by - _COLLISION_PAD - 3.0
-        post_y = by + bh + _COLLISION_PAD + 3.0
+    # Z routes need a level between the outlet and the inlet.
+    if dst_iy > src_oy + 4.0:
+        for y in sorted(levels):
+            if src_oy + 3.0 <= y <= dst_iy - 3.0:
+                consider([start, (src_ox, y), (dst_ix, y), end])
 
-        # Dog-leg: go to pre-obstacle y, jog to route_x, pass obstacle, jog back
-        midpoints.extend([current_x, pre_y])
-        midpoints.extend([route_x, pre_y])
-        midpoints.extend([route_x, post_y])
+    # Lane routes: the first run sits just below the source, the last just
+    # above the destination; the lane runs beside some box edge.
+    near_src = sorted(
+        (y for y in levels if y >= src_oy + 3.0),
+        key=lambda y: y - src_oy,
+    )[:4]
+    near_dst = sorted(
+        (y for y in levels if y <= dst_iy - 3.0),
+        key=lambda y: dst_iy - y,
+    )[:4]
+    lanes = {src_ox, dst_ix}
+    for left, top, right, bottom in rects:
+        lanes.add(left - 2.0)
+        lanes.add(right + 2.0)
+    mid_x = (src_ox + dst_ix) * 0.5
+    for lane in sorted(lanes, key=lambda x: abs(x - mid_x)):
+        for y1 in near_src:
+            for y2 in near_dst:
+                consider([start, (src_ox, y1), (lane, y1), (lane, y2),
+                          (dst_ix, y2), end])
 
-        current_x = route_x
-        current_y = post_y
+    if best is None:
+        return None
 
-    # Final segment back toward destination
-    midpoints.extend([dst_ix, current_y])
-
-    return midpoints
+    # Drop collinear points so the stored route has only real bends.
+    pts = [best[0]]
+    for p_mid, p_next in zip(best[1:], best[2:]):
+        p_prev = pts[-1]
+        if (p_prev[0] == p_mid[0] == p_next[0]) or (p_prev[1] == p_mid[1] == p_next[1]):
+            continue
+        pts.append(p_mid)
+    pts.append(best[-1])
+    inner = pts[1:-1]
+    if not inner:
+        return None
+    flat: list[float] = []
+    for x, y in inner:
+        flat.extend([x, y])
+    return flat
 
 
 def _generate_midpoints(patcher: Patcher) -> None:
@@ -1074,10 +1158,17 @@ def _generate_midpoints(patcher: Patcher) -> None:
         obstacles = _boxes_between(patcher, src_box, dst_box, src_ox, dst_ix)
 
         if obstacles:
-            # Route around obstacles
-            line.midpoints = _route_around_obstacles(
-                src_ox, src_oy, dst_ix, dst_iy, obstacles,
+            # Route around obstacles along a clear Z or lane path. If none
+            # exists, fall back to the plain L-shape: crossing a box is less
+            # confusing than a cord that doubles back over itself.
+            routed = _route_clear_path(
+                patcher, src_box, dst_box, src_ox, src_oy, dst_ix, dst_iy,
             )
+            if routed is not None:
+                line.midpoints = routed
+            elif hdist > HORIZONTAL_THRESHOLD:
+                mid_y = (src_oy + dst_iy) * 0.5
+                line.midpoints = [src_ox, mid_y, dst_ix, mid_y]
         elif hdist > HORIZONTAL_THRESHOLD:
             # Simple L-shape at vertical midpoint (no obstacles)
             mid_y = (src_oy + dst_iy) * 0.5

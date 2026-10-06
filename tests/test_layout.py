@@ -829,6 +829,46 @@ class TestObstacleAvoidance:
         assert len(line.midpoints) >= 4
 
 
+    def test_row_of_obstacles_routes_without_doubling_back(self):
+        """A row of side-by-side obstacles gives one clear route, not a zig-zag."""
+        from src.maxpat.layout import _generate_midpoints, _path_clear
+
+        p = Patcher()
+        src = p.add_box("sig~")
+        src.patching_rect = [30.0, 30.0, 44.0, 22.0]
+        src.numinlets = 1
+        src.numoutlets = 1
+        for i in range(4):
+            ob = p.add_box("*~", ["0.5"])
+            ob.patching_rect = [20.0 + i * 70.0, 100.0, 60.0, 22.0]
+            ob.numinlets = 2
+            ob.numoutlets = 1
+        dst = p.add_box("dac~")
+        dst.patching_rect = [200.0, 200.0, 45.0, 45.0]
+        dst.numinlets = 2
+        dst.numoutlets = 0
+        p.add_connection(src, 0, dst, 0)
+
+        _generate_midpoints(p)
+
+        mp = p.lines[0].midpoints
+        assert mp
+        pts = list(zip(mp[0::2], mp[1::2]))
+        for i in range(2, len(pts)):
+            dx1 = pts[i - 1][0] - pts[i - 2][0]
+            dx2 = pts[i][0] - pts[i - 1][0]
+            dy1 = pts[i - 1][1] - pts[i - 2][1]
+            dy2 = pts[i][1] - pts[i - 1][1]
+            assert dx1 * dx2 >= 0 and dy1 * dy2 >= 0, f"route doubles back: {pts}"
+        rects = [
+            (b.patching_rect[0], b.patching_rect[1],
+             b.patching_rect[0] + b.patching_rect[2],
+             b.patching_rect[1] + b.patching_rect[3])
+            for b in p.boxes if b.id not in (src.id, dst.id)
+        ]
+        assert _path_clear(pts, rects), f"route crosses an obstacle: {pts}"
+
+
 class TestSubpatcherSuggestion:
     """Test suggest_subpatchers() grouping heuristic."""
 
