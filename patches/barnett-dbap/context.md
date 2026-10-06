@@ -1076,3 +1076,45 @@ NOT individually confirmed: the bare word `cue` through `t l`, MIDI CC 1 -> deco
 behaviour in detail, wander feel at the user's usual rates, per-slot gesture recall, and the v0.5.0 leftovers
 (`delayMs` alignment, venue `read`, no Task left after close). Ask before writing these into the
 proven-forms memory.
+
+## Review + build v0.7.3 (2026-10-05)
+
+Full review of v0.7.2; fixes applied (user OK'd items 1-4 + trim / rec / title). Edits were local (no
+`finalize_patch` midpoint pass: it re-routes every existing cord, some out to x ~2900; reverted once).
+
+1. **Stereo File R was silent.** `sfplay~ 2` outlet 1 -> R `selector~ 3` inlet 1 existed until `3bcfba8` (v0.4.0
+   build) and was dropped there: the validator classifies `sfplay~ N` outlet 1 as `trigger` (DB roles are not
+   arg-aware) and its `trigger -> signal` rule AUTO-STRIPS the cord from the dict it is given. Restored.
+   TRAP: running `validate_patch` on the real dict (not a deepcopy) before a save removes it again. The
+   framework fix (arg-aware signal_role for `sfplay~ N`) is not done.
+2. **Motion scenes now reach disk.** Source `read` / `write` -> `p scenefiles` (route read write ->
+   `opendialog .json` / `savedialog` -> prepend -> `js scenefile.js`). scenefile.js sends `read|write <path>`
+   to the source's pattrstorage and `read|write <base>-motion.json` out the scene outlet to dbap-motion's
+   pattrstorage (it has no file buttons). `.json` is added if missing; picking the -motion file loads its
+   pair. Older scene files have no -motion file: the motion pattrstorage posts a read error, harmless.
+   The `<control> <value>` path (`read` / `write` straight into pattrstorage via `p ctlsplit`) is unchanged
+   and still writes the source file only.
+3. **Stereo Live:** `set 1 $1` replaced by `p adcch` (`t i i` -> `set 1 N`, `+ 1` -> `set 2 N+1`). The
+   "adc ch" number is the first channel of the pair; mono uses only N.
+4. **Speaker numbers** on the plan turn dark (12,12,16) when the fill level g > 0.36 (light text on the hot
+   fill was ~1.1:1; 0.36 is the contrast crossover).
+- Trim `gain~` loadbang 127 -> 128 (refpage: 128 = unity; 127 was ~ -0.6 dB).
+- motion.js emits `rec 0` on outlet 1 after the 90 s auto-stop; `route ... gesture rec` (outlet 8) -> rec
+  toggle. The toggle's own `rec 0` is a no-op in js (recArmed already 0). Route kept at 1019 px wide
+  (`modify_box` shrinks it; restored).
+- Host title v0.7.3; about text names the -motion.json file.
+
+Open from the review (not built): output protection before `mc.dac~` (trims to +12 dB and z-cue to +6 dB
+can push a speaker gain to ~8; suggested `mc.limi~` or `mc.clip~ -1. 1.`, awaiting user OK); venue `read`
+broadcasts even on a failed read; decorrelator integer-length steps can crackle while depth slews (plugin
+parity); master floor -70 dB is not mute; ping bypasses master; presentation nits (x m / y m labels and
+POSITION / TRIMS headers touch their controls by 1.5-4 px, weight index labels off-centre, none under trims);
+host bpatcher varnames `dbap-source[1]` / `dbap-source`.
+
+Verify in MAX (v0.7.3):
+1. Source B, File, a stereo file: both sub-points sound (width > 0 shows L / R; R meters move with R content).
+2. Source A `write` -> name `test` -> `test.json` AND `test-motion.json` appear. Reopen the host, `read`
+   test.json: a recall on A restores position AND motion (path, dials, recorded gesture).
+3. Source B, Live, stereo, adc ch 3: L = input 3, R = input 4.
+4. Lit speakers show dark numbers, dim speakers light numbers.
+5. Trim reads unity on load. 6. A 90 s recording auto-stops and the rec toggle goes dark.

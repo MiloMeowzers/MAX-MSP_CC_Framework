@@ -95,7 +95,8 @@
 //           "setanchor x_m y_m"          on record stop: the gesture's centroid becomes the anchor
 //           "recstate 0/1"               the source's plan shows REC while 1
 // outlet 1: UI feedback, routed to the module's own controls: "on i", "path i", "rate f",
-//           "size f", "ratio f", "angle f", "phase f", "gesture f x 240"
+//           "size f", "ratio f", "angle f", "phase f", "gesture f x 240",
+//           "rec 0" (v0.7.3: after an auto-stop, so the rec toggle goes dark)
 
 inlets = 1;
 outlets = 2;
@@ -583,6 +584,7 @@ function anchorm(x, y) {
         // auto-stop: the gesture ends at the last report inside the limit; nothing more until "rec 0"
         recArmed = 0;
         recStop();
+        outlet(1, "rec", 0);            // v0.7.3: un-light the rec toggle (its "rec 0" is a no-op here)
         return;
     }
     if (tSec - tPrev > K_REC_HOLD_S) {

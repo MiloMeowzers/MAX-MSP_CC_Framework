@@ -107,6 +107,19 @@
       "files_changed": [
         "generated/control-demo.maxpat"
       ]
+    },
+    {
+      "version": "0.7.3",
+      "description": "v0.7.3 review fixes: stereo File R cord restored (sfplay~ 2 R -> R selector, lost in 3bcfba8), source read/write also save/load dbap-motion scenes as <name>-motion.json (p scenefiles + scenefile.js), stereo Live R = adc ch N+1 (p adcch), speaker numbers dark on lit speakers, trim init 128 (unity), rec toggle cleared after auto-stop, host title v0.7.3",
+      "timestamp": "2026-10-06T05:03:09.449148+00:00",
+      "files_changed": [
+        "generated/dbap-source.maxpat",
+        "generated/scenefile.js",
+        "generated/dbap.js",
+        "generated/motion.js",
+        "generated/dbap-motion.maxpat",
+        "generated/barnett-dbap.maxpat"
+      ]
     }
   ]
 }

@@ -1,4 +1,4 @@
-// dbap.js -- DBAP solver + lcd room-plan renderer (barnett-dbap v0.7, per-instance)
+// dbap.js -- DBAP solver + lcd room-plan renderer (barnett-dbap v0.7.3, per-instance)
 // Port of DbapSolver.cpp + SourceShaper.cpp from O-Octagon v1.13.0 (Lossius / Baltazar /
 // de la Hogue, ICMC 2009, 2011-04-14 revised equations). All constants verbatim
 // (context.md D10, D18).
@@ -152,6 +152,8 @@ var recState = 0;                         // v0.6: dbap-motion's recorder is arm
 var COL_BG = [22, 22, 26];
 var COL_BOX = [70, 70, 80];
 var COL_TEXT = [200, 200, 210];
+var COL_TEXT_DARK = [12, 12, 16];   // speaker numbers on a lit fill
+var SPK_TEXT_FLIP = 0.36;           // fill level above which the number turns dark
 var COL_SPK_DIM = [55, 60, 75];
 var COL_SPK_HOT = [90, 200, 255];
 var COL_PUCK = [255, 185, 60];
@@ -577,7 +579,9 @@ function draw() {
         var cb = Math.round(COL_SPK_DIM[2] + (COL_SPK_HOT[2] - COL_SPK_DIM[2]) * g);
         var l = Math.round(p[0] - R), tp = Math.round(p[1] - R);
         outlet(1, "paintoval", l, tp, l + 2 * R, tp + 2 * R, cr, cg, cb);
-        rgb("frgb", COL_TEXT);
+        // v0.7.3: dark number on a lit speaker (light text on the hot fill is ~1.1:1);
+        // 0.36 is where the two text colours trade places on contrast
+        rgb("frgb", g > SPK_TEXT_FLIP ? COL_TEXT_DARK : COL_TEXT);
         outlet(1, "moveto", Math.round(p[0]) - 3, Math.round(p[1]) + 4);
         outlet(1, "write", i + 1);
     }
