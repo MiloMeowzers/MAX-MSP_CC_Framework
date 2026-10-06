@@ -127,10 +127,10 @@
                                         0
                                     ],
                                     "midpoints": [
-                                        59.5,
-                                        124.0,
-                                        59.5,
-                                        124.0
+                                        114.0,
+                                        131.0,
+                                        57.0,
+                                        131.0
                                     ],
                                     "source": [
                                         "obj-131",
@@ -147,6 +147,12 @@
                                     "source": [
                                         "obj-132",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        142.0,
+                                        192.0,
+                                        65.0,
+                                        192.0
                                     ]
                                 }
                             },
@@ -159,6 +165,12 @@
                                     "source": [
                                         "obj-183",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        65.0,
+                                        85.0,
+                                        114.0,
+                                        85.0
                                     ]
                                 }
                             }
@@ -315,12 +327,6 @@
                                         "obj-82",
                                         0
                                     ],
-                                    "midpoints": [
-                                        59.5,
-                                        123.0,
-                                        59.5,
-                                        123.0
-                                    ],
                                     "source": [
                                         "obj-81",
                                         0
@@ -332,12 +338,6 @@
                                     "destination": [
                                         "obj-83",
                                         0
-                                    ],
-                                    "midpoints": [
-                                        59.5,
-                                        153.0,
-                                        59.5,
-                                        153.0
                                     ],
                                     "source": [
                                         "obj-82",
@@ -490,6 +490,12 @@
                                     "source": [
                                         "obj-162",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        65.0,
+                                        85.0,
+                                        100.0,
+                                        85.0
                                     ]
                                 }
                             },
@@ -500,10 +506,10 @@
                                         0
                                     ],
                                     "midpoints": [
-                                        59.5,
-                                        124.0,
-                                        59.5,
-                                        124.0
+                                        57.0,
+                                        126.0,
+                                        103.5,
+                                        126.0
                                     ],
                                     "source": [
                                         "obj-70",
@@ -520,6 +526,12 @@
                                     "source": [
                                         "obj-71",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        103.5,
+                                        182.0,
+                                        65.0,
+                                        182.0
                                     ]
                                 }
                             }
@@ -647,6 +659,12 @@
                                     "source": [
                                         "obj-159",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        65.0,
+                                        85.0,
+                                        114.0,
+                                        85.0
                                     ]
                                 }
                             },
@@ -657,10 +675,10 @@
                                         0
                                     ],
                                     "midpoints": [
-                                        59.5,
-                                        180.0,
-                                        59.5,
-                                        180.0
+                                        114.0,
+                                        135.0,
+                                        57.0,
+                                        135.0
                                     ],
                                     "source": [
                                         "obj-73",
@@ -677,6 +695,12 @@
                                     "source": [
                                         "obj-74",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        142.0,
+                                        206.0,
+                                        65.0,
+                                        206.0
                                     ]
                                 }
                             }
@@ -812,12 +836,6 @@
                                         "obj-61",
                                         0
                                     ],
-                                    "midpoints": [
-                                        59.5,
-                                        124.0,
-                                        59.5,
-                                        124.0
-                                    ],
                                     "source": [
                                         "obj-60",
                                         0
@@ -833,6 +851,12 @@
                                     "source": [
                                         "obj-61",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        103.5,
+                                        182.0,
+                                        65.0,
+                                        182.0
                                     ]
                                 }
                             }
@@ -1054,6 +1078,12 @@
                                     "source": [
                                         "obj-100",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        103.5,
+                                        131.0,
+                                        134.5,
+                                        131.0
                                     ]
                                 }
                             },
@@ -1126,6 +1156,12 @@
                                     "source": [
                                         "obj-155",
                                         1
+                                    ],
+                                    "midpoints": [
+                                        153.0,
+                                        172.0,
+                                        205.0,
+                                        172.0
                                     ]
                                 }
                             },
@@ -1138,6 +1174,12 @@
                                     "source": [
                                         "obj-99",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        230.0,
+                                        128.0,
+                                        134.5,
+                                        128.0
                                     ]
                                 }
                             }
@@ -2119,26 +2161,6 @@
                         40.0,
                         22.0
                     ]
-                }
-            },
-            {
-                "box": {
-                    "fontname": "Arial",
-                    "fontsize": 12.0,
-                    "id": "obj-21",
-                    "maxclass": "message",
-                    "numinlets": 2,
-                    "numoutlets": 1,
-                    "outlettype": [
-                        ""
-                    ],
-                    "patching_rect": [
-                        550.0,
-                        140.0,
-                        72.0,
-                        22.0
-                    ],
-                    "text": "set 1 $1"
                 }
             },
             {
@@ -4042,7 +4064,7 @@
                         40.0,
                         22.0
                     ],
-                    "text": "127"
+                    "text": "128"
                 }
             },
             {
@@ -4560,12 +4582,6 @@
                                         "obj-3",
                                         0
                                     ],
-                                    "midpoints": [
-                                        59.5,
-                                        45.0,
-                                        59.5,
-                                        45.0
-                                    ],
                                     "source": [
                                         "obj-1",
                                         0
@@ -4579,10 +4595,10 @@
                                         1
                                     ],
                                     "midpoints": [
-                                        139.5,
-                                        66.0,
-                                        621.5,
-                                        66.0
+                                        145.0,
+                                        61.0,
+                                        624.0,
+                                        61.0
                                     ],
                                     "source": [
                                         "obj-2",
@@ -4595,12 +4611,6 @@
                                     "destination": [
                                         "obj-4",
                                         0
-                                    ],
-                                    "midpoints": [
-                                        59.5,
-                                        489.0,
-                                        59.5,
-                                        489.0
                                     ],
                                     "source": [
                                         "obj-3",
@@ -4615,10 +4625,10 @@
                                         0
                                     ],
                                     "midpoints": [
-                                        621.5,
-                                        531.0,
-                                        139.5,
-                                        531.0
+                                        624.0,
+                                        519.5,
+                                        147.5,
+                                        519.5
                                     ],
                                     "source": [
                                         "obj-3",
@@ -5430,6 +5440,12 @@
                                     "destination": [
                                         "obj-4",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        45.0,
+                                        65.0,
+                                        195.0,
+                                        65.0
                                     ]
                                 }
                             },
@@ -5454,6 +5470,12 @@
                                     "destination": [
                                         "obj-2",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        100.2,
+                                        126.0,
+                                        37.0,
+                                        126.0
                                     ]
                                 }
                             },
@@ -5466,6 +5488,12 @@
                                     "destination": [
                                         "obj-2",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        163.4,
+                                        126.0,
+                                        37.0,
+                                        126.0
                                     ]
                                 }
                             },
@@ -5478,6 +5506,12 @@
                                     "destination": [
                                         "obj-2",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        226.60000000000002,
+                                        126.0,
+                                        37.0,
+                                        126.0
                                     ]
                                 }
                             },
@@ -5490,6 +5524,12 @@
                                     "destination": [
                                         "obj-2",
                                         0
+                                    ],
+                                    "midpoints": [
+                                        289.8,
+                                        126.0,
+                                        37.0,
+                                        126.0
                                     ]
                                 }
                             },
@@ -5516,6 +5556,701 @@
                         "tags": ""
                     }
                 }
+            },
+            {
+                "box": {
+                    "maxclass": "newobj",
+                    "id": "obj-193",
+                    "numinlets": 1,
+                    "numoutlets": 1,
+                    "outlettype": [
+                        ""
+                    ],
+                    "patching_rect": [
+                        550.0,
+                        140.0,
+                        86.0,
+                        22.0
+                    ],
+                    "text": "p adcch",
+                    "fontname": "Arial",
+                    "fontsize": 12.0,
+                    "patcher": {
+                        "fileversion": 1,
+                        "appversion": {
+                            "major": 9,
+                            "minor": 0,
+                            "revision": 0,
+                            "architecture": "x64",
+                            "modernui": 1
+                        },
+                        "classnamespace": "box",
+                        "rect": [
+                            100.0,
+                            100.0,
+                            400.0,
+                            300.0
+                        ],
+                        "bglocked": 0,
+                        "openinpresentation": 0,
+                        "default_fontsize": 12.0,
+                        "default_fontface": 0,
+                        "default_fontname": "Arial",
+                        "gridonopen": 1,
+                        "gridsize": [
+                            15.0,
+                            15.0
+                        ],
+                        "gridsnaponopen": 1,
+                        "objectsnaponopen": 1,
+                        "statusbarvisible": 2,
+                        "toolbarvisible": 1,
+                        "lefttoolbarpinned": 0,
+                        "toptoolbarpinned": 0,
+                        "righttoolbarpinned": 0,
+                        "bottomtoolbarpinned": 0,
+                        "toolbars_unpinned_last_save": 0,
+                        "tallnewobj": 0,
+                        "boxanimatetime": 200,
+                        "enablehscroll": 1,
+                        "enablevscroll": 1,
+                        "devicewidth": 0.0,
+                        "description": "",
+                        "digest": "",
+                        "tags": "",
+                        "style": "",
+                        "subpatcher_template": "",
+                        "assistshowspatchername": 0,
+                        "boxes": [
+                            {
+                                "box": {
+                                    "maxclass": "inlet",
+                                    "id": "obj-1",
+                                    "numinlets": 1,
+                                    "numoutlets": 1,
+                                    "outlettype": [
+                                        ""
+                                    ],
+                                    "patching_rect": [
+                                        50.0,
+                                        30,
+                                        30.0,
+                                        30.0
+                                    ],
+                                    "parameter_enable": 0,
+                                    "comment": "adc channel N (L; R = N + 1)"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "outlet",
+                                    "id": "obj-2",
+                                    "numinlets": 2,
+                                    "numoutlets": 0,
+                                    "outlettype": [],
+                                    "patching_rect": [
+                                        50.0,
+                                        200,
+                                        30.0,
+                                        30.0
+                                    ],
+                                    "parameter_enable": 0,
+                                    "comment": "set messages -> adc~"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "newobj",
+                                    "id": "obj-3",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [
+                                        "",
+                                        ""
+                                    ],
+                                    "patching_rect": [
+                                        50,
+                                        70,
+                                        51.0,
+                                        22.0
+                                    ],
+                                    "text": "t i i",
+                                    "fontname": "Arial",
+                                    "fontsize": 12.0
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "message",
+                                    "id": "obj-4",
+                                    "numinlets": 2,
+                                    "numoutlets": 1,
+                                    "outlettype": [
+                                        ""
+                                    ],
+                                    "patching_rect": [
+                                        50,
+                                        150,
+                                        72.0,
+                                        22.0
+                                    ],
+                                    "text": "set 1 $1",
+                                    "fontname": "Arial",
+                                    "fontsize": 12.0
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "newobj",
+                                    "id": "obj-5",
+                                    "numinlets": 2,
+                                    "numoutlets": 1,
+                                    "outlettype": [
+                                        ""
+                                    ],
+                                    "patching_rect": [
+                                        150,
+                                        110,
+                                        37.0,
+                                        22.0
+                                    ],
+                                    "text": "+ 1",
+                                    "fontname": "Arial",
+                                    "fontsize": 12.0
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "message",
+                                    "id": "obj-6",
+                                    "numinlets": 2,
+                                    "numoutlets": 1,
+                                    "outlettype": [
+                                        ""
+                                    ],
+                                    "patching_rect": [
+                                        150,
+                                        150,
+                                        72.0,
+                                        22.0
+                                    ],
+                                    "text": "set 2 $1",
+                                    "fontname": "Arial",
+                                    "fontsize": 12.0
+                                }
+                            }
+                        ],
+                        "lines": [
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-1",
+                                        0
+                                    ],
+                                    "destination": [
+                                        "obj-3",
+                                        0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-3",
+                                        1
+                                    ],
+                                    "destination": [
+                                        "obj-5",
+                                        0
+                                    ],
+                                    "midpoints": [
+                                        94.0,
+                                        101.0,
+                                        157.0,
+                                        101.0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-5",
+                                        0
+                                    ],
+                                    "destination": [
+                                        "obj-6",
+                                        0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-6",
+                                        0
+                                    ],
+                                    "destination": [
+                                        "obj-2",
+                                        0
+                                    ],
+                                    "midpoints": [
+                                        186.0,
+                                        178.0,
+                                        57.0,
+                                        178.0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-3",
+                                        0
+                                    ],
+                                    "destination": [
+                                        "obj-4",
+                                        0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-4",
+                                        0
+                                    ],
+                                    "destination": [
+                                        "obj-2",
+                                        0
+                                    ],
+                                    "midpoints": [
+                                        86.0,
+                                        186.0,
+                                        57.0,
+                                        186.0
+                                    ]
+                                }
+                            }
+                        ],
+                        "dependency_cache": [],
+                        "autosave": 0
+                    },
+                    "saved_object_attributes": {
+                        "description": "",
+                        "digest": "",
+                        "globalpatchername": "",
+                        "tags": ""
+                    }
+                }
+            },
+            {
+                "box": {
+                    "maxclass": "newobj",
+                    "id": "obj-194",
+                    "numinlets": 1,
+                    "numoutlets": 2,
+                    "outlettype": [
+                        "",
+                        ""
+                    ],
+                    "patching_rect": [
+                        1764,
+                        140,
+                        100.0,
+                        22.0
+                    ],
+                    "text": "p scenefiles",
+                    "fontname": "Arial",
+                    "fontsize": 12.0,
+                    "patcher": {
+                        "fileversion": 1,
+                        "appversion": {
+                            "major": 9,
+                            "minor": 0,
+                            "revision": 0,
+                            "architecture": "x64",
+                            "modernui": 1
+                        },
+                        "classnamespace": "box",
+                        "rect": [
+                            100.0,
+                            100.0,
+                            400.0,
+                            300.0
+                        ],
+                        "bglocked": 0,
+                        "openinpresentation": 0,
+                        "default_fontsize": 12.0,
+                        "default_fontface": 0,
+                        "default_fontname": "Arial",
+                        "gridonopen": 1,
+                        "gridsize": [
+                            15.0,
+                            15.0
+                        ],
+                        "gridsnaponopen": 1,
+                        "objectsnaponopen": 1,
+                        "statusbarvisible": 2,
+                        "toolbarvisible": 1,
+                        "lefttoolbarpinned": 0,
+                        "toptoolbarpinned": 0,
+                        "righttoolbarpinned": 0,
+                        "bottomtoolbarpinned": 0,
+                        "toolbars_unpinned_last_save": 0,
+                        "tallnewobj": 0,
+                        "boxanimatetime": 200,
+                        "enablehscroll": 1,
+                        "enablevscroll": 1,
+                        "devicewidth": 0.0,
+                        "description": "",
+                        "digest": "",
+                        "tags": "",
+                        "style": "",
+                        "subpatcher_template": "",
+                        "assistshowspatchername": 0,
+                        "boxes": [
+                            {
+                                "box": {
+                                    "maxclass": "inlet",
+                                    "id": "obj-1",
+                                    "numinlets": 1,
+                                    "numoutlets": 1,
+                                    "outlettype": [
+                                        ""
+                                    ],
+                                    "patching_rect": [
+                                        50.0,
+                                        30,
+                                        30.0,
+                                        30.0
+                                    ],
+                                    "parameter_enable": 0,
+                                    "comment": "read / write (opens a file dialog)"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "outlet",
+                                    "id": "obj-2",
+                                    "numinlets": 2,
+                                    "numoutlets": 0,
+                                    "outlettype": [],
+                                    "patching_rect": [
+                                        50,
+                                        270,
+                                        30.0,
+                                        30.0
+                                    ],
+                                    "parameter_enable": 0,
+                                    "comment": "read|write <path> -> pattrstorage"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "outlet",
+                                    "id": "obj-3",
+                                    "numinlets": 2,
+                                    "numoutlets": 0,
+                                    "outlettype": [],
+                                    "patching_rect": [
+                                        200,
+                                        270,
+                                        30.0,
+                                        30.0
+                                    ],
+                                    "parameter_enable": 0,
+                                    "comment": "read|write <path>-motion.json -> scene outlet (dbap-motion)"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "newobj",
+                                    "id": "obj-4",
+                                    "numinlets": 1,
+                                    "numoutlets": 3,
+                                    "outlettype": [
+                                        "",
+                                        "",
+                                        ""
+                                    ],
+                                    "patching_rect": [
+                                        50,
+                                        70,
+                                        128.0,
+                                        22.0
+                                    ],
+                                    "text": "route read write",
+                                    "fontname": "Arial",
+                                    "fontsize": 12.0
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "newobj",
+                                    "id": "obj-5",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [
+                                        "",
+                                        ""
+                                    ],
+                                    "patching_rect": [
+                                        50,
+                                        110,
+                                        128.0,
+                                        22.0
+                                    ],
+                                    "text": "opendialog .json",
+                                    "fontname": "Arial",
+                                    "fontsize": 12.0
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "newobj",
+                                    "id": "obj-6",
+                                    "numinlets": 1,
+                                    "numoutlets": 3,
+                                    "outlettype": [
+                                        "",
+                                        "",
+                                        ""
+                                    ],
+                                    "patching_rect": [
+                                        200,
+                                        110,
+                                        86.0,
+                                        22.0
+                                    ],
+                                    "text": "savedialog",
+                                    "fontname": "Arial",
+                                    "fontsize": 12.0
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "newobj",
+                                    "id": "obj-7",
+                                    "numinlets": 1,
+                                    "numoutlets": 1,
+                                    "outlettype": [
+                                        ""
+                                    ],
+                                    "patching_rect": [
+                                        50,
+                                        150,
+                                        100.0,
+                                        22.0
+                                    ],
+                                    "text": "prepend read",
+                                    "fontname": "Arial",
+                                    "fontsize": 12.0
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "newobj",
+                                    "id": "obj-8",
+                                    "numinlets": 1,
+                                    "numoutlets": 1,
+                                    "outlettype": [
+                                        ""
+                                    ],
+                                    "patching_rect": [
+                                        200,
+                                        150,
+                                        107.0,
+                                        22.0
+                                    ],
+                                    "text": "prepend write",
+                                    "fontname": "Arial",
+                                    "fontsize": 12.0
+                                }
+                            },
+                            {
+                                "box": {
+                                    "maxclass": "newobj",
+                                    "id": "obj-9",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [
+                                        "",
+                                        ""
+                                    ],
+                                    "patching_rect": [
+                                        50,
+                                        210,
+                                        135.0,
+                                        22.0
+                                    ],
+                                    "text": "js scenefile.js",
+                                    "fontname": "Arial",
+                                    "fontsize": 12.0
+                                }
+                            }
+                        ],
+                        "lines": [
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-1",
+                                        0
+                                    ],
+                                    "destination": [
+                                        "obj-4",
+                                        0
+                                    ],
+                                    "midpoints": [
+                                        65.0,
+                                        65.0,
+                                        114.0,
+                                        65.0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-4",
+                                        0
+                                    ],
+                                    "destination": [
+                                        "obj-5",
+                                        0
+                                    ],
+                                    "midpoints": [
+                                        57.0,
+                                        101.0,
+                                        114.0,
+                                        101.0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-4",
+                                        1
+                                    ],
+                                    "destination": [
+                                        "obj-6",
+                                        0
+                                    ],
+                                    "midpoints": [
+                                        114.0,
+                                        100.0,
+                                        243.0,
+                                        100.0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-5",
+                                        0
+                                    ],
+                                    "destination": [
+                                        "obj-7",
+                                        0
+                                    ],
+                                    "midpoints": [
+                                        57.0,
+                                        141.0,
+                                        100.0,
+                                        141.0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-6",
+                                        0
+                                    ],
+                                    "destination": [
+                                        "obj-8",
+                                        0
+                                    ],
+                                    "midpoints": [
+                                        207.0,
+                                        141.0,
+                                        253.5,
+                                        141.0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-7",
+                                        0
+                                    ],
+                                    "destination": [
+                                        "obj-9",
+                                        0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-8",
+                                        0
+                                    ],
+                                    "destination": [
+                                        "obj-9",
+                                        0
+                                    ],
+                                    "midpoints": [
+                                        253.5,
+                                        178.0,
+                                        117.5,
+                                        178.0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-9",
+                                        0
+                                    ],
+                                    "destination": [
+                                        "obj-2",
+                                        0
+                                    ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "source": [
+                                        "obj-9",
+                                        1
+                                    ],
+                                    "destination": [
+                                        "obj-3",
+                                        0
+                                    ],
+                                    "midpoints": [
+                                        178.0,
+                                        251.0,
+                                        207.0,
+                                        251.0
+                                    ]
+                                }
+                            }
+                        ],
+                        "dependency_cache": [],
+                        "autosave": 0
+                    },
+                    "saved_object_attributes": {
+                        "description": "",
+                        "digest": "",
+                        "globalpatchername": "",
+                        "tags": ""
+                    }
+                }
             }
         ],
         "lines": [
@@ -5525,50 +6260,8 @@
                         "obj-11",
                         0
                     ],
-                    "midpoints": [
-                        89.5,
-                        189.0,
-                        89.5,
-                        189.0
-                    ],
                     "source": [
                         "obj-10",
-                        0
-                    ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [
-                        "obj-103",
-                        0
-                    ],
-                    "midpoints": [
-                        1773.5,
-                        216.0,
-                        1533.5,
-                        216.0
-                    ],
-                    "source": [
-                        "obj-101",
-                        0
-                    ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [
-                        "obj-103",
-                        0
-                    ],
-                    "midpoints": [
-                        1825.5,
-                        216.0,
-                        1533.5,
-                        216.0
-                    ],
-                    "source": [
-                        "obj-102",
                         0
                     ]
                 }
@@ -5580,10 +6273,10 @@
                         0
                     ],
                     "midpoints": [
-                        1909.5,
-                        123.0,
-                        1909.5,
-                        123.0
+                        1936.0,
+                        131.0,
+                        2002.5,
+                        131.0
                     ],
                     "source": [
                         "obj-105",
@@ -5596,16 +6289,6 @@
                     "destination": [
                         "obj-107",
                         0
-                    ],
-                    "midpoints": [
-                        1925.0,
-                        165.0,
-                        1911.0,
-                        165.0,
-                        1911.0,
-                        177.0,
-                        1909.5,
-                        177.0
                     ],
                     "source": [
                         "obj-106",
@@ -5620,10 +6303,10 @@
                         0
                     ],
                     "midpoints": [
-                        1940.5,
-                        177.0,
-                        1979.5,
-                        177.0
+                        1938.8333333333333,
+                        166.0,
+                        1977.0,
+                        166.0
                     ],
                     "source": [
                         "obj-106",
@@ -5638,10 +6321,10 @@
                         0
                     ],
                     "midpoints": [
-                        1956.0,
-                        177.0,
-                        2031.5,
-                        177.0
+                        1954.75,
+                        166.0,
+                        2029.0,
+                        166.0
                     ],
                     "source": [
                         "obj-106",
@@ -5656,10 +6339,10 @@
                         0
                     ],
                     "midpoints": [
-                        1971.5,
-                        177.0,
-                        2083.5,
-                        177.0
+                        1970.6666666666667,
+                        166.0,
+                        2081.0,
+                        166.0
                     ],
                     "source": [
                         "obj-106",
@@ -5674,10 +6357,10 @@
                         0
                     ],
                     "midpoints": [
-                        1987.0,
-                        165.0,
-                        2139.5,
-                        165.0
+                        1986.5833333333333,
+                        166.0,
+                        2137.0,
+                        166.0
                     ],
                     "source": [
                         "obj-106",
@@ -5693,9 +6376,9 @@
                     ],
                     "midpoints": [
                         2002.5,
-                        165.0,
-                        2191.5,
-                        165.0
+                        166.0,
+                        2189.0,
+                        166.0
                     ],
                     "source": [
                         "obj-106",
@@ -5710,10 +6393,10 @@
                         0
                     ],
                     "midpoints": [
-                        2018.0,
-                        165.0,
-                        2243.5,
-                        165.0
+                        2018.4166666666667,
+                        166.0,
+                        2241.0,
+                        166.0
                     ],
                     "source": [
                         "obj-106",
@@ -5728,10 +6411,10 @@
                         0
                     ],
                     "midpoints": [
-                        2033.5,
-                        165.0,
-                        2376.5,
-                        165.0
+                        2034.3333333333333,
+                        166.0,
+                        2374.0,
+                        166.0
                     ],
                     "source": [
                         "obj-106",
@@ -5746,10 +6429,10 @@
                         0
                     ],
                     "midpoints": [
-                        2049.0,
-                        165.0,
-                        2569.5,
-                        165.0
+                        2050.25,
+                        166.0,
+                        2567.0,
+                        166.0
                     ],
                     "source": [
                         "obj-106",
@@ -5764,10 +6447,10 @@
                         0
                     ],
                     "midpoints": [
-                        2064.5,
-                        165.0,
-                        2621.5,
-                        165.0
+                        2066.1666666666665,
+                        166.0,
+                        2619.0,
+                        166.0
                     ],
                     "source": [
                         "obj-106",
@@ -5782,10 +6465,10 @@
                         0
                     ],
                     "midpoints": [
-                        2080.0,
-                        165.0,
-                        2673.5,
-                        165.0
+                        2082.0833333333335,
+                        166.0,
+                        2671.0,
+                        166.0
                     ],
                     "source": [
                         "obj-106",
@@ -5800,10 +6483,10 @@
                         0
                     ],
                     "midpoints": [
-                        2095.5,
-                        165.0,
-                        2729.5,
-                        165.0
+                        2098.0,
+                        166.0,
+                        2727.0,
+                        166.0
                     ],
                     "source": [
                         "obj-106",
@@ -5818,14 +6501,10 @@
                         0
                     ],
                     "midpoints": [
-                        1909.5,
-                        165.0,
-                        1833.0,
-                        165.0,
-                        1833.0,
-                        495.0,
-                        709.5,
-                        495.0
+                        1907.0,
+                        331.0,
+                        767.5,
+                        331.0
                     ],
                     "source": [
                         "obj-106",
@@ -5840,14 +6519,12 @@
                         0
                     ],
                     "midpoints": [
-                        1909.5,
-                        204.0,
-                        1878.0,
-                        204.0,
-                        1878.0,
-                        0.0,
-                        39.5,
-                        0.0
+                        2790.0,
+                        207.0,
+                        2790.0,
+                        7.0,
+                        62.04,
+                        7.0
                     ],
                     "source": [
                         "obj-107",
@@ -5862,22 +6539,12 @@
                         0
                     ],
                     "midpoints": [
-                        1979.5,
-                        213.0,
-                        1878.0,
-                        213.0,
-                        1878.0,
-                        42.0,
-                        105.0,
-                        42.0,
-                        105.0,
-                        87.0,
-                        90.0,
-                        87.0,
-                        90.0,
-                        96.0,
-                        89.5,
-                        96.0
+                        2798.0,
+                        207.0,
+                        2798.0,
+                        92.0,
+                        130.0,
+                        92.0
                     ],
                     "source": [
                         "obj-108",
@@ -5892,9 +6559,9 @@
                         0
                     ],
                     "midpoints": [
-                        2031.5,
+                        2042.0,
                         441.0,
-                        909.5,
+                        930.0,
                         441.0
                     ],
                     "source": [
@@ -5910,10 +6577,10 @@
                         0
                     ],
                     "midpoints": [
-                        89.5,
-                        285.0,
-                        89.5,
-                        285.0
+                        180.0,
+                        291.0,
+                        91.0,
+                        291.0
                     ],
                     "source": [
                         "obj-11",
@@ -5928,14 +6595,10 @@
                         0
                     ],
                     "midpoints": [
-                        2083.5,
-                        213.0,
-                        1878.0,
-                        213.0,
-                        1878.0,
-                        42.0,
-                        1119.5,
-                        42.0
+                        2096.0,
+                        186.0,
+                        1140.0,
+                        186.0
                     ],
                     "source": [
                         "obj-110",
@@ -5950,18 +6613,10 @@
                         0
                     ],
                     "midpoints": [
-                        2139.5,
-                        213.0,
-                        1878.0,
-                        213.0,
-                        1878.0,
-                        42.0,
-                        1080.0,
-                        42.0,
-                        1080.0,
-                        165.0,
-                        979.5,
-                        165.0
+                        2150.0,
+                        186.0,
+                        1000.0,
+                        186.0
                     ],
                     "source": [
                         "obj-111",
@@ -5976,22 +6631,10 @@
                         0
                     ],
                     "midpoints": [
-                        2191.5,
-                        213.0,
-                        1878.0,
-                        213.0,
-                        1878.0,
-                        42.0,
-                        180.0,
-                        42.0,
-                        180.0,
-                        246.0,
-                        66.0,
-                        246.0,
-                        66.0,
-                        297.0,
-                        89.5,
-                        297.0
+                        2202.0,
+                        251.0,
+                        91.0,
+                        251.0
                     ],
                     "source": [
                         "obj-112",
@@ -6006,14 +6649,10 @@
                         0
                     ],
                     "midpoints": [
-                        2243.5,
-                        267.0,
-                        1320.0,
-                        267.0,
-                        1320.0,
-                        273.0,
-                        1249.5,
-                        273.0
+                        2294.5,
+                        241.0,
+                        1360.0,
+                        241.0
                     ],
                     "source": [
                         "obj-113",
@@ -6028,18 +6667,12 @@
                         0
                     ],
                     "midpoints": [
-                        2376.5,
-                        216.0,
-                        1500.0,
-                        216.0,
-                        1500.0,
-                        87.0,
-                        1305.0,
-                        87.0,
-                        1305.0,
-                        96.0,
-                        1249.5,
-                        96.0
+                        2806.0,
+                        207.0,
+                        2806.0,
+                        92.0,
+                        1360.0,
+                        92.0
                     ],
                     "source": [
                         "obj-114",
@@ -6054,14 +6687,10 @@
                         3
                     ],
                     "midpoints": [
-                        672.5,
-                        207.0,
-                        585.0,
-                        207.0,
-                        585.0,
-                        246.0,
-                        490.5,
-                        246.0
+                        678.0,
+                        210.0,
+                        493.0,
+                        210.0
                     ],
                     "source": [
                         "obj-116",
@@ -6074,12 +6703,6 @@
                     "destination": [
                         "obj-10",
                         0
-                    ],
-                    "midpoints": [
-                        89.5,
-                        156.0,
-                        89.5,
-                        156.0
                     ],
                     "source": [
                         "obj-117",
@@ -6094,18 +6717,10 @@
                         0
                     ],
                     "midpoints": [
-                        121.5,
-                        165.0,
-                        327.0,
-                        165.0,
-                        327.0,
-                        195.0,
-                        417.0,
-                        195.0,
-                        417.0,
-                        207.0,
-                        429.5,
-                        207.0
+                        124.0,
+                        184.5,
+                        427.0,
+                        184.5
                     ],
                     "source": [
                         "obj-117",
@@ -6118,12 +6733,6 @@
                     "destination": [
                         "obj-119",
                         0
-                    ],
-                    "midpoints": [
-                        429.5,
-                        240.0,
-                        429.5,
-                        240.0
                     ],
                     "source": [
                         "obj-118",
@@ -6138,10 +6747,10 @@
                         0
                     ],
                     "midpoints": [
-                        429.5,
-                        297.0,
-                        149.5,
-                        297.0
+                        460.0,
+                        291.0,
+                        151.0,
+                        291.0
                     ],
                     "source": [
                         "obj-119",
@@ -6154,12 +6763,6 @@
                     "destination": [
                         "obj-18",
                         0
-                    ],
-                    "midpoints": [
-                        209.5,
-                        123.0,
-                        209.5,
-                        123.0
                     ],
                     "source": [
                         "obj-12",
@@ -6174,10 +6777,10 @@
                         2
                     ],
                     "midpoints": [
-                        149.5,
-                        441.0,
-                        350.5,
-                        441.0
+                        147.0,
+                        450.0,
+                        353.0,
+                        450.0
                     ],
                     "source": [
                         "obj-120",
@@ -6192,10 +6795,10 @@
                         0
                     ],
                     "midpoints": [
-                        609.5,
-                        243.0,
-                        609.5,
-                        243.0
+                        646.5,
+                        246.0,
+                        607.0,
+                        246.0
                     ],
                     "source": [
                         "obj-122",
@@ -6210,10 +6813,10 @@
                         0
                     ],
                     "midpoints": [
-                        609.5,
-                        273.0,
-                        609.5,
-                        273.0
+                        618.5,
+                        276.0,
+                        640.0,
+                        276.0
                     ],
                     "source": [
                         "obj-123",
@@ -6226,12 +6829,6 @@
                     "destination": [
                         "obj-127",
                         0
-                    ],
-                    "midpoints": [
-                        609.5,
-                        303.0,
-                        609.5,
-                        303.0
                     ],
                     "source": [
                         "obj-124",
@@ -6246,10 +6843,10 @@
                         0
                     ],
                     "midpoints": [
-                        609.5,
-                        447.0,
-                        209.5,
-                        447.0
+                        618.5,
+                        396.0,
+                        207.0,
+                        396.0
                     ],
                     "source": [
                         "obj-127",
@@ -6264,10 +6861,10 @@
                         1
                     ],
                     "midpoints": [
-                        209.5,
-                        483.0,
-                        190.5,
-                        483.0
+                        280.0,
+                        486.0,
+                        193.0,
+                        486.0
                     ],
                     "source": [
                         "obj-128",
@@ -6282,14 +6879,10 @@
                         0
                     ],
                     "midpoints": [
-                        190.5,
-                        738.0,
-                        1125.0,
-                        738.0,
-                        1125.0,
-                        735.0,
-                        1139.5,
-                        735.0
+                        193.0,
+                        626.0,
+                        1137.0,
+                        626.0
                     ],
                     "source": [
                         "obj-129",
@@ -6304,10 +6897,10 @@
                         0
                     ],
                     "midpoints": [
-                        89.5,
-                        594.0,
-                        709.5,
-                        594.0
+                        87.0,
+                        554.5,
+                        707.0,
+                        554.5
                     ],
                     "source": [
                         "obj-129",
@@ -6322,10 +6915,10 @@
                         0
                     ],
                     "midpoints": [
-                        269.5,
-                        195.0,
-                        209.5,
-                        195.0
+                        271.0,
+                        166.0,
+                        207.0,
+                        166.0
                     ],
                     "source": [
                         "obj-13",
@@ -6340,18 +6933,12 @@
                         1
                     ],
                     "midpoints": [
-                        1139.5,
-                        765.0,
-                        963.0,
-                        765.0,
-                        963.0,
-                        738.0,
-                        762.0,
-                        738.0,
-                        762.0,
-                        672.0,
-                        757.0,
-                        672.0
+                        2902.0,
+                        767.0,
+                        2902.0,
+                        630.0,
+                        759.5,
+                        630.0
                     ],
                     "source": [
                         "obj-133",
@@ -6366,10 +6953,10 @@
                         0
                     ],
                     "midpoints": [
-                        710.0,
-                        663.0,
-                        710.0,
-                        663.0
+                        733.5,
+                        679.0,
+                        707.5,
+                        679.0
                     ],
                     "source": [
                         "obj-134",
@@ -6384,10 +6971,10 @@
                         0
                     ],
                     "midpoints": [
-                        979.5,
-                        351.0,
-                        979.5,
-                        351.0
+                        977.0,
+                        364.0,
+                        1023.5,
+                        364.0
                     ],
                     "source": [
                         "obj-136",
@@ -6402,10 +6989,10 @@
                         0
                     ],
                     "midpoints": [
-                        1119.5,
-                        351.0,
-                        1119.5,
-                        351.0
+                        1117.0,
+                        364.0,
+                        1167.0,
+                        364.0
                     ],
                     "source": [
                         "obj-137",
@@ -6420,18 +7007,10 @@
                         0
                     ],
                     "midpoints": [
-                        979.5,
-                        405.0,
-                        951.0,
-                        405.0,
-                        951.0,
-                        486.0,
-                        711.0,
-                        486.0,
-                        711.0,
-                        495.0,
-                        709.5,
-                        495.0
+                        1023.5,
+                        451.0,
+                        767.5,
+                        451.0
                     ],
                     "source": [
                         "obj-138",
@@ -6446,22 +7025,10 @@
                         0
                     ],
                     "midpoints": [
-                        1119.5,
-                        405.0,
-                        1089.0,
-                        405.0,
-                        1089.0,
-                        366.0,
-                        951.0,
-                        366.0,
-                        951.0,
-                        486.0,
-                        711.0,
-                        486.0,
-                        711.0,
-                        495.0,
-                        709.5,
-                        495.0
+                        1167.0,
+                        451.0,
+                        767.5,
+                        451.0
                     ],
                     "source": [
                         "obj-139",
@@ -6476,9 +7043,9 @@
                         0
                     ],
                     "midpoints": [
-                        2569.5,
+                        2580.0,
                         251.0,
-                        979.5,
+                        1000.0,
                         251.0
                     ],
                     "source": [
@@ -6494,9 +7061,9 @@
                         0
                     ],
                     "midpoints": [
-                        2621.5,
+                        2632.0,
                         251.0,
-                        1119.5,
+                        1140.0,
                         251.0
                     ],
                     "source": [
@@ -6512,10 +7079,10 @@
                         0
                     ],
                     "midpoints": [
-                        979.5,
-                        480.0,
-                        979.5,
-                        480.0
+                        977.0,
+                        494.0,
+                        1018.5,
+                        494.0
                     ],
                     "source": [
                         "obj-143",
@@ -6530,10 +7097,10 @@
                         0
                     ],
                     "midpoints": [
-                        1119.5,
-                        480.0,
-                        1119.5,
-                        480.0
+                        1117.0,
+                        494.0,
+                        1160.0,
+                        494.0
                     ],
                     "source": [
                         "obj-144",
@@ -6548,18 +7115,10 @@
                         0
                     ],
                     "midpoints": [
-                        979.5,
-                        534.0,
-                        957.0,
-                        534.0,
-                        957.0,
-                        486.0,
-                        711.0,
-                        486.0,
-                        711.0,
-                        495.0,
-                        709.5,
-                        495.0
+                        1018.5,
+                        516.0,
+                        767.5,
+                        516.0
                     ],
                     "source": [
                         "obj-145",
@@ -6574,14 +7133,10 @@
                         0
                     ],
                     "midpoints": [
-                        1119.5,
-                        534.0,
-                        1077.0,
-                        534.0,
-                        1077.0,
-                        495.0,
-                        709.5,
-                        495.0
+                        1160.0,
+                        516.0,
+                        767.5,
+                        516.0
                     ],
                     "source": [
                         "obj-146",
@@ -6596,14 +7151,10 @@
                         0
                     ],
                     "midpoints": [
-                        2673.5,
-                        489.0,
-                        957.0,
-                        489.0,
-                        957.0,
-                        426.0,
-                        979.5,
-                        426.0
+                        2686.0,
+                        316.0,
+                        1000.0,
+                        316.0
                     ],
                     "source": [
                         "obj-148",
@@ -6618,9 +7169,9 @@
                         0
                     ],
                     "midpoints": [
-                        2729.5,
+                        2740.0,
                         316.0,
-                        1119.5,
+                        1140.0,
                         316.0
                     ],
                     "source": [
@@ -6635,12 +7186,6 @@
                         "obj-17",
                         0
                     ],
-                    "midpoints": [
-                        349.5,
-                        123.0,
-                        349.5,
-                        123.0
-                    ],
                     "source": [
                         "obj-15",
                         0
@@ -6654,10 +7199,10 @@
                         0
                     ],
                     "midpoints": [
-                        1533.5,
-                        207.0,
-                        1533.5,
-                        207.0
+                        1531.0,
+                        217.0,
+                        1626.5,
+                        217.0
                     ],
                     "source": [
                         "obj-155",
@@ -6674,6 +7219,12 @@
                     "source": [
                         "obj-155",
                         1
+                    ],
+                    "midpoints": [
+                        1599.0,
+                        207.0,
+                        1855.0,
+                        207.0
                     ]
                 }
             },
@@ -6686,6 +7237,12 @@
                     "source": [
                         "obj-158",
                         0
+                    ],
+                    "midpoints": [
+                        733.5,
+                        482.5,
+                        767.5,
+                        482.5
                     ]
                 }
             },
@@ -6696,10 +7253,10 @@
                         1
                     ],
                     "midpoints": [
-                        710.5,
-                        594.0,
-                        741.5,
-                        594.0
+                        718.5,
+                        585.5,
+                        744.0,
+                        585.5
                     ],
                     "source": [
                         "obj-161",
@@ -6714,22 +7271,12 @@
                         0
                     ],
                     "midpoints": [
-                        993.0,
-                        594.0,
-                        978.0,
-                        594.0,
-                        978.0,
-                        534.0,
-                        957.0,
-                        534.0,
-                        957.0,
-                        486.0,
-                        711.0,
-                        486.0,
-                        711.0,
-                        495.0,
-                        709.5,
-                        495.0
+                        2894.0,
+                        597.0,
+                        2894.0,
+                        492.0,
+                        767.5,
+                        492.0
                     ],
                     "source": [
                         "obj-164",
@@ -6744,10 +7291,10 @@
                         0
                     ],
                     "midpoints": [
-                        349.5,
-                        195.0,
-                        209.5,
-                        195.0
+                        372.5,
+                        186.0,
+                        207.0,
+                        186.0
                     ],
                     "source": [
                         "obj-17",
@@ -6762,9 +7309,9 @@
                         1
                     ],
                     "midpoints": [
-                        209.5,
+                        207.0,
                         246.0,
-                        149.83333333333334,
+                        149.0,
                         246.0
                     ],
                     "source": [
@@ -6780,14 +7327,12 @@
                         1
                     ],
                     "midpoints": [
-                        909.5,
-                        801.0,
-                        762.0,
-                        801.0,
-                        762.0,
-                        693.0,
-                        742.0,
-                        693.0
+                        2910.0,
+                        803.0,
+                        2910.0,
+                        690.0,
+                        744.5,
+                        690.0
                     ],
                     "source": [
                         "obj-182",
@@ -6816,6 +7361,12 @@
                     "source": [
                         "obj-188",
                         0
+                    ],
+                    "midpoints": [
+                        896.5,
+                        463.5,
+                        767.5,
+                        463.5
                     ]
                 }
             },
@@ -6826,53 +7377,15 @@
                         0
                     ],
                     "midpoints": [
-                        1049.5,
-                        598.0,
-                        1832.0,
-                        598.0,
-                        1832.0,
-                        216.0,
-                        1849.5,
-                        216.0
+                        2846.0,
+                        597.0,
+                        2846.0,
+                        218.0,
+                        1855.0,
+                        218.0
                     ],
                     "source": [
                         "obj-191",
-                        0
-                    ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [
-                        "obj-21",
-                        0
-                    ],
-                    "midpoints": [
-                        559.5,
-                        123.0,
-                        559.5,
-                        123.0
-                    ],
-                    "source": [
-                        "obj-20",
-                        0
-                    ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [
-                        "obj-22",
-                        0
-                    ],
-                    "midpoints": [
-                        559.5,
-                        165.0,
-                        559.5,
-                        165.0
-                    ],
-                    "source": [
-                        "obj-21",
                         0
                     ]
                 }
@@ -6884,10 +7397,10 @@
                         2
                     ],
                     "midpoints": [
-                        559.5,
-                        246.0,
-                        210.16666666666669,
-                        246.0
+                        557.0,
+                        231.0,
+                        211.0,
+                        231.0
                     ],
                     "source": [
                         "obj-22",
@@ -6902,14 +7415,10 @@
                         2
                     ],
                     "midpoints": [
-                        612.5,
-                        204.0,
-                        585.0,
-                        204.0,
-                        585.0,
-                        246.0,
-                        470.1666666666667,
-                        246.0
+                        615.0,
+                        231.0,
+                        471.0,
+                        231.0
                     ],
                     "source": [
                         "obj-22",
@@ -6924,14 +7433,10 @@
                         0
                     ],
                     "midpoints": [
-                        439.5,
-                        141.0,
-                        426.0,
-                        141.0,
-                        426.0,
-                        165.0,
-                        439.5,
-                        165.0
+                        437.0,
+                        155.0,
+                        480.0,
+                        155.0
                     ],
                     "source": [
                         "obj-24",
@@ -6946,10 +7451,10 @@
                         0
                     ],
                     "midpoints": [
-                        439.5,
-                        195.0,
-                        209.5,
-                        195.0
+                        480.0,
+                        201.0,
+                        207.0,
+                        201.0
                     ],
                     "source": [
                         "obj-25",
@@ -6964,14 +7469,12 @@
                         0
                     ],
                     "midpoints": [
-                        93.0,
-                        441.0,
-                        126.0,
-                        441.0,
-                        126.0,
-                        297.0,
-                        149.5,
-                        297.0
+                        169.0,
+                        445.0,
+                        169.0,
+                        292.0,
+                        151.0,
+                        292.0
                     ],
                     "source": [
                         "obj-26",
@@ -6986,10 +7489,10 @@
                         1
                     ],
                     "midpoints": [
-                        89.5,
-                        456.0,
+                        87.0,
+                        450.0,
                         280.0,
-                        456.0
+                        450.0
                     ],
                     "order": 0,
                     "source": [
@@ -7003,12 +7506,6 @@
                     "destination": [
                         "obj-129",
                         0
-                    ],
-                    "midpoints": [
-                        89.5,
-                        441.0,
-                        89.5,
-                        441.0
                     ],
                     "order": 2,
                     "source": [
@@ -7024,14 +7521,12 @@
                         0
                     ],
                     "midpoints": [
-                        89.5,
-                        441.0,
-                        66.0,
-                        441.0,
-                        66.0,
-                        297.0,
-                        116.0,
-                        297.0
+                        129.0,
+                        445.0,
+                        129.0,
+                        292.0,
+                        114.5,
+                        292.0
                     ],
                     "order": 1,
                     "source": [
@@ -7047,14 +7542,10 @@
                         0
                     ],
                     "midpoints": [
-                        979.5,
-                        219.0,
-                        1035.0,
-                        219.0,
-                        1035.0,
-                        246.0,
-                        979.5,
-                        246.0
+                        977.0,
+                        234.0,
+                        1030.5,
+                        234.0
                     ],
                     "source": [
                         "obj-30",
@@ -7069,10 +7560,10 @@
                         0
                     ],
                     "midpoints": [
-                        1119.5,
-                        219.0,
-                        1119.5,
-                        219.0
+                        1117.0,
+                        234.0,
+                        1160.0,
+                        234.0
                     ],
                     "source": [
                         "obj-31",
@@ -7087,10 +7578,10 @@
                         0
                     ],
                     "midpoints": [
-                        979.5,
-                        126.0,
-                        979.5,
-                        126.0
+                        977.0,
+                        127.0,
+                        1020.0,
+                        127.0
                     ],
                     "source": [
                         "obj-33",
@@ -7105,18 +7596,10 @@
                         0
                     ],
                     "midpoints": [
-                        979.5,
-                        273.0,
-                        951.0,
-                        273.0,
-                        951.0,
-                        486.0,
-                        711.0,
-                        486.0,
-                        711.0,
-                        495.0,
-                        709.5,
-                        495.0
+                        1030.5,
+                        386.0,
+                        767.5,
+                        386.0
                     ],
                     "source": [
                         "obj-34",
@@ -7131,18 +7614,10 @@
                         0
                     ],
                     "midpoints": [
-                        1119.5,
-                        273.0,
-                        951.0,
-                        273.0,
-                        951.0,
-                        486.0,
-                        711.0,
-                        486.0,
-                        711.0,
-                        495.0,
-                        709.5,
-                        495.0
+                        1160.0,
+                        386.0,
+                        767.5,
+                        386.0
                     ],
                     "source": [
                         "obj-35",
@@ -7157,22 +7632,10 @@
                         0
                     ],
                     "midpoints": [
-                        979.5,
-                        165.0,
-                        1047.0,
-                        165.0,
-                        1047.0,
-                        246.0,
-                        957.0,
-                        246.0,
-                        957.0,
-                        486.0,
-                        711.0,
-                        486.0,
-                        711.0,
-                        495.0,
-                        709.5,
-                        495.0
+                        1020.0,
+                        326.0,
+                        767.5,
+                        326.0
                     ],
                     "source": [
                         "obj-36",
@@ -7187,14 +7650,10 @@
                         0
                     ],
                     "midpoints": [
-                        1249.5,
-                        183.0,
-                        1245.0,
-                        183.0,
-                        1245.0,
-                        207.0,
-                        1249.5,
-                        207.0
+                        1247.0,
+                        195.0,
+                        1300.5,
+                        195.0
                     ],
                     "source": [
                         "obj-38",
@@ -7209,26 +7668,10 @@
                         0
                     ],
                     "midpoints": [
-                        1249.5,
-                        234.0,
-                        1236.0,
-                        234.0,
-                        1236.0,
-                        231.0,
-                        1047.0,
-                        231.0,
-                        1047.0,
-                        246.0,
-                        957.0,
-                        246.0,
-                        957.0,
-                        486.0,
-                        711.0,
-                        486.0,
-                        711.0,
-                        495.0,
-                        709.5,
-                        495.0
+                        1300.5,
+                        366.0,
+                        767.5,
+                        366.0
                     ],
                     "source": [
                         "obj-47",
@@ -7243,14 +7686,10 @@
                         0
                     ],
                     "midpoints": [
-                        1249.5,
-                        363.0,
-                        1245.0,
-                        363.0,
-                        1245.0,
-                        387.0,
-                        1249.5,
-                        387.0
+                        1247.0,
+                        375.0,
+                        1293.5,
+                        375.0
                     ],
                     "source": [
                         "obj-49",
@@ -7265,10 +7704,10 @@
                         0
                     ],
                     "midpoints": [
-                        1249.5,
-                        495.0,
-                        709.5,
-                        495.0
+                        1293.5,
+                        456.0,
+                        767.5,
+                        456.0
                     ],
                     "source": [
                         "obj-58",
@@ -7285,6 +7724,12 @@
                     "source": [
                         "obj-59",
                         0
+                    ],
+                    "midpoints": [
+                        707.0,
+                        421.5,
+                        733.5,
+                        421.5
                     ]
                 }
             },
@@ -7295,10 +7740,10 @@
                         0
                     ],
                     "midpoints": [
-                        913.5,
-                        564.0,
-                        993.0,
-                        564.0
+                        912.6666666666666,
+                        566.0,
+                        1005.0,
+                        566.0
                     ],
                     "source": [
                         "obj-68",
@@ -7313,9 +7758,9 @@
                         0
                     ],
                     "midpoints": [
-                        957.5,
+                        958.3333333333334,
                         566.0,
-                        1049.5,
+                        1097.0,
                         566.0
                     ],
                     "source": [
@@ -7331,10 +7776,10 @@
                         0
                     ],
                     "midpoints": [
-                        869.5,
-                        564.0,
-                        869.5,
-                        564.0
+                        867.0,
+                        566.0,
+                        918.0,
+                        566.0
                     ],
                     "source": [
                         "obj-68",
@@ -7347,16 +7792,6 @@
                     "destination": [
                         "obj-65",
                         0
-                    ],
-                    "midpoints": [
-                        869.5,
-                        594.0,
-                        855.0,
-                        594.0,
-                        855.0,
-                        615.0,
-                        869.5,
-                        615.0
                     ],
                     "source": [
                         "obj-69",
@@ -7372,13 +7807,9 @@
                     ],
                     "midpoints": [
                         918.0,
-                        597.0,
-                        915.0,
-                        597.0,
-                        915.0,
-                        615.0,
-                        929.5,
-                        615.0
+                        606.0,
+                        945.0,
+                        606.0
                     ],
                     "source": [
                         "obj-69",
@@ -7393,10 +7824,10 @@
                         0
                     ],
                     "midpoints": [
-                        966.5,
-                        615.0,
-                        989.5,
-                        615.0
+                        969.0,
+                        606.0,
+                        1005.0,
+                        606.0
                     ],
                     "source": [
                         "obj-69",
@@ -7411,14 +7842,10 @@
                         0
                     ],
                     "midpoints": [
-                        825.5,
-                        537.0,
-                        66.0,
-                        537.0,
-                        66.0,
-                        486.0,
-                        89.5,
-                        486.0
+                        828.0,
+                        506.0,
+                        87.0,
+                        506.0
                     ],
                     "source": [
                         "obj-72",
@@ -7445,14 +7872,10 @@
                         0
                     ],
                     "midpoints": [
-                        796.5,
-                        657.0,
-                        1116.0,
-                        657.0,
-                        1116.0,
-                        684.0,
-                        1171.5,
-                        684.0
+                        797.75,
+                        610.0,
+                        1193.0,
+                        610.0
                     ],
                     "source": [
                         "obj-72",
@@ -7467,30 +7890,12 @@
                         0
                     ],
                     "midpoints": [
-                        738.5,
-                        534.0,
-                        846.0,
-                        534.0,
-                        846.0,
-                        411.0,
-                        957.0,
-                        411.0,
-                        957.0,
-                        243.0,
-                        1047.0,
-                        243.0,
-                        1047.0,
-                        162.0,
-                        951.0,
-                        162.0,
-                        951.0,
-                        87.0,
-                        774.0,
-                        87.0,
-                        774.0,
-                        93.0,
-                        709.5,
-                        93.0
+                        2814.0,
+                        527.0,
+                        2814.0,
+                        92.0,
+                        820.0,
+                        92.0
                     ],
                     "source": [
                         "obj-72",
@@ -7506,9 +7911,9 @@
                     ],
                     "midpoints": [
                         767.5,
-                        537.0,
-                        869.5,
-                        537.0
+                        531.0,
+                        867.0,
+                        531.0
                     ],
                     "source": [
                         "obj-72",
@@ -7521,12 +7926,6 @@
                     "destination": [
                         "obj-134",
                         0
-                    ],
-                    "midpoints": [
-                        709.5,
-                        621.0,
-                        710.0,
-                        621.0
                     ],
                     "source": [
                         "obj-75",
@@ -7541,10 +7940,10 @@
                         0
                     ],
                     "midpoints": [
-                        710.0,
-                        849.01171875,
-                        909.5,
-                        849.01171875
+                        726.0,
+                        787.5,
+                        1005.0,
+                        787.5
                     ],
                     "order": 0,
                     "source": [
@@ -7558,12 +7957,6 @@
                     "destination": [
                         "obj-78",
                         0
-                    ],
-                    "midpoints": [
-                        710.0,
-                        723.0,
-                        709.5,
-                        723.0
                     ],
                     "order": 1,
                     "source": [
@@ -7579,34 +7972,12 @@
                         0
                     ],
                     "midpoints": [
-                        909.5,
-                        903.0,
-                        885.0,
-                        903.0,
-                        885.0,
-                        654.0,
-                        846.0,
-                        654.0,
-                        846.0,
-                        261.0,
-                        957.0,
-                        261.0,
-                        957.0,
-                        243.0,
-                        1047.0,
-                        243.0,
-                        1047.0,
-                        162.0,
-                        945.0,
-                        162.0,
-                        945.0,
-                        99.0,
-                        783.0,
-                        99.0,
-                        783.0,
-                        108.0,
+                        2822.0,
+                        882.0,
+                        2822.0,
+                        104.0,
                         747.0,
-                        108.0
+                        104.0
                     ],
                     "source": [
                         "obj-77",
@@ -7619,32 +7990,6 @@
                     "destination": [
                         "obj-85",
                         0
-                    ],
-                    "midpoints": [
-                        936.7857142857143,
-                        912.0,
-                        885.0,
-                        912.0,
-                        885.0,
-                        654.0,
-                        846.0,
-                        654.0,
-                        846.0,
-                        261.0,
-                        957.0,
-                        261.0,
-                        957.0,
-                        243.0,
-                        1047.0,
-                        243.0,
-                        1047.0,
-                        162.0,
-                        945.0,
-                        162.0,
-                        945.0,
-                        108.0,
-                        927.0,
-                        108.0
                     ],
                     "source": [
                         "obj-77",
@@ -7659,30 +8004,12 @@
                         0
                     ],
                     "midpoints": [
-                        964.0714285714286,
-                        912.0,
-                        885.0,
-                        912.0,
-                        885.0,
-                        654.0,
-                        846.0,
-                        654.0,
-                        846.0,
-                        261.0,
-                        957.0,
-                        261.0,
-                        957.0,
-                        243.0,
-                        1035.0,
-                        243.0,
-                        1035.0,
-                        219.0,
-                        957.0,
-                        219.0,
-                        957.0,
-                        189.0,
+                        2830.0,
+                        882.0,
+                        2830.0,
+                        184.25,
                         927.0,
-                        189.0
+                        184.25
                     ],
                     "source": [
                         "obj-77",
@@ -7697,18 +8024,12 @@
                         0
                     ],
                     "midpoints": [
-                        991.3571428571429,
-                        912.0,
-                        885.0,
-                        912.0,
-                        885.0,
-                        654.0,
-                        846.0,
-                        654.0,
-                        846.0,
-                        279.0,
+                        2862.0,
+                        882.0,
+                        2862.0,
+                        276.5,
                         927.0,
-                        279.0
+                        276.5
                     ],
                     "source": [
                         "obj-77",
@@ -7723,18 +8044,12 @@
                         0
                     ],
                     "midpoints": [
-                        1018.6428571428571,
-                        912.0,
-                        885.0,
-                        912.0,
-                        885.0,
-                        654.0,
-                        846.0,
-                        654.0,
-                        846.0,
-                        333.0,
+                        2878.0,
+                        882.0,
+                        2878.0,
+                        329.0,
                         886.5,
-                        333.0
+                        329.0
                     ],
                     "source": [
                         "obj-77",
@@ -7749,18 +8064,12 @@
                         0
                     ],
                     "midpoints": [
-                        1045.9285714285713,
-                        912.0,
-                        885.0,
-                        912.0,
-                        885.0,
-                        654.0,
-                        846.0,
-                        654.0,
-                        846.0,
-                        333.0,
+                        2886.0,
+                        882.0,
+                        2886.0,
+                        329.0,
                         787.5,
-                        333.0
+                        329.0
                     ],
                     "source": [
                         "obj-77",
@@ -7775,18 +8084,12 @@
                         0
                     ],
                     "midpoints": [
-                        1073.2142857142858,
-                        912.0,
-                        885.0,
-                        912.0,
-                        885.0,
-                        654.0,
-                        846.0,
-                        654.0,
-                        846.0,
-                        279.0,
+                        2870.0,
+                        882.0,
+                        2870.0,
+                        276.5,
                         747.0,
-                        279.0
+                        276.5
                     ],
                     "source": [
                         "obj-77",
@@ -7801,34 +8104,12 @@
                         0
                     ],
                     "midpoints": [
-                        1100.5,
-                        903.0,
-                        1110.0,
-                        903.0,
-                        1110.0,
-                        633.0,
-                        1041.0,
-                        633.0,
-                        1041.0,
-                        543.0,
-                        969.0,
-                        543.0,
-                        969.0,
-                        534.0,
-                        957.0,
-                        534.0,
-                        957.0,
-                        243.0,
-                        1035.0,
-                        243.0,
-                        1035.0,
-                        219.0,
-                        957.0,
-                        219.0,
-                        957.0,
-                        189.0,
+                        2838.0,
+                        882.0,
+                        2838.0,
+                        184.25,
                         747.0,
-                        189.0
+                        184.25
                     ],
                     "source": [
                         "obj-77",
@@ -7843,14 +8124,10 @@
                         3
                     ],
                     "midpoints": [
-                        639.5,
-                        207.0,
-                        585.0,
-                        207.0,
-                        585.0,
-                        246.0,
-                        270.5,
-                        246.0
+                        645.0,
+                        191.0,
+                        273.0,
+                        191.0
                     ],
                     "source": [
                         "obj-8",
@@ -7867,6 +8144,12 @@
                     "source": [
                         "obj-80",
                         0
+                    ],
+                    "midpoints": [
+                        907.0,
+                        752.0,
+                        935.5,
+                        752.0
                     ]
                 }
             },
@@ -7875,12 +8158,6 @@
                     "destination": [
                         "obj-117",
                         0
-                    ],
-                    "midpoints": [
-                        89.5,
-                        123.0,
-                        89.5,
-                        123.0
                     ],
                     "source": [
                         "obj-9",
@@ -7893,12 +8170,6 @@
                     "destination": [
                         "obj-94",
                         0
-                    ],
-                    "midpoints": [
-                        1533.5,
-                        123.0,
-                        1533.5,
-                        123.0
                     ],
                     "source": [
                         "obj-93",
@@ -7913,10 +8184,10 @@
                         3
                     ],
                     "midpoints": [
-                        1565.5,
-                        165.0,
-                        1596.5,
-                        165.0
+                        1568.0,
+                        172.0,
+                        1599.0,
+                        172.0
                     ],
                     "source": [
                         "obj-94",
@@ -7931,10 +8202,10 @@
                         1
                     ],
                     "midpoints": [
-                        1533.5,
-                        177.0,
-                        1554.5,
-                        177.0
+                        1531.0,
+                        172.0,
+                        1553.6666666666667,
+                        172.0
                     ],
                     "source": [
                         "obj-94",
@@ -7949,10 +8220,10 @@
                         2
                     ],
                     "midpoints": [
-                        1683.5,
-                        168.0,
-                        1575.5,
-                        168.0
+                        1685.0,
+                        166.0,
+                        1576.3333333333333,
+                        166.0
                     ],
                     "source": [
                         "obj-95",
@@ -7967,10 +8238,10 @@
                         0
                     ],
                     "midpoints": [
-                        1593.5,
-                        168.0,
-                        1533.5,
-                        168.0
+                        1595.0,
+                        166.0,
+                        1531.0,
+                        166.0
                     ],
                     "source": [
                         "obj-97",
@@ -8001,9 +8272,9 @@
                         0
                     ],
                     "midpoints": [
-                        859.5,
+                        857.0,
                         498.5,
-                        709.5,
+                        767.5,
                         498.5
                     ]
                 }
@@ -8019,14 +8290,126 @@
                         0
                     ],
                     "midpoints": [
-                        910.5,
-                        504.0,
-                        1518.0,
-                        504.0,
-                        1518.0,
+                        2854.0,
+                        502.0,
+                        2854.0,
                         222.0,
-                        1533.5,
+                        1626.5,
                         222.0
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [
+                        "obj-18",
+                        1
+                    ],
+                    "destination": [
+                        "obj-119",
+                        1
+                    ],
+                    "midpoints": [
+                        286.0,
+                        246.0,
+                        449.0,
+                        246.0
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [
+                        "obj-20",
+                        0
+                    ],
+                    "destination": [
+                        "obj-193",
+                        0
+                    ],
+                    "midpoints": [
+                        557.0,
+                        131.0,
+                        593.0,
+                        131.0
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [
+                        "obj-193",
+                        0
+                    ],
+                    "destination": [
+                        "obj-22",
+                        0
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [
+                        "obj-101",
+                        0
+                    ],
+                    "destination": [
+                        "obj-194",
+                        0
+                    ],
+                    "midpoints": [
+                        1786.0,
+                        126.0,
+                        1814.0,
+                        126.0
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [
+                        "obj-102",
+                        0
+                    ],
+                    "destination": [
+                        "obj-194",
+                        0
+                    ],
+                    "midpoints": [
+                        1841.5,
+                        126.0,
+                        1814.0,
+                        126.0
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [
+                        "obj-194",
+                        0
+                    ],
+                    "destination": [
+                        "obj-103",
+                        0
+                    ],
+                    "midpoints": [
+                        1771.0,
+                        166.0,
+                        1626.5,
+                        166.0
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [
+                        "obj-194",
+                        1
+                    ],
+                    "destination": [
+                        "obj-189",
+                        0
                     ]
                 }
             }
