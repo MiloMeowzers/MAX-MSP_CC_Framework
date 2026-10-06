@@ -69,7 +69,7 @@
                         493.0,
                         24.0
                     ],
-                    "text": "BARNETT DBAP  v0.5   two sources -> 8 ch   (A mono, B stereo)",
+                    "text": "BARNETT DBAP  v0.7.3   two sources -> 8 ch   (A mono, B stereo)",
                     "textcolor": [
                         0.8,
                         0.8,
@@ -1576,7 +1576,7 @@
                                         700,
                                         22
                                     ],
-                                    "text": "SCENES: pick a slot number, then store or recall. read / write save the slots to disk.",
+                                    "text": "SCENES: pick a slot number, then store or recall. read / write save the slots to disk (motion: a -motion.json beside it).",
                                     "fontname": "Arial",
                                     "fontsize": 12.0
                                 }
