@@ -105,7 +105,7 @@ def _outlet_x(box: dict, outlet_idx: int) -> float:
     w = rect[2]
     n = box.get("numoutlets", 1)
     if n <= 1:
-        return x + w * 0.5
+        return x + _IO_MARGIN  # MAX draws a lone port at the left edge, not centered
     usable = w - 2 * _IO_MARGIN
     spacing = usable / (n - 1)
     return x + _IO_MARGIN + outlet_idx * spacing
@@ -118,7 +118,7 @@ def _inlet_x(box: dict, inlet_idx: int) -> float:
     w = rect[2]
     n = box.get("numinlets", 1)
     if n <= 1:
-        return x + w * 0.5
+        return x + _IO_MARGIN  # MAX draws a lone port at the left edge, not centered
     usable = w - 2 * _IO_MARGIN
     spacing = usable / (n - 1)
     return x + _IO_MARGIN + inlet_idx * spacing

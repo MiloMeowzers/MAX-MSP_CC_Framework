@@ -881,7 +881,7 @@ def _outlet_x(box: Box, outlet_idx: int) -> float:
     w = box.patching_rect[2]
     n = box.numoutlets
     if n <= 1:
-        return x + w * 0.5
+        return x + _IO_MARGIN  # MAX draws a lone port at the left edge, not centered
     usable = w - 2 * _IO_MARGIN
     spacing = usable / (n - 1)
     return x + _IO_MARGIN + outlet_idx * spacing
@@ -893,7 +893,7 @@ def _inlet_x(box: Box, inlet_idx: int) -> float:
     w = box.patching_rect[2]
     n = box.numinlets
     if n <= 1:
-        return x + w * 0.5
+        return x + _IO_MARGIN  # MAX draws a lone port at the left edge, not centered
     usable = w - 2 * _IO_MARGIN
     spacing = usable / (n - 1)
     return x + _IO_MARGIN + inlet_idx * spacing
