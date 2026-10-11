@@ -196,6 +196,14 @@ class ObjectDatabase:
         anything else would silently fall back to the default count.
         """
         for name, rule in self._variable_io_rules.items():
+            trailing = rule.get("trailing_outlets")
+            if trailing is not None and (
+                type(trailing) is not int or trailing < 1
+            ):
+                raise ValueError(
+                    f"variable_io_rules[{name!r}].trailing_outlets must be a "
+                    f"positive int, got {trailing!r}"
+                )
             for role in ("inlet_count", "outlet_count"):
                 formula = rule.get(role, "")
                 if not isinstance(formula, str):
@@ -607,7 +615,39 @@ class ObjectDatabase:
         """
         return self._package_info.get(package)
 
-    def get_signal_role(self, name: str, outlet: int) -> str | None:
+    def _resolve_outlet(
+        self, canonical: str, obj: dict, outlet: int, args: list[str] | None
+    ) -> dict | None:
+        """Map an outlet index on a box WITH ARGS to its DB outlet entry.
+
+        Without args, or for objects whose variable_io rule has no
+        `trailing_outlets`, this is a plain index into the DB outlets array
+        (None when out of range). With `trailing_outlets: K` and an outlet
+        count expanded by the args (`sfplay~ 2` -> 3 outlets), the last K
+        outlets map to the DB's last K entries and every leading outlet
+        repeats DB outlet 0: `sfplay~ 2` outlets = (audio, audio, trigger),
+        not (audio, trigger, <beyond>).
+        """
+        db_outlets = obj.get("outlets", [])
+        if outlet < 0:
+            return None
+        rule = self._variable_io_rules.get(canonical, {})
+        trailing = rule.get("trailing_outlets")
+        if args is not None and isinstance(trailing, int) and 0 < trailing < len(db_outlets):
+            _, count = self.compute_io_counts(canonical, args)
+            if outlet >= count:
+                return None
+            from_end = count - outlet
+            if from_end <= trailing:
+                return db_outlets[len(db_outlets) - from_end]
+            return db_outlets[0]
+        if outlet >= len(db_outlets):
+            return None
+        return db_outlets[outlet]
+
+    def get_signal_role(
+        self, name: str, outlet: int, args: list[str] | None = None
+    ) -> str | None:
         """Return the signal_role for a specific outlet, with honest reverse derivation.
 
         Per D-02 (28-CONTEXT.md): for outlets that have only the legacy signal: bool
@@ -619,6 +659,9 @@ class ObjectDatabase:
         Args:
             name: Object name or alias.
             outlet: Zero-indexed outlet position.
+            args: Optional box arguments. When given, objects whose outlet count
+                grows with their args (variable_io_rules `trailing_outlets`)
+                resolve the outlet by layout, so `sfplay~ 2` outlet 1 is audio.
 
         Returns:
             One of {"audio","trigger","status","float","data","list"} when curated,
@@ -629,10 +672,9 @@ class ObjectDatabase:
         obj = self._objects.get(canonical)
         if obj is None:
             return None
-        outlets = obj.get("outlets", [])
-        if outlet < 0 or outlet >= len(outlets):
+        outlet_dict = self._resolve_outlet(canonical, obj, outlet, args)
+        if outlet_dict is None:
             return None
-        outlet_dict = outlets[outlet]
         role = outlet_dict.get("signal_role")
         if role is not None:
             return role
@@ -822,10 +864,19 @@ class ObjectDatabase:
         _, num_outlets = self.compute_io_counts(name, args)
         db_outlets = obj.get("outlets", [])
 
+        # Objects with a `trailing_outlets` layout (sfplay~ N) resolve each
+        # outlet through _resolve_outlet; everything else keeps plain indexing.
+        layout = isinstance(
+            self._variable_io_rules.get(canonical, {}).get("trailing_outlets"), int
+        )
+
         result = []
         for i in range(num_outlets):
-            if i < len(db_outlets):
-                outlet = db_outlets[i]
+            if layout or i < len(db_outlets):
+                outlet = (
+                    self._resolve_outlet(canonical, obj, i, args) or {}
+                    if layout else db_outlets[i]
+                )
                 if outlet.get("signal"):
                     # Check for multichannel
                     otype = outlet.get("type", "")

@@ -538,7 +538,14 @@ def _validate_connections(
         if not remove_this:
             src_name = _extract_object_name(src_box)
             if src_name is not None:
-                src_role = db.get_signal_role(src_name, src_outlet)
+                # args make the role layout-aware: `sfplay~ 2` outlet 1 is
+                # audio, not the 1-channel form's done-bang (barnett-dbap
+                # v0.4.0 lost its stereo file cord to that misread)
+                src_args = (
+                    src_box.get("text", "").split()[1:]
+                    if src_box.get("maxclass") == "newobj" else None
+                )
+                src_role = db.get_signal_role(src_name, src_outlet, args=src_args)
                 if src_role is not None and src_role != "audio":
                     tier = _classify_role_mismatch(
                         src_role, dst_box, dst_inlet, db

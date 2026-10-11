@@ -334,7 +334,7 @@ class TestRoleAwareValidation:
         suggestion; line auto-removed."""
         monkeypatch.setattr(
             db, "get_signal_role",
-            lambda name, outlet: "status" if name.startswith("status") else None
+            lambda name, outlet, args=None: "status" if name.startswith("status") else None
         )
         patch = self._patch_with_connection(src_name="status_src")
         results = validate_patch(patch, db=db)
@@ -352,7 +352,7 @@ class TestRoleAwareValidation:
         """trigger outlet -> signal inlet: ERROR with 'use sig~ or click~'."""
         monkeypatch.setattr(
             db, "get_signal_role",
-            lambda name, outlet: "trigger" if name.startswith("trig") else None
+            lambda name, outlet, args=None: "trigger" if name.startswith("trig") else None
         )
         patch = self._patch_with_connection(src_name="trig_src")
         results = validate_patch(patch, db=db)
@@ -369,7 +369,7 @@ class TestRoleAwareValidation:
         for role in ("data", "list"):
             monkeypatch.setattr(
                 db, "get_signal_role",
-                lambda name, outlet, _r=role: _r if name.startswith(_r) else None
+                lambda name, outlet, args=None, _r=role: _r if name.startswith(_r) else None
             )
             patch = self._patch_with_connection(src_name=f"{role}_src")
             results = validate_patch(patch, db=db)
@@ -385,7 +385,7 @@ class TestRoleAwareValidation:
         """trigger -> float: WARNING with 'bang counting' hint; line preserved."""
         monkeypatch.setattr(
             db, "get_signal_role",
-            lambda name, outlet: "trigger" if name.startswith("trig") else None
+            lambda name, outlet, args=None: "trigger" if name.startswith("trig") else None
         )
         # Destination must classify as 'float' inlet — flonum is a UI
         # float-display widget recognized by _classify_dst_inlet.
@@ -412,7 +412,7 @@ class TestRoleAwareValidation:
         """list -> float: WARNING with 'bach.* often does this' hint."""
         monkeypatch.setattr(
             db, "get_signal_role",
-            lambda name, outlet: "list" if name.startswith("list") else None
+            lambda name, outlet, args=None: "list" if name.startswith("list") else None
         )
         patch = _make_patch_dict(
             boxes=[
@@ -476,7 +476,7 @@ class TestRoleAwareValidation:
     def test_uncurated_role_falls_through(self, db, monkeypatch):
         """Source whose get_signal_role returns None falls through to legacy
         branch unchanged. Mirrors test_control_to_signal_inlet_passes."""
-        monkeypatch.setattr(db, "get_signal_role", lambda name, outlet: None)
+        monkeypatch.setattr(db, "get_signal_role", lambda name, outlet, args=None: None)
         patch = _make_patch_dict(
             boxes=[
                 _make_box("obj-1", maxclass="message", text="440",
@@ -512,7 +512,7 @@ class TestRoleAwareValidation:
         # ERROR case
         monkeypatch.setattr(
             db, "get_signal_role",
-            lambda name, outlet: "status" if name.startswith("s") else None
+            lambda name, outlet, args=None: "status" if name.startswith("s") else None
         )
         patch_err = self._patch_with_connection(src_name="status_x")
         for r in validate_patch(patch_err, db=db):
@@ -522,7 +522,7 @@ class TestRoleAwareValidation:
         # WARNING case
         monkeypatch.setattr(
             db, "get_signal_role",
-            lambda name, outlet: "trigger" if name.startswith("t") else None
+            lambda name, outlet, args=None: "trigger" if name.startswith("t") else None
         )
         patch_warn = _make_patch_dict(
             boxes=[
@@ -535,6 +535,39 @@ class TestRoleAwareValidation:
         for r in validate_patch(patch_warn, db=db):
             if "trigger outlet" in r.message and "float inlet" in r.message:
                 assert r.level == "warning" and r.auto_fixed is False
+
+    def _sfplay_patch(self, sfplay_text, src_outlet):
+        """sfplay~ outlet -> selector~ 3 signal inlet 1 (barnett-dbap's
+        stereo file cord)."""
+        n_out = 3 if sfplay_text == "sfplay~ 2" else 2
+        return _make_patch_dict(
+            boxes=[
+                _make_box("obj-1", text=sfplay_text, numinlets=2,
+                          numoutlets=n_out,
+                          outlettype=["signal"] * (n_out - 1) + ["bang"]),
+                _make_box("obj-2", text="selector~ 3", numinlets=4,
+                          numoutlets=1, outlettype=["signal"]),
+            ],
+            lines=[_make_line("obj-1", src_outlet, "obj-2", 1)],
+        )
+
+    def test_sfplay_2_right_channel_cord_survives(self, db):
+        """`sfplay~ 2` outlet 1 is audio channel 2, not the done-bang: the
+        role lookup is arg-aware, so the cord is neither flagged nor removed
+        (the validator stripped it from barnett-dbap in v0.4.0)."""
+        patch = self._sfplay_patch("sfplay~ 2", 1)
+        results = validate_patch(patch, db=db)
+        assert len(patch["patcher"]["lines"]) == 1
+        assert not [r for r in results if "trigger outlet" in r.message]
+
+    def test_sfplay_done_bang_into_signal_still_removed(self, db):
+        """The done-bang (last outlet: 1 on `sfplay~ 1`, 2 on `sfplay~ 2`)
+        into a signal inlet is still a trigger -> signal ERROR + auto-remove."""
+        for text, outlet in (("sfplay~ 1", 1), ("sfplay~ 2", 2)):
+            patch = self._sfplay_patch(text, outlet)
+            results = validate_patch(patch, db=db)
+            assert patch["patcher"]["lines"] == [], text
+            assert [r for r in results if "trigger outlet" in r.message], text
 
 
 # ===========================================================================

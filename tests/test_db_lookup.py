@@ -841,3 +841,39 @@ def test_mc_pack_is_variable_io():
     obj = db.lookup("mc.pack~")
     assert obj["variable_io"] is True
     assert "mc.pack~" in db._variable_io_rules
+
+
+# ---------------------------------------------------------------------------
+# trailing_outlets: arg-aware outlet layout (sfplay~ N, 2026-10-11)
+# ---------------------------------------------------------------------------
+
+
+def test_sfplay_signal_roles_follow_channel_count():
+    """`sfplay~ N` = N audio outlets + the done-bang. With args, outlet roles
+    resolve by layout; without args, plain indexing is unchanged."""
+    db = ObjectDatabase()
+    assert [db.get_signal_role("sfplay~", i, ["2"]) for i in range(3)] == [
+        "audio", "audio", "trigger"]
+    assert [db.get_signal_role("sfplay~", i, ["4"]) for i in range(6)] == [
+        "audio", "audio", "audio", "audio", "trigger", None]
+    assert [db.get_signal_role("sfplay~", i, []) for i in range(2)] == [
+        "audio", "trigger"]
+    # no args: the legacy index lookup
+    assert db.get_signal_role("sfplay~", 1) == "trigger"
+
+
+def test_sfplay_outlet_types_follow_channel_count():
+    db = ObjectDatabase()
+    assert db.get_outlet_types("sfplay~", ["2"]) == ["signal", "signal", ""]
+    assert db.get_outlet_types("sfplay~", ["1"]) == ["signal", ""]
+    assert db.get_outlet_types("sfplay~", []) == ["signal", ""]
+
+
+def test_trailing_outlets_must_be_positive_int():
+    db = ObjectDatabase()
+    for bad in (0, -1, "1", 1.0, True):
+        db._variable_io_rules = {"sfplay~": {
+            "inlet_count": "fixed:2", "outlet_count": "first_arg+1",
+            "trailing_outlets": bad}}
+        with pytest.raises(ValueError, match="trailing_outlets"):
+            db._validate_variable_io_rules()

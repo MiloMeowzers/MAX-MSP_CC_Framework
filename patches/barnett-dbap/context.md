@@ -1085,8 +1085,9 @@ Full review of v0.7.2; fixes applied (user OK'd items 1-4 + trim / rec / title).
 1. **Stereo File R was silent.** `sfplay~ 2` outlet 1 -> R `selector~ 3` inlet 1 existed until `3bcfba8` (v0.4.0
    build) and was dropped there: the validator classifies `sfplay~ N` outlet 1 as `trigger` (DB roles are not
    arg-aware) and its `trigger -> signal` rule AUTO-STRIPS the cord from the dict it is given. Restored.
-   TRAP: running `validate_patch` on the real dict (not a deepcopy) before a save removes it again. The
-   framework fix (arg-aware signal_role for `sfplay~ N`) is not done.
+   Framework fix done 2026-10-11: `variable_io_rules.sfplay~.trailing_outlets: 1` + `get_signal_role(...,
+   args=)` / `get_outlet_types` resolve `sfplay~ N` by layout, and the validator passes the box args, so the
+   cord is no longer flagged or stripped (tests in test_validation.py / test_db_lookup.py).
 2. **Motion scenes now reach disk.** Source `read` / `write` -> `p scenefiles` (route read write ->
    `opendialog .json` / `savedialog` -> prepend -> `js scenefile.js`). scenefile.js sends `read|write <path>`
    to the source's pattrstorage and `read|write <base>-motion.json` out the scene outlet to dbap-motion's

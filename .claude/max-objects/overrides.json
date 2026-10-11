@@ -3114,7 +3114,7 @@
           "digest": "bang when done playing"
         }
       ],
-      "_note": "Outlet 0 is signal, outlet 1 is control bang in the 1-channel form. sfplay~ N has N signal outlets followed by the bang outlet (variable_io_rules: first_arg+1). Per-outlet signal_role is not arg-aware, so outlet 1 of sfplay~ 2 (audio ch 2) still classifies as trigger -- known false positive (barnett-dbap v0.3.0).",
+      "_note": "Outlet 0 is signal, outlet 1 is control bang in the 1-channel form. sfplay~ N has N signal outlets followed by the bang outlet (variable_io_rules: first_arg+1). signal_role is indexed for the no-arg form; callers that pass the box args (get_signal_role / get_outlet_types, and the validator) resolve sfplay~ N through variable_io_rules.trailing_outlets, so outlet 1 of sfplay~ 2 is audio (fixed 2026-10-11 after the validator stripped barnett-dbap's stereo file cord in v0.4.0).",
       "variable_io": true
     },
     "sfrecord~": {
@@ -16702,7 +16702,8 @@
       "outlet_count": "first_arg+1",
       "default_inlets": 2,
       "default_outlets": 2,
-      "description": "sfplay~ N: N signal outlets + 1 bang outlet (when done). Symbol first arg (sflist~ name) falls back to the default 2.",
+      "trailing_outlets": 1,
+      "description": "sfplay~ N: N signal outlets + 1 bang outlet (when done). Symbol first arg (sflist~ name) falls back to the default 2. trailing_outlets 1: with args, the LAST outlet is the DB's last (the done-bang) and every earlier outlet repeats DB outlet 0 (audio).",
       "_audit": {
         "source": "barnett-dbap v0.3.0 build (sfplay~ 2 confirmed 3 outlets in the v0.2 patch: sfplay~ 1 saved with 2)",
         "confidence": "HIGH"
