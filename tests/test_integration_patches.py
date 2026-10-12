@@ -95,12 +95,7 @@ def _is_allowlisted(patch_rel: str, finding: str) -> bool:
 # Known issues: patches that fail specific tests with documented reasons.
 # Marked xfail(strict=True): when the blocker is fixed the case XPASSes and
 # fails, forcing the entry to be deleted (review A8).
-_REVIEW_XFAILS: dict[str, str] = {
-    "mixer-strip.maxpat": (
-        "known issue (Q3): Fan-out without trigger: '+' (obj-14) outlet 0 -> "
-        "selector~ obj-15/obj-16 -- critic-precision false positive"
-    ),
-}
+_REVIEW_XFAILS: dict[str, str] = {}
 
 
 @pytest.fixture(scope="module")

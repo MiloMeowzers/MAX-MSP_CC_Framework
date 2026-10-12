@@ -553,25 +553,46 @@ def _clean_structure_patch() -> dict:
 class TestStructureCritic:
     """Test the structure critic checks."""
 
-    def test_fan_out_without_trigger_blocks(self):
-        """1-to-3 control fan-out without trigger -> blocker (was warning, promoted per 260427-kbe)."""
+    def test_fan_out_without_reconvergence_warns(self):
+        """1-to-3 control fan-out whose branches never reconverge -> one warning.
+
+        Q3 / E1: print is a display-only sink (dropped), counter and toggle
+        never meet, so execution order cannot change a result.
+        """
         patch = _fan_out_no_trigger_patch()
         results = review_structure(patch)
-        blockers = [r for r in results if r.severity == "blocker"]
-        assert len(blockers) >= 1, (
-            f"Expected at least one blocker for 1-to-3 control fan-out, got: "
+        fan = [r for r in results if r.finding.startswith("Fan-out without trigger")]
+        assert [r.severity for r in fan] == ["warning"], (
             f"{[(r.severity, r.finding) for r in results]}"
         )
-        assert any(
-            "fan" in r.finding.lower() or "trigger" in r.finding.lower()
-            for r in blockers
-        )
-        # Regression: ensure NO warning-tier fan-out finding remains
-        warning_fan = [
-            r for r in results
-            if r.severity == "warning" and ("fan" in r.finding.lower() or "trigger" in r.finding.lower())
+        assert not [r for r in fan if r.severity == "blocker"]
+
+    def test_fan_out_reconvergent_blocks(self):
+        """number -> + inlets 0 and 1 (stale cold value) -> blocker (Q3 / E1)."""
+        boxes = [
+            {
+                "id": "obj-1",
+                "maxclass": "number",
+                "numinlets": 1,
+                "numoutlets": 2,
+                "outlettype": ["", "bang"],
+            },
+            {
+                "id": "obj-2",
+                "maxclass": "newobj",
+                "text": "+",
+                "numinlets": 2,
+                "numoutlets": 1,
+                "outlettype": ["int"],
+            },
         ]
-        assert len(warning_fan) == 0, "Fan-out should now be blocker, not warning"
+        lines = [
+            {"source": ["obj-1", 0], "destination": ["obj-2", 0]},
+            {"source": ["obj-1", 0], "destination": ["obj-2", 1]},
+        ]
+        results = review_structure(_make_patch(boxes, lines))
+        fan = [r for r in results if r.finding.startswith("Fan-out without trigger")]
+        assert [r.severity for r in fan] == ["blocker"]
 
     def test_fan_out_with_trigger_no_warning(self):
         """Trigger object fanning out -> no fan-out finding at any severity."""
@@ -692,7 +713,7 @@ class TestReviewPatchCombined:
             {
                 "id": "obj-4",
                 "maxclass": "newobj",
-                "text": "print a",
+                "text": "s a",
                 "numinlets": 1,
                 "numoutlets": 0,
                 "outlettype": [],
@@ -700,7 +721,7 @@ class TestReviewPatchCombined:
             {
                 "id": "obj-5",
                 "maxclass": "newobj",
-                "text": "print b",
+                "text": "s b",
                 "numinlets": 1,
                 "numoutlets": 0,
                 "outlettype": [],

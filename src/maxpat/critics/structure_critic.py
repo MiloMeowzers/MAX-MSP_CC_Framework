@@ -2,7 +2,8 @@
 
 Catches structural issues that the mechanical validation pipeline does
 not detect:
-  - Fan-out without trigger (ordering ambiguity)
+  - Fan-out without trigger (ordering ambiguity): blocker when branches
+    reconverge on one box at different inlets, otherwise warning (Q3 / E1)
   - Hot/cold inlet ordering issues (stale value computation)
   - Redundant/duplicate patchlines
 
@@ -12,21 +13,44 @@ patterns a MAX expert would flag during code review.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import defaultdict, deque
 
 from src.maxpat.critics.base import CriticResult
 from src.maxpat.utils import get_box_name
 
 
-# Object names that provide explicit ordering for fan-out
+# Object names that provide explicit ordering (used by the hot/cold check)
 _TRIGGER_NAMES = frozenset({"trigger", "t"})
+
+# Outlet types that carry audio; fan-out from these is never flagged (Rule #3)
+_SIGNAL_OUTLET_TYPES = frozenset({"signal", "multichannelsignal"})
+
+# Display-only sinks: dropped from a fan-out when they have no outgoing cord
+# (Q3 / E1 -- e.g. minitaur scale/expr -> send + display flonum)
+_DISPLAY_SINK_NAMES = frozenset({
+    "flonum", "number", "print", "comment", "meter~", "levelmeter~",
+    "live.meter~",
+})
+
+# preset outlets 0/2/4 are include/exclude/capture membership cords
+# (preset.maxref.xml), not ordered data -- e.g. timestretch obj-51 outlet 2
+_PRESET_MEMBERSHIP_OUTLETS = frozenset({0, 2, 4})
+
+# Boxes with no cold inlet that can hold a stale value, or that route each
+# inlet to an independent inner path: a reconvergence on them is not a hazard
+_ALL_HOT_NAMES = frozenset({
+    "js", "jsui", "v8", "v8ui", "v8.codebox", "node.script", "node.codebox",
+    "p", "patcher", "bpatcher", "poly~", "mc.poly~", "pfft~", "rnbo~",
+    "gen~", "mc.gen~",
+})
 
 
 def review_structure(patch_dict: dict) -> list[CriticResult]:
     """Review structural aspects of a patch.
 
     Checks:
-      1. Fan-out without trigger (2+ destinations from one outlet)
+      1. Fan-out without trigger (2+ non-display destinations from one
+         control outlet; blocker only on reconvergence -- Q3 / E1)
       2. Hot/cold inlet ordering (multiple inlets fed without trigger ordering)
       3. Redundant/duplicate patchlines
 
@@ -78,30 +102,96 @@ def _is_signal_object(box: dict) -> bool:
 # Check 1: Fan-out without trigger
 # ---------------------------------------------------------------------------
 
+def _outlet_is_signal(box: dict, outlet: int) -> bool:
+    """True when `box` outlet `outlet` carries audio (Q3 / E1).
+
+    Decided by the box's ``outlettype`` entry at that index. Only when the
+    box has no entry there (hand-built dicts) does it fall back to the legacy
+    ``~``-name test.
+    """
+    outlettype = box.get("outlettype")
+    if isinstance(outlettype, list) and 0 <= outlet < len(outlettype):
+        return outlettype[outlet] in _SIGNAL_OUTLET_TYPES
+    return _is_signal_object(box)
+
+
+def _paths_reconverge(
+    src_id: str,
+    branches: list[tuple[str, int]],
+    ctrl_adj: dict[str, list[tuple[str, int]]],
+    box_lookup: dict[str, dict],
+) -> str | None:
+    """Return the id of a box where two branches meet at different inlets.
+
+    Each branch ``(dst_id, inlet)`` is walked breadth-first over control
+    cords, recording every inlet reached on every box. Two branches
+    reconverge when some box outside ``_ALL_HOT_NAMES`` is reached by both
+    at different inlets (the stale-cold-value hazard). Returns the first
+    such box in sorted id order, or None.
+    """
+    hit_maps: list[dict[str, set[int]]] = []
+    for dst_id, dst_inlet in branches:
+        hits: dict[str, set[int]] = defaultdict(set)
+        hits[dst_id].add(dst_inlet)
+        seen = {dst_id}
+        queue = deque([dst_id])
+        while queue:
+            node = queue.popleft()
+            for nxt, nxt_inlet in ctrl_adj.get(node, ()):
+                hits[nxt].add(nxt_inlet)
+                if nxt not in seen and nxt != src_id:
+                    seen.add(nxt)
+                    queue.append(nxt)
+        hit_maps.append(hits)
+
+    meeting: set[str] = set()
+    for k in range(len(hit_maps)):
+        for l in range(k + 1, len(hit_maps)):
+            hits_k, hits_l = hit_maps[k], hit_maps[l]
+            for box_id in hits_k.keys() & hits_l.keys():
+                box = box_lookup.get(box_id)
+                if box is not None and get_box_name(box) in _ALL_HOT_NAMES:
+                    continue
+                if any(a != b for a in hits_k[box_id] for b in hits_l[box_id]):
+                    meeting.add(box_id)
+    return min(meeting) if meeting else None
+
+
 def _check_fan_out_without_trigger(
     box_lookup: dict[str, dict],
     lines: list[dict],
 ) -> list[CriticResult]:
-    """Detect outlets connected to 2+ destinations without trigger.
+    """Detect control outlets connected to 2+ destinations without trigger.
 
     Per CLAUDE.md Rule #4: "Use explicit trigger objects for fan-out
     instead of connecting one outlet to multiple inlets."
 
-    Tier: BLOCKER. Promoted from warning to blocker per 260427-hox-FINDINGS.md
-    §P0-1 (2026-04-27). Agents were emitting 8-16 fan-out warnings per patch
-    and ignoring them because the signal was non-blocking. Aligning with
-    sibling critics' blocker tier (dsp_critic gen~ I/O, rnbo_critic missing
-    in~/out~, ext_critic MIN_EXTERNAL) forces explicit trigger insertion.
+    Skips (Q3 / E1, quick 261012-di7):
+      - Signal outlets, decided by ``outlettype`` (``signal`` /
+        ``multichannelsignal``); the ``~`` name is only a fallback when the
+        box has no outlettype entry for that outlet. Rule #3: all signal
+        inlets are hot, ordering does not apply in the audio domain.
+      - ``preset`` outlets 0/2/4: include/exclude/capture membership cords
+        (preset.maxref.xml), where a trigger cannot be inserted.
+      - Display-only destinations (``_DISPLAY_SINK_NAMES`` with no outgoing
+        cord) are dropped before counting; fewer than 2 left -> no finding.
 
-    Skips:
-      - Source IS a trigger object (the whole point -- explicit ordering exists)
-      - Source is signal-rate (~) -- Rule #3: all signal inlets are hot, ordering
-        does not apply in the audio domain
+    Trigger sources are checked like any other box: a trigger outlet that
+    itself feeds 2+ destinations has undefined order between those cords.
+
+    Severity: BLOCKER only when two branches reconverge on one box at
+    different inlets (outside ``_ALL_HOT_NAMES``) -- then execution order
+    changes the result. Otherwise WARNING. (History: promoted to an
+    unconditional blocker by 260427-hox §P0-1; narrowed by Q3 because most
+    of those blockers were false positives.)
     """
     results: list[CriticResult] = []
 
-    # Count connections per (source_id, outlet_index)
-    fan_out_count: dict[tuple[str, int], list[str]] = defaultdict(list)
+    # Outgoing-cord sources (for display-sink detection) and control-cord
+    # adjacency (for reconvergence) are built from the same line pass.
+    has_outgoing: set[str] = set()
+    ctrl_adj: dict[str, list[tuple[str, int]]] = defaultdict(list)
+    fan_out: dict[tuple[str, int], list[tuple[str, int]]] = defaultdict(list)
 
     for line_entry in lines:
         patchline = line_entry.get("patchline", line_entry)
@@ -111,41 +201,77 @@ def _check_fan_out_without_trigger(
             continue
 
         src_id, src_outlet = source[0], source[1]
-        dst_id = destination[0]
-        fan_out_count[(src_id, src_outlet)].append(dst_id)
+        dst_id, dst_inlet = destination[0], destination[1]
+        has_outgoing.add(src_id)
+        fan_out[(src_id, src_outlet)].append((dst_id, dst_inlet))
 
-    for (src_id, src_outlet), destinations in fan_out_count.items():
-        if len(destinations) < 2:
+        src_box = box_lookup.get(src_id)
+        if src_box is None or not _outlet_is_signal(src_box, src_outlet):
+            ctrl_adj[src_id].append((dst_id, dst_inlet))
+
+    for (src_id, src_outlet), dests in fan_out.items():
+        if len(dests) < 2:
             continue
 
         src_box = box_lookup.get(src_id)
         if not src_box:
             continue
 
-        # Skip if source IS a trigger object (that is the whole point)
-        if _is_trigger_object(src_box):
-            continue
-
-        # Skip signal connections -- all signal inlets are hot per Rule #3
-        if _is_signal_object(src_box):
+        # Signal outlets: all signal inlets are hot per Rule #3
+        if _outlet_is_signal(src_box, src_outlet):
             continue
 
         src_name = get_box_name(src_box)
+
+        # preset include/exclude/capture membership cords
+        if src_name == "preset" and src_outlet in _PRESET_MEMBERSHIP_OUTLETS:
+            continue
+
+        # Drop display-only sinks (no outgoing cord of their own)
+        branches = []
+        for dst_id, dst_inlet in dests:
+            dst_box = box_lookup.get(dst_id)
+            if (
+                dst_box is not None
+                and get_box_name(dst_box) in _DISPLAY_SINK_NAMES
+                and dst_id not in has_outgoing
+            ):
+                continue
+            branches.append((dst_id, dst_inlet))
+        if len(branches) < 2:
+            continue
+
         dst_names = []
-        for dst_id in destinations:
+        for dst_id, _inlet in branches:
             dst_box = box_lookup.get(dst_id)
             if dst_box:
                 dst_names.append(f"'{get_box_name(dst_box)}' ({dst_id})")
             else:
                 dst_names.append(dst_id)
 
-        results.append(CriticResult(
-            "blocker",
+        prefix = (
             f"Fan-out without trigger: '{src_name}' ({src_id}) outlet "
-            f"{src_outlet} connected to {len(destinations)} destinations "
-            f"({', '.join(dst_names)}) -- execution order is undefined",
-            f"Use a 'trigger' (t) object to explicitly control the order "
-            f"of execution for multiple destinations",
+            f"{src_outlet} connected to {len(branches)} destinations "
+            f"({', '.join(dst_names)}) --"
+        )
+        meet_id = _paths_reconverge(src_id, branches, ctrl_adj, box_lookup)
+        if meet_id is not None:
+            meet_box = box_lookup.get(meet_id)
+            meet_name = get_box_name(meet_box) if meet_box else meet_id
+            severity = "blocker"
+            finding = (
+                f"{prefix} paths reconverge on '{meet_name}' ({meet_id}) at "
+                f"different inlets, so execution order changes the result"
+            )
+        else:
+            severity = "warning"
+            finding = f"{prefix} execution order is undefined"
+
+        results.append(CriticResult(
+            severity,
+            finding,
+            "Use a 'trigger' (t) object to explicitly control the order "
+            "of execution for multiple destinations",
         ))
 
     return results

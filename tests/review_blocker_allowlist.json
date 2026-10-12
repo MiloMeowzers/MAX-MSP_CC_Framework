@@ -1077,6 +1077,18 @@
           "*",
           "flonum"
         ]
+      },
+      {
+        "severity": "blocker",
+        "kind": "fanout",
+        "source": "buffer~",
+        "source_id": "obj-1",
+        "outlet": 1,
+        "destinations": [
+          "message",
+          "message"
+        ],
+        "reason": "True positive (fix-plan rule 3), surfaced by Q3 (quick 261012-di7) once signal-ness was read from outlettype instead of the `~` name: `buffer~ #1` obj-1 outlet 1 (bang after read) feeds `setbuffer #1` obj-27, which reaches waveform~ obj-4 inlets 2/3 via js slot-engine.js -> `t f f` -> expr -> `trigger f f`, and `set #1` obj-28, which reaches waveform~ obj-4 inlet 0. It works in MAX because fan-out fires right-to-left by box position (setbuffer at x=300 before set at x=110). The patch is frozen (never edited to satisfy critics); listed in the Q3 SUMMARY."
       }
     ],
     "patches/scala-synth/generated/scala-synth-voice.maxpat": [
