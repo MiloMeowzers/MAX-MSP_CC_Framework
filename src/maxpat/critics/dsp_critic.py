@@ -2,7 +2,11 @@
 
 Catches semantic DSP issues that the mechanical validation pipeline does
 not detect:
-  - gen~ I/O mismatches between GenExpr code and wrapper box
+  - gen~ I/O mismatches between GenExpr code and wrapper box. Boxes are
+    detected by name (``gen~`` / ``mc.gen~``), not maxclass, because MAX and
+    add_gen write them as ``newobj``; mc.gen~'s gen patcher is read from
+    ``data.patcher`` (MAX's mc wrapper) as well as ``patcher`` (Q4 / E3,
+    quick 261012-egf).
   - Missing gain staging before dac~/ezdac~
 
 The former control-rate-to-signal-rate check was removed by Q3 / E2 (quick
@@ -50,6 +54,11 @@ _NORMALIZER_NAMES = frozenset({"scale", "zmap", "clip", "clip~"})
 # check misclassifies every mc lane as control-rate.
 _SIGNAL_OUTLET_TYPES = frozenset({"signal", "multichannelsignal"})
 
+# Box names whose embedded gen patcher is checked against the box's I/O
+# (Q4 / E3). Matched with get_box_name, so newobj `gen~ ...` / `mc.gen~ ...`
+# and maxclass-gen~ fixtures are all covered.
+_GEN_BOX_NAMES = frozenset({"gen~", "mc.gen~"})
+
 
 def review_dsp(
     patch_dict: dict,
@@ -58,7 +67,9 @@ def review_dsp(
     """Review DSP aspects of a patch.
 
     Checks:
-      1. gen~ I/O match between GenExpr code and wrapper box
+      1. gen~ I/O match between GenExpr code and wrapper box (gen~ and
+         mc.gen~ detected by box name; mc.gen~ code read from data.patcher
+         too -- Q4 / E3)
       2. Gain staging: oscillators connected to dac~ without *~ or gain~
       3. Unsafe gain sources (see _check_unsafe_gain_sources)
 
@@ -102,14 +113,17 @@ def _check_gen_io_match(
 ) -> list[CriticResult]:
     """Find gen~ boxes and verify I/O counts match embedded GenExpr code.
 
-    Looks for gen~ boxes with embedded patchers containing codebox objects.
-    Also checks code_context for externally-provided code strings.
+    Boxes are selected by name (``gen~`` / ``mc.gen~``, Q4 / E3): MAX and
+    add_gen write them as ``newobj``, so the former ``maxclass == "gen~"``
+    gate never fired on real patches. The compared code is the first
+    *wired* codebox of the embedded gen patcher (see _extract_codebox_code);
+    when there is none, code_context supplies externally-provided code.
     """
     results: list[CriticResult] = []
 
     for box_id, box in box_lookup.items():
-        # Only check gen~ boxes
-        if box.get("maxclass") != "gen~":
+        # Only check gen~ / mc.gen~ boxes (by name, not maxclass -- Q4 / E3)
+        if get_box_name(box) not in _GEN_BOX_NAMES:
             continue
 
         gen_numinlets = box.get("numinlets", 0)
@@ -154,19 +168,54 @@ def _check_gen_io_match(
     return results
 
 
+def _gen_inner_patcher(box: dict) -> dict | None:
+    """Return the gen patcher embedded in a gen~ / mc.gen~ box, or None.
+
+    gen~ (and the add_gen-plus-rename mc.gen~ recipe) store it at
+    ``box["patcher"]``; MAX's mc wrapper stores mc.gen~'s at
+    ``box["data"]["patcher"]`` (Q4 / E3).
+    """
+    inner = box.get("patcher")
+    if isinstance(inner, dict):
+        return inner
+    data = box.get("data")
+    if isinstance(data, dict) and isinstance(data.get("patcher"), dict):
+        return data["patcher"]
+    return None
+
+
 def _extract_codebox_code(gen_box: dict) -> str | None:
-    """Extract GenExpr code from an embedded codebox inside a gen~ box."""
-    inner_patcher = gen_box.get("patcher")
+    """Extract GenExpr code from the first wired codebox inside a gen~ box.
+
+    Only a codebox that appears as the source or destination of at least one
+    patchline in its gen patcher is used (Q4 OQ1-A): an unwired codebox is
+    demonstration or dead code whose in/out usage says nothing about the
+    gen~ box's inlets (MAX's own gen~.maxhelp has one). Returns None when no
+    wired codebox has code, so the caller falls back to code_context.
+    """
+    inner_patcher = _gen_inner_patcher(gen_box)
     if not inner_patcher:
         return None
 
-    inner_boxes = inner_patcher.get("boxes", [])
-    for entry in inner_boxes:
+    wired_ids: set[str] = set()
+    for line_entry in inner_patcher.get("lines", []) or []:
+        if not isinstance(line_entry, dict):
+            continue
+        patchline = line_entry.get("patchline", line_entry)
+        for key in ("source", "destination"):
+            end = patchline.get(key)
+            if isinstance(end, list) and end:
+                wired_ids.add(end[0])
+
+    for entry in inner_patcher.get("boxes", []) or []:
         inner_box = entry.get("box", {})
-        if inner_box.get("maxclass") == "codebox":
-            code = inner_box.get("code")
-            if code:
-                return code
+        if inner_box.get("maxclass") != "codebox":
+            continue
+        if inner_box.get("id") not in wired_ids:
+            continue
+        code = inner_box.get("code")
+        if code:
+            return code
 
     return None
 

@@ -10,6 +10,10 @@ does not detect:
 NOTE: Overlaps intentionally with rnbo_validation.py at the semantic level.
 rnbo_validation checks structural correctness (is it valid?), while this
 critic checks design quality (is it well-designed?).
+
+rnbo~ boxes are detected by name via is_rnbo_box (Q4 / E3, quick 261012-egf):
+MAX writes them as ``newobj`` (``rnbo~ @title ...``), so a maxclass gate
+skipped every MAX-authored rnbo~.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from __future__ import annotations
 import re
 
 from src.maxpat.critics.base import CriticResult
+from src.maxpat.utils import get_box_name
 
 
 # Regex to extract param @name from box text like "param @name foo @min 0 @max 1"
@@ -24,6 +29,17 @@ _PARAM_NAME_RE = re.compile(r"@name\s+(\S+)")
 
 # Regex for lowercase_with_underscores convention
 _LOWERCASE_UNDERSCORE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def is_rnbo_box(box: dict) -> bool:
+    """True when ``box`` is an rnbo~ box, by name (Q4 / E3).
+
+    Covers MAX's ``newobj`` shape (text ``rnbo~ ...``) and the builder's
+    maxclass ``rnbo~`` shape, since get_box_name returns the maxclass for
+    non-newobj boxes. Shared by review_rnbo and review_patch's dispatch so
+    the two agree on what counts as rnbo~.
+    """
+    return get_box_name(box) == "rnbo~"
 
 
 def review_rnbo(
@@ -52,9 +68,8 @@ def review_rnbo(
     # Find all rnbo~ boxes
     for box_entry in boxes:
         box = box_entry.get("box", {})
-        maxclass = box.get("maxclass", "")
 
-        if maxclass != "rnbo~":
+        if not is_rnbo_box(box):
             continue
 
         inner_patcher = box.get("patcher")

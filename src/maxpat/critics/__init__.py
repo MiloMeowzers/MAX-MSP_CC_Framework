@@ -18,19 +18,23 @@ from src.maxpat.critics.base import CriticResult
 from src.maxpat.critics.dsp_critic import review_dsp
 from src.maxpat.critics.structure_critic import review_structure
 from src.maxpat.critics.layout_critic import review_layout
-from src.maxpat.critics.rnbo_critic import review_rnbo
+from src.maxpat.critics.rnbo_critic import is_rnbo_box, review_rnbo
 from src.maxpat.critics.ext_critic import review_external
 from src.maxpat.critics.package_critic import review_packages
 from src.maxpat.utils import get_box_name
 
 
 def _has_rnbo_boxes(patch_dict: dict) -> bool:
-    """Check if a patch contains any rnbo~ boxes."""
+    """Check if a patch contains any top-level rnbo~ boxes.
+
+    Detected by name via is_rnbo_box (Q4 / E3): MAX writes rnbo~ as
+    ``newobj``, so the former maxclass test never matched a MAX-authored box.
+    """
     patcher = patch_dict.get("patcher", {})
     boxes = patcher.get("boxes", [])
     for box_entry in boxes:
         box = box_entry.get("box", {})
-        if box.get("maxclass") == "rnbo~":
+        if is_rnbo_box(box):
             return True
     return False
 
