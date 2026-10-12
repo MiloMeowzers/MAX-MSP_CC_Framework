@@ -235,6 +235,10 @@ _A1_REPROS = [
      ["list", "float", "float", "float", "float", "list", "int"],
      "biquad~", 6, 1, 0, 0, False),
     ("in-peek", "in 1", 0, 1, [""], "peek~ buf", 3, 1, 0, 0, False),
+    ("matrix-dac", "matrix~ 2 4", 2, 5, ["signal"] * 4 + [""],
+     "dac~", 2, 0, 2, 0, False),
+    ("play-dac", "play~ buf 2", 1, 3, ["signal", "signal", "bang"],
+     "dac~", 2, 0, 1, 1, False),
 ]
 
 
@@ -282,6 +286,21 @@ class TestA1Repros:
         assert _conn(results) == [], [str(r) for r in _conn(results)]
         assert patch == before
         assert _keys(patch) == [("obj-1", s_outlet, "obj-2", d_inlet)]
+
+    @pytest.mark.parametrize("src,outlettype,outlet,needle", [
+        ("matrix~ 2 4", ["signal"] * 4 + [""], 4, "list outlet"),
+        ("play~ buf 2", ["signal", "signal", "bang"], 2, "trigger outlet"),
+    ])
+    def test_anchor_trailing_control_outlet_into_dac_warns(
+        self, db, src, outlettype, outlet, needle,
+    ):
+        n_in = 2 if src.startswith("matrix~") else 1
+        patch = _two_box_patch(src, n_in, len(outlettype), outlettype,
+                               "dac~", 2, 0, outlet, 0)
+        results = _conn(validate_patch(patch, db=db))
+        assert len(results) == 1, [str(r) for r in results]
+        assert needle in results[0].message
+        assert results[0].proposed_removal is None
 
     def test_anchor_signal_into_print_still_proposed(self, db):
         patch = _two_box_patch(*_CYC, "print", 1, 0, 0, 0)

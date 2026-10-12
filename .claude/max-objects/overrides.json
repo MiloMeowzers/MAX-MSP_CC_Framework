@@ -2878,7 +2878,8 @@
           "digest": "bang when playback reaches destination or is stopped"
         }
       ],
-      "_note": "Outlet 0 is signal, outlet 1 is control bang."
+      "_note": "Outlet 0 is signal, outlet 1 is control bang.",
+      "variable_io": true
     },
     "plot~": {
       "outlets": [
@@ -15026,6 +15027,12 @@
           "type": "list",
           "digest": "Inlets Outlets Gains",
           "signal_role": "list"
+        },
+        {
+          "id": 3,
+          "type": "",
+          "signal": false,
+          "digest": "Control output (MAX-saved help box mc.matrix~ 3 2; not in the 9.2 refpage)"
         }
       ]
     },
@@ -16522,10 +16529,15 @@
     },
     "matrix~": {
       "inlet_count": "first_arg",
-      "outlet_count": "second_arg",
+      "outlet_count": "second_arg+1",
       "default_inlets": 1,
-      "default_outlets": 1,
-      "description": "First arg = inputs, second arg = outputs."
+      "default_outlets": 2,
+      "description": "matrix~ N M: first arg = signal inputs, second arg = signal outputs; M audio outlets + 1 list dump outlet. Default 1 output + dump = 2. trailing_outlets 1: with args, the LAST outlet is the DB's dump (list) and every earlier outlet repeats DB outlet 0 (audio).",
+      "trailing_outlets": 1,
+      "_audit": {
+        "source": "Q2 / A1 (261012-c5i): MAX-saved help boxes `matrix~ 4 1 1.` = 4/2, `matrix~ 4 2` = 4/3, `matrix~ 4 4 1.` = 4/5, `matrix~ 2 2 1. @ramp 74` = 2/3, all [signal x M, \"\"]; outlet M feeds dict.view / print dumpmatrix~",
+        "confidence": "HIGH"
+      }
     },
     "selector~": {
       "inlet_count": "first_arg+1",
@@ -16702,15 +16714,15 @@
     },
     "mc.matrix~": {
       "inlet_count": "first_arg",
-      "outlet_count": "second_arg",
+      "outlet_count": "second_arg+2",
       "default_inlets": 2,
-      "default_outlets": 2,
-      "description": "mc.matrix~ inlets outlets: first arg = signal inlets, second = signal outlets. Default 2x2. Note: rule targets signal I/O; an additional non-signal dump outlet (list) is always present \u2014 see DQ-07 corner case #3.",
+      "default_outlets": 4,
+      "description": "mc.matrix~ N M: first arg = signal inlets, second = signal outlets; M audio outlets + 2 control outlets (list dump, then a further control outlet). Default 2x2 = 4 outlets. trailing_outlets 2: with args, the last two outlets are the DB's last two and every earlier outlet repeats DB outlet 0 (audio).",
       "_audit": {
-        "source": "quick-260421-bx3 (DQ-07) \u2014 mirrors core 'matrix~' rule",
-        "confidence": "MEDIUM",
-        "finding": "Same semantics as matrix~ (rule already in overrides.json). Rule intentionally excludes the always-present 3rd dump outlet (list Inlets/Outlets/Gains). Downstream callers that need full outlet shape should read the DB outlets array directly."
-      }
+        "source": "Q2 / A1 (261012-c5i, OQ2-A): MAX-saved help boxes `mc.matrix~ 3 2` = 3/4 and `mc.matrix~ 4 2` = 4/4, outlettype [multichannelsignal, multichannelsignal, \"\", \"\"]; the 9.2 refpage lists only 3 outlets (2x2 template). Supersedes quick-260421-bx3 (DQ-07), which excluded the dump outlet.",
+        "confidence": "HIGH"
+      },
+      "trailing_outlets": 2
     },
     "mc.pack~": {
       "inlet_count": "first_arg",
@@ -16783,6 +16795,18 @@
       "outlet_count": "fixed:1",
       "default_inlets": 1,
       "description": "Inlet count equals the highest $iN/$fN/$sN index in the expression (max 9). Default 1. Refpage-verified 2026-09-27."
+    },
+    "play~": {
+      "inlet_count": "",
+      "outlet_count": "second_arg+1",
+      "default_inlets": 1,
+      "default_outlets": 2,
+      "trailing_outlets": 1,
+      "description": "play~ buf N: N signal outlets + 1 bang outlet (playback reached its destination or stopped). Missing or non-integer channel arg falls back to the default 2 (1 channel + bang). trailing_outlets 1: with args, the LAST outlet is the DB's last (the bang) and every earlier outlet repeats DB outlet 0 (audio).",
+      "_audit": {
+        "source": "Q2 / A1 (261012-c5i): MAX-saved help boxes `play~ foo 2` = 1/3 [signal, signal, bang] (ears package help) and `play~ playme` = 1/2 [signal, bang]; msp-ref play~ refpage args buffer-name, number-of-output-channels (default 1)",
+        "confidence": "HIGH"
+      }
     }
   },
   "_uncovered_empty_io": {

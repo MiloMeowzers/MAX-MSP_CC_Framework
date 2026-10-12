@@ -33,6 +33,8 @@ SUPPORTED_IO_FORMULAS = frozenset({
     "first_arg",
     "first_arg+1",
     "second_arg",
+    "second_arg+1",
+    "second_arg+2",
     "inherited_from_subpatch",
 })
 
@@ -817,6 +819,12 @@ class ObjectDatabase:
         - "first_arg": first numeric argument
         - "first_arg+1": first numeric argument + 1
         - "second_arg": second numeric argument
+        - "second_arg+1": second numeric argument + 1 (matrix~ N M: M audio
+          outlets + the dump outlet; play~ buf N: N audio + the done-bang)
+        - "second_arg+2": second numeric argument + 2 (mc.matrix~ N M: M
+          audio outlets + 2 control outlets, per MAX-saved help boxes)
+        The second_arg family falls back to ``default`` with fewer than 2
+        args, and warns once and falls back on a non-integer second arg.
 
         Args:
             formula: The formula string from variable_io_rules.
@@ -859,11 +867,12 @@ class ObjectDatabase:
                 self._warn_non_integer_first_arg(formula, args[0], default)
                 return default
 
-        if formula == "second_arg":
+        if formula in ("second_arg", "second_arg+1", "second_arg+2"):
             if len(args) < 2:
                 return default
+            offset = {"second_arg": 0, "second_arg+1": 1, "second_arg+2": 2}[formula]
             try:
-                return int(args[1])
+                return int(args[1]) + offset
             except ValueError:
                 self._warn_non_integer_first_arg(formula, args[1], default)
                 return default

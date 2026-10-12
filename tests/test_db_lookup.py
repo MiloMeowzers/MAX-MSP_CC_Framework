@@ -825,9 +825,16 @@ def test_compute_io_counts_mc_selector():
 
 
 def test_compute_io_counts_mc_matrix():
-    """mc.matrix~ N M → N inlets, M outlets. Signal-only — dump outlet not counted."""
+    """mc.matrix~ N M → N inlets, M signal outlets + 2 control outlets.
+
+    MAX-saved help boxes: `mc.matrix~ 3 2` and `mc.matrix~ 4 2` both save
+    4 outlets (multichannelsignal x2, "", ""). Q2 / OQ2-A: the count follows
+    MAX, not the 9.2 refpage's 3-outlet template.
+    """
     db = ObjectDatabase()
-    assert db.compute_io_counts("mc.matrix~", ["4", "6"]) == (4, 6)
+    assert db.compute_io_counts("mc.matrix~", ["3", "2"]) == (3, 4)
+    assert db.compute_io_counts("mc.matrix~", ["4", "2"]) == (4, 4)
+    assert db.compute_io_counts("mc.matrix~", ["4", "6"]) == (4, 8)
 
 
 def test_mc_pack_is_variable_io():
@@ -877,3 +884,86 @@ def test_trailing_outlets_must_be_positive_int():
             "trailing_outlets": bad}}
         with pytest.raises(ValueError, match="trailing_outlets"):
             db._validate_variable_io_rules()
+
+
+# ---------------------------------------------------------------------------
+# trailing_outlets: matrix~ N M, mc.matrix~ N M, play~ buf N (Q2 / A1)
+# Counts are the MAX-saved help boxes (observed_facts in 261012-c5i).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("args,expected", [
+    (["4", "1", "1."], (4, 2)),
+    (["4", "2"], (4, 3)),
+    (["4", "4", "1."], (4, 5)),
+    (["2", "2", "1.", "@ramp", "74"], (2, 3)),
+    (["2", "4"], (2, 5)),
+])
+def test_matrix_counts_include_dump_outlet(args, expected):
+    """`matrix~ N M` = N inlets, M audio outlets + the list dump outlet."""
+    db = ObjectDatabase()
+    assert db.compute_io_counts("matrix~", args) == expected
+
+
+@pytest.mark.parametrize("args,expected", [
+    (["foo", "2"], (1, 3)),
+    (["playme"], (1, 2)),
+    ([], (1, 2)),
+])
+def test_play_counts_follow_channel_arg(args, expected):
+    """`play~ buf N` = N audio outlets + the done-bang (refpage args:
+    buffer-name, number-of-output-channels, default 1)."""
+    db = ObjectDatabase()
+    assert db.compute_io_counts("play~", args) == expected
+
+
+def test_mc_matrix_counts_follow_help_boxes():
+    db = ObjectDatabase()
+    assert db.compute_io_counts("mc.matrix~", ["3", "2"]) == (3, 4)
+    assert db.compute_io_counts("mc.matrix~", ["4", "2"]) == (4, 4)
+    assert db.compute_io_counts("mc.matrix~", ["4", "6"]) == (4, 8)
+
+
+def test_trailing_signal_roles_matrix_play_mc_matrix():
+    db = ObjectDatabase()
+    assert [db.get_signal_role("matrix~", i, ["2", "4"]) for i in range(5)] == [
+        "audio", "audio", "audio", "audio", "list"]
+    assert [db.get_signal_role("play~", i, ["foo", "2"]) for i in range(3)] == [
+        "audio", "audio", "trigger"]
+    assert [db.get_signal_role("play~", i, ["playme"]) for i in range(2)] == [
+        "audio", "trigger"]
+    assert db.get_signal_role("play~", 1) == "trigger"
+    assert [db.get_signal_role("mc.matrix~", i, ["3", "2"]) for i in range(4)] == [
+        "audio", "audio", "list", None]
+
+
+def test_trailing_outlet_types_matrix_play_mc_matrix():
+    db = ObjectDatabase()
+    assert db.get_outlet_types("matrix~", ["4", "2", "1."]) == [
+        "signal", "signal", ""]
+    assert db.get_outlet_types("play~", ["foo", "2"]) == [
+        "signal", "signal", ""]
+    assert db.get_outlet_types("mc.matrix~", ["3", "2"]) == [
+        "signal", "signal", "", ""]
+
+
+def test_patcher_builds_matrix_and_play_with_trailing_outlet():
+    from src.maxpat.patcher import Patcher
+
+    p = Patcher()
+    assert p.add_box("matrix~", args=["2", "4"]).numoutlets == 5
+    assert p.add_box("play~", args=["buf", "2"]).numoutlets == 3
+
+
+def test_second_arg_plus_formulas():
+    db = ObjectDatabase()
+    assert db._apply_io_formula("second_arg+1", ["x", "3"], 9) == 4
+    assert db._apply_io_formula("second_arg+1", ["x"], 9) == 9
+    assert db._apply_io_formula("second_arg+2", ["x", "3"], 9) == 5
+    assert db._apply_io_formula("second_arg+2", [], 9) == 9
+    with pytest.warns(UserWarning, match="non-integer"):
+        assert db._apply_io_formula("second_arg+1", ["x", "q"], 9) == 9
+    db._variable_io_rules = {"probe~": {
+        "inlet_count": "", "outlet_count": "second_arg+1",
+        "trailing_outlets": 1}}
+    db._validate_variable_io_rules()  # must not raise
