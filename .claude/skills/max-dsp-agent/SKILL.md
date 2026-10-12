@@ -270,11 +270,11 @@ Extends the canonical BEAP templates in PACKAGES.md with additional modular patt
 
 1. Generate GenExpr code and/or MSP signal chain
 2. If GenExpr: validate with `validate_genexpr()` from `src.maxpat.code_validation`
-3. If .maxpat with signal objects: `finalize_patch(patcher, is_new=True)` -- applies styling, layout, assistance comments, and midpoint generation for all patchers and subpatchers. Then serialize via `patcher.to_dict()`, validate via `validate_patch()`
+3. If .maxpat with signal objects: `finalize_patch(patcher, is_new=True)` -- applies styling, layout, assistance comments, and midpoint generation for all patchers and subpatchers. Then serialize via `patch_dict = patcher.to_dict()` and validate a copy via `results = validate_patch(copy.deepcopy(patch_dict), db=patcher.db)`. Proposed removals mean inspect, don't save: if any result has `proposed_removal` set, inspect each `(src_id, outlet, dst_id, inlet)` -- fix a real wiring mistake and re-validate, or keep a false-positive cord and report the checker gap; call `apply_fixes(patch_dict, results)` only when removal is explicitly wanted, then re-validate
 4. If standalone .gendsp: generate via `generate_gendsp()`
 5. Return output for critic review (DSP critic checks signal flow, gen~ I/O matching)
 6. Apply revisions if critic requests them
-7. Write final output via `save_patch_roundtrip(patch_dict, path)` or `write_gendsp()` to project's `generated/` directory
+7. Only when `has_blocking_errors(results, is_new=True)` is False, write final output via `save_patch_roundtrip(patch_dict, path)` or `write_gendsp()` to project's `generated/` directory
 
 ## Output Protocol (Edited Patches)
 

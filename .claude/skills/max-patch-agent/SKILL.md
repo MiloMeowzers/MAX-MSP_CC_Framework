@@ -314,10 +314,11 @@ Structured workflow blueprints for generating working package patches. Each temp
 
 1. Create Patcher and build patch structure
 2. Finalize patch: `finalize_patch(patcher, is_new=True)` -- applies styling, layout, assistance comments, and midpoint generation for all patchers and subpatchers
-3. Serialize and validate: `patch_dict = patcher.to_dict()`, `results = validate_patch(patch_dict, db=patcher.db)`
-4. Return `(patch_dict, results)` tuple for critic review
-5. Apply revisions if critic requests them
-6. Write final output via `save_patch_roundtrip(patch_dict, path)` to project's `generated/` directory
+3. Serialize and validate a copy: `patch_dict = patcher.to_dict()`, then `results = validate_patch(copy.deepcopy(patch_dict), db=patcher.db)`. Validation never mutates its input; the deepcopy is defense in depth.
+4. Proposed removals mean inspect, don't save. If `has_blocking_errors(results, is_new=True)` is True, or any result has `proposed_removal` set, do NOT save. Inspect each `(src_id, outlet, dst_id, inlet)`: a real wiring mistake -> fix the build and re-validate; a validator false positive -> keep the cord and report the checker gap. Call `apply_fixes(patch_dict, results)` only when removal is explicitly wanted, then re-validate.
+5. Return `(patch_dict, results)` tuple for critic review
+6. Apply revisions if critic requests them
+7. Only after the step-4 gate passes, write final output via `save_patch_roundtrip(patch_dict, path)` to project's `generated/` directory
 
 ## Output Protocol (Edited Patches)
 

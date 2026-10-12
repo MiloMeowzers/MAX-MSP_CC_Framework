@@ -338,8 +338,9 @@ class TestUnknownKeyTolerance:
         assert result["patcher"]["boxes"][0]["box"][_SYNTHETIC_KEY] == [1, "box"]
         assert result["patcher"]["lines"][0]["patchline"][_SYNTHETIC_KEY] == 1
 
-        # validate_patch mutates the dict it is given (it strips lines it
-        # rejects), so it runs on a deep copy and the copy is inspected.
+        # validate_patch is pure (it only proposes removals, never applies
+        # them); it still runs on a deep copy so the pristine comparison
+        # stays guarded, and the copy is inspected.
         validated = copy.deepcopy(pristine)
         findings = validate_patch(validated)
 
