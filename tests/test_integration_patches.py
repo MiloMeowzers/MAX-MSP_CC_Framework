@@ -23,13 +23,17 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 _PATCH_FILES = sorted(_REPO_ROOT.glob("patches/*/generated/*.maxpat"))
 
 # ---------------------------------------------------------------------------
-# Review-blocker allowlist (documented pre-existing debt in committed patches)
+# Review-blocker allowlist (true positives in frozen committed patches)
 # ---------------------------------------------------------------------------
-# The committed .maxpat files are frozen (never edited to satisfy critics --
-# D-fanout regression constraint). review_blocker_allowlist.json documents the
-# existing blocker debt (fan-out-without-trigger per CLAUDE.md Rule #4, plus a
-# small number of Bach-llll send/receive routing-bridge false positives) so the
-# integration test can exempt ONLY those specific, signature-scoped findings.
+# The committed .maxpat files are frozen (never edited to satisfy critics).
+# review_blocker_allowlist.json exempts specific, signature-scoped blockers in
+# those patches for test_review_patch_no_blockers only. Until Q3 (quick
+# 261012-di7) it held 120 "debt" entries; most were critic false positives
+# (display-only sinks, preset membership cords, non-reconvergent fan-out, Bach
+# command messages) and were removed once the critics stopped emitting them.
+# Every remaining entry is a live true positive with a written `reason`;
+# test_review_allowlist_entries_are_live fails on stale entries, missing files
+# and missing reasons, and calibration-project patches may never appear here.
 # A NEW patch (path absent from the allowlist) or a NEW blocker (signature not
 # explicitly listed for its patch) is never exempted -- it still fails.
 _ALLOWLIST_PATH = Path(__file__).resolve().parent / "review_blocker_allowlist.json"
@@ -179,4 +183,88 @@ def test_review_patch_no_blockers(patch_path: Path, db: ObjectDatabase) -> None:
     assert not remaining, (
         f"{len(remaining)} unallowlisted blocker(s) in {patch_path.name}:\n"
         + "\n".join(f"  - {r}" for r in remaining)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 3: allowlist hygiene (Q3, S10)
+# ---------------------------------------------------------------------------
+
+# User-confirmed projects (review §0 / §4.3 / §4.4 R3, fix-plan Q3): their
+# generated patches must review with zero blockers and no allowlist.
+_CALIBRATION_PROJECTS = (
+    "ji-harmonizer", "terrain-synth", "wormhole", "timestretch", "gong-model",
+    "gen-eq", "kicksynth", "granularsynthtest", "performancepatchtest",
+    "physics-composition", "barnett-dbap", "scala-synth",
+)
+_CALIBRATION_FILES = [
+    path
+    for project in _CALIBRATION_PROJECTS
+    for path in sorted(_REPO_ROOT.glob(f"patches/{project}/generated/*.maxpat"))
+]
+
+
+def _project_of(patch_rel: str) -> str:
+    parts = patch_rel.split("/")
+    return parts[1] if len(parts) > 1 and parts[0] == "patches" else ""
+
+
+def test_review_allowlist_entries_are_live() -> None:
+    """Every allowlist entry names an existing file, carries a reason, and
+    matches a blocker review_patch emits on that file today."""
+    problems = []
+    for patch_rel, entries in sorted(_ALLOWLIST.items()):
+        path = _REPO_ROOT / patch_rel
+        if not path.is_file():
+            problems.append(f"{patch_rel}: file missing ({len(entries)} entries)")
+            continue
+        with open(path) as f:
+            live = {
+                _blocker_match_key(r.finding)
+                for r in review_patch(json.load(f))
+                if r.severity == "blocker"
+            }
+        for entry in entries:
+            reason = entry.get("reason")
+            if not (isinstance(reason, str) and reason.strip()):
+                problems.append(f"{patch_rel}: no reason for {_entry_key(entry)}")
+            if _entry_key(entry) not in live:
+                problems.append(f"{patch_rel}: stale (does not fire) {_entry_key(entry)}")
+    assert not problems, (
+        f"{len(problems)} allowlist problem(s):\n"
+        + "\n".join(f"  - {p}" for p in problems)
+    )
+
+
+def test_review_allowlist_excludes_calibration_projects() -> None:
+    bad = sorted(k for k in _ALLOWLIST if _project_of(k) in _CALIBRATION_PROJECTS)
+    assert not bad, f"calibration-project patches in the allowlist: {bad}"
+
+
+def test_calibration_projects_have_patches() -> None:
+    """A rename must not silently empty the calibration gate."""
+    empty = [
+        p for p in _CALIBRATION_PROJECTS
+        if not list(_REPO_ROOT.glob(f"patches/{p}/generated/*.maxpat"))
+    ]
+    assert not empty, f"calibration projects with no generated patches: {empty}"
+
+
+# ---------------------------------------------------------------------------
+# Test 4: user-confirmed calibration patches have zero blockers (Q3, S9)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "patch_path",
+    _CALIBRATION_FILES,
+    ids=[str(p.relative_to(_REPO_ROOT)) for p in _CALIBRATION_FILES],
+)
+def test_calibration_zero_blockers(patch_path: Path) -> None:
+    """No allowlist: a blocker on a user-confirmed patch is a critic bug."""
+    with open(patch_path) as f:
+        patch_dict = json.load(f)
+    blockers = [r for r in review_patch(patch_dict) if r.severity == "blocker"]
+    assert blockers == [], (
+        f"{len(blockers)} blocker(s) in user-confirmed {patch_path.name}:\n"
+        + "\n".join(f"  - {r}" for r in blockers)
     )
