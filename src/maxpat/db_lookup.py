@@ -5,6 +5,7 @@ computing variable I/O counts, and checking PD blocklist. This is the single
 source of truth for object existence and metadata during patch generation.
 """
 
+import itertools
 import json
 import warnings
 from collections import defaultdict
@@ -97,6 +98,9 @@ class ObjectDatabase:
         self._empty_io_warned: set[str] = set()
         self._install_warned: set[str] = set()
         self._first_arg_warned: set[tuple[str, str]] = set()
+        # Unordered, alias-canonical companion pairs from relationships.json
+        # (review A1: Layer 3 never flags a known pair's type/role).
+        self._known_pairs: set[frozenset[str]] = set()
         self._load(db_root)
 
     def _load(self, db_root: Path) -> None:
@@ -106,6 +110,21 @@ class ObjectDatabase:
         if aliases_path.exists():
             data = json.loads(aliases_path.read_text())
             self._aliases = data.get("aliases", {})
+
+        # Load known companion pairs (after aliases, so names canonicalise).
+        # A group of N objects expands to every 2-combination; the file has
+        # no direction field, so pairs are unordered.
+        relationships_path = db_root / "relationships.json"
+        if relationships_path.exists():
+            data = json.loads(relationships_path.read_text())
+            for entry in data.get("pairs", []):
+                names = {
+                    self._aliases.get(n, n)
+                    for n in entry.get("objects", [])
+                    if isinstance(n, str)
+                }
+                for a, b in itertools.combinations(sorted(names), 2):
+                    self._known_pairs.add(frozenset((a, b)))
 
         # Parse overrides.json exactly once (quick-260421-b3a FN-02). Both
         # the variable_io_rules registry and the per-object deep-merge
@@ -497,6 +516,20 @@ class ObjectDatabase:
         """
         canonical = self._aliases.get(name, name)
         return canonical in self._objects
+
+    def is_known_pair(self, a: str, b: str) -> bool:
+        """True if *a* and *b* are listed together in relationships.json.
+
+        Unordered (the file has no direction field) and alias-canonical
+        (``s``/``r`` resolve to ``send``/``receive``). Returns False for the
+        same name twice. Used by validation Layer 3 to exempt a known pair
+        from type/role checks only -- index bounds are still enforced.
+        """
+        ca = self._aliases.get(a, a)
+        cb = self._aliases.get(b, b)
+        if ca == cb:
+            return False
+        return frozenset((ca, cb)) in self._known_pairs
 
     def is_overridden(self, name: str) -> bool:
         """Check whether an object has expert-verified overrides applied.

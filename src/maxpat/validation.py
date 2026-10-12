@@ -600,9 +600,11 @@ def _validate_connections(
     Pure: never writes to *patch_dict*. A cord considered invalid is
     reported as an error carrying ``proposed_removal`` (its 4-tuple key);
     removal happens only via ``apply_fixes``. Check order per cord:
-    bounds (always, even for containers) -> container destination (no
-    type/role checks) -> role dispatch (skipped for container sources;
-    mismatches warn, cord kept) -> legacy signal/control check.
+    bounds (always, even for containers and known pairs) -> known pair
+    from relationships.json (e.g. tapin~ -> tapout~; no type/role checks)
+    -> container destination (no type/role checks) -> role dispatch
+    (skipped for container sources; mismatches warn, cord kept) -> legacy
+    signal/control check.
     """
     results: list[ValidationResult] = []
 
@@ -677,6 +679,15 @@ def _validate_connections(
         if out_of_bounds:
             continue
 
+        # --- Known companion pair (relationships.json): no type/role checks ---
+        src_name = _extract_object_name(src_box)
+        dst_name = _extract_object_name(dst_box)
+        if (
+            src_name is not None and dst_name is not None
+            and db.is_known_pair(src_name, dst_name)
+        ):
+            continue
+
         # --- Container destination: accepts any cord (A1) ---
         if _is_container_box(dst_box):
             continue
@@ -689,7 +700,6 @@ def _validate_connections(
         # _ROLE_TIER_TABLE. Hit -> warn (cord kept) and skip legacy branch
         # (D-02). Miss / None / audio source -> fall through unchanged.
         # Container outlets carry no signal_role (A1).
-        src_name = _extract_object_name(src_box)
         if src_name is not None and not src_is_container:
             # args make the role layout-aware: `sfplay~ 2` outlet 1 is
             # audio, not the 1-channel form's done-bang (barnett-dbap

@@ -366,3 +366,47 @@ class TestCommittedStrips:
         if "terrain-voice" in rel:
             assert not [r for r in results
                         if "Unterminated signal chain: '*~' (obj-16)" in r.message]
+
+
+# ===========================================================================
+# Tests 14-17: relationships.json pairs are never flagged (A1)
+# ===========================================================================
+
+class TestKnownPairs:
+
+    def _tap_patch(self, src_outlet=0):
+        return _make_patch_dict(
+            boxes=[
+                _make_box("obj-1", text="tapin~ 1000", numinlets=1,
+                          numoutlets=1, outlettype=["tapconnect"]),
+                _make_box("obj-2", text="tapout~ 500", numinlets=1,
+                          numoutlets=1, outlettype=["signal"]),
+            ],
+            lines=[_make_line("obj-1", src_outlet, "obj-2", 0)],
+        )
+
+    def test_tapin_to_tapout_not_flagged(self, db):
+        patch = self._tap_patch()
+        before = copy.deepcopy(patch)
+        results = validate_patch(patch, db=db)
+        assert _conn(results) == [], [str(r) for r in _conn(results)]
+        assert _keys(patch) == [("obj-1", 0, "obj-2", 0)]
+        assert patch == before
+
+    def test_is_known_pair(self, db):
+        assert db.is_known_pair("tapin~", "tapout~")
+        assert db.is_known_pair("tapout~", "tapin~")
+        assert db.is_known_pair("pfft~", "fftin~")
+        assert db.is_known_pair("fftin~", "fftout~")
+        assert db.is_known_pair("s", "r")
+        assert not db.is_known_pair("cycle~", "dac~")
+        assert not db.is_known_pair("tapin~", "tapin~")
+
+    def test_known_pair_bounds_still_enforced(self, db):
+        results = validate_patch(self._tap_patch(src_outlet=3), db=db)
+        hits = [r for r in results if r.proposed_removal == ("obj-1", 3, "obj-2", 0)]
+        assert len(hits) == 1 and hits[0].level == "error"
+
+    def test_missing_relationships_file(self, tmp_path):
+        empty_db = ObjectDatabase(db_root=tmp_path)
+        assert empty_db.is_known_pair("tapin~", "tapout~") is False
