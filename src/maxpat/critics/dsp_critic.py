@@ -4,7 +4,10 @@ Catches semantic DSP issues that the mechanical validation pipeline does
 not detect:
   - gen~ I/O mismatches between GenExpr code and wrapper box
   - Missing gain staging before dac~/ezdac~
-  - Audio rate consistency (control-rate to signal inlet)
+
+The former control-rate-to-signal-rate check was removed by Q3 / E2 (quick
+261012-di7): it was ~100% noise (399 corpus hits, including the mandated
+`param $1` -> gen~ form and number -> sig~) and its advice was harmful.
 
 NOTE: Does NOT duplicate validation.py Layer 4 checks (unterminated chains,
 feedback loops). Focus is on semantic issues validation misses.
@@ -57,7 +60,7 @@ def review_dsp(
     Checks:
       1. gen~ I/O match between GenExpr code and wrapper box
       2. Gain staging: oscillators connected to dac~ without *~ or gain~
-      3. Audio rate consistency: control-rate objects to signal inlets
+      3. Unsafe gain sources (see _check_unsafe_gain_sources)
 
     Args:
         patch_dict: A .maxpat-format dict.
@@ -84,7 +87,6 @@ def review_dsp(
     # Run checks
     results.extend(_check_gen_io_match(box_lookup, code_context))
     results.extend(_check_gain_staging(box_lookup, lines))
-    results.extend(_check_audio_rate_consistency(box_lookup, lines))
     results.extend(_check_unsafe_gain_sources(box_lookup, lines))
 
     return results
@@ -255,74 +257,7 @@ def _check_gain_staging(
 
 
 # ---------------------------------------------------------------------------
-# Check 3: Audio rate consistency
-# ---------------------------------------------------------------------------
-
-def _check_audio_rate_consistency(
-    box_lookup: dict[str, dict],
-    lines: list[dict],
-) -> list[CriticResult]:
-    """Detect control-rate objects connected to signal inlets.
-
-    A non-~ object (control rate) connecting to a signal object's inlet
-    where signal flow is expected is a potential issue.
-
-    NOTE: Some signal inlets (like *~ inlet 1) accept both signal and
-    float values, so this is a warning, not a blocker. We only flag
-    when a control-rate outlet connects to inlet 0 of a signal object
-    that normally expects signal input.
-    """
-    results: list[CriticResult] = []
-
-    for line_entry in lines:
-        patchline = line_entry.get("patchline", line_entry)
-        source = patchline.get("source", [])
-        destination = patchline.get("destination", [])
-        if len(source) < 2 or len(destination) < 2:
-            continue
-
-        src_id, src_outlet = source[0], source[1]
-        dst_id, dst_inlet = destination[0], destination[1]
-
-        src_box = box_lookup.get(src_id)
-        dst_box = box_lookup.get(dst_id)
-        if not src_box or not dst_box:
-            continue
-
-        src_name = get_box_name(src_box)
-        dst_name = get_box_name(dst_box)
-
-        # Source is control-rate (no ~ suffix in name)
-        src_is_signal = src_name.endswith("~")
-
-        # Destination is signal-rate (~ suffix in name)
-        dst_is_signal = dst_name.endswith("~")
-
-        if src_is_signal or not dst_is_signal:
-            continue  # Not a control-to-signal connection
-
-        # Check if the source outlet is control-rate
-        src_outlettype = src_box.get("outlettype", [])
-        if src_outlet < len(src_outlettype) and src_outlettype[src_outlet] in _SIGNAL_OUTLET_TYPES:
-            continue  # Source outlet is actually signal
-
-        # This is a control-rate object feeding a signal-rate object
-        # Only flag for inlet 0 (primary signal input) to reduce noise
-        if dst_inlet == 0:
-            results.append(CriticResult(
-                "warning",
-                f"Control-rate to signal-rate: '{src_name}' ({src_id}) "
-                f"outlet {src_outlet} connected to '{dst_name}' ({dst_id}) "
-                f"inlet {dst_inlet} -- control data feeding signal input",
-                f"Use a 'sig~' object to convert control data to signal rate, "
-                f"or verify this is intentional (some inlets accept both)",
-            ))
-
-    return results
-
-
-# ---------------------------------------------------------------------------
-# Check 4: Unsafe gain sources
+# Check 3: Unsafe gain sources
 # ---------------------------------------------------------------------------
 
 def _is_normalizer(box: dict) -> bool:

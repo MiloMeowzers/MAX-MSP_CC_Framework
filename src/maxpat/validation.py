@@ -986,7 +986,7 @@ def _validate_domain_rules(
     results.extend(_check_gen_param_message_syntax(box_lookup, ctrl_adj))
 
     # --- Rule: Comment #N substitution ---
-    results.extend(_check_comment_hash_substitution(box_lookup))
+    results.extend(_check_comment_hash_substitution(box_lookup, ctrl_adj))
 
     # --- Rule: line~ comma messages ---
     results.extend(_check_line_tilde_comma_messages(box_lookup, ctrl_adj))
@@ -1466,12 +1466,30 @@ def _check_gen_param_message_syntax(
 
 def _check_comment_hash_substitution(
     box_lookup: dict[str, dict],
+    ctrl_adj: dict[str, list[str]],
 ) -> list[ValidationResult]:
-    """Warn about #N text in comment boxes (comment doesn't support substitution)."""
+    """Warn about #N text in comment boxes (comment doesn't support substitution).
+
+    A comment fed directly by a message box ``set ... #N`` is skipped (Q3,
+    review §4.4 R3): that is the sanctioned loadbang -> message -> set chain,
+    and the comment's stored text is just the pre-substitution placeholder.
+    Only direct feeders count (no ``prepend set`` chains).
+    """
     results: list[ValidationResult] = []
+
+    set_fed: set[str] = set()
+    for src_id, dst_ids in ctrl_adj.items():
+        src_box = box_lookup.get(src_id)
+        if not src_box or src_box.get("maxclass") != "message":
+            continue
+        src_text = src_box.get("text", "")
+        if _re.match(r'\s*set\s', src_text) and _re.search(r'#\d+', src_text):
+            set_fed.update(dst_ids)
 
     for box_id, box in box_lookup.items():
         if box.get("maxclass") != "comment":
+            continue
+        if box_id in set_fed:
             continue
         text = box.get("text", "")
         if _re.search(r'#\d+', text):

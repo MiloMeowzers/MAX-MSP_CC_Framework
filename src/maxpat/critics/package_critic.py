@@ -3,7 +3,8 @@
 Catches package-specific semantic errors that the generic validation pipeline
 misses:
   - BEAP: missing output termination, missing VCA gain staging
-  - Bach: llll/list type mismatches (non-bach feeding llll inlet)
+  - Bach: llll/list type mismatches (non-bach, non-command source feeding an
+    llll inlet) -- note severity (Q3 / E4)
   - Community: unextracted community package usage warnings
 """
 
@@ -27,6 +28,14 @@ _BEAP_SOURCE_CATEGORIES = frozenset({"Oscillator", "Input", "Random", "LFO"})
 
 # BEAP gain staging categories (contains bp.VCA)
 _BEAP_GAIN_CATEGORIES = frozenset({"Level"})
+
+# Sources that send bach commands/messages rather than llll data into an llll
+# inlet (Q3 / E4). Message boxes are matched by maxclass. Evidence:
+# physics-composition `addchord [ $1 [ $2 $3 $4 ] ]`, `domain $1 $2` and
+# `receive roll-clear` into bach.roll inlet 0 were all false-positive blockers.
+_BACH_COMMAND_SOURCES = frozenset({
+    "attrui", "loadmess", "loadbang", "receive", "r", "button", "prepend",
+})
 
 
 def _get_object_name(box: dict) -> str:
@@ -311,8 +320,11 @@ def _check_bach_llll_types(
     """Detect non-bach objects connected to bach inlets expecting llll.
 
     For each patchline, check whether the destination is a Bach object whose
-    inlet digest advertises llll. If the source is not a Bach object, emit a
-    blocker.
+    inlet digest advertises llll. Command sources (message boxes and
+    ``_BACH_COMMAND_SOURCES``) are skipped: they send bach commands, not
+    llll data. Any other non-bach source emits a NOTE (Q3 / E4: a flat MAX
+    list into a bach inlet is usually fine; the real trap is bach -> non-bach
+    without ``@out t``, handled elsewhere).
     """
     results: list[CriticResult] = []
 
@@ -334,6 +346,13 @@ def _check_bach_llll_types(
         src_name = _get_object_name(src_box)
         dst_name = _get_object_name(dst_box)
 
+        # Command sources send bach messages, not llll data (Q3 / E4)
+        if (
+            src_box.get("maxclass") == "message"
+            or src_name in _BACH_COMMAND_SOURCES
+        ):
+            continue
+
         # Only check connections TO bach objects
         dst_entry = db.lookup(dst_name)
         if not dst_entry or dst_entry.get("package") != "Bach":
@@ -349,7 +368,7 @@ def _check_bach_llll_types(
 
         if not src_is_bach:
             results.append(CriticResult(
-                "blocker",
+                "note",
                 f"Bach llll type mismatch: '{src_name}' ({src_id}) "
                 f"connected to '{dst_name}' ({dst_id}) inlet {dst_inlet} "
                 f"which expects llll data -- plain MAX lists will silently "

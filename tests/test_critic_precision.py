@@ -16,16 +16,30 @@ freshly loaded dict. No committed patch file is ever written.
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
+import pytest
+
+from src.maxpat.critics.dsp_critic import review_dsp
+from src.maxpat.critics.package_critic import review_packages
 from src.maxpat.critics.structure_critic import review_structure
+from src.maxpat.db_lookup import ObjectDatabase
+from src.maxpat.validation import validate_patch
 from tests.test_critics import _make_patch
 from tests.test_integration_patches import _FANOUT_RE
+from tests.test_validation import _make_box, _make_line, _make_patch_dict
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 _FAN_PREFIX = "Fan-out without trigger"
+
+
+@pytest.fixture(scope="module")
+def db() -> ObjectDatabase:
+    """Module-scoped ObjectDatabase (expensive to construct)."""
+    return ObjectDatabase()
 
 
 def _load(rel: str) -> dict:
@@ -318,3 +332,176 @@ class TestFanOutCommittedPatches:
                 assert all(r.severity == "warning" for r in fans), (
                     f"{rel} {src_id}: {[(r.severity, r.finding) for r in fans]}"
                 )
+
+
+# ===========================================================================
+# E4: Bach-llll command sources
+# ===========================================================================
+
+def _llll(results):
+    return [r for r in results if "llll" in r.finding.lower()]
+
+
+_BACH_COMMAND_FIXTURES = [
+    ("message", "addchord [ $1 [ $2 $3 $4 ] ]"),
+    ("message", "domain $1 $2"),
+    ("newobj", "receive roll-clear"),
+    ("newobj", "r x"),
+    ("attrui", ""),
+    ("newobj", "loadmess 1"),
+    ("newobj", "loadbang"),
+    ("button", ""),
+    ("newobj", "prepend addchord"),
+]
+
+
+class TestBachCommandSources:
+
+    @pytest.mark.parametrize("dst", ["bach.roll", "bach.score"])
+    @pytest.mark.parametrize(
+        "maxclass,text", _BACH_COMMAND_FIXTURES,
+        ids=[f"{m}:{t}" for m, t in _BACH_COMMAND_FIXTURES],
+    )
+    def test_command_source_exempt(self, db, maxclass, text, dst):
+        boxes = [
+            _box("obj-1", text=text, maxclass=maxclass, numinlets=1,
+                 numoutlets=1),
+            _box("obj-2", text=dst, numinlets=1, numoutlets=1),
+        ]
+        res = review_packages(_make_patch(boxes, [_ln("obj-1", 0, "obj-2", 0)]), db)
+        assert _llll(res) == [], [(r.severity, r.finding) for r in res]
+
+    def test_pack_into_bach_score_is_note(self, db):
+        boxes = [
+            _box("obj-1", text="pack 0 0", numinlets=2, numoutlets=1),
+            _box("obj-2", text="bach.score", numinlets=1, numoutlets=1),
+        ]
+        res = _llll(review_packages(
+            _make_patch(boxes, [_ln("obj-1", 0, "obj-2", 0)]), db))
+        assert [r.severity for r in res] == ["note"]
+        assert "bach.nth" in res[0].suggestion
+        assert "list2llll" not in res[0].suggestion
+
+    def test_physics_composition_command_sources(self, db):
+        res = review_packages(
+            _load("patches/physics-composition/generated/physics-composition.maxpat"),
+            db,
+        )
+        hits = [
+            r for r in _llll(res)
+            if any(f"({i})" in r.finding for i in ("obj-107", "obj-109", "obj-73"))
+        ]
+        assert hits == [], [(r.severity, r.finding) for r in hits]
+
+
+# ===========================================================================
+# E2: control-rate-to-signal-rate check removed (OQ2-A)
+# ===========================================================================
+
+_CTRL_PREFIX = "Control-rate to signal-rate"
+
+
+class TestControlToSignalRemoved:
+
+    def _ctrl(self, results):
+        return [r for r in results if r.finding.startswith(_CTRL_PREFIX)]
+
+    def test_param_message_into_gen(self):
+        boxes = [
+            _box("obj-1", text="cutoff $1", maxclass="message", numinlets=2,
+                 numoutlets=1),
+            _box("obj-2", text="gen~", numinlets=1, numoutlets=1,
+                 outlettype=["signal"]),
+        ]
+        res = review_dsp(_make_patch(boxes, [_ln("obj-1", 0, "obj-2", 0)]))
+        assert self._ctrl(res) == []
+
+    def test_number_into_sig(self):
+        boxes = [
+            _number("obj-1"),
+            _box("obj-2", text="sig~", numinlets=1, numoutlets=1,
+                 outlettype=["signal"]),
+        ]
+        res = review_dsp(_make_patch(boxes, [_ln("obj-1", 0, "obj-2", 0)]))
+        assert self._ctrl(res) == []
+
+    def test_number_into_times_tilde(self):
+        boxes = [
+            _number("obj-1"),
+            _box("obj-2", text="*~ 1.", numinlets=2, numoutlets=1,
+                 outlettype=["signal"]),
+        ]
+        res = review_dsp(_make_patch(boxes, [_ln("obj-1", 0, "obj-2", 0)]))
+        assert self._ctrl(res) == []
+
+    def test_corpus_has_no_control_rate_findings(self):
+        hits = []
+        for path in sorted(_REPO_ROOT.glob("patches/*/generated/*.maxpat")):
+            rel = path.relative_to(_REPO_ROOT).as_posix()
+            hits.extend((rel, r.finding) for r in self._ctrl(review_dsp(_load(rel))))
+        assert hits == [], f"{len(hits)} control-rate finding(s), e.g. {hits[:3]}"
+
+
+# ===========================================================================
+# Comment #N: set-fed comments are not flagged
+# ===========================================================================
+
+_HASH_MSG = "Comment boxes don't support #N"
+
+
+def _comment_hash_warnings(results):
+    return [
+        r for r in results
+        if r.layer == "domain" and r.level == "warning" and _HASH_MSG in r.message
+    ]
+
+
+def _comment(box_id, text):
+    return {"box": {"maxclass": "comment", "id": box_id, "text": text,
+                    "numinlets": 1, "numoutlets": 0, "outlettype": [],
+                    "patching_rect": [0, 40, 80, 22]}}
+
+
+class TestCommentHashSetFed:
+
+    def test_set_hash_message_feeds_comment(self, db):
+        patch = _make_patch_dict(
+            boxes=[
+                _make_box("obj-1", maxclass="message", text="set Bus #1",
+                          numinlets=2, numoutlets=1, outlettype=[""]),
+                _comment("obj-2", "Bus #1"),
+            ],
+            lines=[_make_line("obj-1", 0, "obj-2", 0)],
+        )
+        assert _comment_hash_warnings(validate_patch(patch, db=db)) == []
+
+    def test_set_without_hash_still_warns(self, db):
+        patch = _make_patch_dict(
+            boxes=[
+                _make_box("obj-1", maxclass="message", text="set Label",
+                          numinlets=2, numoutlets=1, outlettype=[""]),
+                _comment("obj-2", "Label #1"),
+            ],
+            lines=[_make_line("obj-1", 0, "obj-2", 0)],
+        )
+        assert len(_comment_hash_warnings(validate_patch(patch, db=db))) == 1
+
+    def test_unfed_comment_still_warns(self, db):
+        patch = _make_patch_dict(boxes=[_comment("obj-1", "Freq: #1 Hz")])
+        assert len(_comment_hash_warnings(validate_patch(patch, db=db))) == 1
+
+    @pytest.mark.parametrize("rel,box_id", [
+        ("patches/barnett-dbap/generated/dbap-motion.maxpat", "obj-3"),
+        ("patches/barnett-dbap/generated/dbap-source.maxpat", "obj-1"),
+        ("patches/mixer/generated/mixer-bus.maxpat", "obj-36"),
+    ])
+    def test_committed_set_fed_comments_clean(self, db, rel, box_id):
+        res = validate_patch(copy.deepcopy(_load(rel)), db=db)
+        hits = [r for r in _comment_hash_warnings(res) if f"({box_id})" in r.message]
+        assert hits == []
+
+    def test_committed_prose_comment_still_warns(self, db):
+        rel = "patches/barnett-dbap/generated/barnett-dbap.maxpat"
+        res = validate_patch(copy.deepcopy(_load(rel)), db=db)
+        hits = [r for r in _comment_hash_warnings(res) if "(obj-27)" in r.message]
+        assert len(hits) == 1

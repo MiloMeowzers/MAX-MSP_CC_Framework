@@ -133,7 +133,10 @@ _DSP_CRITIC_READ_SHAPES = _OUTLET_SIGNAL_READ_SHAPES | frozenset({
 # outlettype membership tests; patcher.py carried one outlet.get("signal")
 # read. Deleting a consumer drops below its floor and trips the anchor --
 # which is the regression these tests exist to catch.
-_DSP_CRITIC_MIN_CONSUMER_SITES = 4
+# Q3 / E2 (quick 261012-di7) deleted the control-rate-to-signal-rate check,
+# which was one of the four sites; the floor drops to the three survivors
+# (gain staging and the two unsafe-gain reads).
+_DSP_CRITIC_MIN_CONSUMER_SITES = 3
 _PATCHER_MIN_CONSUMER_SITES = 1
 
 

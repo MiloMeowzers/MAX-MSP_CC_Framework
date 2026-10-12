@@ -309,13 +309,11 @@ class TestDSPCritic:
         gain_issues = [r for r in results if r.severity in ("warning", "blocker") and "gain" in r.finding.lower()]
         assert len(gain_issues) == 0
 
-    def test_control_to_signal_warning(self):
-        """Control-rate number to signal inlet of *~ -> warning."""
+    def test_control_to_signal_not_flagged(self):
+        """Control-rate number to *~ inlet 0 -> no finding (check removed, Q3 / E2)."""
         patch = _control_to_signal_patch()
         results = review_dsp(patch)
-        warnings = [r for r in results if r.severity == "warning"]
-        assert len(warnings) >= 1
-        assert any("rate" in r.finding.lower() or "control" in r.finding.lower() for r in warnings)
+        assert not [r for r in results if r.finding.startswith("Control-rate")]
 
     def test_signal_to_signal_clean(self):
         """Signal-to-signal connection -> no audio rate warnings."""
@@ -1963,7 +1961,7 @@ class TestPackageCritic:
     # --- Bach llll type tests ---
 
     def test_bach_llll_mismatch(self):
-        """Non-bach object (pack) connected to bach.score llll inlet produces blocker."""
+        """Non-bach object (pack) into a bach.score llll inlet -> note, not blocker (Q3 / E4)."""
         boxes = [
             {
                 "id": "obj-1",
@@ -1987,8 +1985,11 @@ class TestPackageCritic:
         ]
         patch = _make_patch(boxes, lines)
         results = review_packages(patch)
-        blockers = [r for r in results if r.severity == "blocker" and "llll" in r.finding.lower()]
-        assert len(blockers) >= 1, f"Expected llll mismatch blocker, got: {results}"
+        blockers = [r for r in results if r.severity == "note" and "llll" in r.finding.lower()]
+        assert len(blockers) >= 1, f"Expected llll mismatch note, got: {results}"
+        assert not [
+            r for r in results if r.severity == "blocker" and "llll" in r.finding.lower()
+        ], "Bach-llll must no longer block (Q3 / E4)"
 
     def test_bach_llll_mismatch_suggestion_names_existing_objects(self):
         """The llll-mismatch suggestion recommends only objects that exist (D-04).
@@ -2020,8 +2021,11 @@ class TestPackageCritic:
         ]
         patch = _make_patch(boxes, lines)
         results = review_packages(patch)
-        blockers = [r for r in results if r.severity == "blocker" and "llll" in r.finding.lower()]
-        assert len(blockers) >= 1, f"Expected llll mismatch blocker, got: {results}"
+        blockers = [r for r in results if r.severity == "note" and "llll" in r.finding.lower()]
+        assert len(blockers) >= 1, f"Expected llll mismatch note, got: {results}"
+        assert not [
+            r for r in results if r.severity == "blocker" and "llll" in r.finding.lower()
+        ], "Bach-llll must no longer block (Q3 / E4)"
         suggestion = blockers[0].suggestion
         assert "list2llll" not in suggestion, (
             f"Suggestion still names the missing converter: {suggestion}"
