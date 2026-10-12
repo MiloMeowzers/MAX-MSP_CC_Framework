@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -25,31 +26,79 @@ if TYPE_CHECKING:
     from src.maxpat.patcher import Patcher
 
 
-def _auto_commit_saved_file(path: Path) -> None:
-    """Auto-commit a saved file to git to prevent work loss.
+def _auto_commit_saved_file(path: Path) -> str | None:
+    """Auto-commit a saved file to git to prevent work loss (fix-plan Q5, A5).
 
-    Walks up the path to find the project directory (patches/{name}/)
-    and commits the file using auto_commit_patch.  Silently skips if
-    the path is not inside a patches/ tree or if git is unavailable.
+    Finds the repository from the file's own directory with
+    ``git rev-parse --show-toplevel``. When the file sits under
+    ``patches/<project>/`` (measured from the repo root), commits exactly this
+    one path via :func:`auto_commit_patch` -- anything else already staged
+    stays staged and out of the commit.
+
+    Never raises: a commit failure must not block the save, which has already
+    happened. Every outcome other than a commit emits one ``UserWarning``
+    naming the path and the reason:
+
+    - not inside a git repository;
+    - outside ``patches/<project>/`` (commit it yourself with an explicit path);
+    - auto-commit failed (git error text: ignored path, index.lock, ...);
+    - no changes to commit (the file matches the last commit).
+
+    Returns:
+        The full commit hash, or None (with a warning) when nothing was
+        committed.
     """
-    try:
-        from src.maxpat.project import auto_commit_patch
+    from src.maxpat.project import auto_commit_patch, _run_git
 
-        patch_path = Path(path)
-        parts = list(patch_path.parts)
-        if "patches" in parts:
-            patches_idx = parts.index("patches")
-            if len(parts) > patches_idx + 1:
-                project_dir = Path(*parts[: patches_idx + 2])
-                base_dir = Path(*parts[:patches_idx])
-                auto_commit_patch(
-                    project_dir,
-                    base_dir,
-                    description=f"save {patch_path.name}",
-                    files=[str(path)],
-                )
-    except Exception:
-        pass  # Never let commit failure block patch save
+    abs_path = Path(path).resolve()
+
+    try:
+        root_out = _run_git(abs_path.parent, ["rev-parse", "--show-toplevel"]).stdout.strip()
+        root = Path(root_out).resolve()
+        rel = abs_path.relative_to(root)
+    except (RuntimeError, ValueError):
+        warnings.warn(
+            f"{path}: not inside a git repository -- not auto-committed",
+            UserWarning,
+            stacklevel=3,
+        )
+        return None
+
+    dir_parts = rel.parts[:-1]
+    if "patches" not in dir_parts or dir_parts.index("patches") + 1 >= len(dir_parts):
+        warnings.warn(
+            f"{path}: outside patches/<project>/ in repo {root} -- not auto-committed; "
+            f"commit it yourself with an explicit path",
+            UserWarning,
+            stacklevel=3,
+        )
+        return None
+    i = dir_parts.index("patches")
+    project_dir = root.joinpath(*rel.parts[: i + 2])
+
+    try:
+        commit_hash = auto_commit_patch(
+            project_dir,
+            root,
+            description=f"save {abs_path.name}",
+            files=[str(abs_path)],
+        )
+    except Exception as exc:  # never let a commit failure block the save
+        warnings.warn(
+            f"{path}: auto-commit failed -- {exc}; the file was saved but is not committed",
+            UserWarning,
+            stacklevel=3,
+        )
+        return None
+
+    if commit_hash is None:
+        warnings.warn(
+            f"{path}: no changes to commit -- the file matches the last commit",
+            UserWarning,
+            stacklevel=3,
+        )
+        return None
+    return commit_hash
 
 
 def _write_and_sync(path: Path, content: str) -> None:
@@ -133,7 +182,7 @@ def save_patch_roundtrip(
     patch_dict: dict,
     path: "str | Path",
     original_text: str | None = None,
-) -> None:
+) -> str | None:
     """Save a .maxpat dict preserving the original file's indentation.
 
     For round-trip saves (load -> edit -> save), pass the original file text
@@ -145,6 +194,13 @@ def save_patch_roundtrip(
         path: Destination file path.
         original_text: Original file content (for indent detection). If None,
             uses 4-space indent (MAX 9.1.2 default).
+
+    Returns:
+        The full git commit hash of the path-scoped auto-commit (fix-plan
+        Q5, A5), or None when nothing was committed. Every None comes with
+        a UserWarning naming the reason: not inside a git repository,
+        outside ``patches/<project>/``, git failed, or no changes to commit.
+        Only this one path is committed; other staged files stay staged.
     """
     path = Path(path)
 
@@ -163,8 +219,8 @@ def save_patch_roundtrip(
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_and_sync(path, output)
 
-    # Auto-commit to git to prevent work loss
-    _auto_commit_saved_file(path)
+    # Auto-commit to git to prevent work loss (path-scoped; warns on None)
+    return _auto_commit_saved_file(path)
 
 
 def read_patch(path: "str | Path") -> tuple["Patcher", str]:

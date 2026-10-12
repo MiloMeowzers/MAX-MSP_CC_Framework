@@ -301,6 +301,45 @@ def bump_version(
     return new_version
 
 
+def _run_git(
+    root: "Path | str",
+    args: list[str],
+    ok_codes: tuple[int, ...] = (0,),
+    timeout: float = 10,
+) -> "subprocess.CompletedProcess[str]":
+    """Run ``git --literal-pathspecs <args>`` in *root* and check the exit code.
+
+    No shell is involved: *args* are passed as argv elements, and callers put
+    every pathspec after ``--``. ``--literal-pathspecs`` stops glob characters
+    in a filename (``a[1].maxpat``) from matching sibling files.
+
+    Returns:
+        The CompletedProcess (stdout/stderr as text).
+
+    Raises:
+        RuntimeError: ``git <subcommand> failed (exit N): <stderr>`` when the
+            exit code is not in *ok_codes*, or ``git <subcommand> could not
+            run: <error>`` when git is missing, times out, or cannot start.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "--literal-pathspecs", *args],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        raise RuntimeError(f"git {args[0]} could not run: {exc}") from exc
+    if result.returncode not in ok_codes:
+        raise RuntimeError(
+            f"git {args[0]} failed (exit {result.returncode}): {result.stderr.strip()}"
+        )
+    return result
+
+
 def auto_commit_patch(
     project_dir: Path,
     base_dir: Path,
@@ -309,77 +348,65 @@ def auto_commit_patch(
 ) -> str | None:
     """Auto-commit patch project files to git after a save operation.
 
-    Commits only the specific files within the project's directory (and any
-    explicitly listed extra files) to avoid interfering with other Claude
-    instances working on different patches.
+    The commit is path-scoped (fix-plan Q5, review finding A5): it runs
+    ``git commit -m <msg> -- <paths>`` from the repository root, so anything
+    another instance already staged stays staged and out of this commit, and
+    the "anything to commit?" check looks only at these paths.
+
+    The repository root comes from ``git rev-parse --show-toplevel`` run in
+    *base_dir*. Every path is made absolute (relative ``files`` entries
+    resolve against *base_dir*, never the process cwd) and passed as a
+    literal pathspec after ``--``. Every git return code is checked.
 
     Args:
         project_dir: Path to the project directory (e.g., patches/gen-eq/).
-        base_dir: Root directory of the repo (for running git commands).
+            Its name is used in the commit message; it is also the pathspec
+            when ``files`` is empty.
+        base_dir: A directory inside the repo (normally the repo root); git
+            commands run from the root ``rev-parse`` finds from here.
         description: Human-readable description of the change.
-        files: Optional explicit list of file paths to stage (relative to base_dir).
-            If None, stages all changed files under project_dir/.
+        files: Optional explicit list of file paths to commit (absolute, or
+            relative to base_dir). If empty/None, commits all changes under
+            project_dir/.
 
     Returns:
-        The commit hash string, or None if nothing to commit or git fails.
+        The full commit hash, or None when the given paths have nothing to
+        commit (other staged files do not count).
+
+    Raises:
+        RuntimeError: When any git command fails or cannot run (not a git
+            repository, ignored path, index.lock contention, missing git,
+            timeout). The message names the git subcommand and its stderr.
     """
-    import subprocess
+    base = Path(base_dir)
+    root_out = _run_git(base, ["rev-parse", "--show-toplevel"]).stdout.strip()
+    root = Path(root_out).resolve()
 
-    try:
-        if files:
-            # Stage only the specific files listed
-            for f in files:
-                subprocess.run(
-                    ["git", "add", str(f)],
-                    cwd=str(base_dir),
-                    capture_output=True,
-                    timeout=10,
-                )
-        else:
-            # Stage all changed files under the project directory
-            rel_project = project_dir.relative_to(base_dir)
-            subprocess.run(
-                ["git", "add", str(rel_project)],
-                cwd=str(base_dir),
-                capture_output=True,
-                timeout=10,
-            )
+    def _abs(p: "str | Path") -> str:
+        p = Path(p)
+        if not p.is_absolute():
+            p = base / p
+        return str(p.resolve())
 
-        # Check if there are staged changes
-        result = subprocess.run(
-            ["git", "diff", "--cached", "--quiet"],
-            cwd=str(base_dir),
-            capture_output=True,
-            timeout=10,
-        )
-        if result.returncode == 0:
-            return None  # Nothing staged
+    if files:
+        paths = [_abs(f) for f in files]
+    else:
+        paths = [_abs(project_dir)]
 
-        # Build commit message
-        project_name = project_dir.name
-        msg = f"patch({project_name}): {description}" if description else f"patch({project_name}): auto-save"
+    _run_git(root, ["add", "--", *paths])
 
-        result = subprocess.run(
-            ["git", "commit", "-m", msg],
-            cwd=str(base_dir),
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode == 0:
-            # Extract commit hash
-            hash_result = subprocess.run(
-                ["git", "rev-parse", "--short", "HEAD"],
-                cwd=str(base_dir),
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            return hash_result.stdout.strip() if hash_result.returncode == 0 else "unknown"
-        return None
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        # Git not available or timed out -- silently skip
-        return None
+    staged = _run_git(root, ["diff", "--cached", "--quiet", "--", *paths], ok_codes=(0, 1))
+    if staged.returncode == 0:
+        return None  # Nothing to commit for these paths
+
+    project_name = Path(project_dir).name
+    msg = f"patch({project_name}): {description}" if description else f"patch({project_name}): auto-save"
+
+    _run_git(root, ["commit", "-q", "-m", msg, "--", *paths], timeout=30)
+
+    # Path-scoped log is race-safe against another instance committing other
+    # paths between our commit and this lookup (rev-parse HEAD is not).
+    return _run_git(root, ["log", "-1", "--format=%H", "--", *paths]).stdout.strip()
 
 
 def list_versions(project_dir: Path) -> list[dict]:
