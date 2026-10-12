@@ -407,7 +407,7 @@
                     "numoutlets": 0,
                     "patching_rect": [
                         30.0,
-                        752.0,
+                        766.0,
                         177.0,
                         22.0
                     ],
@@ -742,7 +742,7 @@
                     "numoutlets": 0,
                     "patching_rect": [
                         30.0,
-                        784.0,
+                        798.0,
                         290.0,
                         45.0
                     ],
@@ -1805,8 +1805,8 @@
                     "patching_rect": [
                         30.0,
                         720.0,
-                        352.0,
-                        22.0
+                        200.0,
+                        36.0
                     ],
                     "text": "mc.limi~ @threshold -1. @release 100. @dcblock 0",
                     "fontname": "Arial",
