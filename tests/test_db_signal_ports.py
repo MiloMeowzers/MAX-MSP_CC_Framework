@@ -99,6 +99,18 @@ _SIGNAL_DOWNGRADE_ALLOWLIST: dict[tuple[str, int], str] = {
         "from msp-ref adc~.maxref.xml + saved .maxpat instances, verified "
         "2026-09-27"
     ),
+    ("peek~", 0): (
+        "peek~ inlet 0 is the sample index (int/float/list): the msp-ref "
+        "peek~ refpage lists int/float/list/clip/set methods and no signal "
+        "method; MAX-saved help boxes are peek~ <buf> 3/1 [\"float\"]"
+    ),
+    ("peek~", 1): (
+        "peek~ inlet 1 is the value to write (float); refpage has no signal "
+        "method"
+    ),
+    ("peek~", 2): (
+        "peek~ inlet 2 is the channel (int); refpage has no signal method"
+    ),
 }
 
 
@@ -219,6 +231,10 @@ _A1_REPROS = [
     ("cycle-pitchshift", *_CYC, "pitchshift~", 3, 1, 0, 0, False),
     ("cycle-fffb", *_CYC, "fffb~ 4", 1, 4, 0, 0, False),
     ("cycle-mc.snapshot", *_CYC, "mc.snapshot~", 2, 1, 0, 0, False),
+    ("filtergraph-biquad", "filtergraph~", 8, 7,
+     ["list", "float", "float", "float", "float", "list", "int"],
+     "biquad~", 6, 1, 0, 0, False),
+    ("in-peek", "in 1", 0, 1, [""], "peek~ buf", 3, 1, 0, 0, False),
 ]
 
 
@@ -298,3 +314,50 @@ class TestCommittedPatchesZeroProposed:
         results = validate_patch(_load_patch(rel), db=db)
         proposed = [r for r in results if r.proposed_removal is not None]
         assert proposed == [], [str(r) for r in proposed]
+
+    def test_scala_synth_voice_zero_connection_findings(self, db):
+        rel = "patches/scala-synth/generated/scala-synth-voice.maxpat"
+        results = validate_patch(_load_patch(rel), db=db)
+        assert _conn(results) == [], [str(r) for r in _conn(results)]
+
+
+# ---------------------------------------------------------------------------
+# biquad~ / in / peek~ refpage corrections (S6-S8)
+# ---------------------------------------------------------------------------
+
+class TestRefpageCorrections:
+
+    def test_biquad_inlet0_signal_and_list(self, db):
+        obj = db.lookup("biquad~")
+        inlet0 = obj["inlets"][0]
+        assert inlet0["signal"] is True
+        assert "list" in inlet0["type"].split("/")
+        assert len(obj["inlets"]) == 6
+
+    def test_in_outlet_has_no_role(self, db):
+        assert db.get_signal_role("in", 0) is None
+        assert db.lookup("in")["outlets"][0]["signal"] is False
+
+    def test_peek_inlets_are_control(self, db):
+        inlets = db.lookup("peek~")["inlets"]
+        assert len(inlets) == 3
+        assert all(i["signal"] is False for i in inlets)
+        assert not any("signal" in (i.get("type") or "") for i in inlets)
+
+    def test_anchor_list_into_plain_signal_inlet_still_warns(self, db):
+        patch = _two_box_patch(
+            "filtergraph~", 8, 7,
+            ["list", "float", "float", "float", "float", "list", "int"],
+            "*~ 0.5", 2, 1, 0, 0,
+        )
+        results = _conn(validate_patch(patch, db=db))
+        assert len(results) == 1, [str(r) for r in results]
+        assert "list outlet → signal inlet" in results[0].message
+        assert results[0].proposed_removal is None
+
+    def test_anchor_signal_into_peek_proposed(self, db):
+        patch = _two_box_patch(*_CYC, "peek~ buf", 3, 1, 0, 0)
+        results = validate_patch(patch, db=db)
+        errors = [r for r in _conn(results) if r.level == "error"]
+        assert len(errors) == 1, [str(r) for r in results]
+        assert errors[0].proposed_removal == ("obj-1", 0, "obj-2", 0)

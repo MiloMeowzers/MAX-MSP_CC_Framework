@@ -2321,7 +2321,7 @@
           "id": 0,
           "type": "control",
           "digest": "Control output",
-          "signal_role": "status"
+          "signal": false
         }
       ],
       "_audit": {
@@ -2329,7 +2329,8 @@
         "instances": 90,
         "agreement": 0.9888888888888889,
         "source": "io_count_finding"
-      }
+      },
+      "_note": "`in` forwards any message arriving at a poly~/pfft~ inlet, so its outlet has no curated signal_role (was `status`, which flagged in 1 -> peek~ in scala-synth-voice). Q2 / A1."
     },
     "index~": {
       "outlets": [
@@ -2733,7 +2734,30 @@
           "signal_role": "float"
         }
       ],
-      "_note": "Outlet is control (float), not signal."
+      "_note": "Outlet is control (float), not signal. Inlets are control: msp-ref peek~.maxref.xml lists int/float/list/clip/set methods and no signal method (its inlet types are INLET_TYPE placeholders); MAX-saved help boxes are peek~ <buf> 3/1 [\"float\"]. Inlet 0 index (a list stores index+value), inlet 1 value to write, inlet 2 channel. Q2 / A1.",
+      "inlets": [
+        {
+          "id": 0,
+          "type": "int/list",
+          "signal": false,
+          "digest": "Sample Index",
+          "hot": true
+        },
+        {
+          "id": 1,
+          "type": "float",
+          "signal": false,
+          "digest": "Sample Value For Writing Into buffer~",
+          "hot": true
+        },
+        {
+          "id": 2,
+          "type": "int",
+          "signal": false,
+          "digest": "Channel",
+          "hot": true
+        }
+      ]
     },
     "pfft~": {
       "inlets": [
@@ -11532,7 +11556,52 @@
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "inlets": [
+        {
+          "id": 0,
+          "type": "signal/list",
+          "signal": true,
+          "digest": "Input signal; a list of the five filter coefficients (a0 a1 a2 b1 b2) sets them all at once",
+          "hot": true
+        },
+        {
+          "id": 1,
+          "type": "signal/float",
+          "signal": true,
+          "digest": "Input Gain (Filter coefficient a0)",
+          "hot": true
+        },
+        {
+          "id": 2,
+          "type": "signal/float",
+          "signal": true,
+          "digest": "Filter coefficient a1",
+          "hot": true
+        },
+        {
+          "id": 3,
+          "type": "signal/float",
+          "signal": true,
+          "digest": "Filter coefficient a2",
+          "hot": true
+        },
+        {
+          "id": 4,
+          "type": "signal/float",
+          "signal": true,
+          "digest": "Filter coefficient b1",
+          "hot": true
+        },
+        {
+          "id": 5,
+          "type": "signal/float",
+          "signal": true,
+          "digest": "Filter coefficient b2",
+          "hot": true
+        }
+      ],
+      "_note": "Inlet 0 is signal/list: msp-ref biquad~.maxref.xml method `list` -- \"The five filter coefficients can be provided as a list in the left inlet\" (filtergraph~ outlet 0 -> biquad~ inlet 0 is the canonical pairing). Q2 / A1."
     },
     "bitand~": {
       "outlets": [

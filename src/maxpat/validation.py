@@ -856,7 +856,23 @@ def _classify_role_mismatch(
     is folded into the pre-formatted message and not returned separately;
     the only caller (the role-aware tier dispatch in
     `_validate_connection_bounds`) consumed the message verbatim.
+
+    A destination inlet whose DB ``type`` names the source role as one of
+    its ``/``-separated tokens accepts that role outright (Q2 / A1):
+    biquad~ inlet 0 is ``signal/list`` because its refpage documents the
+    five-coefficient list there, so filtergraph~ -> biquad~ returns None
+    here and falls through to the legacy branch. Plain ``signal`` inlets
+    carry no role token and still warn.
     """
+    name = _extract_object_name(dst_box)
+    if name is not None:
+        obj = db.lookup(name)
+        if obj is not None:
+            inlets = obj.get("inlets", [])
+            if 0 <= dst_inlet < len(inlets):
+                inlet_type = (inlets[dst_inlet].get("type") or "").lower()
+                if src_role in inlet_type.split("/"):
+                    return None
     dst_kind = _classify_dst_inlet(dst_box, dst_inlet, db)
     entry = _ROLE_TIER_TABLE.get((src_role, dst_kind))
     if entry is None:
