@@ -1119,3 +1119,16 @@ Verify in MAX (v0.7.3):
 3. Source B, Live, stereo, adc ch 3: L = input 3, R = input 4.
 4. Lit speakers show dark numbers, dim speakers light numbers.
 5. Trim reads unity on load. 6. A 90 s recording auto-stops and the rec toggle goes dark.
+
+## Build v0.7.4 (2026-10-12): output safety limiter (review #5)
+
+`mc.limi~ @threshold -1. @release 100. @dcblock 0` spliced between `mc.delay~` and `mc.dac~` in the host
+(obj-51). `mc.limi~` = one limi~ per channel, so a hot speaker does not duck the other seven (`mcs.limi~`
+would link them). Transparent below -1 dBFS; `@dcblock 0` set explicitly so normal levels pass untouched.
+Lookahead left at limi~'s default: every speaker gets the same small latency, so alignment is unchanged.
+The ping goes through it too. Box is 200 px wide (two text lines) to stay clear of the motion bpatcher;
+`mc.dac~` and the output comment moved down. Not in presentation (no control). `control-demo.maxpat` has no
+limiter (teaching patch, no change).
+
+Verify in MAX (v0.7.4): opens with no console error on `mc.limi~`; normal levels unchanged; push a trim to
++12 dB with a loud source: that speaker's meter stops at about -1 dBFS and the others are not pulled down.

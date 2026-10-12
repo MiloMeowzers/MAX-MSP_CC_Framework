@@ -120,6 +120,14 @@
         "generated/dbap-motion.maxpat",
         "generated/barnett-dbap.maxpat"
       ]
+    },
+    {
+      "version": "0.7.4",
+      "description": "v0.7.4: mc.limi~ @threshold -1. @release 100. @dcblock 0 between mc.delay~ and mc.dac~ (independent per speaker; review #5)",
+      "timestamp": "2026-10-12T15:18:52.494475+00:00",
+      "files_changed": [
+        "generated/barnett-dbap.maxpat"
+      ]
     }
   ]
 }
