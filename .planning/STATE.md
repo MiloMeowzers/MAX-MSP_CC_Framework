@@ -2,10 +2,10 @@
 gsd_state_version: "1.0"
 milestone: v5.0
 status: completed
-last_updated: "2026-10-12T17:18:15.800Z"
+last_updated: "2026-10-12T22:53:30.456Z"
 last_activity: 2026-10-12
 last_activity_desc: "Completed quick task 261001-hwb: Max 9.2.0 update — object DB re-synced from the installed bundle, 9.2 guidance added"
-state_head: 3008d2226351361291145650e9969aa7b70fee13
+state_head: d423bf48aeb5a6543632e3f26166d718cbc36772
 progress:
   total_phases: 5
   completed_phases: 5
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v5.0)
 Phase: —
 Plan: —
 Status: v5.0 shipped; awaiting `/gsd-new-milestone` to start next cycle
-Last activity: 2026-10-12 - Completed quick task 261012-di7: Implement Q3 in .planning/reviews/2026-10-11-fix-plan.md — critic precision, suite green
+Last activity: 2026-10-12 - Completed quick task 261012-egf: Implement Q4 in .planning/reviews/2026-10-11-fix-plan.md — revive dead critic detectors and review_m4l
 
 Previous: 2026-09-21 - Completed quick task 260921-kfd: SF-04/SF-06/SF-07 closed — CLAUDE.md `live.*` extraction note revised (all 30 resolve); added refpage `<c74object name>`-is-authoritative rule and refpage-placeholder (54.5%) counts-not-types / never-overwrite-overrides rule
 
@@ -97,6 +97,7 @@ None.
 | 261012-bii | Implement Q1 in .planning/reviews/2026-10-11-fix-plan.md — non-destructive validate_patch | 2026-10-12 | 294f90c | Verified | [261012-bii-implement-q1-in-planning-reviews-2026-10](./quick/261012-bii-implement-q1-in-planning-reviews-2026-10/) |
 | 261012-c5i | Implement Q2 in .planning/reviews/2026-10-11-fix-plan.md — fix DB entries that strip valid cords | 2026-10-12 | d0885b8 | Verified | [261012-c5i-implement-q2-in-planning-reviews-2026-10](./quick/261012-c5i-implement-q2-in-planning-reviews-2026-10/) |
 | 261012-di7 | Implement Q3 in .planning/reviews/2026-10-11-fix-plan.md — critic precision, suite green | 2026-10-12 | 3008d22 | Verified | [261012-di7-implement-q3-in-planning-reviews-2026-10](./quick/261012-di7-implement-q3-in-planning-reviews-2026-10/) |
+| 261012-egf | Implement Q4 in .planning/reviews/2026-10-11-fix-plan.md — revive dead critic detectors and review_m4l | 2026-10-12 | d423bf4 | Verified | [261012-egf-implement-q4-in-planning-reviews-2026-10](./quick/261012-egf-implement-q4-in-planning-reviews-2026-10/) |
 
 ## Deferred Items
 
