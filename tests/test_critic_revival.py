@@ -25,6 +25,7 @@ from pathlib import Path
 
 from src.maxpat.critics import _has_rnbo_boxes, review_patch
 from src.maxpat.critics.dsp_critic import review_dsp
+from src.maxpat.critics.m4l_critic import detect_m4l_device_type, review_m4l
 from src.maxpat.critics.rnbo_critic import review_rnbo
 from src.maxpat.patcher import Patcher
 from tests.test_critics import (
@@ -328,3 +329,251 @@ class TestRNBOByName:
         hits = [r for r in review_patch(_rnbo_patch_clean())
                 if "rnbo~" in r.finding or "RNBO" in r.finding]
         assert hits == []
+
+
+# ===========================================================================
+# M4L fixtures (D4) -- real outlettypes so _outlet_is_signal reads them
+# ===========================================================================
+
+_OUTLETTYPES = {
+    "plugin~": ["signal", "signal"],
+    "plugout~": ["signal", "signal"],
+    "gen~": ["signal"],
+    "gain~": ["signal", ""],
+    "live.gain~": ["signal", "signal", "", "", ""],
+    "*~": ["signal"],
+    "number": ["", "bang"],
+    "cycle~": ["signal"],
+    "dac~": [],
+    "ezdac~": [],
+    "meter~": ["float"],
+    "notein": ["int", "int", "int"],
+    "midiin": ["int"],
+    "live.thisdevice": ["bang", "int", "int"],
+}
+
+_UI = {"gain~", "live.gain~", "number", "meter~", "ezdac~"}
+
+
+def _b(box_id: str, text: str, numinlets: int = 2) -> dict:
+    """Box with MAX's shape: UI maxclass for widgets, else newobj."""
+    name = text.split()[0]
+    box = {
+        "id": box_id,
+        "numinlets": numinlets,
+        "numoutlets": len(_OUTLETTYPES[name]),
+        "outlettype": list(_OUTLETTYPES[name]),
+    }
+    if name in _UI:
+        box["maxclass"] = name
+    else:
+        box["maxclass"] = "newobj"
+        box["text"] = text
+    return box
+
+
+def _l(src: str, so: int, dst: str, di: int) -> dict:
+    return {"source": [src, so], "destination": [dst, di]}
+
+
+def _gain_findings(results):
+    return [r for r in results
+            if "is on the signal path to plugout~" in r.finding]
+
+
+def _blockers(results):
+    return [r for r in results if r.severity == "blocker"]
+
+
+def _audio_effect_passthrough() -> dict:
+    return _make_patch(
+        [_b("obj-1", "plugin~"), _b("obj-2", "plugout~")],
+        [_l("obj-1", 0, "obj-2", 0), _l("obj-1", 1, "obj-2", 1)],
+    )
+
+
+def _instrument_patch() -> dict:
+    return _make_patch(
+        [_b("obj-1", "notein", 1), _b("obj-2", "gen~", 1),
+         _b("obj-3", "plugout~")],
+        [_l("obj-2", 0, "obj-3", 0), _l("obj-2", 0, "obj-3", 1)],
+    )
+
+
+def _plain_audio_patch() -> dict:
+    return _make_patch(
+        [_b("obj-1", "cycle~ 440"), _b("obj-2", "*~ 0.5"),
+         _b("obj-3", "dac~")],
+        [_l("obj-1", 0, "obj-2", 0), _l("obj-2", 0, "obj-3", 0),
+         _l("obj-2", 0, "obj-3", 1)],
+    )
+
+
+class TestM4LDispatch:
+    """D4: review_patch detects M4L devices and calls review_m4l."""
+
+    def test_detect_audio_effect(self):
+        assert detect_m4l_device_type(_audio_effect_passthrough()) == "audio_effect"
+
+    def test_detect_instrument(self):
+        assert detect_m4l_device_type(_instrument_patch()) == "instrument"
+
+    def test_detect_midi_effect_newobj(self):
+        patch = _make_patch(
+            [_b("obj-1", "live.thisdevice", 1), _b("obj-2", "midiin", 1)], [])
+        assert detect_m4l_device_type(patch) == "midi_effect"
+
+    def test_detect_midi_effect_maxclass_thisdevice(self):
+        patch = _make_patch([{
+            "id": "obj-1", "maxclass": "live.thisdevice",
+            "numinlets": 1, "numoutlets": 3,
+            "outlettype": ["bang", "int", "int"],
+        }], [])
+        assert detect_m4l_device_type(patch) == "midi_effect"
+
+    def test_detect_none_for_plain_patch(self):
+        assert detect_m4l_device_type(_plain_audio_patch()) is None
+
+    def test_review_patch_plain_patch_no_m4l(self):
+        hits = [r for r in review_patch(_plain_audio_patch())
+                if "M4L" in r.finding or "plugout~" in r.finding]
+        assert hits == []
+
+    def test_review_patch_runs_m4l_critic(self):
+        results = review_patch(_audio_effect_passthrough())
+        assert any(r.severity == "warning"
+                   and r.finding.startswith("M4L device missing openinpresentation")
+                   for r in results)
+
+
+class TestM4LRequiredObjects:
+    """D4 / OQ2-A: reduced required-object sets; live.thisdevice optional."""
+
+    def test_instrument_needs_no_midi(self):
+        results = review_m4l(_instrument_patch(), "instrument")
+        assert not [r for r in results if "missing required object" in r.finding]
+
+    def test_audio_effect_needs_no_thisdevice(self):
+        results = review_m4l(_audio_effect_passthrough(), "audio_effect")
+        assert not [r for r in results if "missing required object" in r.finding]
+
+    def test_midi_effect_requires_midiin_midiout(self):
+        patch = _make_patch([_b("obj-1", "live.thisdevice", 1)], [])
+        blockers = sorted(r.finding for r in _blockers(review_patch(patch)))
+        assert blockers == [
+            "M4L midi_effect missing required object: midiin",
+            "M4L midi_effect missing required object: midiout",
+        ]
+
+    def test_audio_effect_requires_plugout(self):
+        patch = _make_patch(
+            [_b("obj-1", "plugin~"), _b("obj-2", "*~ 0.5")],
+            [_l("obj-1", 0, "obj-2", 0)],
+        )
+        assert any(
+            r.severity == "blocker"
+            and r.finding == "M4L audio_effect missing required object: plugout~"
+            for r in review_patch(patch)
+        )
+
+
+class TestM4LGainPath:
+    """D4 / OQ3-A: gain stages on any signal path to plugout~; ezdac~."""
+
+    def test_gain_direct_one_blocker_per_pair(self):
+        patch = _make_patch(
+            [_b("obj-1", "gen~", 1), _b("obj-2", "gain~"),
+             _b("obj-3", "plugout~")],
+            [_l("obj-1", 0, "obj-2", 0), _l("obj-2", 0, "obj-3", 0),
+             _l("obj-2", 0, "obj-3", 1)],
+        )
+        gain = _gain_findings(review_patch(patch))
+        assert len(gain) == 1
+        assert gain[0].severity == "blocker"
+        assert "obj-2" in gain[0].finding and "obj-3" in gain[0].finding
+
+    def test_live_gain_direct(self):
+        patch = _make_patch(
+            [_b("obj-1", "gen~", 1), _b("obj-2", "live.gain~"),
+             _b("obj-3", "plugout~")],
+            [_l("obj-1", 0, "obj-2", 0), _l("obj-2", 0, "obj-3", 0),
+             _l("obj-2", 1, "obj-3", 1)],
+        )
+        gain = _gain_findings(review_patch(patch))
+        assert len(gain) == 1
+        assert gain[0].severity == "blocker"
+        assert gain[0].finding.startswith("live.gain~ (obj-2)")
+
+    def test_gain_indirect(self):
+        patch = _make_patch(
+            [_b("obj-1", "gen~", 1), _b("obj-2", "gain~"),
+             _b("obj-3", "*~ 0.5"), _b("obj-4", "plugout~")],
+            [_l("obj-1", 0, "obj-2", 0), _l("obj-2", 0, "obj-3", 0),
+             _l("obj-3", 0, "obj-4", 0)],
+        )
+        gain = _gain_findings(review_patch(patch))
+        assert len(gain) == 1
+        assert gain[0].finding.startswith("gain~ (obj-2)")
+
+    def test_gain_chain_two_blockers(self):
+        patch = _make_patch(
+            [_b("obj-1", "gen~", 1), _b("obj-2", "gain~"),
+             _b("obj-3", "live.gain~"), _b("obj-4", "plugout~")],
+            [_l("obj-1", 0, "obj-2", 0), _l("obj-2", 0, "obj-3", 0),
+             _l("obj-3", 0, "obj-4", 0)],
+        )
+        gain = _gain_findings(review_patch(patch))
+        assert len(gain) == 2
+        assert all(r.severity == "blocker" for r in gain)
+        assert sorted(r.finding.split()[0] for r in gain) == ["gain~", "live.gain~"]
+
+    def test_side_branch_not_flagged(self):
+        patch = _make_patch(
+            [_b("obj-1", "plugin~"), _b("obj-2", "plugout~"),
+             _b("obj-3", "gain~"), _b("obj-4", "meter~", 1)],
+            [_l("obj-1", 0, "obj-2", 0), _l("obj-1", 1, "obj-2", 1),
+             _l("obj-1", 0, "obj-3", 0), _l("obj-3", 0, "obj-4", 0)],
+        )
+        assert _gain_findings(review_patch(patch)) == []
+
+    def test_control_cord_not_a_path(self):
+        patch = _make_patch(
+            [_b("obj-1", "plugin~"), _b("obj-2", "gain~"),
+             _b("obj-3", "number", 1), _b("obj-4", "*~"),
+             _b("obj-5", "plugout~")],
+            [_l("obj-2", 1, "obj-3", 0), _l("obj-3", 0, "obj-4", 1),
+             _l("obj-1", 0, "obj-4", 0), _l("obj-4", 0, "obj-5", 0)],
+        )
+        assert _gain_findings(review_patch(patch)) == []
+
+    def test_ezdac_in_device_blocks(self):
+        patch = _make_patch(
+            [_b("obj-1", "plugin~"), _b("obj-2", "plugout~"),
+             _b("obj-3", "ezdac~")],
+            [_l("obj-1", 0, "obj-2", 0), _l("obj-1", 1, "obj-2", 1),
+             _l("obj-1", 0, "obj-3", 0)],
+        )
+        ez = [r for r in review_patch(patch) if r.finding.startswith("ezdac~ (")]
+        assert len(ez) == 1
+        assert ez[0].severity == "blocker"
+        assert "M4L device" in ez[0].finding
+
+
+def _m4l_gen_synth_dict() -> dict:
+    p = Patcher()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        p.add_m4l_gen_synth([("freq", 20.0, 2000.0), ("amp", 0.0, 1.0)])
+    return p.to_dict()
+
+
+class TestM4LBuilderClean:
+    """D4: the framework's own add_m4l_gen_synth skeleton reviews clean."""
+
+    def test_review_patch_runs_m4l_with_zero_blockers(self):
+        results = review_patch(_m4l_gen_synth_dict())
+        assert any(r.finding.startswith("M4L device") for r in results)
+        assert _blockers(results) == []
+
+    def test_review_m4l_instrument_zero_blockers(self):
+        assert _blockers(review_m4l(_m4l_gen_synth_dict(), "instrument")) == []

@@ -1,8 +1,8 @@
 """Critic system -- semantic/architectural review of generated patches.
 
 Provides review_patch() which combines DSP, structure, layout, RNBO,
-package, and external critics to catch design problems that the mechanical
-validation pipeline does not detect.
+M4L, package, and external critics to catch design problems that the
+mechanical validation pipeline does not detect.
 
 Usage:
     from src.maxpat.critics import review_patch, CriticResult
@@ -19,6 +19,7 @@ from src.maxpat.critics.dsp_critic import review_dsp
 from src.maxpat.critics.structure_critic import review_structure
 from src.maxpat.critics.layout_critic import review_layout
 from src.maxpat.critics.rnbo_critic import is_rnbo_box, review_rnbo
+from src.maxpat.critics.m4l_critic import detect_m4l_device_type, review_m4l
 from src.maxpat.critics.ext_critic import review_external
 from src.maxpat.critics.package_critic import review_packages
 from src.maxpat.utils import get_box_name
@@ -67,11 +68,15 @@ def review_patch(
     Combines DSP critic (signal flow, gen~ I/O, gain staging),
     structure critic (fan-out, hot/cold ordering, duplicates),
     RNBO critic (param naming, I/O completeness, duplicates),
+    M4L critic (gain stages before plugout~, required objects, device
+    quality, parameter uniqueness),
     package critic (BEAP conventions, Bach llll types, community extraction),
     and external critic (code structure, archetype requirements).
 
     The RNBO critic is only invoked when rnbo~ boxes are detected
-    in the patch. The package critic is only invoked when package
+    in the patch (by name, Q4 / E3). The M4L critic is only invoked when
+    plugin~, plugout~ or live.thisdevice is present; the device type is
+    inferred by detect_m4l_device_type (Q4 / D4). The package critic is only invoked when package
     objects (BEAP, Bach, community) are detected. The external critic
     is only invoked when ext_code is provided.
 
@@ -95,6 +100,11 @@ def review_patch(
     if _has_rnbo_boxes(patch_dict):
         results.extend(review_rnbo(patch_dict, code_context=code_context))
 
+    # M4L critic: auto-invoke when plugin~/plugout~/live.thisdevice detected
+    m4l_device_type = detect_m4l_device_type(patch_dict)
+    if m4l_device_type is not None:
+        results.extend(review_m4l(patch_dict, device_type=m4l_device_type))
+
     # External critic: invoke when ext_code provided
     if ext_code is not None:
         results.extend(review_external(ext_code, archetype=ext_archetype))
@@ -112,6 +122,7 @@ __all__ = [
     "review_structure",
     "review_layout",
     "review_rnbo",
+    "review_m4l",
     "review_external",
     "review_packages",
     "CriticResult",
