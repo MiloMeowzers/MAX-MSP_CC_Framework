@@ -1959,26 +1959,26 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 2,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 3,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -2105,20 +2105,20 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 2,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -2279,8 +2279,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -2519,14 +2519,14 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -2591,8 +2591,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "mc_signal/message",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -2613,8 +2613,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         },
         {
@@ -2739,8 +2739,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal/message",
+          "signal": true,
           "digest": ""
         },
         {
@@ -2767,14 +2767,14 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
@@ -2900,8 +2900,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal/message",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -3071,14 +3071,14 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -3121,8 +3121,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
@@ -3271,8 +3271,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -3360,14 +3360,14 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -3981,32 +3981,32 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 2,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 3,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 4,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -4091,20 +4091,20 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 2,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -4173,8 +4173,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -4265,8 +4265,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -4331,20 +4331,20 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 2,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -4379,14 +4379,14 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "mc_signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "mc_signal",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -4441,8 +4441,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
@@ -4503,8 +4503,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -4527,8 +4527,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "mc_signal/message",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -4537,14 +4537,14 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal/int",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
@@ -4595,14 +4595,14 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -4631,8 +4631,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
@@ -4709,8 +4709,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         },
         {
@@ -4806,20 +4806,20 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 2,
-          "type": "",
-          "signal": false,
+          "type": "signal/float",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -4912,14 +4912,14 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "mc_signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -5001,8 +5001,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
@@ -5167,8 +5167,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -5366,8 +5366,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -5392,26 +5392,26 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 2,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 3,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -5443,8 +5443,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -5531,8 +5531,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ],
@@ -5569,14 +5569,14 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         }
       ]
@@ -5617,8 +5617,8 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
+          "type": "signal",
+          "signal": true,
           "digest": ""
         },
         {

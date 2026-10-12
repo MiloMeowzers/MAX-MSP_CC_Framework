@@ -169,7 +169,7 @@ class OverrideGenerator:
 
         io_entry: dict[str, Any] = {}
         if help_inlets is not None:
-            io_entry["inlets"] = self._build_inlet_array(help_inlets)
+            io_entry["inlets"] = self._build_inlet_array(help_inlets, obj_name)
         if help_outlets is not None and "outlets" not in proposed["objects"].get(
             obj_name, {}
         ):
@@ -234,7 +234,9 @@ class OverrideGenerator:
 
             entry: dict[str, Any] = {}
             if proposed_inlets is not None:
-                entry["inlets"] = self._build_inlet_array(proposed_inlets)
+                entry["inlets"] = self._build_inlet_array(
+                    proposed_inlets, obj_name
+                )
             if proposed_outlets is not None:
                 entry["outlets"] = self._build_outlet_array(
                     [""] * proposed_outlets
@@ -276,24 +278,65 @@ class OverrideGenerator:
             })
         return outlets
 
-    def _build_inlet_array(self, count: int) -> list[dict]:
+    def _build_inlet_array(
+        self, count: int, obj_name: str | None = None
+    ) -> list[dict]:
         """Build inlet array matching overrides.json format.
+
+        Never downgrades a signal inlet (review C9 / Q2): for every index
+        the current DB entry (base + reviewed overrides) has, ``signal``
+        and ``type`` are copied from it by index. Help patches carry no
+        inlet types, so a blind control default would turn every signal
+        inlet into a control-only one. Indices beyond the DB array, and
+        objects the DB does not know, keep the control default.
+
+        Reads ``self._db._objects`` directly (the reporter.py precedent)
+        with type guards, so a MagicMock DB in tests stays harmless.
 
         Args:
             count: Number of inlets to create.
+            obj_name: Object name whose current DB inlets seed signal/type.
 
         Returns:
             List of inlet dicts with id, type, signal, digest keys.
         """
-        return [
-            {
-                "id": i,
-                "type": "",
-                "signal": False,
-                "digest": "",
-            }
-            for i in range(count)
-        ]
+        db_inlets: list = []
+        if obj_name is not None:
+            aliases = getattr(self._db, "_aliases", None)
+            canonical = obj_name
+            if isinstance(aliases, dict):
+                alias_target = aliases.get(obj_name)
+                if isinstance(alias_target, str):
+                    canonical = alias_target
+            objects = getattr(self._db, "_objects", None)
+            if isinstance(objects, dict):
+                entry = objects.get(canonical)
+                if entry is None and canonical != obj_name:
+                    entry = objects.get(obj_name)
+                if isinstance(entry, dict) and isinstance(
+                    entry.get("inlets"), list
+                ):
+                    db_inlets = entry["inlets"]
+
+        inlets = []
+        for i in range(count):
+            src = db_inlets[i] if i < len(db_inlets) else None
+            if isinstance(src, dict):
+                type_str = src.get("type", "")
+                inlets.append({
+                    "id": i,
+                    "type": type_str if isinstance(type_str, str) else "",
+                    "signal": bool(src.get("signal", False)),
+                    "digest": "",
+                })
+            else:
+                inlets.append({
+                    "id": i,
+                    "type": "",
+                    "signal": False,
+                    "digest": "",
+                })
+        return inlets
 
     def write_proposed_overrides(
         self, proposed: dict, output_path: Path
