@@ -407,7 +407,7 @@
                     "numoutlets": 0,
                     "patching_rect": [
                         30.0,
-                        720.0,
+                        752.0,
                         177.0,
                         22.0
                     ],
@@ -742,11 +742,11 @@
                     "numoutlets": 0,
                     "patching_rect": [
                         30.0,
-                        752.0,
+                        784.0,
                         290.0,
-                        31.0
+                        45.0
                     ],
-                    "text": "sources + ping sum at mc.delay~ (alignment delays from the venue dict, D23; all 0 = bit-transparent) -> mc.dac~",
+                    "text": "sources + ping sum at mc.delay~ (alignment delays from the venue dict, D23; all 0 = bit-transparent) -> mc.limi~ (-1 dBFS safety limiter, independent per speaker) -> mc.dac~",
                     "textcolor": [
                         0.8,
                         0.8,
@@ -1432,7 +1432,7 @@
                                         700,
                                         22
                                     ],
-                                    "text": "Turn on DSP (OUTPUT). Speaker N plays on interface output N.",
+                                    "text": "Turn on DSP (OUTPUT). Speaker N plays on interface output N. A -1 dBFS limiter guards every output.",
                                     "fontname": "Arial",
                                     "fontsize": 12.0
                                 }
@@ -1791,6 +1791,26 @@
                         "globalpatchername": "",
                         "tags": ""
                     }
+                }
+            },
+            {
+                "box": {
+                    "maxclass": "newobj",
+                    "id": "obj-51",
+                    "numinlets": 1,
+                    "numoutlets": 1,
+                    "outlettype": [
+                        "signal"
+                    ],
+                    "patching_rect": [
+                        30.0,
+                        720.0,
+                        352.0,
+                        22.0
+                    ],
+                    "text": "mc.limi~ @threshold -1. @release 100. @dcblock 0",
+                    "fontname": "Arial",
+                    "fontsize": 12.0
                 }
             }
         ],
@@ -2168,18 +2188,6 @@
             {
                 "patchline": {
                     "destination": [
-                        "obj-11",
-                        0
-                    ],
-                    "source": [
-                        "obj-28",
-                        0
-                    ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [
                         "obj-28",
                         1
                     ],
@@ -2391,6 +2399,30 @@
                     ],
                     "source": [
                         "obj-9",
+                        0
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [
+                        "obj-28",
+                        0
+                    ],
+                    "destination": [
+                        "obj-51",
+                        0
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "source": [
+                        "obj-51",
+                        0
+                    ],
+                    "destination": [
+                        "obj-11",
                         0
                     ]
                 }
