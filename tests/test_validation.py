@@ -187,8 +187,8 @@ class TestLayer3ConnectionBounds:
                        if r.layer == "connections" and r.level == "error"]
         assert conn_errors == []
 
-    def test_outlet_out_of_bounds_auto_fixed(self, db):
-        """Source outlet index 2 on cycle~ (1 outlet) is auto-fixed."""
+    def test_outlet_out_of_bounds_proposed(self, db):
+        """Source outlet index 2 on cycle~ (1 outlet) is proposed for removal."""
         boxes = [
             _make_box("obj-1", text="cycle~ 440", numoutlets=1, outlettype=["signal"]),
             _make_box("obj-2", maxclass="ezdac~", text="ezdac~",
@@ -198,12 +198,14 @@ class TestLayer3ConnectionBounds:
         patch = _make_patch_dict(boxes=boxes, lines=lines)
         results = validate_patch(patch, db=db)
         fixed = [r for r in results
-                 if r.layer == "connections" and r.auto_fixed]
+                 if r.layer == "connections" and r.proposed_removal is not None]
         assert len(fixed) >= 1
         assert "outlet" in fixed[0].message.lower() or "out of bounds" in fixed[0].message.lower()
+        assert fixed[0].proposed_removal == ("obj-1", 2, "obj-2", 0)
+        assert len(patch["patcher"]["lines"]) == 1  # kept: validation is pure
 
-    def test_inlet_out_of_bounds_auto_fixed(self, db):
-        """Dest inlet index 5 on ezdac~ (2 inlets) is auto-fixed."""
+    def test_inlet_out_of_bounds_proposed(self, db):
+        """Dest inlet index 5 on ezdac~ (2 inlets) is proposed for removal."""
         boxes = [
             _make_box("obj-1", text="cycle~ 440", numoutlets=1, outlettype=["signal"]),
             _make_box("obj-2", maxclass="ezdac~", text="ezdac~",
@@ -213,12 +215,15 @@ class TestLayer3ConnectionBounds:
         patch = _make_patch_dict(boxes=boxes, lines=lines)
         results = validate_patch(patch, db=db)
         fixed = [r for r in results
-                 if r.layer == "connections" and r.auto_fixed]
+                 if r.layer == "connections" and r.proposed_removal is not None]
         assert len(fixed) >= 1
         assert "inlet" in fixed[0].message.lower() or "out of bounds" in fixed[0].message.lower()
+        assert fixed[0].proposed_removal == ("obj-1", 0, "obj-2", 5)
+        assert len(patch["patcher"]["lines"]) == 1  # kept: validation is pure
 
-    def test_auto_fixed_connections_removed(self, db):
-        """Auto-fixed connections are removed from the patch lines."""
+    def test_invalid_connection_kept_and_proposed(self, db):
+        """Invalid connections stay in the patch lines and are proposed for
+        removal; nothing is removed until apply_fixes is called."""
         boxes = [
             _make_box("obj-1", text="cycle~ 440", numoutlets=1, outlettype=["signal"]),
             _make_box("obj-2", maxclass="ezdac~", text="ezdac~",
@@ -231,10 +236,11 @@ class TestLayer3ConnectionBounds:
         ]
         patch = _make_patch_dict(boxes=boxes, lines=lines)
         results = validate_patch(patch, db=db)
-        # The patch should have the invalid connection removed
-        remaining_lines = patch["patcher"]["lines"]
-        assert len(remaining_lines) == 1
-        assert remaining_lines[0]["patchline"]["source"] == ["obj-1", 0]
+        # Validation is pure: both lines survive, the invalid one is proposed
+        assert len(patch["patcher"]["lines"]) == 2
+        proposed = [r.proposed_removal for r in results
+                    if r.proposed_removal is not None]
+        assert proposed == [("obj-1", 2, "obj-2", 0)]
 
 
 class TestLayer3SignalTypes:
@@ -255,7 +261,7 @@ class TestLayer3SignalTypes:
         assert type_issues == []
 
     def test_signal_to_control_only_inlet_detected(self, db):
-        """Signal outlet to control-only inlet is detected and auto-fixed."""
+        """Signal outlet to control-only inlet is detected and proposed."""
         boxes = [
             _make_box("obj-1", text="cycle~ 440", numoutlets=1, outlettype=["signal"]),
             _make_box("obj-2", text="print", numinlets=1, numoutlets=0, outlettype=[]),
@@ -264,9 +270,12 @@ class TestLayer3SignalTypes:
         patch = _make_patch_dict(boxes=boxes, lines=lines)
         results = validate_patch(patch, db=db)
         type_issues = [r for r in results
-                       if r.layer == "connections" and r.auto_fixed
+                       if r.layer == "connections"
+                       and r.proposed_removal is not None
                        and "signal" in r.message.lower()]
         assert len(type_issues) >= 1
+        assert type_issues[0].proposed_removal == ("obj-1", 0, "obj-2", 0)
+        assert len(patch["patcher"]["lines"]) == 1
 
     def test_control_to_signal_inlet_passes(self, db):
         """Control outlet to signal/float inlet passes (per CLAUDE.md exception)."""
@@ -292,10 +301,11 @@ class TestLayer3SignalTypes:
 # ===========================================================================
 
 class TestRoleAwareValidation:
-    """VALID-01 / D-01..D-04 / D-19: Role-aware tier dispatch ahead of legacy
-    signal:bool branch. ERROR + auto-remove for status/trigger/data/list ->
-    signal-only inlets; WARNING + preserve for trigger/list -> float;
-    silent fall-through for audio sources and uncurated (None) roles.
+    """VALID-01 / D-01..D-04 / D-19, amended by Q1 (A1): Role-aware tier
+    dispatch ahead of legacy signal:bool branch. Every tier row is a
+    WARNING and the cord is always kept (no proposed_removal) --
+    status/trigger/data/list -> signal and trigger/list -> float alike.
+    Silent fall-through for audio sources and uncurated (None) roles.
 
     Uses monkeypatch to control db.get_signal_role return values without
     polluting overrides.json. Production fixtures (snapshot~ float role,
@@ -330,8 +340,8 @@ class TestRoleAwareValidation:
         return _make_patch_dict(boxes=boxes, lines=lines)
 
     def test_status_to_signal_emits_use_snapshot(self, db, monkeypatch):
-        """status outlet -> signal inlet: ERROR with 'use snapshot~'
-        suggestion; line auto-removed."""
+        """status outlet -> signal inlet: WARNING with 'use snapshot~'
+        suggestion; line kept, nothing proposed."""
         monkeypatch.setattr(
             db, "get_signal_role",
             lambda name, outlet, args=None: "status" if name.startswith("status") else None
@@ -340,16 +350,16 @@ class TestRoleAwareValidation:
         results = validate_patch(patch, db=db)
         tier_errors = [
             r for r in results
-            if r.layer == "connections" and r.level == "error"
+            if r.layer == "connections" and r.level == "warning"
             and "status outlet" in r.message and "use snapshot~" in r.message
         ]
         assert len(tier_errors) >= 1, [r.message for r in results]
-        assert tier_errors[0].auto_fixed is True
-        # Line auto-removed
-        assert len(patch["patcher"]["lines"]) == 0
+        assert tier_errors[0].proposed_removal is None
+        # Line kept
+        assert len(patch["patcher"]["lines"]) == 1
 
     def test_trigger_to_signal_emits_use_sig(self, db, monkeypatch):
-        """trigger outlet -> signal inlet: ERROR with 'use sig~ or click~'."""
+        """trigger outlet -> signal inlet: WARNING with 'use sig~ or click~'."""
         monkeypatch.setattr(
             db, "get_signal_role",
             lambda name, outlet, args=None: "trigger" if name.startswith("trig") else None
@@ -358,14 +368,15 @@ class TestRoleAwareValidation:
         results = validate_patch(patch, db=db)
         tier_errors = [
             r for r in results
-            if r.level == "error" and "trigger outlet" in r.message
+            if r.level == "warning" and "trigger outlet" in r.message
             and "use sig~ or click~" in r.message
         ]
         assert len(tier_errors) >= 1
-        assert tier_errors[0].auto_fixed is True
+        assert tier_errors[0].proposed_removal is None
+        assert len(patch["patcher"]["lines"]) == 1
 
     def test_data_list_to_signal_emits_role_mismatch(self, db, monkeypatch):
-        """data and list -> signal: ERROR + auto-remove, no canonical fix."""
+        """data and list -> signal: WARNING, cord kept, no canonical fix."""
         for role in ("data", "list"):
             monkeypatch.setattr(
                 db, "get_signal_role",
@@ -375,11 +386,12 @@ class TestRoleAwareValidation:
             results = validate_patch(patch, db=db)
             tier_errors = [
                 r for r in results
-                if r.level == "error" and f"{role} outlet" in r.message
+                if r.level == "warning" and f"{role} outlet" in r.message
                 and "role mismatch" in r.message
             ]
             assert len(tier_errors) >= 1, (role, [r.message for r in results])
-            assert tier_errors[0].auto_fixed is True
+            assert tier_errors[0].proposed_removal is None
+            assert len(patch["patcher"]["lines"]) == 1
 
     def test_trigger_to_float_warning_preserves(self, db, monkeypatch):
         """trigger -> float: WARNING with 'bang counting' hint; line preserved."""
@@ -404,8 +416,8 @@ class TestRoleAwareValidation:
             and "bang counting" in r.message
         ]
         assert len(warnings_found) >= 1, [r.message for r in results]
-        # Line preserved (auto_fixed=False)
-        assert warnings_found[0].auto_fixed is False
+        # Line preserved (nothing proposed)
+        assert warnings_found[0].proposed_removal is None
         assert len(patch["patcher"]["lines"]) == 1
 
     def test_list_to_float_warning_bach_hint(self, db, monkeypatch):
@@ -429,7 +441,7 @@ class TestRoleAwareValidation:
             and "bach.*" in r.message
         ]
         assert len(warnings_found) >= 1
-        assert warnings_found[0].auto_fixed is False
+        assert warnings_found[0].proposed_removal is None
         assert len(patch["patcher"]["lines"]) == 1
 
     def test_audio_to_signal_silent_via_legacy(self, db):
@@ -453,7 +465,7 @@ class TestRoleAwareValidation:
 
     def test_audio_to_control_legacy_branch_runs(self, db):
         """REGRESSION (R10): cycle~ -> print (control-only inlet) is
-        auto-removed by the LEGACY signal:bool branch — tier dispatch
+        proposed for removal by the LEGACY signal:bool branch — tier dispatch
         must not bypass it. Mirrors test_signal_to_control_only_inlet_detected."""
         boxes = [
             _make_box("obj-1", text="cycle~ 440", numoutlets=1, outlettype=["signal"]),
@@ -462,14 +474,15 @@ class TestRoleAwareValidation:
         lines = [_make_line("obj-1", 0, "obj-2", 0)]
         patch = _make_patch_dict(boxes=boxes, lines=lines)
         results = validate_patch(patch, db=db)
-        # Legacy branch produces an auto_fixed error mentioning signal -> control
+        # Legacy branch produces a proposed-removal error mentioning signal -> control
         legacy_errors = [
             r for r in results
-            if r.layer == "connections" and r.auto_fixed
+            if r.layer == "connections" and r.level == "error"
+            and r.proposed_removal is not None
             and "signal" in r.message.lower()
         ]
         assert len(legacy_errors) >= 1, (
-            f"Legacy auto-remove for audio -> control inlet was bypassed. "
+            f"Legacy proposed removal for audio -> control inlet was bypassed. "
             f"Got: {[r.message for r in results]}"
         )
 
@@ -506,20 +519,23 @@ class TestRoleAwareValidation:
             f"exclusive control of the legacy signal:bool branch."
         )
 
-    def test_severity_auto_fix_contract(self, db, monkeypatch):
-        """D-19 row: ERROR tier has auto_fixed=True; WARNING tier has
-        auto_fixed=False."""
-        # ERROR case
+    def test_role_tier_contract_warns_never_removes(self, db, monkeypatch):
+        """D-19 row as amended by Q1 (A1): every tier row is a WARNING with
+        no proposed_removal, and the cord is kept."""
+        # status -> signal (formerly ERROR + auto-remove)
         monkeypatch.setattr(
             db, "get_signal_role",
             lambda name, outlet, args=None: "status" if name.startswith("s") else None
         )
         patch_err = self._patch_with_connection(src_name="status_x")
-        for r in validate_patch(patch_err, db=db):
-            if "status outlet" in r.message:
-                assert r.level == "error" and r.auto_fixed is True
+        hits = [r for r in validate_patch(patch_err, db=db)
+                if "status outlet" in r.message]
+        assert hits
+        for r in hits:
+            assert r.level == "warning" and r.proposed_removal is None
+        assert len(patch_err["patcher"]["lines"]) == 1
 
-        # WARNING case
+        # trigger -> float (always WARNING)
         monkeypatch.setattr(
             db, "get_signal_role",
             lambda name, outlet, args=None: "trigger" if name.startswith("t") else None
@@ -532,9 +548,12 @@ class TestRoleAwareValidation:
             ],
             lines=[_make_line("obj-1", 0, "obj-2", 0)],
         )
-        for r in validate_patch(patch_warn, db=db):
-            if "trigger outlet" in r.message and "float inlet" in r.message:
-                assert r.level == "warning" and r.auto_fixed is False
+        hits = [r for r in validate_patch(patch_warn, db=db)
+                if "trigger outlet" in r.message and "float inlet" in r.message]
+        assert hits
+        for r in hits:
+            assert r.level == "warning" and r.proposed_removal is None
+        assert len(patch_warn["patcher"]["lines"]) == 1
 
     def _sfplay_patch(self, sfplay_text, src_outlet):
         """sfplay~ outlet -> selector~ 3 signal inlet 1 (barnett-dbap's
@@ -560,14 +579,18 @@ class TestRoleAwareValidation:
         assert len(patch["patcher"]["lines"]) == 1
         assert not [r for r in results if "trigger outlet" in r.message]
 
-    def test_sfplay_done_bang_into_signal_still_removed(self, db):
+    def test_sfplay_done_bang_into_signal_still_flagged(self, db):
         """The done-bang (last outlet: 1 on `sfplay~ 1`, 2 on `sfplay~ 2`)
-        into a signal inlet is still a trigger -> signal ERROR + auto-remove."""
+        into a signal inlet is still flagged as trigger -> signal, as a
+        WARNING; the cord is kept and nothing is proposed (Q1 / A1)."""
         for text, outlet in (("sfplay~ 1", 1), ("sfplay~ 2", 2)):
             patch = self._sfplay_patch(text, outlet)
             results = validate_patch(patch, db=db)
-            assert patch["patcher"]["lines"] == [], text
-            assert [r for r in results if "trigger outlet" in r.message], text
+            assert len(patch["patcher"]["lines"]) == 1, text
+            flagged = [r for r in results if "trigger outlet" in r.message]
+            assert flagged, text
+            assert all(r.level == "warning" for r in flagged), text
+            assert [r for r in results if r.proposed_removal is not None] == [], text
 
 
 # ===========================================================================
@@ -1165,11 +1188,12 @@ class TestLayer4UnsafeGainValues:
 class TestLayer3OverrideGuard:
     """Guard: non-overridden MSP objects skip signal-to-control auto-removal."""
 
-    def test_overridden_msp_object_auto_removes(self, db):
-        """Overridden MSP object (line~) signal->control: connection auto-removed.
+    def test_overridden_msp_object_proposes_removal(self, db):
+        """Overridden MSP object (line~) signal->control: removal proposed.
 
         line~ is in overrides.json, so its outlet types are trusted.
-        Signal outlet 0 -> print inlet 0 (control-only) should be removed.
+        Signal outlet 0 -> print inlet 0 (control-only) is proposed for
+        removal; validation itself keeps the line (Q1 / A2).
         """
         boxes = [
             _make_box("obj-1", text="line~", numinlets=2, numoutlets=2,
@@ -1182,14 +1206,15 @@ class TestLayer3OverrideGuard:
         patch = _make_patch_dict(boxes=boxes, lines=lines)
         results = validate_patch(patch, db=db)
 
-        # Connection should be auto-fixed (removed)
-        auto_fixed = [r for r in results
-                      if r.layer == "connections" and r.auto_fixed
-                      and "signal" in r.message.lower()]
-        assert len(auto_fixed) >= 1
+        # Connection should be proposed for removal
+        proposed = [r for r in results
+                    if r.layer == "connections" and r.proposed_removal is not None
+                    and "signal" in r.message.lower()]
+        assert len(proposed) >= 1
+        assert proposed[0].proposed_removal == ("obj-1", 0, "obj-2", 0)
 
-        # Line should be removed from patch
-        assert len(patch["patcher"]["lines"]) == 0
+        # Line is kept: validation never mutates its input
+        assert len(patch["patcher"]["lines"]) == 1
 
     def test_non_overridden_msp_object_preserves_connection(self, db):
         """Non-overridden MSP object (fakesynth~) signal->control: connection preserved.
@@ -1216,13 +1241,13 @@ class TestLayer3OverrideGuard:
                     if r.layer == "connections" and r.level == "warning"
                     and "unverified" in r.message.lower()]
         assert len(warnings) >= 1
-        assert not warnings[0].auto_fixed
+        assert warnings[0].proposed_removal is None
 
-    def test_non_msp_object_unchanged(self, db):
-        """Non-tilde object with signal outlettype: existing auto-removal unchanged.
+    def test_non_msp_object_proposes_removal(self, db):
+        """Non-tilde object with signal outlettype: removal still proposed.
 
-        A non-MSP object (no ~) with outlettype=["signal"] should still have
-        signal->control connections auto-removed as before.
+        A non-MSP object (no ~) with outlettype=["signal"] still has
+        signal->control connections proposed for removal (not applied).
         """
         boxes = [
             _make_box("obj-1", text="fakebox", numinlets=1, numoutlets=1,
@@ -1234,14 +1259,14 @@ class TestLayer3OverrideGuard:
         patch = _make_patch_dict(boxes=boxes, lines=lines)
         results = validate_patch(patch, db=db)
 
-        # Connection should be auto-fixed (removed) -- existing behavior unchanged
-        auto_fixed = [r for r in results
-                      if r.layer == "connections" and r.auto_fixed
-                      and "signal" in r.message.lower()]
-        assert len(auto_fixed) >= 1
+        # Connection should be proposed for removal
+        proposed = [r for r in results
+                    if r.layer == "connections" and r.proposed_removal is not None
+                    and "signal" in r.message.lower()]
+        assert len(proposed) >= 1
 
-        # Line should be removed
-        assert len(patch["patcher"]["lines"]) == 0
+        # Line is kept: validation never mutates its input
+        assert len(patch["patcher"]["lines"]) == 1
 
 
 # ===========================================================================

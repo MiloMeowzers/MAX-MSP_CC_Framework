@@ -14,6 +14,7 @@ from src.maxpat.patcher import Patcher, Box, Patchline, EditResult
 from src.maxpat.validation import (
     validate_patch,
     has_blocking_errors,
+    apply_fixes,
     ValidationResult,
 )
 from src.maxpat.layout import apply_layout
@@ -106,6 +107,7 @@ __all__ = [
     # Patch validation
     "validate_patch",
     "has_blocking_errors",
+    "apply_fixes",
     "ValidationResult",
     # Errors
     "PatchGenerationError",

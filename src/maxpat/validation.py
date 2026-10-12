@@ -6,8 +6,17 @@ Four layers run sequentially, stopping early on structural errors:
   Layer 3 (connections): Connection index bounds and signal/control type checks
   Layer 4 (domain):      Domain-specific rules (gain staging, unterminated chains, feedback)
 
-Auto-fix removes invalid connections in-place and reports what changed.
-Only unfixable structural errors block output.
+Validation is pure: ``validate_patch`` never mutates its input, and dict and
+Patcher input produce identical results. A cord Layer 3 considers invalid is
+reported as an ``error`` whose ``proposed_removal`` is the 4-tuple
+``(src_id, src_outlet, dst_id, dst_inlet)``; nothing is removed unless the
+caller explicitly calls ``apply_fixes(patch, results)`` (review A2).
+
+Proposed removals block new patches (``has_blocking_errors(results)`` with the
+default ``is_new=True``); on the edit path (``is_new=False``) they are
+reported but not blocking. Container boxes accept any cord, signal_role
+mismatches are warnings, and known companion pairs from relationships.json
+are never flagged (review A1).
 """
 
 from __future__ import annotations
@@ -45,22 +54,35 @@ _DELAY_NAMES = frozenset({"tapin~", "tapout~", "gen~"})
 
 
 # Role-aware connection tier table (D-04, D-19, VALID-01). Maps
-# (src_outlet_role, dst_inlet_kind) -> (level, suggestion, auto_fix).
+# (src_outlet_role, dst_inlet_kind) -> (level, suggestion).
+# Q1 / review A1: role mismatches WARN and never remove or propose removal --
+# signal_role data is curated but not authoritative enough to delete a cord
+# (scala-synth-voice `in 1` -> `peek~` was stripped by the old ERROR rows).
 # Absent keys mean "fall through to legacy signal:bool branch unchanged"
 # (D-02). Audio-source keys are INTENTIONALLY ABSENT — the legacy branch
 # retains exclusive control of audio source paths so existing
 # test_signal_to_signal_passes / test_signal_to_control_only_inlet_detected
 # regression anchors remain unchanged (RESEARCH.md R2, R10).
-_ROLE_TIER_TABLE: dict[tuple[str, str], tuple[str, str, bool]] = {
-    # ERROR + auto-remove (mechanical fix exists)
-    ("status",  "signal"): ("error", "use snapshot~", True),
-    ("trigger", "signal"): ("error", "use sig~ or click~", True),
-    ("data",    "signal"): ("error", "role mismatch; data outlet cannot drive signal inlet", True),
-    ("list",    "signal"): ("error", "role mismatch; list outlet cannot drive signal inlet", True),
-    # WARNING + preserve (judgment-laden intent)
-    ("trigger", "float"):  ("warning", "trigger feeding float; user may intend bang counting", False),
-    ("list",    "float"):  ("warning", "list outlet feeding float; bach.* often does this — verify", False),
+_ROLE_TIER_TABLE: dict[tuple[str, str], tuple[str, str]] = {
+    # Mechanical fix exists
+    ("status",  "signal"): ("warning", "use snapshot~"),
+    ("trigger", "signal"): ("warning", "use sig~ or click~"),
+    ("data",    "signal"): ("warning", "role mismatch; data outlet cannot drive signal inlet"),
+    ("list",    "signal"): ("warning", "role mismatch; list outlet cannot drive signal inlet"),
+    # Judgment-laden intent
+    ("trigger", "float"):  ("warning", "trigger feeding float; user may intend bang counting"),
+    ("list",    "float"):  ("warning", "list outlet feeding float; bach.* often does this — verify"),
 }
+
+
+# Container boxes (review A1): they forward whatever arrives to an inner
+# patcher, so any cord into them is valid and their outlets carry no
+# signal_role. Any box with an embedded patcher dict is also a container.
+_CONTAINER_NAMES = frozenset({
+    "p", "patcher", "bpatcher", "poly~", "mc.poly~", "pfft~", "rnbo~",
+})
+
+_PROPOSED_SUFFIX = "-- proposed removal (not applied; see apply_fixes)"
 
 
 # UI maxclasses whose primary inlet displays a float number. The DB
@@ -86,10 +108,14 @@ class ValidationResult:
                "connections", "domain").
         level: Severity ("error", "warning", "info", "fixed").
         message: Human-readable description.
-        auto_fixed: True if the issue was automatically resolved.
+        auto_fixed: Legacy flag kept for back-compatibility; validate_patch
+            never sets it (validation no longer modifies anything).
+        proposed_removal: ``(src_id, src_outlet, dst_id, dst_inlet)`` of a
+            top-level cord the validator considers invalid, or None. Applied
+            only by an explicit ``apply_fixes`` call.
     """
 
-    __slots__ = ("layer", "level", "message", "auto_fixed")
+    __slots__ = ("layer", "level", "message", "auto_fixed", "proposed_removal")
 
     def __init__(
         self,
@@ -97,11 +123,15 @@ class ValidationResult:
         level: str,
         message: str,
         auto_fixed: bool = False,
+        proposed_removal: tuple | list | None = None,
     ):
         self.layer = layer
         self.level = level
         self.message = message
         self.auto_fixed = auto_fixed
+        self.proposed_removal = (
+            tuple(proposed_removal) if proposed_removal is not None else None
+        )
 
     def __repr__(self) -> str:
         return f"[{self.layer}:{self.level}] {self.message}"
@@ -129,6 +159,10 @@ def validate_patch(
 
     Returns:
         Combined list of ValidationResult from all layers.
+
+    The input is never mutated (dict or Patcher). Cords Layer 3 considers
+    invalid come back as errors with ``proposed_removal`` set; apply them
+    with ``apply_fixes(patch, results)`` only when removal is wanted.
     """
     # Import here to avoid circular imports at module level
     from src.maxpat.patcher import Patcher as PatcherClass
@@ -166,7 +200,7 @@ def validate_patch(
     # Layer 2d: Community package extracted check
     results.extend(_validate_community_extracted(patch_dict, db))
 
-    # Layer 3: Connection bounds and signal types (mutates lines in-place)
+    # Layer 3: Connection bounds and signal types (pure; proposes removals)
     results.extend(_validate_connections(patch_dict, db))
 
     # Layer 4: Domain-specific rules
@@ -181,16 +215,87 @@ def validate_patch(
     return results
 
 
-def has_blocking_errors(results: list[ValidationResult]) -> bool:
-    """Check whether any unfixable errors exist.
+def has_blocking_errors(
+    results: list[ValidationResult],
+    is_new: bool = True,
+) -> bool:
+    """Check whether any error should block output.
 
-    Auto-fixed errors (auto_fixed=True) do NOT block output.
-    Warnings and info results do NOT block output.
+    Only results at level ``error`` count; warnings and info never block.
+
+    - An error carrying a ``proposed_removal`` blocks when *is_new* is True
+      (the default -- a new patch must not ship a cord the validator would
+      drop). With ``is_new=False`` (the edit path) it is reported but not
+      blocking.
+    - A legacy ``auto_fixed=True`` error without a proposal does not block.
+    - Every other error blocks.
 
     Returns:
         True if output should be blocked.
     """
-    return any(r.level == "error" and not r.auto_fixed for r in results)
+    for r in results:
+        if r.level != "error":
+            continue
+        if r.proposed_removal is not None:
+            if is_new:
+                return True
+            continue
+        if r.auto_fixed:
+            continue
+        return True
+    return False
+
+
+def apply_fixes(patch, results: list[ValidationResult]) -> list[tuple]:
+    """Remove the top-level cords proposed for removal in *results*.
+
+    This is the ONLY code path that removes cords; ``validate_patch`` never
+    does. Accepts a raw .maxpat dict (lines are removed by slice-assignment
+    on ``patch["patcher"]["lines"]`` so caller references stay valid) or a
+    Patcher (``patch.lines`` is filtered in place).
+
+    Returns the distinct proposed keys that matched at least one line, in
+    order. A no-op returning ``[]`` when nothing is proposed, nothing
+    matches, or the dict has no ``patcher.lines``. Re-run ``validate_patch``
+    afterwards: removing a cord can change other findings.
+    """
+    from src.maxpat.patcher import Patcher as PatcherClass
+
+    keys: list[tuple] = []
+    for r in results:
+        key = getattr(r, "proposed_removal", None)
+        if key is not None and key not in keys:
+            keys.append(key)
+    if not keys:
+        return []
+    wanted = set(keys)
+    matched: set[tuple] = set()
+
+    if isinstance(patch, PatcherClass):
+        kept = []
+        for line in patch.lines:
+            k = (line.source_id, line.source_outlet, line.dest_id, line.dest_inlet)
+            if k in wanted:
+                matched.add(k)
+            else:
+                kept.append(line)
+        patch.lines[:] = kept
+    else:
+        patcher = patch.get("patcher") if isinstance(patch, dict) else None
+        lines = patcher.get("lines") if isinstance(patcher, dict) else None
+        if not isinstance(lines, list):
+            return []
+        kept = []
+        for entry in lines:
+            patchline = entry.get("patchline", {}) if isinstance(entry, dict) else {}
+            k = _line_key(patchline)
+            if k in wanted:
+                matched.add(k)
+            else:
+                kept.append(entry)
+        lines[:] = kept
+
+    return [k for k in keys if k in matched]
 
 
 # ===========================================================================
@@ -453,14 +558,51 @@ def _validate_community_extracted(
 # Layer 3: Connection Validation (Bounds + Signal Types)
 # ===========================================================================
 
+def _line_key(patchline: dict) -> tuple:
+    """Return ``(src_id, src_outlet, dst_id, dst_inlet)`` for a patchline.
+
+    A non-list source/destination is treated as empty and missing elements
+    are padded with None, so malformed lines still get a stable key that
+    ``apply_fixes`` can match.
+    """
+    source = patchline.get("source")
+    destination = patchline.get("destination")
+    src = list(source[:2]) if isinstance(source, list) else []
+    dst = list(destination[:2]) if isinstance(destination, list) else []
+    src += [None] * (2 - len(src))
+    dst += [None] * (2 - len(dst))
+    return (src[0], src[1], dst[0], dst[1])
+
+
+def _is_container_box(box: dict) -> bool:
+    """True for boxes that forward any cord to an inner patcher (review A1).
+
+    Any box with an embedded patcher dict, maxclass patcher/bpatcher, or a
+    newobj whose first token is in _CONTAINER_NAMES.
+    """
+    if isinstance(box.get("patcher"), dict):
+        return True
+    maxclass = box.get("maxclass", "")
+    if maxclass in ("patcher", "bpatcher"):
+        return True
+    if maxclass == "newobj":
+        tokens = str(box.get("text", "")).split()
+        return bool(tokens) and tokens[0] in _CONTAINER_NAMES
+    return False
+
+
 def _validate_connections(
     patch_dict: dict,
     db: ObjectDatabase,
 ) -> list[ValidationResult]:
     """Validate connection index bounds and signal/control type compatibility.
 
-    Invalid connections are removed from patch_dict["patcher"]["lines"]
-    in-place (auto-fix) and reported with auto_fixed=True.
+    Pure: never writes to *patch_dict*. A cord considered invalid is
+    reported as an error carrying ``proposed_removal`` (its 4-tuple key);
+    removal happens only via ``apply_fixes``. Check order per cord:
+    bounds (always, even for containers) -> container destination (no
+    type/role checks) -> role dispatch (skipped for container sources;
+    mismatches warn, cord kept) -> legacy signal/control check.
     """
     results: list[ValidationResult] = []
 
@@ -473,21 +615,24 @@ def _validate_connections(
             box_lookup[box_id] = box
 
     lines = patch_dict["patcher"]["lines"]
-    to_remove: list[int] = []  # indices of lines to remove
 
     for idx, line_entry in enumerate(lines):
         patchline = line_entry.get("patchline", {})
         source = patchline.get("source", [])
         destination = patchline.get("destination", [])
+        key = _line_key(patchline)
 
-        if len(source) < 2 or len(destination) < 2:
+        if (
+            not isinstance(source, list) or not isinstance(destination, list)
+            or len(source) < 2 or len(destination) < 2
+        ):
             results.append(ValidationResult(
                 "connections", "error",
                 f"Malformed patchline at index {idx}: "
-                f"source={source}, destination={destination}",
-                auto_fixed=True,
+                f"source={source}, destination={destination} "
+                f"{_PROPOSED_SUFFIX}",
+                proposed_removal=key,
             ))
-            to_remove.append(idx)
             continue
 
         src_id, src_outlet = source[0], source[1]
@@ -500,13 +645,12 @@ def _validate_connections(
             results.append(ValidationResult(
                 "connections", "error",
                 f"Connection references missing box: "
-                f"source={src_id}, dest={dst_id}",
-                auto_fixed=True,
+                f"source={src_id}, dest={dst_id} {_PROPOSED_SUFFIX}",
+                proposed_removal=key,
             ))
-            to_remove.append(idx)
             continue
 
-        remove_this = False
+        out_of_bounds = False
 
         # --- Check outlet bounds ---
         src_numoutlets = src_box.get("numoutlets", 0)
@@ -514,10 +658,10 @@ def _validate_connections(
             results.append(ValidationResult(
                 "connections", "error",
                 f"Outlet index {src_outlet} out of bounds on '{src_id}' "
-                f"(has {src_numoutlets} outlet(s)) -- connection removed",
-                auto_fixed=True,
+                f"(has {src_numoutlets} outlet(s)) {_PROPOSED_SUFFIX}",
+                proposed_removal=key,
             ))
-            remove_this = True
+            out_of_bounds = True
 
         # --- Check inlet bounds ---
         dst_numinlets = dst_box.get("numinlets", 0)
@@ -525,86 +669,82 @@ def _validate_connections(
             results.append(ValidationResult(
                 "connections", "error",
                 f"Inlet index {dst_inlet} out of bounds on '{dst_id}' "
-                f"(has {dst_numinlets} inlet(s)) -- connection removed",
-                auto_fixed=True,
+                f"(has {dst_numinlets} inlet(s)) {_PROPOSED_SUFFIX}",
+                proposed_removal=key,
             ))
-            remove_this = True
+            out_of_bounds = True
+
+        if out_of_bounds:
+            continue
+
+        # --- Container destination: accepts any cord (A1) ---
+        if _is_container_box(dst_box):
+            continue
+
+        src_is_container = _is_container_box(src_box)
 
         # --- Role-aware tier dispatch (VALID-01, D-01..D-04) ---
         # Runs BEFORE legacy signal:bool check. When src outlet has a
         # curated signal_role (Phase 28), look up (role, dst_kind) in
-        # _ROLE_TIER_TABLE. Hit -> emit and skip legacy branch (D-02).
-        # Miss / None / audio source -> fall through unchanged.
-        if not remove_this:
-            src_name = _extract_object_name(src_box)
-            if src_name is not None:
-                # args make the role layout-aware: `sfplay~ 2` outlet 1 is
-                # audio, not the 1-channel form's done-bang (barnett-dbap
-                # v0.4.0 lost its stereo file cord to that misread)
-                src_args = (
-                    src_box.get("text", "").split()[1:]
-                    if src_box.get("maxclass") == "newobj" else None
-                )
-                src_role = db.get_signal_role(src_name, src_outlet, args=src_args)
-                if src_role is not None and src_role != "audio":
-                    tier = _classify_role_mismatch(
-                        src_role, dst_box, dst_inlet, db
-                    )
-                    if tier is not None:
-                        level, message, auto_fix = tier
-                        results.append(ValidationResult(
-                            "connections", level, message,
-                            auto_fixed=auto_fix,
-                        ))
-                        if auto_fix:
-                            remove_this = True
-                            to_remove.append(idx)
-                        # Tier result is final — skip legacy is_signal_source
-                        # branch for this line (D-02 clean separation).
-                        continue
-
-        # --- Signal type compatibility (only if bounds are OK) ---
-        if not remove_this:
-            src_outlettype = src_box.get("outlettype", [])
-            is_signal_source = (
-                src_outlet < len(src_outlettype)
-                and src_outlettype[src_outlet] == "signal"
+        # _ROLE_TIER_TABLE. Hit -> warn (cord kept) and skip legacy branch
+        # (D-02). Miss / None / audio source -> fall through unchanged.
+        # Container outlets carry no signal_role (A1).
+        src_name = _extract_object_name(src_box)
+        if src_name is not None and not src_is_container:
+            # args make the role layout-aware: `sfplay~ 2` outlet 1 is
+            # audio, not the 1-channel form's done-bang (barnett-dbap
+            # v0.4.0 lost its stereo file cord to that misread)
+            src_args = (
+                src_box.get("text", "").split()[1:]
+                if src_box.get("maxclass") == "newobj" else None
             )
-
-            if is_signal_source:
-                # Guard: non-overridden MSP objects have unverified outlet types.
-                # The MSP domain extraction marked ALL outlets as signal=true,
-                # so for uncorrected objects a valid control outlet would be
-                # incorrectly flagged. Emit a warning and preserve the connection.
-                src_name = _extract_object_name(src_box)
-                if src_name and src_name.endswith("~") and not db.is_overridden(src_name):
+            src_role = db.get_signal_role(src_name, src_outlet, args=src_args)
+            if src_role is not None and src_role != "audio":
+                tier = _classify_role_mismatch(
+                    src_role, dst_box, dst_inlet, db
+                )
+                if tier is not None:
+                    level, message = tier
                     results.append(ValidationResult(
-                        "connections", "warning",
-                        f"Unverified outlet types: '{src_name}' outlet "
-                        f"{src_outlet} -> '{dst_id}' inlet {dst_inlet} "
-                        f"-- source MSP object not in overrides, "
-                        f"connection preserved",
-                        auto_fixed=False,
+                        "connections", level,
+                        f"{message} ('{src_id}' outlet {src_outlet} -> "
+                        f"'{dst_id}' inlet {dst_inlet}) -- connection kept",
                     ))
-                else:
-                    # Overridden MSP or non-MSP: apply existing auto-removal
-                    dst_accepts_signal = _inlet_accepts_signal(dst_box, dst_inlet, db)
-                    if not dst_accepts_signal:
-                        results.append(ValidationResult(
-                            "connections", "error",
-                            f"Signal outlet to control-only inlet: "
-                            f"'{src_id}' outlet {src_outlet} -> "
-                            f"'{dst_id}' inlet {dst_inlet} -- connection removed",
-                            auto_fixed=True,
-                        ))
-                        remove_this = True
+                    # Tier result is final — skip legacy is_signal_source
+                    # branch for this line (D-02 clean separation).
+                    continue
 
-        if remove_this:
-            to_remove.append(idx)
+        # --- Signal type compatibility (bounds are OK) ---
+        src_outlettype = src_box.get("outlettype", [])
+        is_signal_source = (
+            src_outlet < len(src_outlettype)
+            and src_outlettype[src_outlet] == "signal"
+        )
 
-    # Remove invalid connections in reverse order to preserve indices
-    for idx in reversed(to_remove):
-        lines.pop(idx)
+        if is_signal_source:
+            # Guard: non-overridden MSP objects have unverified outlet types.
+            # The MSP domain extraction marked ALL outlets as signal=true,
+            # so for uncorrected objects a valid control outlet would be
+            # incorrectly flagged. Emit a warning and preserve the connection.
+            if src_name and src_name.endswith("~") and not db.is_overridden(src_name):
+                results.append(ValidationResult(
+                    "connections", "warning",
+                    f"Unverified outlet types: '{src_name}' outlet "
+                    f"{src_outlet} -> '{dst_id}' inlet {dst_inlet} "
+                    f"-- source MSP object not in overrides, "
+                    f"connection preserved",
+                ))
+            else:
+                # Overridden MSP or non-MSP: propose removal
+                dst_accepts_signal = _inlet_accepts_signal(dst_box, dst_inlet, db)
+                if not dst_accepts_signal:
+                    results.append(ValidationResult(
+                        "connections", "error",
+                        f"Signal outlet to control-only inlet: "
+                        f"'{src_id}' outlet {src_outlet} -> "
+                        f"'{dst_id}' inlet {dst_inlet} {_PROPOSED_SUFFIX}",
+                        proposed_removal=key,
+                    ))
 
     return results
 
@@ -693,11 +833,12 @@ def _classify_role_mismatch(
     dst_box: dict,
     dst_inlet: int,
     db: ObjectDatabase,
-) -> tuple[str, str, bool] | None:
+) -> tuple[str, str] | None:
     """Look up (src_role, dst_kind) in _ROLE_TIER_TABLE.
 
-    Returns (level, message, auto_fix) when a tier-table entry matches, or
-    None to signal "fall through to legacy signal:bool branch" (D-02).
+    Returns (level, message) when a tier-table entry matches, or None to
+    signal "fall through to legacy signal:bool branch" (D-02). Every level
+    is "warning" (Q1 / A1): a role mismatch never removes a cord.
 
     Per D-04, the message is formatted as
     "{src_role} outlet → {dst_kind} inlet: {suggestion}" — concrete and
@@ -710,9 +851,9 @@ def _classify_role_mismatch(
     entry = _ROLE_TIER_TABLE.get((src_role, dst_kind))
     if entry is None:
         return None
-    level, suggestion, auto_fix = entry
+    level, suggestion = entry
     message = f"{src_role} outlet → {dst_kind} inlet: {suggestion}"
-    return (level, message, auto_fix)
+    return (level, message)
 
 
 # ===========================================================================

@@ -93,9 +93,13 @@ def _is_allowlisted(patch_rel: str, finding: str) -> bool:
     return any(_entry_key(e) == key for e in entries)
 
 # Known issues: patches that fail specific tests with documented reasons.
-# Use xfail so regressions are still tracked without blocking CI.
+# Marked xfail(strict=True): when the blocker is fixed the case XPASSes and
+# fails, forcing the entry to be deleted (review A8).
 _REVIEW_XFAILS: dict[str, str] = {
-    "mixer-strip.maxpat": "known issue: message '128' feeds *~ gain inlet via line~ (unsafe gain source blocker)",
+    "mixer-strip.maxpat": (
+        "known issue (Q3): Fan-out without trigger: '+' (obj-14) outlet 0 -> "
+        "selector~ obj-15/obj-16 -- critic-precision false positive"
+    ),
 }
 
 
@@ -115,14 +119,15 @@ def _make_review_params() -> list:
     for p in _PATCH_FILES:
         reason = _REVIEW_XFAILS.get(p.name)
         if reason:
-            params.append(pytest.param(p, marks=pytest.mark.xfail(reason=reason)))
+            params.append(pytest.param(
+                p, marks=pytest.mark.xfail(reason=reason, strict=True)))
         else:
             params.append(p)
     return params
 
 
 # ---------------------------------------------------------------------------
-# Test 1: validate_patch produces zero blocking errors
+# Test 1: validate_patch produces zero errors and zero proposed removals
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize(
@@ -135,11 +140,21 @@ def test_validate_patch_no_errors(patch_path: Path, db: ObjectDatabase) -> None:
         patch_dict = json.load(f)
 
     results = validate_patch(patch_dict, db)
-    blocking = [r for r in results if r.level == "error" and not r.auto_fixed]
+    # A proposed removal means the validator would drop a cord from a
+    # committed (user-confirmed) patch -- that is a failure, not a fix (A8).
+    blocking = [
+        r for r in results
+        if r.level == "error" or r.proposed_removal is not None
+    ]
 
     assert not blocking, (
-        f"{len(blocking)} blocking error(s) in {patch_path.name}:\n"
-        + "\n".join(f"  - {r}" for r in blocking)
+        f"{len(blocking)} error(s) / proposed removal(s) in {patch_path.name}:\n"
+        + "\n".join(
+            f"  - {r}"
+            + (f"  [proposed_removal={r.proposed_removal}]"
+               if r.proposed_removal is not None else "")
+            for r in blocking
+        )
     )
 
 
