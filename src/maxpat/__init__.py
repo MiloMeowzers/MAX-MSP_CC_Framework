@@ -40,6 +40,7 @@ from src.maxpat.hooks import (
     finalize_patch,
     PatchGenerationError,
     PatchValidationError,
+    StaleFileError,
 )
 from src.maxpat.codegen import (
     build_genexpr,
@@ -112,6 +113,7 @@ __all__ = [
     # Errors
     "PatchGenerationError",
     "PatchValidationError",
+    "StaleFileError",
     # Database
     "ObjectDatabase",
     # RNBO

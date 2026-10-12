@@ -182,6 +182,8 @@ def save_patch_roundtrip(
     patch_dict: dict,
     path: "str | Path",
     original_text: str | None = None,
+    *,
+    force: bool = False,
 ) -> str | None:
     """Save a .maxpat dict preserving the original file's indentation.
 
@@ -189,11 +191,24 @@ def save_patch_roundtrip(
     so indentation is preserved. For new files, omit original_text to use
     MAX's default 4-space indentation.
 
+    Stale-file check (fix-plan Q5, review finding A6): when original_text is
+    given and the file already exists, the file on disk must still equal
+    original_text exactly. If it does not (typically the user saved it in MAX
+    after read_patch), StaleFileError is raised BEFORE anything is written or
+    committed, so the MAX-side work is not silently lost. A target that does
+    not exist yet is never stale. Re-read after every save before saving the
+    same file again.
+
     Args:
         patch_dict: The .maxpat dict (output of Patcher.to_dict()).
         path: Destination file path.
-        original_text: Original file content (for indent detection). If None,
-            uses 4-space indent (MAX 9.1.2 default).
+        original_text: Original file content, as returned by read_patch().
+            Used for indent detection and as the stale-check baseline. If
+            None, uses 4-space indent (MAX 9.1.2 default) and skips the
+            stale check.
+        force: Keyword-only. Overwrite a stale file anyway, with a
+            UserWarning. Use only when the user confirms the on-disk changes
+            can be discarded.
 
     Returns:
         The full git commit hash of the path-scoped auto-commit (fix-plan
@@ -201,8 +216,24 @@ def save_patch_roundtrip(
         a UserWarning naming the reason: not inside a git repository,
         outside ``patches/<project>/``, git failed, or no changes to commit.
         Only this one path is committed; other staged files stay staged.
+
+    Raises:
+        StaleFileError: original_text no longer matches the file on disk and
+            force is False. The file is untouched and nothing is committed.
     """
     path = Path(path)
+
+    # Stale-file check first: before mkdir, write or commit (Q5, A6).
+    if original_text is not None and path.exists():
+        if path.read_text() != original_text:
+            if not force:
+                raise StaleFileError(path)
+            warnings.warn(
+                f"{path}: file changed on disk since it was read; "
+                f"overwriting because force=True",
+                UserWarning,
+                stacklevel=2,
+            )
 
     if original_text is not None:
         indent = detect_indent(original_text)
@@ -226,8 +257,11 @@ def save_patch_roundtrip(
 def read_patch(path: "str | Path") -> tuple["Patcher", str]:
     """Load a .maxpat file into a Patcher ready for querying and editing.
 
-    Returns (patcher, original_text) tuple. Pass original_text to
-    save_patch_roundtrip() for indent-preserving saves.
+    Returns (patcher, original_text) tuple. Pass original_text back to
+    save_patch_roundtrip() for indent-preserving saves; it is also the
+    baseline for the stale-file check (StaleFileError if the file changed on
+    disk in between). Re-read after each save before saving the same file
+    again -- the old original_text no longer matches the file.
 
     Args:
         path: Path to the .maxpat file (str or pathlib.Path).
@@ -259,6 +293,46 @@ class PatchValidationError(Exception):
     """Raised when validation finds blocking errors that prevent file write."""
 
 
+class StaleFileError(Exception):
+    """Raised when a file changed on disk since it was read (fix-plan Q5, A6).
+
+    save_patch_roundtrip() raises this before writing when original_text no
+    longer matches the file on disk -- usually because the user saved it in
+    MAX after read_patch(). Re-read and re-apply the edit, or pass
+    force=True to overwrite.
+
+    Attributes:
+        path: The file that changed.
+    """
+
+    def __init__(self, path: "str | Path") -> None:
+        self.path = path
+        super().__init__(
+            f"{path}: file changed in MAX since it was read; re-read and "
+            f"re-apply (read_patch), or pass force=True to overwrite"
+        )
+
+
+class GendspWriteResult(dict):
+    """write_gendsp() return value: the .gendsp dict plus ``commit_hash``.
+
+    A plain dict subclass with identical content; ``commit_hash`` is the
+    auto-commit hash (str) or None when nothing was committed (Q5, OQ1-A).
+    """
+
+    commit_hash: "str | None" = None
+
+
+class JsWriteResult(list):
+    """write_js() return value: the ValidationResult list plus ``commit_hash``.
+
+    A plain list subclass with identical content; ``commit_hash`` is the
+    auto-commit hash (str) or None when nothing was committed (Q5, OQ1-A).
+    """
+
+    commit_hash: "str | None" = None
+
+
 def write_gendsp(
     code: str,
     path: str | Path,
@@ -277,7 +351,10 @@ def write_gendsp(
         num_outputs: Number of outputs. Auto-detected from code if None.
 
     Returns:
-        The generated .gendsp dict.
+        The generated .gendsp dict, as a GendspWriteResult (a dict subclass)
+        whose ``commit_hash`` attribute is the path-scoped auto-commit hash,
+        or None with a UserWarning giving the reason (Q5). Overwrites
+        unconditionally -- there is no stale-file check here.
     """
     from src.maxpat.codegen import generate_gendsp
 
@@ -290,10 +367,10 @@ def write_gendsp(
     # Write JSON with readable formatting
     _write_and_sync(path, json.dumps(gendsp_dict, indent=2))
 
-    # Auto-commit to git to prevent work loss
-    _auto_commit_saved_file(path)
-
-    return gendsp_dict
+    # Auto-commit to git to prevent work loss (path-scoped; warns on None)
+    result = GendspWriteResult(gendsp_dict)
+    result.commit_hash = _auto_commit_saved_file(path)
+    return result
 
 
 def validate_file(path: str | Path) -> list[ValidationResult]:
@@ -420,7 +497,10 @@ def write_js(
         path: Output file path for the .js file.
 
     Returns:
-        List of ValidationResult from code validation.
+        List of ValidationResult from code validation, as a JsWriteResult (a
+        list subclass) whose ``commit_hash`` attribute is the path-scoped
+        auto-commit hash, or None with a UserWarning giving the reason (Q5).
+        Overwrites unconditionally -- there is no stale-file check here.
     """
     path = Path(path)
 
@@ -430,8 +510,10 @@ def write_js(
     # Write the file first (never blocked by validation)
     _write_and_sync(path, code)
 
-    # Auto-commit to git to prevent work loss
-    _auto_commit_saved_file(path)
+    # Auto-commit to git to prevent work loss (path-scoped; warns on None)
+    commit_hash = _auto_commit_saved_file(path)
 
     # Run validation on the written file
-    return validate_code_file(path)
+    result = JsWriteResult(validate_code_file(path))
+    result.commit_hash = commit_hash
+    return result

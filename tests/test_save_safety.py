@@ -309,3 +309,150 @@ class TestAutoCommitWarnings:
         assert result is None
         assert not _has_head(root)
         assert f.exists()
+
+
+# ---------------------------------------------------------------------------
+# Task 2 (A6): stale-file check; write helpers expose the commit hash (OQ1-A)
+# ---------------------------------------------------------------------------
+
+
+def _saved_and_read(root: Path):
+    """Save P once (committed), read it back, and add one box to the patcher."""
+    from src.maxpat.hooks import read_patch, save_patch_roundtrip
+
+    P = _patch_path(root)
+    save_patch_roundtrip(_minimal_patch(), P)
+    patcher, T = read_patch(P)
+    patcher.add_box("*~", ["0.5"])
+    return P, patcher, T
+
+
+def _simulate_max_save(P: Path, T: str) -> str:
+    """Write T2 = T with one box's patching_rect x moved, as a MAX save would."""
+    data = json.loads(T)
+    rect = data["patcher"]["boxes"][0]["box"]["patching_rect"]
+    rect[0] = rect[0] + 37.0
+    T2 = json.dumps(data, indent=4, ensure_ascii=False)
+    assert T2 != T
+    P.write_text(T2)
+    return T2
+
+
+class TestStaleFile:
+    def test_stale_file_raises_without_writing(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip, StaleFileError
+
+        root = _repo(tmp_path)
+        P, patcher, T = _saved_and_read(root)
+        head_before = _head(root)
+        T2 = _simulate_max_save(P, T)
+
+        with pytest.raises(StaleFileError) as excinfo:
+            save_patch_roundtrip(patcher.to_dict(), P, T)
+
+        msg = str(excinfo.value)
+        assert "changed in MAX since it was read" in msg
+        assert "re-read" in msg
+        assert "force=True" in msg
+        assert excinfo.value.path == P
+        assert P.read_text() == T2
+        assert _head(root) == head_before
+
+    def test_force_overwrites_with_warning(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip
+
+        root = _repo(tmp_path)
+        P, patcher, T = _saved_and_read(root)
+        _simulate_max_save(P, T)
+        _prestage(root)
+        new_dict = patcher.to_dict()
+
+        with pytest.warns(UserWarning, match="force=True"):
+            result = save_patch_roundtrip(new_dict, P, T, force=True)
+
+        expected = json.dumps(new_dict, indent="    ", ensure_ascii=False)
+        if T.endswith("\n"):
+            expected += "\n"
+        assert P.read_text() == expected
+        assert result == _head(root)
+        assert _head_files(root) == [REL_P]
+        assert _staged(root) == ["other.txt"]
+
+    def test_unchanged_file_saves_normally(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip
+
+        root = _repo(tmp_path)
+        P, patcher, T = _saved_and_read(root)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            result = save_patch_roundtrip(patcher.to_dict(), P, T)
+
+        assert result == _head(root)
+        assert _head_files(root) == [REL_P]
+
+    def test_missing_target_is_never_stale(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip
+
+        root = _repo(tmp_path)
+        P, patcher, T = _saved_and_read(root)
+        new_path = P.parent / "copy.maxpat"
+        assert not new_path.exists()
+
+        result = save_patch_roundtrip(patcher.to_dict(), new_path, T)
+
+        assert new_path.exists()
+        assert result == _head(root)
+        assert _head_files(root) == ["patches/demo/generated/copy.maxpat"]
+
+    def test_stale_file_error_exported(self):
+        from src.maxpat import StaleFileError
+        from src.maxpat.hooks import StaleFileError as HooksStaleFileError
+
+        assert StaleFileError is HooksStaleFileError
+        assert issubclass(StaleFileError, Exception)
+
+
+class TestWriteHelpersCommit:
+    """OQ1-A: write_gendsp/write_js keep their return values and add commit_hash."""
+
+    def test_write_gendsp_commit_hash(self, tmp_path):
+        from src.maxpat.hooks import write_gendsp
+
+        root = _repo(tmp_path)
+        _prestage(root)
+        x = root / "patches" / "demo" / "generated" / "x.gendsp"
+
+        result = write_gendsp("out1 = in1 * 0.5;", x, num_inputs=1, num_outputs=1)
+
+        assert isinstance(result, dict)
+        assert "patcher" in result
+        assert json.loads(x.read_text()) == dict(result)
+        assert result.commit_hash == _head(root)
+        assert _head_files(root) == ["patches/demo/generated/x.gendsp"]
+        assert _staged(root) == ["other.txt"]
+
+    def test_write_js_commit_hash(self, tmp_path):
+        from src.maxpat.hooks import write_js
+        from src.maxpat.validation import ValidationResult
+
+        root = _repo(tmp_path)
+        x = root / "patches" / "demo" / "generated" / "x.js"
+        code = 'inlets = 1;\noutlets = 1;\nfunction bang() { outlet(0, "bang"); }\n'
+
+        result = write_js(code, x)
+
+        assert isinstance(result, list)
+        assert all(isinstance(r, ValidationResult) for r in result)
+        assert result.commit_hash == _head(root)
+        assert _head_files(root) == ["patches/demo/generated/x.js"]
+
+    def test_write_gendsp_outside_repo_warns(self, tmp_path):
+        from src.maxpat.hooks import write_gendsp
+
+        y = tmp_path / "plain" / "y.gendsp"
+        with pytest.warns(UserWarning, match="not inside a git repository"):
+            result = write_gendsp("out1 = in1 * 0.5;", y, num_inputs=1, num_outputs=1)
+
+        assert result.commit_hash is None
+        assert y.exists()
