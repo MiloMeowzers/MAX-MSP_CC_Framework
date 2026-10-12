@@ -10,6 +10,16 @@ Provides:
 - validate_code_file: Validate .gendsp or .js code files from disk.
 - PatchGenerationError: Raised when unfixable errors prevent generation.
 - PatchValidationError: Raised when validation blocks file write.
+- StaleFileError: Raised when a file changed on disk since it was read.
+
+Save safety (Q5): save_patch_roundtrip, write_gendsp and write_js auto-commit
+only the saved path (``git commit -m msg -- <path>`` from the repo root), so
+anything else already staged stays staged and out of the commit. They commit
+only under ``patches/<project>/`` of a git repository, and return the commit
+hash (write_gendsp/write_js as a ``commit_hash`` attribute on their usual
+return value) or None with a UserWarning giving the reason. save_patch_roundtrip
+raises StaleFileError when original_text no longer matches the file on disk;
+``force=True`` overwrites with a warning.
 """
 
 from __future__ import annotations

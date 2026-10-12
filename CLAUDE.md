@@ -158,6 +158,8 @@ The overlay readout pattern (from gen-eq):
 
 Every patch save MUST be committed to git. The `save_patch_roundtrip()`, `write_gendsp()`, and `write_js()` functions auto-commit via `auto_commit_patch()`. Do NOT rely on disk-only saves -- uncommitted work is vulnerable to loss from stash operations, branch switches, or concurrent instances.
 
+Auto-commit is path-scoped: it runs `git commit -m msg -- <paths>` from the repo root, so files other instances have staged are never swept into a patch commit. Only files under `patches/<project>/` are auto-committed; any other path, a git failure, or a no-op save emits a `UserWarning` and the save returns None instead of a commit hash. When `save_patch_roundtrip()` is given `original_text` and the file on disk no longer matches it (MAX saved it after you read it), it raises `StaleFileError` without writing: re-read with `read_patch()` and re-apply the edit, and re-read after every save before saving the same file again. `force=True` overwrites with a warning -- use it only when the user confirms the MAX-side changes can be discarded.
+
 **Prohibited:** `git stash` during any patch workflow. Three orphaned stashes containing significant patch work were discovered and recovered. Use `git commit` instead. If you need to context-switch, commit your current work first.
 
 To verify whether a change caused a failure, check out a prior commit into a temp worktree or run tests against `git show HEAD~N:path` — never stash. After any worktree merge, check `git stash list` for orphaned stashes: a `stash && merge && pop` chain short-circuits on conflict and silently strands uncommitted work.
