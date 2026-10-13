@@ -1465,23 +1465,6 @@
         "source": "io_count_finding"
       }
     },
-    "r": {
-      "inlets": [],
-      "outlets": [
-        {
-          "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": "Control output"
-        }
-      ],
-      "_audit": {
-        "confidence": "HIGH",
-        "instances": 109,
-        "agreement": 1.0,
-        "source": "io_count_finding"
-      }
-    },
     "receive": {
       "inlets": [
         {
@@ -6503,8 +6486,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "M4L.api.ToggleTransport": {
       "inlets": [
@@ -6521,8 +6503,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "array.at": {
       "inlets": [
@@ -6558,10 +6539,9 @@
         "instances": 2,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
-    "del": {
+    "delay": {
       "inlets": [
         {
           "id": 0,
@@ -6589,8 +6569,7 @@
         "instances": 10,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.*": {
       "inlets": [
@@ -6626,8 +6605,7 @@
         "instances": 2,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.fx.rota": {
       "inlets": [
@@ -6651,8 +6629,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.gl.layer": {
       "inlets": [
@@ -6682,8 +6659,7 @@
         "instances": 15,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.gl.movie": {
       "inlets": [
@@ -6713,8 +6689,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.gl.pbr": {
       "inlets": [
@@ -6786,8 +6761,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.gl.polymovie": {
       "inlets": [
@@ -6823,8 +6797,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.mo.sin": {
       "inlets": [
@@ -6854,8 +6827,7 @@
         "instances": 3,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.time": {
       "inlets": [
@@ -6885,8 +6857,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.time.perlin": {
       "inlets": [
@@ -6916,8 +6887,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.time.saw": {
       "inlets": [
@@ -6947,8 +6917,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.time.sin": {
       "inlets": [
@@ -6978,8 +6947,7 @@
         "instances": 2,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "mc.capture~": {
       "inlets": [
@@ -6997,8 +6965,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON. inlets[0].signal flipped true in Plan 30-04 (deferred-items.md MC tilde test resolution)."
+      }
     },
     "mc.receive~": {
       "outlets": [
@@ -7022,8 +6989,7 @@
           "signal": false,
           "digest": ""
         }
-      ],
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      ]
     },
     "mc.send~": {
       "inlets": [
@@ -7041,8 +7007,7 @@
         "instances": 2,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON. inlets[0].signal flipped true in Plan 30-04 (deferred-items.md MC tilde test resolution)."
+      }
     },
     "mc.sum~": {
       "outlets": [
@@ -7066,8 +7031,7 @@
           "signal": false,
           "digest": ""
         }
-      ],
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      ]
     },
     "mcp.record~": {
       "outlets": [
@@ -7103,8 +7067,7 @@
           "signal": false,
           "digest": ""
         }
-      ],
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      ]
     },
     "mcs.loudness~": {
       "inlets": [
@@ -7159,8 +7122,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "mcs.sfizz~": {
       "outlets": [
@@ -7190,10 +7152,9 @@
           "signal": false,
           "digest": ""
         }
-      ],
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      ]
     },
-    "v": {
+    "value": {
       "inlets": [
         {
           "id": 0,
@@ -7215,8 +7176,7 @@
         "instances": 11,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "bucket": {
       "inlets": [
@@ -7246,8 +7206,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "uzi": {
       "inlets": [
@@ -7289,8 +7248,7 @@
         "instances": 13,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "bpatcher": {
       "inlets": [

@@ -22,7 +22,7 @@ Each domain file is a JSON object keyed by object name. Every object entry conta
 
 ### Supplementary Files
 
-- **`overrides.json`** -- Expert corrections that take precedence over extracted data. Deep-merged onto base objects.
+- **`overrides.json`** -- Expert corrections that take precedence over extracted data. Merged per port: an override's `inlets`/`outlets` array sets the count, and each port replaces only the keys it sets, so base digests, `hot` flags and port types survive (generator placeholder digests and an empty `type` on a control port never replace base values; `{"id": N}` inherits the base port). Other keys replace whole; keys are canonicalized through `aliases.json`, and an unknown or duplicate key fails at load.
 - **`aliases.json`** -- Common shortcuts mapped to canonical names (e.g., `t` -> `trigger`, `b` -> `bangbang`, `sel` -> `select`).
 - **`relationships.json`** -- Common object pairings and companions (e.g., `tapin~`/`tapout~`, `notein`/`stripnote`).
 - **`pd-blocklist.json`** -- Pure Data objects that do NOT exist in MAX, with their MAX equivalents.
