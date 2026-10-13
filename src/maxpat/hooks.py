@@ -561,6 +561,110 @@ def _parse_patch_text(text: "str | None") -> "dict | None":
     return data
 
 
+def _iter_patchers(patcher_dict: dict, path: tuple = ()):
+    """Yield ``(path, patcher_dict)`` for a patcher and every embedded one.
+
+    A path element is ``(box id, box text or maxclass)``, so a regenerated
+    patch whose ``obj-5`` is now a different subpatcher is not compared
+    port-for-port. Inner ids collide with outer ids, hence the path.
+    """
+    if not isinstance(patcher_dict, dict):
+        return
+    yield path, patcher_dict
+    boxes = patcher_dict.get("boxes")
+    if not isinstance(boxes, list):
+        return
+    for entry in boxes:
+        box = entry.get("box") if isinstance(entry, dict) else None
+        if not isinstance(box, dict):
+            continue
+        inner = box.get("patcher")
+        if isinstance(inner, dict):
+            elem = (str(box.get("id", "")), str(box.get("text") or box.get("maxclass") or ""))
+            yield from _iter_patchers(inner, path + (elem,))
+
+
+def _top_patcher(d: "dict | None") -> "dict | None":
+    if not isinstance(d, dict):
+        return None
+    top = d.get("patcher")
+    return top if isinstance(top, dict) else None
+
+
+def _cord_set(d: "dict | None") -> set:
+    """Set of ``(path, src_id, src_outlet, dst_id, dst_inlet)`` over all patchers.
+
+    Malformed patchlines are skipped.
+    """
+    cords = set()
+    for path, patcher in _iter_patchers(_top_patcher(d)):
+        lines = patcher.get("lines")
+        if not isinstance(lines, list):
+            continue
+        for entry in lines:
+            line = entry.get("patchline") if isinstance(entry, dict) else None
+            if not isinstance(line, dict):
+                continue
+            src = line.get("source")
+            dst = line.get("destination")
+            try:
+                cords.add((path, str(src[0]), int(src[1]), str(dst[0]), int(dst[1])))
+            except (TypeError, ValueError, IndexError, KeyError):
+                continue
+    return cords
+
+
+def _box_ids(d: "dict | None") -> dict:
+    """Map patcher path -> set of box ids in that patcher."""
+    ids: dict = {}
+    for path, patcher in _iter_patchers(_top_patcher(d)):
+        found = set()
+        for entry in patcher.get("boxes") or []:
+            box = entry.get("box") if isinstance(entry, dict) else None
+            if isinstance(box, dict) and "id" in box:
+                found.add(str(box["id"]))
+        ids[path] = found
+    return ids
+
+
+def _port_ranks(d: "dict | None") -> dict:
+    """Map ``(path, "inlet"|"outlet", port box id)`` -> x-rank.
+
+    The rank is the index among that patcher's boxes of that maxclass,
+    sorted by ``(patching_rect x, array index)`` -- the order MAX uses to
+    number subpatcher/abstraction ports. gen ``in N``/``out N`` boxes are
+    numbered by argument and are not counted.
+    """
+    ranks: dict = {}
+    for path, patcher in _iter_patchers(_top_patcher(d)):
+        boxes = patcher.get("boxes")
+        if not isinstance(boxes, list):
+            continue
+        for kind in ("inlet", "outlet"):
+            ports = []
+            for index, entry in enumerate(boxes):
+                box = entry.get("box") if isinstance(entry, dict) else None
+                if not isinstance(box, dict) or box.get("maxclass") != kind:
+                    continue
+                rect = box.get("patching_rect")
+                try:
+                    x = float(rect[0])
+                except (TypeError, ValueError, IndexError, KeyError):
+                    x = 0.0
+                ports.append((x, index, str(box.get("id", ""))))
+            ports.sort(key=lambda p: (p[0], p[1]))
+            for rank, (_x, _i, box_id) in enumerate(ports):
+                ranks[(path, kind, box_id)] = rank
+    return ranks
+
+
+def _path_label(path: tuple) -> str:
+    """``top`` for the top level, else ``text (id) > text (id)``."""
+    if not path:
+        return "top"
+    return " > ".join(f"{text} ({box_id})" for box_id, text in path)
+
+
 def _gate_report(new_dict: dict, baseline_dict: "dict | None", ref_dicts: list) -> GateReport:
     """Compare *new_dict* with its blocker baseline and cord/port references.
 
@@ -581,7 +685,29 @@ def _gate_report(new_dict: dict, baseline_dict: "dict | None", ref_dicts: list) 
             if seen[key] > base_counts[key]:
                 new_blockers.append(r)
 
-    return GateReport(new_blockers, [], [])
+    removed_cords: list = []
+    port_changes: list = []
+    if ref_dicts:
+        # A cord is removed when every reference has it and the new dict
+        # does not (a removal already present in original_text is exempt).
+        ref_cords = set.intersection(*(_cord_set(r) for r in ref_dicts))
+        removed_cords = sorted(ref_cords - _cord_set(new_dict))
+
+        # A port changed when it exists in the new dict and every reference
+        # and its new rank differs from its rank in every reference.
+        new_ranks = _port_ranks(new_dict)
+        ref_ranks = [_port_ranks(r) for r in ref_dicts]
+        for key in sorted(new_ranks):
+            if not all(key in rr for rr in ref_ranks):
+                continue
+            new_rank = new_ranks[key]
+            if all(rr[key] != new_rank for rr in ref_ranks):
+                path, kind, box_id = key
+                port_changes.append(
+                    f"{_path_label(path)}: {kind} {box_id} rank {ref_ranks[0][key]} -> {new_rank}"
+                )
+
+    return GateReport(new_blockers, removed_cords, port_changes)
 
 
 def _run_save_gate(
@@ -628,6 +754,27 @@ def _run_save_gate(
 
     report = _gate_report(patch_dict, baseline, [d for _, d in refs])
 
+    # 1. Removed cords: one warning, whatever force is (review §4.1 class 9).
+    if report.removed_cords:
+        ref_labels = [label for label, _ in refs]
+        if "HEAD" in ref_labels:
+            against = "HEAD"
+        else:
+            against = ref_labels[0]
+        new_ids = _box_ids(patch_dict)
+        n = len(report.removed_cords)
+        cord_lines = [f"{path}: {n} cord(s) removed compared with {against}:"]
+        for cpath, src, outlet, dst, inlet in report.removed_cords[:10]:
+            ids_here = new_ids.get(cpath, set())
+            mark = ""
+            if src not in ids_here or dst not in ids_here:
+                mark = " (endpoint box deleted)"
+            cord_lines.append(f"  {_path_label(cpath)}/{src}:{outlet} -> {dst}:{inlet}{mark}")
+        if n > 10:
+            cord_lines.append(f"  ... and {n - 10} more")
+        warnings.warn("\n".join(cord_lines), SaveGateWarning, stacklevel=3)
+
+    # 2. New blockers / port x-rank changes: refuse (or warn under force).
     if not report.new_blockers and not report.port_changes:
         return None
 
@@ -635,6 +782,12 @@ def _run_save_gate(
     if report.new_blockers:
         lines.append(f"{len(report.new_blockers)} new blocking finding(s):")
         lines.extend(f"  {r!r}" for r in report.new_blockers)
+    if report.port_changes:
+        lines.append(
+            f"{len(report.port_changes)} subpatcher/abstraction port x-rank change(s) "
+            f"(parent cords address ports by x-rank, so they would hit the wrong port):"
+        )
+        lines.extend(f"  {c}" for c in report.port_changes)
     lines.append("Fix them, or pass force=True to save anyway.")
     message = "\n".join(lines)
 
@@ -654,28 +807,46 @@ def write_gendsp(
     path: str | Path,
     num_inputs: int | None = None,
     num_outputs: int | None = None,
+    *,
+    force: bool = False,
 ) -> dict:
     """Generate and write a .gendsp file to disk.
 
     Creates a standalone .gendsp file containing a Gen patcher with
     codebox, in/out objects, and patchlines.
 
+    Save gate (fix-plan Q7): before anything is written, the generated dict
+    goes through the same gate as save_patch_roundtrip -- validate_patch
+    (on a deepcopy) and review_patch, compared with the HEAD version of the
+    path, else the file on disk; with neither it is a new file and every
+    blocker refuses. Removed cords warn (SaveGateWarning); new blockers and
+    port x-rank changes raise PatchValidationError.
+
     Args:
         code: GenExpr source code for the codebox.
         path: Output file path for the .gendsp file.
         num_inputs: Number of inputs. Auto-detected from code if None.
         num_outputs: Number of outputs. Auto-detected from code if None.
+        force: Keyword-only. Bypass the save gate, with a SaveGateWarning
+            listing what was bypassed.
 
     Returns:
         The generated .gendsp dict, as a GendspWriteResult (a dict subclass)
         whose ``commit_hash`` attribute is the path-scoped auto-commit hash,
         or None with a UserWarning giving the reason (Q5). Overwrites
         unconditionally -- there is no stale-file check here.
+
+    Raises:
+        PatchValidationError: the save gate refused the write and force is
+            False. Nothing is written, created or committed.
     """
     from src.maxpat.codegen import generate_gendsp
 
     path = Path(path)
     gendsp_dict = generate_gendsp(code, num_inputs, num_outputs)
+
+    # Save gate (Q7): before mkdir, write or commit.
+    _run_save_gate(gendsp_dict, path, None, force=force)
 
     # Create parent directories if needed
     path.parent.mkdir(parents=True, exist_ok=True)

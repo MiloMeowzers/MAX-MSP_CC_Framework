@@ -451,6 +451,352 @@ class TestGateDb:
         assert calls == []
 
 
+# ---------------------------------------------------------------------------
+# Task 2: cord-removal warning, port x-rank block, write_gendsp gate
+# ---------------------------------------------------------------------------
+
+
+def _sub() -> dict:
+    """SUB: top-level p ctl (obj-1; inner inlets obj-1 x50, obj-2 x130,
+    outlet obj-3, inner cord obj-1:0 -> obj-3:0), number (obj-2) -> p ctl
+    inlet 0, p ctl outlet 0 -> print (obj-3)."""
+    p = Patcher()
+    box, inner = p.add_subpatcher("ctl", inlets=2, outlets=1)
+    inner.add_connection(inner.get_inlets()[0], 0, inner.get_outlets()[0], 0)
+    n = p.add_box("number")
+    pr = p.add_box("print")
+    p.add_connection(n, 0, box, 0)
+    p.add_connection(box, 0, pr, 0)
+    return p.to_dict()
+
+
+def _abs() -> dict:
+    """ABS: abstraction top level with inlet obj-1, outlets obj-2 (x50), obj-3 (x130)."""
+    _, inner = Patcher().add_subpatcher("abs", inlets=1, outlets=2)
+    return inner.to_dict()
+
+
+def _ctl_box(d: dict) -> dict:
+    for entry in d["patcher"]["boxes"]:
+        if entry["box"].get("text") == "p ctl":
+            return entry["box"]
+    raise KeyError("p ctl")
+
+
+def _inner_box(patcher: dict, box_id: str) -> dict:
+    for entry in patcher["boxes"]:
+        if entry["box"]["id"] == box_id:
+            return entry["box"]
+    raise KeyError(box_id)
+
+
+def _swap_x(patcher: dict, id_a: str, id_b: str) -> None:
+    a = _inner_box(patcher, id_a)["patching_rect"]
+    b = _inner_box(patcher, id_b)["patching_rect"]
+    a[0], b[0] = b[0], a[0]
+
+
+def _add_inner_inlet(d: dict, x: float) -> None:
+    ctl = _ctl_box(d)
+    ctl["patcher"]["boxes"].append({"box": {
+        "id": "obj-90", "maxclass": "inlet", "numinlets": 0, "numoutlets": 1,
+        "outlettype": [""], "patching_rect": [x, 30.0, 30.0, 30.0],
+    }})
+    ctl["numinlets"] = 3
+
+
+def _drop_line(patcher: dict, src: str, dst: str) -> None:
+    patcher["lines"] = [
+        l for l in patcher["lines"]
+        if not (l["patchline"]["source"][0] == src and l["patchline"]["destination"][0] == dst)
+    ]
+
+
+def _disk_edit(P: Path, T: str, mutate) -> None:
+    """Write a modified copy of T to P without committing (a MAX save)."""
+    data = json.loads(T)
+    mutate(data)
+    P.write_text(json.dumps(data, indent=4))
+
+
+def _gate_warnings(record) -> list:
+    from src.maxpat.hooks import SaveGateWarning
+
+    return [w for w in record if issubclass(w.category, SaveGateWarning)]
+
+
+class TestCordRemoval:
+    def test_removed_top_level_cord_warns_once(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip, read_patch
+
+        root = _repo(tmp_path)
+        P = _patch_path(root)
+        save_patch_roundtrip(_fan(), P)
+        p, T = read_patch(P)
+        d = p.to_dict()
+        _drop_line(d["patcher"], "obj-2", "obj-3")
+
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
+            result = save_patch_roundtrip(d, P, T)
+
+        gate = _gate_warnings(record)
+        assert len(gate) == 1
+        msg = str(gate[0].message)
+        assert "1 cord(s) removed compared with HEAD" in msg
+        assert "obj-2:0 -> obj-3:0" in msg
+        assert "endpoint box deleted" not in msg
+        assert result == _head(root)
+
+    def test_deleted_endpoint_marked(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip, read_patch
+
+        root = _repo(tmp_path)
+        P = _patch_path(root)
+        save_patch_roundtrip(_fan(), P)
+        p, T = read_patch(P)
+        p.remove_box(_box_by_id(p, "obj-3"))
+
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
+            save_patch_roundtrip(p.to_dict(), P, T)
+
+        gate = _gate_warnings(record)
+        assert len(gate) == 1
+        msg = str(gate[0].message)
+        assert "obj-2:0 -> obj-3:0" in msg
+        assert "(endpoint box deleted)" in msg
+
+    def test_removed_nested_cord_warns_with_path(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip, read_patch
+
+        root = _repo(tmp_path)
+        P = _patch_path(root)
+        save_patch_roundtrip(_sub(), P)
+        p, T = read_patch(P)
+        d = p.to_dict()
+        _drop_line(_ctl_box(d)["patcher"], "obj-1", "obj-3")
+
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
+            save_patch_roundtrip(d, P, T)
+
+        gate = _gate_warnings(record)
+        assert len(gate) == 1
+        msg = str(gate[0].message)
+        assert "1 cord(s) removed" in msg
+        assert "p ctl" in msg
+        assert "obj-1:0 -> obj-3:0" in msg
+
+    def test_cord_removed_before_this_save_is_exempt(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip, read_patch
+
+        root = _repo(tmp_path)
+        P = _patch_path(root)
+        save_patch_roundtrip(_fan(), P)
+        T0 = P.read_text()
+        _disk_edit(P, T0, lambda d: _drop_line(d["patcher"], "obj-2", "obj-3"))
+        p, T = read_patch(P)
+        p.add_box("print", ["other"])
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            result = save_patch_roundtrip(p.to_dict(), P, T)
+
+        assert result == _head(root)
+
+    def test_clean_edit_emits_no_warning(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip, read_patch
+
+        root = _repo(tmp_path)
+        P = _patch_path(root)
+        save_patch_roundtrip(_fan(), P)
+        p, T = read_patch(P)
+        p.add_box("print", ["other"])
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            result = save_patch_roundtrip(p.to_dict(), P, T)
+
+        assert result == _head(root)
+
+
+class TestPortOrder:
+    def test_swapped_inner_inlets_refused(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip, read_patch, PatchValidationError
+
+        root = _repo(tmp_path)
+        P = _patch_path(root)
+        save_patch_roundtrip(_sub(), P)
+        head_before = _head(root)
+        p, T = read_patch(P)
+        d = p.to_dict()
+        _swap_x(_ctl_box(d)["patcher"], "obj-1", "obj-2")
+
+        with pytest.raises(PatchValidationError) as excinfo:
+            save_patch_roundtrip(d, P, T)
+
+        changes = excinfo.value.port_changes
+        joined = "\n".join(changes)
+        assert "inlet obj-1" in joined
+        assert "inlet obj-2" in joined
+        assert "p ctl" in joined
+        assert "x-rank" in str(excinfo.value)
+        assert P.read_text() == T
+        assert _head(root) == head_before
+
+    def test_swapped_inner_inlets_force_saves(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip, read_patch, SaveGateWarning
+
+        root = _repo(tmp_path)
+        P = _patch_path(root)
+        save_patch_roundtrip(_sub(), P)
+        p, T = read_patch(P)
+        d = p.to_dict()
+        _swap_x(_ctl_box(d)["patcher"], "obj-1", "obj-2")
+
+        with pytest.warns(SaveGateWarning, match="force=True"):
+            result = save_patch_roundtrip(d, P, T, force=True)
+
+        assert result == _head(root)
+        assert json.loads(P.read_text()) == d
+
+    def test_abstraction_top_level_outlet_swap_refused(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip, read_patch, PatchValidationError
+
+        root = _repo(tmp_path)
+        P = _patch_path(root)
+        save_patch_roundtrip(_abs(), P)
+        p, T = read_patch(P)
+        d = p.to_dict()
+        _swap_x(d["patcher"], "obj-2", "obj-3")
+
+        with pytest.raises(PatchValidationError) as excinfo:
+            save_patch_roundtrip(d, P, T)
+
+        assert any("top" in c for c in excinfo.value.port_changes)
+        assert P.read_text() == T
+
+    def test_mid_insert_refused(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip, read_patch, PatchValidationError
+
+        root = _repo(tmp_path)
+        P = _patch_path(root)
+        save_patch_roundtrip(_sub(), P)
+        p, T = read_patch(P)
+        d = p.to_dict()
+        _add_inner_inlet(d, 90.0)
+
+        with pytest.raises(PatchValidationError) as excinfo:
+            save_patch_roundtrip(d, P, T)
+
+        assert any("inlet obj-2 rank 1 -> 2" in c for c in excinfo.value.port_changes)
+
+    def test_append_rightmost_saves(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip, read_patch
+
+        root = _repo(tmp_path)
+        P = _patch_path(root)
+        save_patch_roundtrip(_sub(), P)
+        p, T = read_patch(P)
+        d = p.to_dict()
+        _add_inner_inlet(d, 210.0)
+
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
+            result = save_patch_roundtrip(d, P, T)
+
+        assert _gate_warnings(record) == []
+        assert result == _head(root)
+
+    def test_port_order_changed_before_this_save_is_exempt(self, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip, read_patch
+
+        root = _repo(tmp_path)
+        P = _patch_path(root)
+        save_patch_roundtrip(_sub(), P)
+        T0 = P.read_text()
+        _disk_edit(P, T0, lambda d: _swap_x(_ctl_box(d)["patcher"], "obj-1", "obj-2"))
+        p, T = read_patch(P)
+        p.add_box("print", ["other"])
+
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
+            result = save_patch_roundtrip(p.to_dict(), P, T)
+
+        assert _gate_warnings(record) == []
+        assert result == _head(root)
+
+
+class TestWriteGendspGate:
+    CODE = "out1 = in1 * 0.5;"
+
+    def _x(self, root: Path) -> Path:
+        return root / "patches" / "demo" / "generated" / "x.gendsp"
+
+    def test_clean_write_commits_without_warning(self, tmp_path):
+        from src.maxpat.hooks import write_gendsp
+
+        root = _repo(tmp_path)
+        x = self._x(root)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            result = write_gendsp(self.CODE, x, num_inputs=1, num_outputs=1)
+
+        assert result.commit_hash == _head(root)
+
+    def _inject_blocker(self, monkeypatch):
+        import src.maxpat.critics as critics
+        from src.maxpat.critics import CriticResult
+
+        monkeypatch.setattr(
+            critics, "review_patch",
+            lambda *a, **k: [CriticResult("blocker", "injected (obj-1)", "s")],
+        )
+
+    def test_blocker_on_new_gendsp_refused(self, tmp_path, monkeypatch):
+        from src.maxpat.hooks import write_gendsp, PatchValidationError
+
+        root = _repo(tmp_path)
+        x = self._x(root)
+        self._inject_blocker(monkeypatch)
+
+        with pytest.raises(PatchValidationError) as excinfo:
+            write_gendsp(self.CODE, x, num_inputs=1, num_outputs=1)
+
+        assert "injected" in excinfo.value.findings[0].finding
+        assert not x.exists()
+        assert not _has_head(root)
+
+    def test_blocker_on_new_gendsp_force_writes(self, tmp_path, monkeypatch):
+        from src.maxpat.hooks import write_gendsp, SaveGateWarning
+
+        root = _repo(tmp_path)
+        x = self._x(root)
+        self._inject_blocker(monkeypatch)
+
+        with pytest.warns(SaveGateWarning, match="force=True"):
+            result = write_gendsp(self.CODE, x, num_inputs=1, num_outputs=1, force=True)
+
+        assert x.exists()
+        assert result.commit_hash == _head(root)
+
+    def test_rewrite_over_committed_gendsp_saves(self, tmp_path):
+        from src.maxpat.hooks import write_gendsp
+
+        root = _repo(tmp_path)
+        x = self._x(root)
+        first = write_gendsp(self.CODE, x, num_inputs=1, num_outputs=1)
+        assert first.commit_hash == _head(root)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # "no changes to commit" is fine
+            result = write_gendsp(self.CODE, x, num_inputs=1, num_outputs=1)
+
+        assert json.loads(x.read_text()) == dict(result)
+
+
 def _committed_patch_files() -> list[Path]:
     files = sorted(REPO_ROOT.glob("patches/*/generated/*.maxpat"))
     files += sorted(REPO_ROOT.glob("patches/*/generated/*.gendsp"))
@@ -476,3 +822,5 @@ class TestRoundTripNoFalseBlocks:
         report = _gate_report(new, d, [d])
 
         assert report.new_blockers == []
+        assert report.removed_cords == []
+        assert report.port_changes == []
