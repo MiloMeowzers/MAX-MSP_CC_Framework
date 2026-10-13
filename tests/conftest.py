@@ -1,6 +1,15 @@
-"""Shared test fixtures for MAX object knowledge base tests."""
+"""Shared test fixtures for MAX object knowledge base tests.
+
+Markers (registered in ``pytest_configure``):
+- ``requires_max``: the test reads the installed Max application bundle and is
+  skipped when it is absent. ``MAXPAT_TEST_MAX_APP`` overrides the bundle path
+  (default ``/Applications/Max.app``), e.g. ``MAXPAT_TEST_MAX_APP=/nonexistent``
+  simulates a machine without Max, as CI is.
+- ``slow``: slow test (builds the release archive).
+"""
 
 import json
+import os
 from pathlib import Path
 from typing import Callable
 
@@ -12,6 +21,28 @@ VALID_DOMAINS = {"Max", "MSP", "Jitter", "MC", "Gen", "M4L", "Packages", "RNBO"}
 # Order matters for object_by_name: core domains loaded last so they take priority
 # when objects with the same name exist in multiple domains (e.g., RNBO cycle~ vs MSP cycle~)
 DOMAIN_DIRS = ["rnbo", "packages", "m4l", "gen", "mc", "jitter", "msp", "max"]
+
+# Test seam: point at a nonexistent path to simulate a machine without Max.
+MAX_APP_PATH = Path(os.environ.get("MAXPAT_TEST_MAX_APP", "/Applications/Max.app"))
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "requires_max: test reads the installed Max application bundle; "
+        "skipped when it is absent",
+    )
+    config.addinivalue_line(
+        "markers",
+        'slow: slow test (builds the release archive); deselect with -m "not slow"',
+    )
+
+
+def pytest_runtest_setup(item):
+    if item.get_closest_marker("requires_max") is not None and not MAX_APP_PATH.is_dir():
+        pytest.skip(
+            f"requires the Max application bundle at {MAX_APP_PATH} (not found)"
+        )
 
 
 @pytest.fixture(scope="session")

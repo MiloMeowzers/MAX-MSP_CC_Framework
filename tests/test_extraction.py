@@ -118,6 +118,7 @@ class TestVizzieExtraction:
         assert with_desc >= 100, f"Expected >= 100 Vizzie modules with descriptions, got {with_desc}"
 
 
+@pytest.mark.requires_max
 class TestIOCrossCheck:
     """D-11: Automated cross-check of I/O counts against help patches."""
 

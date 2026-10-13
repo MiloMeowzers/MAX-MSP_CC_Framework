@@ -1,0 +1,24 @@
+# Release archive contents.
+#
+# The release is `git archive` of HEAD, built by scripts/build_release.sh
+# (release.yml and tests/test_release.py both run it). Paths marked
+# export-ignore below are left out of the archive.
+#
+# Every pattern is anchored with a leading "/": an unanchored `scripts` also
+# matches .claude/scripts/, which src/maxpat/validation.py, the max-lifecycle
+# skill and tools/sync_max_bundle.py need at runtime (review I2).
+
+# Maintainer-only trees
+/.planning export-ignore
+/.github export-ignore
+/tests export-ignore
+/patches export-ignore
+/scripts export-ignore
+/installer export-ignore
+/.claude/projects export-ignore
+/.gitattributes export-ignore
+
+# Audit reports are maintainer-only, but src/maxpat/sizing.py loads the width
+# table at import time, so that one file ships (Q8 OQ1, option A).
+/.claude/max-objects/audit/** export-ignore
+/.claude/max-objects/audit/width-overrides.json -export-ignore
