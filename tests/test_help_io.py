@@ -25,6 +25,7 @@ import json
 import plistlib
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 
 import pytest
@@ -65,13 +66,36 @@ def _port(signal: bool = False) -> dict:
 
 
 def _make_fake_db(tmp_path: Path) -> Path:
-    """Write a tiny object DB: `alpha` is 1 control inlet, 2 control outlets."""
+    """Write a tiny object DB under tmp_path (never the real DB values).
+
+    * ``alpha``: 1 control inlet, 2 control outlets.
+    * ``vfoo``: variable I/O, 1 inlet, one outlet per positional argument.
+    * ``sigout~``: 1 control outlet; ``mcout~``: 1 signal outlet.
+    * ``uiwidget``: (1,1), a non-newobj maxclass (OQ1-A).
+    * ``js``: (1,1), present to prove the content-defined exclusion wins.
+    * ``emptyio``: no ports at all (``lookup`` warns on it).
+    """
     root = tmp_path / "db"
     (root / "max").mkdir(parents=True)
     objects = {
         "alpha": {"name": "alpha", "inlets": [_port()], "outlets": [_port(), _port()]},
+        "vfoo": {
+            "name": "vfoo", "variable_io": True,
+            "inlets": [_port()], "outlets": [_port(), _port()],
+        },
+        "sigout~": {"name": "sigout~", "inlets": [_port()], "outlets": [_port(False)]},
+        "mcout~": {"name": "mcout~", "inlets": [_port()], "outlets": [_port(True)]},
+        "uiwidget": {"name": "uiwidget", "inlets": [_port()], "outlets": [_port()]},
+        "js": {"name": "js", "inlets": [_port()], "outlets": [_port()]},
+        "emptyio": {"name": "emptyio", "inlets": [], "outlets": []},
     }
     (root / "max" / "objects.json").write_text(json.dumps(objects))
+    (root / "overrides.json").write_text(json.dumps({
+        "objects": {},
+        "variable_io_rules": {
+            "vfoo": {"inlet_count": "fixed:1", "outlet_count": "arg_count"},
+        },
+    }))
     return root
 
 
@@ -193,3 +217,186 @@ class TestTracer:
         swapped = help_io.diff_baselines(bl, older)
         assert swapped["regressions"] == []
         assert len(swapped["improvements"]) == 1
+
+
+# ── Task 2: full scan semantics ───────────────────────────────────
+
+
+def _ui(box_id, maxclass, numinlets, numoutlets) -> dict:
+    return {"box": {"maxclass": maxclass, "id": box_id,
+                    "numinlets": numinlets, "numoutlets": numoutlets}}
+
+
+def _inner(boxes, classnamespace="box") -> dict:
+    patcher: dict = {"boxes": boxes, "lines": []}
+    if classnamespace is not None:
+        patcher["classnamespace"] = classnamespace
+    return patcher
+
+
+def _scan_boxes() -> list:
+    return [
+        _newobj("obj-1", "alpha", 1, 2),
+        _newobj("obj-2", "alpha 5", 1, 3),
+        _newobj("obj-3", "vfoo a b @attr 1", 1, 2),
+        _newobj("obj-4", "sigout~", 1, 1, outlettype=["signal"]),
+        _newobj("obj-5", "mcout~", 1, 1, outlettype=["multichannelsignal"]),
+        _newobj("obj-6", "sigout~", 1, 1),
+        _newobj("obj-7", "nosuch 1", 1, 1),
+        _newobj("obj-8", "js foo.js", 1, 3),
+        _newobj("obj-9", "p sub", 1, 1,
+                patcher=_inner([_newobj("obj-9a", "alpha 7", 1, 9)])),
+        _newobj("obj-10", "gen~", 1, 1,
+                patcher=_inner([_newobj("g-1", "alpha 9", 1, 9)], "dsp.gen")),
+        _newobj("obj-11", "gen~", 1, 1,
+                patcher=_inner([_newobj("g-2", "alpha 9", 1, 9)], None)),
+        _newobj("obj-12", "rnbo~", 1, 1,
+                patcher=_inner([_newobj("r-1", "alpha 9", 1, 9)], "rnbo")),
+        _newobj("obj-13a", "alpha", "x", 2),
+        _newobj("obj-13b", "alpha", 1, True),
+        _newobj("obj-14a", "", 1, 1),
+        _newobj("obj-14b", 5, 1, 1),
+        _ui("obj-15a", "uiwidget", 1, 2),
+        _ui("obj-15b", "missingui", 1, 1),
+        _ui("obj-15c", "v8.codebox", 1, 1),
+        _newobj("obj-16", "emptyio", 0, 0),
+    ]
+
+
+def _scan_tree(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """Fake bundle + fake packages dir exercising every scan rule."""
+    app = _make_fake_max(tmp_path)
+    db = _make_fake_db(tmp_path)
+    c74 = _c74(app)
+    _write(c74 / "help" / "max" / "scan.maxhelp", _help(_scan_boxes()))
+    _write(c74 / "packages" / "BPkg" / "help" / "b.maxhelp",
+           _help([_newobj("obj-1", "alpha", 1, 2)], appversion=None))
+    (c74 / "help" / "max" / "broken.maxhelp").write_text("{not json")
+    _write(c74 / "help" / "max" / "list.maxhelp", [1, 2, 3])
+
+    pkgs = tmp_path / "packages"
+    _write(pkgs / "UserPkg" / "package-info.json", {"version": "1.2.3"})
+    _write(pkgs / "UserPkg" / "help" / "u.maxhelp",
+           _help([_newobj("obj-1", "alpha 5", 1, 3)]))
+    _write(pkgs / "UserPkg" / "patchers" / "x.maxhelp",
+           _help([_newobj("obj-1", "alpha 6", 1, 4)]))
+    _write(pkgs / "CapPkg" / "Help" / "c.maxhelp",
+           _help([_newobj("obj-1", "alpha", 1, 2)]))
+    (pkgs / "EmptyPkg").mkdir(parents=True)
+    return app, db, pkgs
+
+
+def _scan(app: Path, db: Path, pkgs: Path) -> dict:
+    return help_io.scan_help_io(app, pkgs, ObjectDatabase(db_root=db), "9.9.9")
+
+
+class TestScan:
+    def test_box_rules_and_counters(self, tmp_path: Path) -> None:
+        app, db, pkgs = _scan_tree(tmp_path)
+        database = ObjectDatabase(db_root=db)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            section = help_io.scan_help_io(app, pkgs, database, "9.9.9")
+        assert [str(w.message) for w in caught] == []
+
+        stats = section["sources"]["bundle"]["stats"]
+        # scan.maxhelp: 17 top-level newobj + the p's inner box, 3 others;
+        # b.maxhelp adds one compared newobj.
+        assert stats["newobj_boxes"] == 19
+        assert stats["other_boxes"] == 3
+        assert stats["compared"] == 10
+        assert stats["content_defined"] == 6
+        assert stats["unresolved"] == 2
+        assert stats["malformed"] == 4
+        assert stats["internal_patchers_skipped"] == 3
+
+        mism = section["mismatches"]["bundle"]
+        alpha = mism["alpha"]
+        assert alpha["count_mismatches"] == 2  # obj-2 and the p's inner box
+        assert alpha["canonical"] == "alpha"
+        assert alpha["kinds"] == ["newobj"]
+        assert sorted(alpha["signatures"]) == [
+            "count args=1 max=1,3 db=1,2",
+            "count args=1 max=1,9 db=1,2",
+        ]
+        for sig in alpha["signatures"].values():
+            assert sig["count"] == 1  # no gen~/rnbo~ internal was walked
+            assert sig["appversions"] == ["9.1.0"]
+            assert len(sig["examples"]) <= 3
+            assert sig["examples"][0]["file"] == "help/max/scan.maxhelp"
+        inner = alpha["signatures"]["count args=1 max=1,9 db=1,2"]
+        assert inner["examples"][0]["box"] == "obj-9a"
+
+        assert "vfoo" not in mism  # args stop at the first @
+        assert mism["sigout~"]["type_mismatches"] == 1
+        assert mism["sigout~"]["count_mismatches"] == 0
+        assert list(mism["sigout~"]["signatures"]) == ["type max=signal db=control"]
+        assert "mcout~" not in mism  # multichannelsignal is a signal class
+        assert "js" not in mism and "emptyio" not in mism
+        assert mism["uiwidget"]["kinds"] == ["box"]
+        assert mism["uiwidget"]["count_mismatches"] == 1
+        assert section["unresolved"]["bundle"] == {"missingui": 1, "nosuch": 1}
+
+    def test_bad_files_appversions_and_bundle_packages(self, tmp_path: Path) -> None:
+        section = _scan(*_scan_tree(tmp_path))
+        bundle = section["sources"]["bundle"]
+        assert bundle["files"] == 4
+        bad = {b["file"] for b in bundle["bad_files"]}
+        assert bad == {"help/max/broken.maxhelp", "help/max/list.maxhelp"}
+        assert bundle["appversions"] == {"9.1.0": 1, "unknown": 1}
+
+    def test_package_sources(self, tmp_path: Path) -> None:
+        section = _scan(*_scan_tree(tmp_path))
+        src = section["sources"]
+        assert sorted(src) == ["bundle", "package:CapPkg", "package:UserPkg"]
+        assert src["package:UserPkg"]["version"] == "1.2.3"
+        assert src["package:UserPkg"]["files"] == 1  # patchers/ is not scanned
+        assert src["package:CapPkg"]["version"] is None
+        user = section["mismatches"]["package:UserPkg"]["alpha"]
+        assert list(user["signatures"]) == ["count args=1 max=1,3 db=1,2"]
+        assert section["mismatches"]["package:CapPkg"] == {}
+
+    def test_missing_packages_dir(self, tmp_path: Path) -> None:
+        app, db, _ = _scan_tree(tmp_path)
+        section = _scan(app, db, tmp_path / "nowhere")
+        assert section["available"] is True
+        assert list(section["sources"]) == ["bundle"]
+        assert section["packages_reason"]
+
+    def test_depth_cap(self, tmp_path: Path) -> None:
+        app = _make_fake_max(tmp_path)
+        db = _make_fake_db(tmp_path)
+        node: dict = _inner([_newobj("deep", "alpha 5", 1, 3)])
+        for i in range(40):
+            node = _inner([_newobj(f"p-{i}", "p nest", 1, 1, patcher=node)])
+        _write(_c74(app) / "help" / "max" / "deep.maxhelp", {"patcher": node})
+        section = _scan(app, db, tmp_path / "no-packages")
+        assert section["sources"]["bundle"]["stats"]["depth_capped"] >= 1
+
+    def test_deterministic_baseline(self, tmp_path: Path) -> None:
+        app, db, pkgs = _scan_tree(tmp_path)
+        first = help_io.dump_baseline(help_io.build_baseline(_scan(app, db, pkgs)))
+        second = help_io.dump_baseline(help_io.build_baseline(_scan(app, db, pkgs)))
+        assert first == second
+
+
+class TestCliModes:
+    def test_missing_bundle_exits_zero(self, tmp_path: Path) -> None:
+        result = _cli(
+            "--help-io", "--max-app", tmp_path / "absent.app",
+            "--db-root", _make_fake_db(tmp_path),
+            "--packages-dir", tmp_path / "no-packages",
+        )
+        assert result.returncode == 0, result.stderr
+        assert "unavailable" in result.stdout
+
+    def test_summary_lines(self, tmp_path: Path) -> None:
+        app, db, pkgs = _scan_tree(tmp_path)
+        result = _cli("--help-io", "--max-app", app, "--db-root", db,
+                      "--packages-dir", pkgs)
+        assert result.returncode == 0, result.stderr
+        out = result.stdout
+        assert "package:UserPkg" in out
+        versions = [ln for ln in out.splitlines() if "help versions" in ln]
+        assert versions and "9.1.0" in versions[0]
+        assert any(ln.strip().startswith("mismatching") for ln in out.splitlines())
