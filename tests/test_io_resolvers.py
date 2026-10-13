@@ -43,6 +43,8 @@ BASELINE = REPO_ROOT / "tests" / "fixtures" / "help_io_baseline.json"
 # oracle must report 0 count mismatches for each of them in the bundle.
 Q10_TARGETS = (
     "r", "receive", "t",
+    "sel", "select", "route", "routepass", "expr", "vexpr", "if", "sprintf",
+    "pipe", "notein", "ctlin",
 )
 
 LCD = '"LCD Text / Icon (Inactive)"'
@@ -136,6 +138,62 @@ MAX_SAVED = [
     ("receive", [], (1, 1), "C74/help/max/receive.maxhelp `receive`"),
     ("t", [LCD], (1, 1), f"C74/help/m4l/live.routing.maxhelp `t {LCD}`"),
     ("t", LCD_PRESPLIT, (1, 1), f"C74/help/m4l/live.routing.maxhelp `t {LCD}` (pre-split)"),
+    # Task 2: select family (N args -> N+1 inlets and outlets)
+    ("sel", [], (2, 2), "C74/help/jitter/jit.playlist.maxhelp `sel`"),
+    ("sel", ["0", "1"], (3, 3), "C74/extras/JitterTester.maxpat `sel 0 1`"),
+    ("select", list("1234567"), (8, 8),
+     "C74/packages/Vizzie/help/vz.1easemappr.maxhelp `select 1 2 3 4 5 6 7`"),
+    ("route", ["point"], (2, 2), "C74/help/jitter/jit.anim.path.maxhelp `route point`"),
+    ("route", ["time", "transport"], (3, 3), "C74/help/jitter/jit.avc.maxhelp `route time transport`"),
+    ("route", ['"Control Border"', '"Text / Icon"', '"Slider Range Value"'], (4, 4),
+     'C74/help/m4l/live.colors.maxhelp `route "Control Border" "Text / Icon" "Slider Range Value"`'),
+    ("route", '"Control Border" "Text / Icon" "Slider Range Value"'.split(), (4, 4),
+     "C74/help/m4l/live.colors.maxhelp (pre-split)"),
+    ("routepass", ["0", "1"], (3, 3), "C74/help/jitter/jit.displays.maxhelp `routepass 0 1`"),
+    ("route", [], (2, 2), "refpage route.maxref.xml: no argument -> one other outlet (0)"),
+    ("routepass", [], (2, 2), "refpage routepass.maxref.xml: no argument -> one other outlet (0)"),
+    # Task 2: expr / vexpr (highest $ index)
+    ("expr", ["$i3", "*", "$i1", "+", "$i2"], (3, 1), "C74/help/max/expr.maxhelp `expr $i3 * $i1 + $i2`"),
+    ("expr", ["$i2", "+", "11"], (2, 1), "FluidCorpusManipulation/help/fluid.bufnmf~.maxhelp `expr $i2 + 11`"),
+    ("expr", ["sin", "(2.", "*", "3.141593", "*", "$f1)"], (1, 1), "bundle `expr sin (2. * 3.141593 * $f1)`"),
+    ("expr", ["$i1", "+", "$i2", "+", "$i3"], (3, 1), "review C1: `expr $i1 + $i2 + $i3` (was 5 inlets)"),
+    ("vexpr", ["$f1*($f3-$f2)+$f2", "@scalarmode", "1"], (3, 1),
+     "C74/packages/BEAP/Examples/Synthesis Examples/Resynthesis.maxpat `vexpr $f1*($f3-$f2)+$f2 @scalarmode 1`"),
+    ("vexpr", ["int($f1", "*", "255)"], (1, 1), "C74/help/m4l/live.colors.maxhelp `vexpr int($f1 * 255)`"),
+    ("expr", ['"no dollars here"'], (1, 1), "edge: no $ index -> 1 inlet"),
+    # Task 2: if
+    ("if", "$i1 < 8 then bang else out2 bang".split(), (1, 2),
+     "C74/help/jitter/jit.avc.maxhelp `if $i1 < 8 then bang else out2 bang`"),
+    ("if", "$i3 == 1 then $f1 $f2 else out2 bang".split(), (3, 2),
+     "C74/help/max/nodes.maxhelp `if $i3 == 1 then $f1 $f2 else out2 bang`"),
+    ("if", "$i2 == 1 then $i1".split(), (2, 1), "C74/help/jitter/jit.displays.maxhelp `if $i2 == 1 then $i1`"),
+    # Task 2: sprintf (one inlet per changeable specifier)
+    ("sprintf", "%d - %d x %d\\, %d bit\\, %dHz %s".split(), (6, 1),
+     "C74/help/jitter/jit.displays.maxhelp `sprintf %d - %d x %d\\, %d bit\\, %dHz %s`"),
+    ("sprintf", ["symout", "%s%s"], (2, 1), "C74/help/max/sprintf.maxhelp `sprintf symout %s%s`"),
+    ("sprintf", ["%ld", "34", "%ld", "555"], (2, 1), "C74/help/max/sprintf.maxhelp `sprintf %ld 34 %ld 555`"),
+    ("sprintf", ["%c%c%c%c"], (4, 1), "C74/help/max/sprintf.maxhelp `sprintf %c%c%c%c`"),
+    ("sprintf", [], (1, 1), "edge: no format -> 1 inlet"),
+    ("sprintf", ["100%%"], (1, 1), "edge: literal %% is not a specifier"),
+    # Task 2: pipe (final arg is the delay time)
+    ("pipe", ["0", "0", "1000"], (3, 2), "C74/help/max/pipe.maxhelp `pipe 0 0 1000`"),
+    ("pipe", ["0.", "0.", "0.", "2000"], (4, 3), "C74/help/max/pipe.maxhelp `pipe 0. 0. 0. 2000`"),
+    ("pipe", ["500"], (2, 1), "C74/help/max/pipe.maxhelp `pipe 500`"),
+    ("pipe", ["0"] * 12 + ["500"], (13, 12), "bundle `pipe 0 0 0 0 0 0 0 0 0 0 0 0 500`"),
+    ("pipe", [], (2, 1), "edge: bare pipe = DB default"),
+    # Task 2: notein (a channel arg drops the channel outlet)
+    ("notein", [], (1, 3), "C74/extras/MIDItester.maxpat `notein`"),
+    ("notein", ["a"], (1, 3), "C74/help/max/bendin.maxhelp `notein a`"),
+    ("notein", ["17"], (1, 2), "C74/help/max/bendin.maxhelp `notein 17`"),
+    ("notein", ["b", "6"], (1, 2), "C74/help/max/bendin.maxhelp `notein b 6`"),
+    ("notein", ['"Sensel Morph"'], (1, 3), "edge: a quoted port name is not a channel"),
+    # Task 2: ctlin (a controller arg and a channel arg each drop an outlet)
+    ("ctlin", [], (1, 3), "C74/extras/MIDItester.maxpat `ctlin`"),
+    ("ctlin", ["7"], (1, 2), "C74/help/max/linedrive.maxhelp `ctlin 7`"),
+    ("ctlin", ["33", "1"], (1, 1), "C74/help/max/ctlin.maxhelp `ctlin 33 1`"),
+    ("ctlin", ["-1", "4"], (1, 2), "C74/help/max/ctlin.maxhelp `ctlin -1 4`"),
+    ("ctlin", ["a", "1"], (1, 2), "C74/help/max/ctlin.maxhelp `ctlin a 1`"),
+    ("ctlin", ["none"], (1, 3), "edge: a non-numeric port name only"),
 ]
 
 
@@ -145,6 +203,18 @@ MAX_SAVED = [
 )
 def test_max_saved_counts(db, name, args, expected, citation) -> None:
     assert db.compute_io_counts(name, args) == expected, citation
+
+
+class TestResolverOutletTypes:
+    """Expansion past the DB outlets inherits the last DB outlet (control)."""
+
+    def test_sel_two_args(self, db) -> None:
+        assert db.get_outlet_types("sel", ["0", "1"]) == ["", "", ""]
+
+    def test_if_out2(self, db) -> None:
+        assert db.get_outlet_types(
+            "if", "$i1 < 8 then bang else out2 bang".split()
+        ) == ["", ""]
 
 
 # ── Invariants ────────────────────────────────────────────────────

@@ -16491,18 +16491,6 @@
       "default_outlets": 2,
       "description": "Number of arguments determines number of outlets. Each argument (i, f, b, l, s) creates one outlet. Default: 2 outlets."
     },
-    "route": {
-      "inlet_count": "fixed:1",
-      "outlet_count": "arg_count+1",
-      "default_outlets": 3,
-      "description": "Number of arguments determines outlets + 1 unmatched outlet. Default: 3 outlets."
-    },
-    "select": {
-      "inlet_count": "fixed:1",
-      "outlet_count": "arg_count+1",
-      "default_outlets": 2,
-      "description": "Number of arguments determines outlets + 1 unmatched outlet."
-    },
     "gate": {
       "inlet_count": "fixed:2",
       "outlet_count": "first_arg",
@@ -16556,12 +16544,6 @@
       "outlet_count": "first_arg",
       "default_outlets": 2,
       "description": "First argument sets number of outlets."
-    },
-    "expr": {
-      "inlet_count": "arg_count",
-      "outlet_count": "fixed:1",
-      "default_inlets": 1,
-      "description": "Inlet count equals the number of distinct $iN/$fN/$sN variables in the expression argument (not the simple arg count). Default 1."
     },
     "expr~": {
       "inlet_count": "arg_count",
@@ -16638,18 +16620,6 @@
         "source": "review-260420-j15",
         "confidence": "HIGH",
         "finding": "DQ-02 / FN-01: lifted from per-domain inline io_rule (router had variable_io=true but no overrides.json rule; compute_io_counts was returning wrong default counts)."
-      }
-    },
-    "routepass": {
-      "inlet_count": "fixed:1",
-      "outlet_count": "arg_count+1",
-      "default_inlets": 1,
-      "default_outlets": 2,
-      "description": "Outlets = arg count + 1 (extra outlet passes unmatched through). Default: 2 outlets (matches routepass DB entry).",
-      "_audit": {
-        "source": "review-260421-b3a + quick-260421-bti",
-        "confidence": "HIGH",
-        "finding": "FN-01 / DQ-02: lifted from extract_objects.py VARIABLE_IO_RULES constant with formula normalized from 'arg_count_plus_1' to 'arg_count+1'. 260421-bti aligned default_outlets (3 \u2192 2) with the routepass per-domain DB entry; behaviorally identical because arg_count+1 formula never falls through to default_outlets. Aliases 't' and 'sel' intentionally NOT lifted because alias resolution runs before rule lookup in compute_io_counts."
       }
     },
     "mc.combine~": {
@@ -16789,12 +16759,6 @@
         "source": "barnett-dbap v0.3.0 build (sfplay~ 2 confirmed 3 outlets in the v0.2 patch: sfplay~ 1 saved with 2)",
         "confidence": "HIGH"
       }
-    },
-    "vexpr": {
-      "inlet_count": "arg_count",
-      "outlet_count": "fixed:1",
-      "default_inlets": 1,
-      "description": "Inlet count equals the highest $iN/$fN/$sN index in the expression (max 9). Default 1. Refpage-verified 2026-09-27."
     },
     "play~": {
       "inlet_count": "",
