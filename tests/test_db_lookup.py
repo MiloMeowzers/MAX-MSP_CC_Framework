@@ -612,11 +612,14 @@ def test_compute_io_counts_honors_overrides_rules_for_lifted_objects():
     assert db.compute_io_counts("cycle", ["5"]) == (1, 5)
     assert db.compute_io_counts("cycle", []) == (1, 2)
 
-    # combine: arg count = inlet count
-    assert db.compute_io_counts("combine", ["a", "b", "c"]) == (3, 1)
-    # FN-03 fix (REVIEW 260420-j15): arg_count formula now always evaluates
-    # len(args), so no-args returns 0 inlets, not the default_inlets=2.
-    assert db.compute_io_counts("combine", []) == (0, 1)
+    # combine: arg count = inlet count; 2 outlets (combined symbol + the
+    # trigger-done outlet). Q10 / C1 (261013-cyg): MAX evidence overturns
+    # FN-03 of REVIEW 260420-j15 -- MAX saves `combine sound 74 @triggers 1`
+    # as (2,2) (C74/help/max/combine.maxhelp) and bare `combine` as (1,2)
+    # (dada/help/dada.machines.maxhelp), so bare uses the defaults and
+    # there are always 2 outlets.
+    assert db.compute_io_counts("combine", ["a", "b", "c"]) == (3, 2)
+    assert db.compute_io_counts("combine", []) == (1, 2)
 
     # router: first_arg inlets, second_arg outlets; no-arg = 2x2
     # (first_arg/second_arg keep their default-fallback semantics)
@@ -646,12 +649,16 @@ def test_compute_io_counts_trigger_with_full_args():
     assert db.compute_io_counts("trigger", ["b", "i", "f"]) == (1, 3)
 
 
-def test_compute_io_counts_trigger_no_args_post_fn03():
-    """FN-03: trigger uses outlet_count='arg_count'. Empty args → 0 outlets,
-    not the default 2. Deliberate semantic shift from REVIEW 260420-j15.
+def test_compute_io_counts_trigger_no_args_matches_refpage():
+    """Q10 / C1 (261013-cyg): bare trigger = (1,2).
+
+    MAX evidence overturns FN-03 of REVIEW 260420-j15 (which expected 0
+    outlets): trigger.maxref.xml says "If there are no arguments, there are
+    two outlets", so the rule is now arg_count_or_default with
+    default_outlets 2. No MAX-saved bare trigger box exists (refpage-derived).
     """
     db = ObjectDatabase()
-    assert db.compute_io_counts("trigger", []) == (1, 0)
+    assert db.compute_io_counts("trigger", []) == (1, 2)
 
 
 def test_compute_io_counts_route_no_args_matches_refpage():

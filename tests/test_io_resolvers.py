@@ -45,6 +45,9 @@ Q10_TARGETS = (
     "r", "receive", "t",
     "sel", "select", "route", "routepass", "expr", "vexpr", "if", "sprintf",
     "pipe", "notein", "ctlin",
+    "pack", "pak", "unpack", "trigger", "combine", "switch", "unjoin", "gate~",
+    "bucket", "buddy", "b", "bangbang", "groove~", "tapout~", "record~",
+    "jit.pack", "jit.unpack", "mc.route", "matrix~", "mc.matrix~", "play~",
 )
 
 LCD = '"LCD Text / Icon (Inactive)"'
@@ -194,6 +197,51 @@ MAX_SAVED = [
     ("ctlin", ["-1", "4"], (1, 2), "C74/help/max/ctlin.maxhelp `ctlin -1 4`"),
     ("ctlin", ["a", "1"], (1, 2), "C74/help/max/ctlin.maxhelp `ctlin a 1`"),
     ("ctlin", ["none"], (1, 3), "edge: a non-numeric port name only"),
+    # Task 3: bare pack/pak/unpack/trigger/combine use the defaults
+    ("pack", [], (2, 1), "C74/extras/KeyMidi.maxpat `pack`"),
+    ("pak", [], (2, 1), "C74/help/m4l/live.push.maxhelp `pak`"),
+    ("pak", ["0", "0", "0"], (3, 1), "C74/help/max/jit.cellblock.maxhelp `pak 0 0 0`"),
+    ("unpack", [], (1, 2), "C74/extras/GlobalTransport.maxpat `unpack`"),
+    ("trigger", [], (1, 2), "refpage trigger.maxref.xml: no arguments -> two outlets"),
+    ("t", [], (1, 2), "refpage trigger.maxref.xml: no arguments -> two outlets"),
+    ("combine", ["sound", "74", "@triggers", "1"], (2, 2),
+     "C74/help/max/combine.maxhelp `combine sound 74 @triggers 1`"),
+    ("combine", [], (1, 2), "dada/help/dada.machines.maxhelp `combine`"),
+    ("combine", ["e", "i"], (2, 2), "abclib help `combine e i`"),
+    # Task 3: switch / unjoin
+    ("switch", [], (3, 1), "C74/help/max/switch.maxhelp `switch`"),
+    ("switch", ["3"], (4, 1), "C74/help/jitter/jit.keyscreen.maxhelp `switch 3`"),
+    ("unjoin", [], (1, 3), "C74/help/jitter/jit.playlist.maxhelp `unjoin`"),
+    ("unjoin", ["4"], (1, 5), "C74/help/msp/plot~.maxhelp `unjoin 4`"),
+    # Task 3: one port per argument
+    ("gate~", ["3", "@ramptime", "100"], (2, 3), "C74/help/msp/gate~.maxhelp `gate~ 3 @ramptime 100`"),
+    ("gate~", ["5", "2"], (2, 5), "C74/help/max/crosspatch.maxhelp `gate~ 5 2`"),
+    ("gate~", [], (2, 1), "C74/help/msp/freqshift~.maxhelp `gate~`"),
+    ("bucket", [], (1, 1), "C74/help/max/anal.maxhelp `bucket`"),
+    ("bucket", ["4", "1"], (1, 4), "C74/help/max/bucket.maxhelp `bucket 4 1`"),
+    ("buddy", ["4"], (4, 4), "C74/help/max/buddy.maxhelp `buddy 4`"),
+    ("buddy", [], (2, 2), "C74/help/max/buddy.maxhelp `buddy`"),
+    ("b", [], (1, 2), "C74/extras/GlobalTransport.maxpat `b`"),
+    ("b", ["1"], (1, 1), "C74/help/max/cpuclock.maxhelp `b 1`"),
+    ("bangbang", [], (1, 2),
+     "C74/packages/Node for Max/patchers/debug-monitor/n4m.monitor.maxpat `bangbang`"),
+    ("b", ["17"], (1, 17), "bundle `b 17`"),
+    # Task 3: groove~ / tapout~ / record~
+    ("groove~", ["audio", "2"], (3, 3), "C74/help/m4l/chucker~.maxhelp `groove~ audio 2`"),
+    ("groove~", ["helpgroove02", "4", "@loop", "1"], (3, 5),
+     "C74/help/msp/groove~.maxhelp `groove~ helpgroove02 4 @loop 1`"),
+    ("tapout~", ["0", "0"], (2, 2),
+     "C74/patchers/m4l/Lessons resources/M4L.dl.vdelay~.maxpat `tapout~ 0 0`"),
+    ("tapout~", ["100"], (1, 1), "C74/help/msp/plugin~.maxhelp `tapout~ 100`"),
+    ("record~", ["this", "2"], (4, 1),
+     "C74/media/legacy-tutorials/msp-tut/mypvoc2~.maxpat `record~ this 2`"),
+    ("record~", ["foo"], (3, 1), "C74/help/msp/plugphasor~.maxhelp `record~ foo`"),
+    # Task 3: jit.pack / jit.unpack / mc.route
+    ("jit.pack", ["2"], (2, 2), "C74/help/jitter/jit.fft.maxhelp `jit.pack 2`"),
+    ("jit.unpack", ["2"], (1, 3), "C74/help/jitter/jit.fft.maxhelp `jit.unpack 2`"),
+    ("jit.pack", ["3", "float32"], (3, 2), "C74/help/jitter/jit.p.shiva.maxhelp `jit.pack 3 float32`"),
+    ("jit.unpack", ["5", "float32"], (1, 6), "C74/help/jitter/jit.p.shiva.maxhelp `jit.unpack 5 float32`"),
+    ("mc.route", ["4"], (2, 4), "C74/help/msp/mc.pack~.maxhelp `mc.route 4`"),
 ]
 
 
@@ -215,6 +263,63 @@ class TestResolverOutletTypes:
         assert db.get_outlet_types(
             "if", "$i1 < 8 then bang else out2 bang".split()
         ) == ["", ""]
+
+
+class TestTrailingOutletLayouts:
+    """Rule-driven outlet types follow the DB layout (trailing_outlets)."""
+
+    def test_groove_four_channels(self, db) -> None:
+        assert db.get_outlet_types("groove~", ["a", "4"]) == ["signal"] * 5
+        sync_role = db.get_signal_role("groove~", len(db.lookup("groove~")["outlets"]) - 1)
+        assert db.get_signal_role("groove~", 4, ["a", "4"]) == sync_role
+
+    def test_unjoin_four(self, db) -> None:
+        assert db.get_outlet_types("unjoin", ["4"]) == [""] * 5
+
+    def test_jit_unpack_two(self, db) -> None:
+        assert db.get_outlet_types("jit.unpack", ["2"]) == [""] * 3
+
+    def test_gate_three(self, db) -> None:
+        assert db.get_outlet_types("gate~", ["3"]) == ["signal"] * 3
+
+    def test_tapout_two_taps(self, db) -> None:
+        assert db.get_outlet_types("tapout~", ["0", "0"]) == ["signal"] * 2
+
+
+class TestModifyBoxRecomputesNewlyVariable:
+    """Assumption delta: gate~ is now variable_io, so an args edit recomputes."""
+
+    def test_gate_three_to_two_orphans_outlet_two(self, db) -> None:
+        boxes = [{"box": {
+            "id": "obj-1", "maxclass": "newobj", "text": "gate~ 3",
+            "numinlets": 2, "numoutlets": 3,
+            "outlettype": ["signal", "signal", "signal"],
+            "patching_rect": [200.0, 200.0, 60.0, 22.0],
+        }}]
+        lines = []
+        for o in range(3):
+            boxes.append({"box": {
+                "id": f"obj-out{o}", "maxclass": "newobj", "text": "print",
+                "numinlets": 1, "numoutlets": 0, "outlettype": [],
+                "patching_rect": [100.0 + o * 90, 300.0, 40.0, 22.0],
+            }})
+            lines.append({"patchline": {
+                "source": ["obj-1", o], "destination": [f"obj-out{o}", 0],
+            }})
+        p = Patcher.from_dict({"patcher": {"boxes": boxes, "lines": lines}}, db=db)
+        gate = next(b for b in p.boxes if b.id == "obj-1")
+        assert p._io_is_content_defined(gate) is False
+
+        result = p.modify_box(gate, args=["2"])
+
+        assert (gate.numinlets, gate.numoutlets) == (2, 2)
+        assert [
+            (o["source_id"], o["source_outlet"], o["dest_id"], o["dest_inlet"])
+            for o in result.orphaned
+        ] == [("obj-1", 2, "obj-out2", 0)]
+        assert sorted(
+            (l.source_outlet, l.dest_id) for l in p.lines if l.source_id == "obj-1"
+        ) == [(0, "obj-out0"), (1, "obj-out1")]
 
 
 # ── Invariants ────────────────────────────────────────────────────
