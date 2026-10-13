@@ -110,13 +110,16 @@ class TestMspOutletOverrides:
         assert outlets[0]["signal"] is True, "gain~ outlet 0 should be signal"
         assert outlets[1]["signal"] is False, "gain~ outlet 1 should be control (not signal)"
 
-    def test_index_tilde_has_single_outlet(self, db):
-        """index~ must have exactly 1 outlet (extraction had erroneous outlet 1)."""
+    def test_index_tilde_has_two_signal_outlets(self, db):
+        """index~ has 2 signal outlets (Q11 / C2): MAX saves `index~ poke_index`
+        as (2,2) ["signal","signal"] in C74/help/msp/index~.maxhelp (9.0.0);
+        the refpage lists 2 outlets. The old 1-outlet override was wrong."""
         idx = db.lookup("index~")
         assert idx is not None, "index~ not found in database"
         outlets = idx["outlets"]
-        assert len(outlets) == 1, f"index~ expected 1 outlet, got {len(outlets)}"
+        assert len(outlets) == 2, f"index~ expected 2 outlets, got {len(outlets)}"
         assert outlets[0]["signal"] is True, "index~ outlet 0 should be signal"
+        assert outlets[1]["signal"] is True, "index~ outlet 1 should be signal"
 
     def test_gain_tilde_is_overridden(self, db):
         """gain~ must be marked as overridden in ObjectDatabase."""

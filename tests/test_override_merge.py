@@ -279,3 +279,183 @@ class TestOverrideKeyFailFast:
         assert out["digest"] == "Output"
         assert out["type"] == "control"
         assert mdb.lookup("metro")["inlets"][0]["hot"] is True
+
+
+# ---------------------------------------------------------------------------
+# Task 2 (C2): override I/O counts match MAX-saved help boxes
+# ---------------------------------------------------------------------------
+
+def _classes(db: ObjectDatabase, name: str, args: list) -> str:
+    """'S' per signal/multichannelsignal outlet, 'c' per control outlet."""
+    return "".join(
+        "S" if t in ("signal", "multichannelsignal") else "c"
+        for t in db.get_outlet_types(name, args)
+    )
+
+
+Q11_COUNT_TARGETS = (
+    "coll", "spectroscope~", "index~", "poke~", "vst~", "thispoly~",
+    "live.scope~", "gridmeter~", "bucket", "mousestate", "live.adsr~",
+    "live.adsrui", "dict.view", "jit.polymovie", "jit.line", "mxj~",
+    "mira.motion",
+)
+
+# Boxes saved by older Max versions with the pre-9 count. The oracle may
+# still report these exact signatures and nothing else for the name.
+OLDER_SIGNATURES = {
+    "mousestate": "count args=0 max=1,5 db=1,10",
+    "thispoly~": "count args=0 max=1,2 db=1,3",
+    "index~": "count args=1 max=2,1 db=2,2",
+    "poke~": "count args=1 max=3,0 db=3,1",
+}
+
+# (name, args, (inlets, outlets), outlet classes, roles or None, citation).
+# Every row is a box MAX itself serialized.
+MAX_SAVED_COUNTS = [
+    ("coll", [], (1, 4), "cccc", None,
+     "C74/help/max/coll.maxhelp (9.2.0) `coll` (1,4) [\"\" x4]; 169/169 boxes"),
+    ("spectroscope~", [], (2, 1), "c", ("status",),
+     "C74/help/msp/cross~.maxhelp (9.0.0) `spectroscope~` (2,1) [\"\"]; 57/57 bundle boxes"),
+    ("index~", ["buf"], (2, 2), "SS", ("audio", "audio"),
+     "C74/help/msp/index~.maxhelp (9.0.0) `index~ poke_index` (2,2) [signal, signal]"),
+    ("poke~", ["buf"], (3, 1), "S", ("audio",),
+     "C74/help/max/gen.maxhelp (9.1.0) `poke~ window` (3,1) [signal]"),
+    ("vst~", [], (2, 8), "SScccccc",
+     ("audio", "audio", "list", "data", "float", "status", "status", "status"),
+     "C74/help/msp/mc.midiplayer~.maxhelp (9.0.0) `vst~` (2,8) "
+     "[signal, signal, \"\", list, int, \"\", \"\", \"\"]"),
+    ("thispoly~", [], (1, 3), "ccc", ("data", "status", "float"),
+     "C74/help/msp/thispoly~.maxhelp (9.0.5) `thispoly~ @automute 1` (1,3) [int, int, int]"),
+    ("live.scope~", [], (2, 1), "c", None,
+     "C74/help/m4l/live.routing.maxhelp (9.0.0) `live.scope~` (2,1) [bang]; 224 boxes"),
+    ("gridmeter~", [], (1, 1), "S", ("audio",),
+     "C74/help/msp/gridmeter~.maxhelp (9.0.0) `gridmeter~` (1,1) [multichannelsignal]"),
+    ("bucket", [], (1, 1), "c", None,
+     "C74/help/max/anal.maxhelp (9.0.0) `bucket` (1,1) [\"\"]"),
+    ("bucket", ["4"], (1, 4), "cccc", None,
+     "C74/help/max/bucket.maxhelp `bucket 4 1` (1,4)"),
+    ("mousestate", [], (1, 10), "c" * 10, None,
+     "C74/help/max/mousestate.maxhelp (9.0.5) `mousestate` (1,10) [int x7, float, float, list]"),
+    ("live.adsr~", [], (11, 3), "SSc", ("audio", "audio", "status"),
+     "C74/packages/maxforlive-elements/help/live.adsr~.maxhelp (8.2.0) "
+     "`live.adsr~ 600. 100. 0.5 1000.` (11,3) [signal, signal, \"\"]"),
+    ("live.adsrui", [], (10, 10), "c" * 10, ("status",) * 10,
+     "C74/packages/maxforlive-elements/help/live.adsrui.maxhelp (8.5.6) `live.adsrui` (10,10)"),
+    ("dict.view", [], (1, 0), "", None,
+     "C74/help/max/dict.pack.maxhelp (9.0.0) `dict.view` (1,0) []; 70 bundle boxes"),
+    ("jit.polymovie", [], (1, 3), "ccc", ("data", "status", "status"),
+     "C74/packages/Jitter Tools/help/jit.polymovie.maxhelp (9.1.0) "
+     "`jit.polymovie @vol 0` (1,3) [jit_matrix, \"\", \"\"]"),
+    ("jit.line", [], (1, 2), "cc", ("status", "status"),
+     "C74/packages/Jitter Tools/help/jit.fx-help/jit.fx.camera.maxhelp (9.1.0) "
+     "`jit.line` (1,2) [\"\", \"\"]"),
+    ("mxj~", ["noise"], (1, 2), "Sc", ("audio", "status"),
+     "C74/packages/max-mxj/help/mxj~.maxhelp (7.0.0) `mxj~ noise` (1,2) [signal, \"\"]"),
+    ("mira.motion", [], (1, 1), "c", ("status",),
+     "C74/packages/mira/help/mira.motion.maxhelp (7.3.1) `mira.motion` (1,1) [\"\"]"),
+]
+
+
+def _row_id(row) -> str:
+    return row[0] + ("(" + " ".join(row[1]) + ")" if row[1] else "")
+
+
+def _assert_row(db, name, args, counts, classes, roles):
+    assert db.compute_io_counts(name, list(args)) == counts
+    assert _classes(db, name, list(args)) == classes
+    if roles is not None:
+        got = tuple(db.get_signal_role(name, i, list(args)) for i in range(counts[1]))
+        assert got == tuple(roles)
+
+
+class TestMaxSavedCounts:
+
+    @pytest.mark.parametrize(
+        "name,args,counts,classes,roles,citation", MAX_SAVED_COUNTS,
+        ids=[_row_id(r) for r in MAX_SAVED_COUNTS],
+    )
+    def test_matches_max_saved_box(self, db, name, args, counts, classes, roles, citation):
+        _assert_row(db, name, args, counts, classes, roles)
+
+    def test_every_target_has_a_row(self):
+        assert {r[0] for r in MAX_SAVED_COUNTS} == set(Q11_COUNT_TARGETS)
+
+    def test_live_adsr_inlets(self, db):
+        inlets = db.lookup("live.adsr~")["inlets"]
+        assert len(inlets) == 11
+        for i in range(5):
+            assert inlets[i]["signal"] is True and inlets[i]["type"] == "signal/float"
+        for i in range(5, 11):
+            assert inlets[i]["signal"] is False
+
+    def test_coll_single_hot_inlet(self, db):
+        inlets = db.lookup("coll")["inlets"]
+        assert len(inlets) == 1
+        assert inlets[0]["digest"] == "Messages and data"
+        assert inlets[0]["hot"] is True
+
+    def test_dict_view_has_no_outlets(self, db):
+        assert db.lookup("dict.view")["outlets"] == []
+
+    def test_mousestate_stub_inherits_base_digest(self, db):
+        assert db.lookup("mousestate")["outlets"][9]["digest"].startswith("Mousewheel Flags")
+
+    def test_role_ports_carry_no_signal_key(self):
+        ov = _override_objects()
+        both = [
+            (name, p.get("id"))
+            for name in Q11_COUNT_TARGETS
+            for p in ov[name].get("outlets", [])
+            if "signal_role" in p and "signal" in p
+        ]
+        assert both == []
+
+
+# ---------------------------------------------------------------------------
+# Live oracle (requires the Max bundle)
+# ---------------------------------------------------------------------------
+
+BASELINE = REPO_ROOT / "tests" / "fixtures" / "help_io_baseline.json"
+
+
+@pytest.fixture(scope="module")
+def live_section() -> dict:
+    import tools.audit_db as audit_db
+    from tests.conftest import MAX_APP_PATH
+    from tools import help_io
+
+    envelope = audit_db.run_help_io(max_app=MAX_APP_PATH)
+    section = envelope["help_io"]
+    assert section["available"], section.get("reason")
+    return help_io.build_baseline(section)
+
+
+def _skip_if_stale(live_section: dict) -> None:
+    from tools import help_io
+
+    committed = json.loads(BASELINE.read_text())
+    stale = help_io.diff_baselines(committed, live_section)["stale_sources"].get("bundle")
+    if stale is not None:
+        pytest.skip(
+            f"help-io baseline recorded against Max {stale['baseline']}, "
+            f"installed {stale['live']}"
+        )
+
+
+@pytest.mark.requires_max
+class TestOracleQ11:
+    """Q11 targets agree with MAX-saved bundle boxes (older-version boxes
+    excepted by exact signature)."""
+
+    def test_count_targets_clean_in_bundle(self, live_section):
+        _skip_if_stale(live_section)
+        bundle = live_section["names"].get("bundle", {})
+        bad = {}
+        for name in Q11_COUNT_TARGETS:
+            entry = bundle.get(name)
+            if entry is None:
+                continue
+            allowed = {OLDER_SIGNATURES[name]} if name in OLDER_SIGNATURES else set()
+            if not set(entry["signatures"]) <= allowed or entry["type_mismatches"]:
+                bad[name] = entry["signatures"]
+        assert not bad, bad

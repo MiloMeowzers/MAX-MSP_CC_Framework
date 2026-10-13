@@ -702,16 +702,9 @@
           "signal": false,
           "digest": "Messages and data",
           "hot": true
-        },
-        {
-          "id": 1,
-          "type": "int",
-          "signal": false,
-          "digest": "Index",
-          "hot": true
         }
       ],
-      "_note": "coll has two hot inlets (exception to cold-inlet convention)",
+      "_note": "coll has 1 inlet and 4 control outlets: MAX saves `coll` as (1,4) (C74/help/max/coll.maxhelp, 9.2.0).",
       "_manual_original": {
         "inlets": [
           {
@@ -758,10 +751,8 @@
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 42,
-        "agreement": 1.0,
-        "source": "io_count_finding"
+        "source": "Q11 / C2 (261013-e43): C74/help/max/coll.maxhelp `coll` => (1,4) [\"\",\"\",\"\",\"\"] (9.2.0), 169 boxes (169/169 bundle+package boxes; coll.maxref.xml 1 inlet / 4 outlets)",
+        "confidence": "HIGH"
       }
     },
     "decode": {
@@ -1292,14 +1283,26 @@
           "type": "",
           "signal": false,
           "digest": "Control output"
+        },
+        {
+          "id": 5
+        },
+        {
+          "id": 6
+        },
+        {
+          "id": 7
+        },
+        {
+          "id": 8
+        },
+        {
+          "id": 9
         }
       ],
       "_audit": {
-        "confidence": "MEDIUM",
-        "instances": 4,
-        "agreement": 0.75,
-        "source": "io_count_finding",
-        "_needs_verification": true
+        "source": "Q11 / C2 (261013-e43): C74/help/max/mousestate.maxhelp `mousestate` => (1,10) [\"int\" x7,\"float\",\"float\",\"list\"] (9.0.5), 2 boxes (also C74/help/jitter/jit.web.maxhelp 9.3.0; mousestate.maxref.xml 10 outlets; 4 bundle + 2 cv.jit boxes saved by Max 7.0.3-9.0.0 / 8.2.0 keep the pre-9 (1,5))",
+        "confidence": "HIGH"
       }
     },
     "mtof": {
@@ -2290,11 +2293,16 @@
       }
     },
     "gridmeter~": {
-      "outlets": [],
+      "outlets": [
+        {
+          "id": 0,
+          "type": "multichannelsignal",
+          "signal_role": "audio"
+        }
+      ],
       "_audit": {
-        "confidence": "HIGH",
-        "source": "outlet_type_correction",
-        "note": "gridmeter~ is display only - no outlets"
+        "source": "Q11 / C2 (261013-e43): C74/help/msp/gridmeter~.maxhelp `gridmeter~` => (1,1) [\"multichannelsignal\"] (9.0.0), 14 boxes",
+        "confidence": "HIGH"
       }
     },
     "in": {
@@ -2322,12 +2330,16 @@
           "type": "signal",
           "signal_role": "audio",
           "digest": "Sample value at index"
+        },
+        {
+          "id": 1,
+          "type": "signal",
+          "signal_role": "audio"
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "source": "outlet_count_correction",
-        "note": "Only 1 outlet per official docs. Outlet 1 was extraction error (inlet 1 digest duplicated as outlet 1)."
+        "source": "Q11 / C2 (261013-e43): C74/help/msp/index~.maxhelp `index~ poke_index` => (2,2) [\"signal\",\"signal\"] (9.0.0), 11 boxes (refpage 2 outlets)",
+        "confidence": "HIGH"
       }
     },
     "info~": {
@@ -2880,11 +2892,16 @@
       }
     },
     "poke~": {
-      "outlets": [],
+      "outlets": [
+        {
+          "id": 0,
+          "type": "signal",
+          "signal_role": "audio"
+        }
+      ],
       "_audit": {
-        "confidence": "HIGH",
-        "source": "outlet_type_correction",
-        "note": "poke~ has no outlets - it writes to buffer~ only"
+        "source": "Q11 / C2 (261013-e43): C74/help/max/gen.maxhelp `poke~ window` => (3,1) [\"signal\"] (9.1.0), 6 boxes (also `poke~ poke_index`, C74/help/msp/index~.maxhelp 9.0.0; refpage 1 outlet \"Channel\")",
+        "confidence": "HIGH"
       }
     },
     "polybuffer~": {
@@ -3156,11 +3173,16 @@
       }
     },
     "spectroscope~": {
-      "outlets": [],
+      "outlets": [
+        {
+          "id": 0,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        }
+      ],
       "_audit": {
-        "confidence": "HIGH",
-        "source": "outlet_type_correction",
-        "note": "spectroscope~ is display only - no outlets"
+        "source": "Q11 / C2 (261013-e43): C74/help/msp/cross~.maxhelp `spectroscope~` => (2,1) [\"\"] (9.0.0), 57 boxes (57/57 bundle boxes; refpage 1 outlet)",
+        "confidence": "HIGH"
       }
     },
     "stash~": {
@@ -3256,9 +3278,14 @@
           "type": "signal",
           "digest": "Mute flag 0/1 for instance (int)",
           "signal_role": "status"
+        },
+        {
+          "id": 2,
+          "type": "int",
+          "signal_role": "float"
         }
       ],
-      "_note": "Both outlets are control.",
+      "_note": "All 3 outlets are control (int): MAX saves `thispoly~ @automute 1` as (1,3) [int, int, int] (C74/help/msp/thispoly~.maxhelp, 9.0.5).",
       "_manual_original": {
         "outlets": [
           {
@@ -3285,10 +3312,8 @@
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 3,
-        "agreement": 1.0,
-        "source": "io_count_finding"
+        "source": "Q11 / C2 (261013-e43): C74/help/msp/thispoly~.maxhelp `thispoly~ @automute 1` => (1,3) [\"int\",\"int\",\"int\"] (9.0.5), 3 boxes (refpage 3 outlets)",
+        "confidence": "HIGH"
       }
     },
     "train~": {
@@ -3333,9 +3358,29 @@
           "type": "signal",
           "signal_role": "data",
           "digest": "Parameter index and value when changed"
+        },
+        {
+          "id": 4,
+          "type": "int",
+          "signal_role": "float"
+        },
+        {
+          "id": 5,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 6,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 7,
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
       ],
-      "_note": "Outlets 0-1 are signal, outlets 2-3 are control.",
+      "_note": "Outlets 0-1 signal, 2-7 control: MAX saves `vst~` as (2,8) [signal, signal, \"\", list, int, \"\", \"\", \"\"] (C74/help/msp/mc.midiplayer~.maxhelp, 9.0.0).",
       "_manual_original": {
         "outlets": [
           {
@@ -3380,10 +3425,8 @@
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 11,
-        "agreement": 1.0,
-        "source": "io_count_finding"
+        "source": "Q11 / C2 (261013-e43): C74/help/msp/mc.midiplayer~.maxhelp `vst~` => (2,8) [\"signal\",\"signal\",\"\",\"list\",\"int\",\"\",\"\",\"\"] (9.0.0), 12 boxes (refpage 8 outlets)",
+        "confidence": "HIGH"
       }
     },
     "windowed-fft~": {
@@ -5890,11 +5933,14 @@
           "hot": true
         }
       ],
-      "outlets": [],
+      "outlets": [
+        {
+          "id": 0
+        }
+      ],
       "_audit": {
-        "confidence": "HIGH",
-        "source": "manual_correction",
-        "note": "live.scope~ matches scope~ I/O: 2 signal inlets, 0 outlets"
+        "source": "Q11 / C2 (261013-e43): C74/help/m4l/live.routing.maxhelp `live.scope~` => (2,1) [\"bang\"] (9.0.0), 224 boxes",
+        "confidence": "HIGH"
       }
     },
     "_domain_rnbo": "--- RNBO Objects ---",
@@ -7193,19 +7239,11 @@
           "type": "",
           "signal": false,
           "digest": "Control output"
-        },
-        {
-          "id": 1,
-          "type": "",
-          "signal": false,
-          "digest": "Control output"
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 1,
-        "agreement": 1.0,
-        "source": "io_count_finding"
+        "source": "Q11 / C2 (261013-e43): C74/help/max/anal.maxhelp `bucket` => (1,1) [\"\"] (9.0.0), 1 box (count from the Q10 variable_io rule; stale 2-port array truncated)",
+        "confidence": "HIGH"
       }
     },
     "uzi": {
@@ -10504,19 +10542,10 @@
           "digest": ""
         }
       ],
-      "outlets": [
-        {
-          "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
-        }
-      ],
+      "outlets": [],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "dict UI viewer (control in, control out)"
+        "source": "Q11 / C2 (261013-e43): C74/help/max/dict.pack.maxhelp `dict.view` => (1,0) [] (9.0.0), 123 boxes (70 bundle + 53 package)",
+        "confidence": "HIGH"
       }
     },
     "fluid.stftpass~": {
@@ -10726,16 +10755,18 @@
       "outlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 1,
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
       ],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "jit.line ramp generator"
+        "source": "Q11 / C2 (261013-e43): C74/packages/Jitter Tools/help/jit.fx-help/jit.fx.camera.maxhelp `jit.line` => (1,2) [\"\",\"\"] (9.1.0), 6 boxes (5 there + `jit.line 0.` in jit.path.ui.maxhelp 9.2.0)",
+        "confidence": "HIGH"
       }
     },
     "jit.mo.field": {
@@ -10846,16 +10877,23 @@
       "outlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "jit_matrix",
+          "signal_role": "data"
+        },
+        {
+          "id": 1,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 2,
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
       ],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "jit polymovie playback"
+        "source": "Q11 / C2 (261013-e43): C74/packages/Jitter Tools/help/jit.polymovie.maxhelp `jit.polymovie @vol 0` => (1,3) [\"jit_matrix\",\"\",\"\"] (9.1.0), 1 box",
+        "confidence": "MEDIUM"
       }
     },
     "live.adsrui": {
@@ -10865,47 +10903,185 @@
           "type": "",
           "signal": false,
           "digest": ""
-        }
-      ],
-      "outlets": [
+        },
         {
-          "id": 0,
+          "id": 1,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 2,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 3,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 4,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 5,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 6,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 7,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 8,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 9,
           "type": "",
           "signal": false,
           "digest": ""
         }
       ],
+      "outlets": [
+        {
+          "id": 0,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 1,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 2,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 3,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 4,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 5,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 6,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 7,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 8,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 9,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        }
+      ],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "live ADSR UI editor"
+        "source": "Q11 / C2 (261013-e43): C74/packages/maxforlive-elements/help/live.adsrui.maxhelp `live.adsrui` => (10,10) [\"\" x10] (8.5.6), 23 boxes (also abl.dsp.dualbasicshapes~.maxhelp 9.0.0; every inlet receives only control cords)",
+        "confidence": "HIGH"
       }
     },
     "live.adsr~": {
       "inlets": [
         {
           "id": 0,
-          "type": "",
+          "type": "signal/float",
           "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
+          "type": "signal/float",
           "signal": true,
           "digest": ""
         },
         {
           "id": 2,
-          "type": "",
+          "type": "signal/float",
           "signal": true,
           "digest": ""
         },
         {
           "id": 3,
-          "type": "",
+          "type": "signal/float",
           "signal": true,
+          "digest": ""
+        },
+        {
+          "id": 4,
+          "type": "signal/float",
+          "signal": true,
+          "digest": ""
+        },
+        {
+          "id": 5,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 6,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 7,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 8,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 9,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 10,
+          "type": "",
+          "signal": false,
           "digest": ""
         }
       ],
@@ -10913,15 +11089,22 @@
         {
           "id": 0,
           "type": "signal",
-          "signal": true,
-          "digest": ""
+          "signal_role": "audio"
+        },
+        {
+          "id": 1,
+          "type": "signal",
+          "signal_role": "audio"
+        },
+        {
+          "id": 2,
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
       ],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "live ADSR signal-rate envelope (4 control + 1 signal out)"
+        "source": "Q11 / C2 (261013-e43): C74/packages/maxforlive-elements/help/live.adsr~.maxhelp `live.adsr~ 600. 100. 0.5 1000.` => (11,3) [\"signal\",\"signal\",\"\"] (8.2.0), 20 boxes (also C74/packages/ableton-dsp/help/abl.dsp.dualbasicshapes~.maxhelp 9.0.0; inlets 0-4 receive cords from MAX-saved signal outlets, 5-10 control only; no refpage)",
+        "confidence": "HIGH"
       }
     },
     "mira.motion": {
@@ -10936,28 +11119,13 @@
       "outlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
-        },
-        {
-          "id": 1,
-          "type": "",
-          "signal": false,
-          "digest": ""
-        },
-        {
-          "id": 2,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
       ],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "mira motion sensor (3-axis gyro/accel)"
+        "source": "Q11 / C2 (261013-e43): C74/packages/mira/help/mira.motion.maxhelp `mira.motion` => (1,1) [\"\"] (7.3.1), 3 boxes (also mira.frame.maxhelp 7.3.4; refpage has no I/O lists)",
+        "confidence": "MEDIUM"
       }
     },
     "mira.multitouch": {
@@ -11065,13 +11233,16 @@
           "type": "signal",
           "signal_role": "audio",
           "digest": "Signal output"
+        },
+        {
+          "id": 1,
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
       ],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "Java MSP host (I/O determined by loaded class)"
+        "source": "Q11 / C2 (261013-e43): C74/packages/max-mxj/help/mxj~.maxhelp `mxj~ noise` => (1,2) [\"signal\",\"\"] (7.0.0), 1 box (I/O depends on the loaded Java class)",
+        "confidence": "MEDIUM"
       }
     },
     "osc-route": {
