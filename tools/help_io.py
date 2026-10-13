@@ -576,12 +576,35 @@ def dump_baseline(baseline: dict) -> str:
 
 
 def diff_baselines(baseline: dict, live: dict) -> dict:
-    """Compare two baselines; a regression is a per-name mismatch increase."""
+    """Compare two baselines; a regression is a per-name mismatch increase.
+
+    Only sources present in both at an equal ``version`` are compared. For
+    those, a (source, name) whose ``count_mismatches`` or ``type_mismatches``
+    is higher live than in the baseline is a regression (a missing name
+    counts as 0); lower is an improvement. Stale-version, new and missing
+    sources are reported but never produce regressions.
+
+    Raises:
+        ValueError: when either side's ``schema`` is not :data:`SCHEMA_VERSION`.
+    """
+    for label, doc in (("baseline", baseline), ("live", live)):
+        if doc.get("schema") != SCHEMA_VERSION:
+            raise ValueError(
+                f"{label} help-io baseline has schema {doc.get('schema')!r}; "
+                f"expected {SCHEMA_VERSION}"
+            )
     regressions: list[dict] = []
     improvements: list[dict] = []
     b_src = baseline.get("sources", {})
     l_src = live.get("sources", {})
-    compared = sorted(set(b_src) & set(l_src))
+    compared: list[str] = []
+    stale: dict[str, dict] = {}
+    for sid in sorted(set(b_src) & set(l_src)):
+        b_ver, l_ver = b_src[sid].get("version"), l_src[sid].get("version")
+        if b_ver == l_ver:
+            compared.append(sid)
+        else:
+            stale[sid] = {"baseline": b_ver, "live": l_ver}
     for sid in compared:
         b_names = baseline.get("names", {}).get(sid, {})
         l_names = live.get("names", {}).get(sid, {})
@@ -595,10 +618,16 @@ def diff_baselines(baseline: dict, live: dict) -> dict:
                     regressions.append(row)
                 elif v < b:
                     improvements.append(row)
+    def _key(row: dict) -> tuple:
+        return (row["source"], row["name"], row["field"])
+
     return {
-        "regressions": regressions,
-        "improvements": improvements,
+        "regressions": sorted(regressions, key=_key),
+        "improvements": sorted(improvements, key=_key),
         "compared_sources": compared,
+        "stale_sources": stale,
+        "new_sources": sorted(set(l_src) - set(b_src)),
+        "missing_sources": sorted(set(b_src) - set(l_src)),
     }
 
 

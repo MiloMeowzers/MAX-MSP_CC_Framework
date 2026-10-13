@@ -30,7 +30,9 @@ from pathlib import Path
 
 import pytest
 
+import tools.audit_db as audit_db
 from src.maxpat.db_lookup import ObjectDatabase
+from tests.conftest import MAX_APP_PATH
 from tools import help_io
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -400,3 +402,291 @@ class TestCliModes:
         versions = [ln for ln in out.splitlines() if "help versions" in ln]
         assert versions and "9.1.0" in versions[0]
         assert any(ln.strip().startswith("mismatching") for ln in out.splitlines())
+
+
+# ── Task 3: diff semantics, baseline output, committed baseline ───
+
+
+MINI = REPO_ROOT / "tests" / "fixtures" / "help_io_mini_baseline.json"
+BASELINE = REPO_ROOT / "tests" / "fixtures" / "help_io_baseline.json"
+
+
+def _mini() -> dict:
+    return json.loads(MINI.read_text())
+
+
+def _keys(obj) -> set:
+    """Every dict key anywhere in a JSON value."""
+    found: set = set()
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            found.add(k)
+            found |= _keys(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            found |= _keys(v)
+    return found
+
+
+def _assert_signature_sums(baseline: dict) -> None:
+    for sid, names in baseline["names"].items():
+        assert sid in baseline["sources"], sid
+        for name, e in names.items():
+            total = e["count_mismatches"] + e["type_mismatches"]
+            assert total > 0, (sid, name)
+            assert sum(e["signatures"].values()) == total, (sid, name)
+
+
+class TestDiff:
+    def test_identical(self) -> None:
+        d = help_io.diff_baselines(_mini(), _mini())
+        assert d["regressions"] == [] and d["improvements"] == []
+        assert d["compared_sources"] == ["bundle", "package:Demo"]
+        assert d["stale_sources"] == {}
+        assert d["new_sources"] == [] and d["missing_sources"] == []
+
+    def test_count_increase(self) -> None:
+        live = _mini()
+        live["names"]["bundle"]["alpha"]["count_mismatches"] = 3
+        d = help_io.diff_baselines(_mini(), live)
+        assert d["regressions"] == [{
+            "source": "bundle", "name": "alpha", "field": "count_mismatches",
+            "baseline": 2, "live": 3,
+        }]
+
+    def test_type_increase(self) -> None:
+        live = _mini()
+        live["names"]["bundle"]["beta~"]["type_mismatches"] = 2
+        d = help_io.diff_baselines(_mini(), live)
+        assert [(r["name"], r["field"]) for r in d["regressions"]] == [
+            ("beta~", "type_mismatches")
+        ]
+
+    def test_new_name_is_a_regression_from_zero(self) -> None:
+        live = _mini()
+        live["names"]["bundle"]["gamma"] = {
+            "boxes": 1, "count_mismatches": 1, "type_mismatches": 0,
+            "signatures": {"count args=0 max=1,1 db=1,0": 1},
+        }
+        d = help_io.diff_baselines(_mini(), live)
+        assert d["regressions"] == [{
+            "source": "bundle", "name": "gamma", "field": "count_mismatches",
+            "baseline": 0, "live": 1,
+        }]
+
+    def test_removed_name_is_an_improvement(self) -> None:
+        live = _mini()
+        del live["names"]["bundle"]["alpha"]
+        d = help_io.diff_baselines(_mini(), live)
+        assert d["regressions"] == []
+        assert d["improvements"] == [{
+            "source": "bundle", "name": "alpha", "field": "count_mismatches",
+            "baseline": 2, "live": 0,
+        }]
+
+    def test_stale_source_is_excluded(self) -> None:
+        live = _mini()
+        live["sources"]["package:Demo"]["version"] = "1.0.1"
+        live["names"]["package:Demo"]["demo.obj"]["count_mismatches"] = 5
+        d = help_io.diff_baselines(_mini(), live)
+        assert d["regressions"] == []
+        assert d["stale_sources"] == {
+            "package:Demo": {"baseline": "1.0.0", "live": "1.0.1"}
+        }
+        assert d["compared_sources"] == ["bundle"]
+
+    def test_new_source_is_not_compared(self) -> None:
+        live = _mini()
+        live["sources"]["package:New"] = {
+            "version": "2.0.0", "files": 1, "boxes_compared": 1,
+            "mismatching_boxes": 1, "mismatching_names": 1,
+        }
+        live["names"]["package:New"] = {"x": {
+            "boxes": 1, "count_mismatches": 1, "type_mismatches": 0,
+            "signatures": {"count args=0 max=1,1 db=0,0": 1},
+        }}
+        d = help_io.diff_baselines(_mini(), live)
+        assert d["new_sources"] == ["package:New"]
+        assert d["regressions"] == []
+
+    def test_missing_source(self) -> None:
+        live = _mini()
+        del live["sources"]["package:Demo"]
+        del live["names"]["package:Demo"]
+        d = help_io.diff_baselines(_mini(), live)
+        assert d["missing_sources"] == ["package:Demo"]
+        assert d["regressions"] == []
+
+    def test_boxes_change_alone_is_not_a_regression(self) -> None:
+        live = _mini()
+        live["names"]["bundle"]["alpha"]["boxes"] = 40
+        d = help_io.diff_baselines(_mini(), live)
+        assert d["regressions"] == [] and d["improvements"] == []
+
+    def test_regressions_are_sorted(self) -> None:
+        live = _mini()
+        live["names"]["package:Demo"]["demo.obj"]["type_mismatches"] = 1
+        live["names"]["bundle"]["beta~"]["type_mismatches"] = 4
+        live["names"]["bundle"]["beta~"]["count_mismatches"] = 1
+        live["names"]["bundle"]["alpha"]["type_mismatches"] = 1
+        d = help_io.diff_baselines(_mini(), live)
+        keys = [(r["source"], r["name"], r["field"]) for r in d["regressions"]]
+        assert keys == [
+            ("bundle", "alpha", "type_mismatches"),
+            ("bundle", "beta~", "count_mismatches"),
+            ("bundle", "beta~", "type_mismatches"),
+            ("package:Demo", "demo.obj", "type_mismatches"),
+        ]
+
+    @pytest.mark.parametrize("side", ["baseline", "live"])
+    def test_unknown_schema_raises(self, side: str) -> None:
+        other = _mini()
+        other["schema"] = 2
+        args = (other, _mini()) if side == "baseline" else (_mini(), other)
+        with pytest.raises(ValueError):
+            help_io.diff_baselines(*args)
+
+    def test_mini_fixture_is_canonical(self) -> None:
+        text = MINI.read_text()
+        assert text == help_io.dump_baseline(json.loads(text))
+
+
+class TestBaselineOutput:
+    def test_dump_is_machine_neutral(self, tmp_path: Path) -> None:
+        app, db, pkgs = _scan_tree(tmp_path)
+        baseline = help_io.build_baseline(_scan(app, db, pkgs))
+        text = help_io.dump_baseline(baseline)
+        assert str(tmp_path) not in text
+        assert str(Path.home()) not in text
+        assert not _keys(baseline) & {"generated_at", "root", "examples", "appversions"}
+
+    def test_only_mismatching_names_and_signature_sums(self, tmp_path: Path) -> None:
+        baseline = help_io.build_baseline(_scan(*_scan_tree(tmp_path)))
+        assert sorted(baseline["names"]["bundle"]) == ["alpha", "sigout~", "uiwidget"]
+        _assert_signature_sums(baseline)
+
+    def test_cli_write_twice_identical(self, tmp_path: Path) -> None:
+        app, db, pkgs = _scan_tree(tmp_path)
+        outs = []
+        for i in range(2):
+            target = tmp_path / f"bl{i}.json"
+            r = _cli("--help-io", "--max-app", app, "--db-root", db,
+                     "--packages-dir", pkgs, "--write-baseline", target)
+            assert r.returncode == 0, r.stderr
+            assert f"baseline        : {target}" in r.stdout
+            outs.append(target.read_bytes())
+        assert outs[0] == outs[1]
+
+    def test_cli_refuses_protected_target(self, tmp_path: Path) -> None:
+        app, db, pkgs = _scan_tree(tmp_path)
+        repo = tmp_path / "repo"
+        (repo / "patches").mkdir(parents=True)
+        target = repo / "patches" / "x.json"
+        r = _cli("--help-io", "--repo-root", repo, "--max-app", app, "--db-root", db,
+                 "--packages-dir", pkgs, "--write-baseline", target)
+        assert r.returncode == 2
+        assert not target.exists()
+        assert "refusing to write" in r.stderr
+
+    def test_cli_write_baseline_requires_help_io(self, tmp_path: Path) -> None:
+        target = tmp_path / "bl.json"
+        r = _cli("--write-baseline", target, "--max-app", tmp_path / "absent.app")
+        assert r.returncode == 2
+        assert not target.exists()
+
+    def test_cli_unavailable_bundle_writes_nothing(self, tmp_path: Path) -> None:
+        target = tmp_path / "bl.json"
+        j = tmp_path / "h.json"
+        r = _cli("--help-io", "--max-app", tmp_path / "absent.app",
+                 "--db-root", _make_fake_db(tmp_path),
+                 "--packages-dir", tmp_path / "no-packages",
+                 "--json", j, "--write-baseline", target)
+        assert r.returncode == 1
+        assert "error" in r.stderr
+        assert not target.exists() and not j.exists()
+
+
+class TestCommittedBaseline:
+    """Hygiene of the committed baseline; no Max needed (runs in CI)."""
+
+    def test_exists_and_schema(self) -> None:
+        baseline = json.loads(BASELINE.read_text())
+        assert baseline["schema"] == 1
+        assert isinstance(baseline["max_version"], str)
+
+    def test_canonical(self) -> None:
+        text = BASELINE.read_text()
+        assert text == help_io.dump_baseline(json.loads(text))
+
+    def test_size(self) -> None:
+        assert BASELINE.stat().st_size < 400_000
+
+    def test_no_machine_paths_or_timestamps(self) -> None:
+        text = BASELINE.read_text()
+        for needle in ("/Users/", "/Applications/", "/home/", "generated_at"):
+            assert needle not in text, needle
+
+    def test_entries_are_mismatches_with_matching_signature_sums(self) -> None:
+        _assert_signature_sums(json.loads(BASELINE.read_text()))
+
+
+@pytest.fixture(scope="module")
+def live() -> dict:
+    """One live scan (real bundle, real DB, default packages dir) per module."""
+    envelope = audit_db.run_help_io(max_app=MAX_APP_PATH)
+    section = envelope["help_io"]
+    assert section["available"], section.get("reason")
+    return help_io.build_baseline(section)
+
+
+@pytest.mark.requires_max
+class TestLiveOracle:
+    """Fails when MAX-saved help boxes disagree with the DB more than recorded.
+
+    Reads the real bundle, the real DB and the default packages dir. Skips
+    without Max.app (conftest) and when the installed Max differs from the
+    version the baseline was recorded against.
+    """
+
+    INSPECT = "python3 tools/audit_db.py --help-io --json <path>"
+
+    @staticmethod
+    def _diff_or_skip(baseline: dict, live: dict) -> dict:
+        diff = help_io.diff_baselines(baseline, live)
+        stale = diff["stale_sources"].get("bundle")
+        if stale is not None:
+            pytest.skip(
+                f"help-io baseline recorded against Max {stale['baseline']}, "
+                f"installed {stale['live']}: re-run python3 tools/audit_db.py "
+                "--help-io --write-baseline tests/fixtures/help_io_baseline.json"
+            )
+        return diff
+
+    def test_mismatches_do_not_increase(self, live: dict) -> None:
+        diff = self._diff_or_skip(json.loads(BASELINE.read_text()), live)
+        rows = [
+            f"{r['source']}/{r['name']} {r['field']} {r['baseline']}->{r['live']}"
+            for r in diff["regressions"][:20]
+        ]
+        assert not diff["regressions"], (
+            f"{len(diff['regressions'])} help-box I/O regressions vs the committed "
+            f"baseline (inspect with {self.INSPECT}):\n" + "\n".join(rows)
+        )
+
+    def test_a_regression_is_detected_on_live_data(self, live: dict) -> None:
+        committed = json.loads(BASELINE.read_text())
+        base_diff = self._diff_or_skip(committed, live)
+        names = committed["names"].get("bundle", {})
+        if not names:
+            pytest.skip("committed baseline records no bundle mismatches")
+        name = sorted(names)[0]
+        entry = names[name]
+        field = max(("count_mismatches", "type_mismatches"), key=lambda f: entry[f])
+        doctored = copy.deepcopy(committed)
+        doctored["names"]["bundle"][name][field] -= 1
+        diff = help_io.diff_baselines(doctored, live)
+        new = [r for r in diff["regressions"] if r not in base_diff["regressions"]]
+        assert len(new) == 1
+        assert (new[0]["source"], new[0]["name"], new[0]["field"]) == (
+            "bundle", name, field
+        )
