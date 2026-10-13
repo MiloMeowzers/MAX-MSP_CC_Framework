@@ -2187,11 +2187,13 @@ class TestLiveScopeOverride:
     """Verify live.scope~ has correct I/O from override."""
 
     def test_live_scope_has_signal_inlets(self):
+        """2 inlets, 1 outlet (Q11 / C2): MAX saves `live.scope~` as (2,1)
+        ["bang"] in C74/help/m4l/live.routing.maxhelp (9.0.0), 224 boxes."""
         from src.maxpat import Patcher
         p = Patcher()
         box = p.add_box("live.scope~")
         assert box.numinlets == 2
-        assert box.numoutlets == 0
+        assert box.numoutlets == 1
 
     def test_live_scope_connectable(self):
         """Can connect signal sources to live.scope~ inlets."""

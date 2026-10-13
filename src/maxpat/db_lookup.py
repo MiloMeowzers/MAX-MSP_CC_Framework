@@ -65,6 +65,73 @@ _DOMAIN_TO_FIELD = {
     "gen": "Gen",
 }
 
+# Placeholder port text written by the override generator
+# (src/maxpat/audit/overrides.py ``_build_outlet_array`` /
+# ``_build_inlet_array``). It carries no information, so the per-port merge
+# never lets it replace a real base digest/description (Q11 / C6).
+OVERRIDE_PLACEHOLDER_DIGESTS = frozenset({"", "Control output", "Signal output"})
+
+
+def _is_control_port(port: dict) -> bool:
+    """True when a base port is control: not ``signal: true`` and no
+    "signal" in its (lower-cased) type."""
+    if port.get("signal") is True:
+        return False
+    ptype = port.get("type")
+    return not (isinstance(ptype, str) and "signal" in ptype.lower())
+
+
+def merge_override_ports(base_ports: list, override_ports: list) -> list:
+    """Merge an overrides.json ``inlets``/``outlets`` array onto base ports.
+
+    Q11 / C6: override arrays used to replace the base array whole, so a
+    generator-written port (digest "Control output", type "") wiped the base
+    digest, ``hot`` flag, name and type. Now:
+
+    * The override sets the port COUNT: the result has
+      ``len(override_ports)`` entries (longer appends, shorter truncates).
+    * Port i with no base port i (or a non-dict on either side) is a shallow
+      copy of the override port; a non-dict passes through unchanged (the
+      schema validator still rejects it).
+    * Otherwise port i starts as a shallow copy of base port i and each
+      override key replaces only that key, except:
+
+      - ``digest`` / ``description``: a non-string or placeholder value
+        (:data:`OVERRIDE_PLACEHOLDER_DIGESTS`) never replaces a non-empty
+        base string;
+      - ``type``: ``""`` never replaces a non-empty type on a CONTROL base
+        port (on a signal base port the empty type is a real signal ->
+        control correction and applies).
+
+    So ``{"id": N}`` inherits base port N unchanged. Inputs are not mutated.
+    """
+    merged: list = []
+    for i, over in enumerate(override_ports):
+        base = base_ports[i] if i < len(base_ports) else None
+        if not isinstance(over, dict) or not isinstance(base, dict):
+            merged.append(dict(over) if isinstance(over, dict) else over)
+            continue
+        port = dict(base)
+        for key, value in over.items():
+            if key in ("digest", "description"):
+                base_value = base.get(key)
+                if (
+                    (not isinstance(value, str) or value in OVERRIDE_PLACEHOLDER_DIGESTS)
+                    and isinstance(base_value, str) and base_value
+                ):
+                    continue
+            elif key == "type":
+                base_type = base.get("type")
+                if (
+                    value == ""
+                    and isinstance(base_type, str) and base_type
+                    and _is_control_port(base)
+                ):
+                    continue
+            port[key] = value
+        merged.append(port)
+    return merged
+
 
 class ObjectDatabase:
     """Interface to the MAX object knowledge base.
@@ -94,7 +161,7 @@ class ObjectDatabase:
         self._package_objects: dict[str, list[str]] = defaultdict(list)
         self._package_info: dict[str, dict] = {}
         # Raw per-file empty-I/O provenance, captured during _load BEFORE the
-        # override deep-merge and BEFORE canonical-name shadowing collapses
+        # per-port override merge and BEFORE canonical-name shadowing collapses
         # duplicates. Maps source label ("max", "packages/Bach", ...) to the
         # empty-I/O object names in that raw file. Surfaces package entries
         # that self._objects shadows behind populated same-named core entries.
@@ -131,7 +198,7 @@ class ObjectDatabase:
                     self._known_pairs.add(frozenset((a, b)))
 
         # Parse overrides.json exactly once (quick-260421-b3a FN-02). Both
-        # the variable_io_rules registry and the per-object deep-merge
+        # the variable_io_rules registry and the per-object per-port merge
         # payload come from this file; the prior implementation parsed it
         # twice.
         overrides_path = db_root / "overrides.json"
@@ -181,21 +248,14 @@ class ObjectDatabase:
                         if not obj.get("inlets") and not obj.get("outlets"):
                             self._empty_io_by_source[domain_dir].append(name)
 
-        # Apply object overrides (deep-merge onto loaded objects) using the
-        # already-parsed overrides_data — no second disk read.
+        # Apply object overrides (per-port merge of inlets/outlets, whole
+        # replacement of every other field) using the already-parsed
+        # overrides_data — no second disk read.
         self._overridden_objects: set[str] = set()
-        for name, overrides in overrides_data.get("objects", {}).items():
-            if name.startswith("_"):
-                continue  # skip comment keys
-            if name in self._objects:
-                for key, value in overrides.items():
-                    if key.startswith("_"):
-                        continue  # skip comments
-                    self._objects[name][key] = value
-                self._overridden_objects.add(name)
+        self._apply_object_overrides(overrides_data)
 
         # Fail-fast on the v5.0 schema-extension fields (signal_role,
-        # domain_restricted, verified_installed). Runs AFTER deep-merge so
+        # domain_restricted, verified_installed). Runs AFTER the merge so
         # the validator sees the final merged shape, BEFORE package_info
         # so any load-time error surfaces during DB construction.
         self._validate_schema_extensions()
@@ -221,6 +281,53 @@ class ObjectDatabase:
             obj = self._objects.get(name)
             if obj is not None:
                 obj["variable_io"] = True
+
+    def _apply_object_overrides(self, overrides_data: dict) -> None:
+        """Apply overrides.json ``objects`` onto the loaded domain entries.
+
+        * Keys are canonicalized through aliases.json (Q11 / C7): alias keys
+          such as ``del`` / ``v`` used to be silently ignored because only
+          literal object names matched.
+        * Two keys that map to the same canonical name raise ValueError.
+        * A key whose canonical name has no domain entry raises ValueError
+          (it would otherwise be a silently inactive override).
+        * ``inlets`` / ``outlets`` lists merge per port via
+          :func:`merge_override_ports` (Q11 / C6); every other non-``_``
+          field replaces the base value whole. ``_``-prefixed keys are
+          comments and never applied.
+        """
+        seen: dict[str, str] = {}
+        for key, overrides in overrides_data.get("objects", {}).items():
+            if key.startswith("_"):
+                continue  # skip comment keys
+            canonical = self._aliases.get(key, key)
+            if canonical in seen:
+                raise ValueError(
+                    f"overrides.json objects keys {seen[canonical]!r} and "
+                    f"{key!r} both resolve to {canonical!r} through "
+                    "aliases.json; merge them into one entry keyed by the "
+                    "canonical name."
+                )
+            seen[canonical] = key
+            obj = self._objects.get(canonical)
+            if obj is None:
+                via = f" (alias of {canonical!r})" if canonical != key else ""
+                raise ValueError(
+                    f"overrides.json objects key {key!r}{via} has no base "
+                    "domain entry; add the object to a domain objects.json "
+                    "file or delete the override."
+                )
+            for field, value in overrides.items():
+                if field.startswith("_"):
+                    continue  # skip comments
+                if field in ("inlets", "outlets") and isinstance(value, list):
+                    base_ports = obj.get(field)
+                    if not isinstance(base_ports, list):
+                        base_ports = []
+                    obj[field] = merge_override_ports(base_ports, value)
+                else:
+                    obj[field] = value
+            self._overridden_objects.add(canonical)
 
     def _validate_variable_io_rules(self) -> None:
         """Assert every loaded rule uses a supported formula.
@@ -280,7 +387,7 @@ class ObjectDatabase:
     def _validate_schema_extensions(self) -> None:
         """Fail-fast validator for the v5.0 schema-extension fields.
 
-        Walks self._objects after the overrides deep-merge has completed and
+        Walks self._objects after the per-port overrides merge has completed and
         enforces three schema invariants (SCHEMA-01..03, D-04, D-06, D-15):
 
           1. Every outlet's `signal_role` (when present) is a member of

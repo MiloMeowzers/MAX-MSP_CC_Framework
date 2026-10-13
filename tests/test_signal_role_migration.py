@@ -65,21 +65,21 @@ _PROJECTED_SIGNAL_BOOL_EXPECTATIONS = [
     ("mxj~", 0, True),
     ("playlist~", 0, True),
     ("playlist~", 1, True),
-    ("playlist~", 2, False),  # status (state)
+    ("playlist~", 2, True),   # Q11: MAX saves playlist~ (1,5) ["signal" x3, "", "dictionary"], C74/help/max/chooser.maxhelp
     ("play~", 0, True),
     ("play~", 1, False),      # trigger (bang when playback)
     ("ramp~", 0, True),
     ("ramp~", 1, False),      # trigger
     ("retune~", 0, True),
     ("retune~", 1, True),
-    ("retune~", 2, False),    # default-status (Voice allocation data)
+    ("retune~", 2, True),     # Q11: MAX saves `retune~ 440` (3,5) ["signal" x4, "list"], C74/help/msp/retune~.maxhelp
     ("sfizz~", 0, True),
     ("sfizz~", 7, True),
     ("sfplay~", 0, True),
     ("sfplay~", 1, False),    # trigger (bang when done)
     ("stash~", 0, True),
-    ("stash~", 1, False),     # data (Index (int))
-    ("stretch~", 0, True),
+    ("stash~", 1, True),      # Q11: MAX saves stash~ (4,2) ["signal","signal"], C74/help/msp/stash~.maxhelp
+    ("stretch~", 0, False),   # Q11: MAX saves `stretch~ stretchy` (1,2) ["float","bang"], C74/help/msp/stretch~.maxhelp
     ("stretch~", 1, False),   # trigger (bang when done)
     ("sync~", 0, True),
     ("sync~", 1, False),      # default-status (Control output)

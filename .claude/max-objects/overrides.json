@@ -702,16 +702,9 @@
           "signal": false,
           "digest": "Messages and data",
           "hot": true
-        },
-        {
-          "id": 1,
-          "type": "int",
-          "signal": false,
-          "digest": "Index",
-          "hot": true
         }
       ],
-      "_note": "coll has two hot inlets (exception to cold-inlet convention)",
+      "_note": "coll has 1 inlet and 4 control outlets: MAX saves `coll` as (1,4) (C74/help/max/coll.maxhelp, 9.2.0).",
       "_manual_original": {
         "inlets": [
           {
@@ -758,10 +751,8 @@
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 42,
-        "agreement": 1.0,
-        "source": "io_count_finding"
+        "source": "Q11 / C2 (261013-e43): C74/help/max/coll.maxhelp `coll` => (1,4) [\"\",\"\",\"\",\"\"] (9.2.0), 169 boxes (169/169 bundle+package boxes; coll.maxref.xml 1 inlet / 4 outlets)",
+        "confidence": "HIGH"
       }
     },
     "decode": {
@@ -1292,14 +1283,26 @@
           "type": "",
           "signal": false,
           "digest": "Control output"
+        },
+        {
+          "id": 5
+        },
+        {
+          "id": 6
+        },
+        {
+          "id": 7
+        },
+        {
+          "id": 8
+        },
+        {
+          "id": 9
         }
       ],
       "_audit": {
-        "confidence": "MEDIUM",
-        "instances": 4,
-        "agreement": 0.75,
-        "source": "io_count_finding",
-        "_needs_verification": true
+        "source": "Q11 / C2 (261013-e43): C74/help/max/mousestate.maxhelp `mousestate` => (1,10) [\"int\" x7,\"float\",\"float\",\"list\"] (9.0.5), 2 boxes (also C74/help/jitter/jit.web.maxhelp 9.3.0; mousestate.maxref.xml 10 outlets; 4 bundle + 2 cv.jit boxes saved by Max 7.0.3-9.0.0 / 8.2.0 keep the pre-9 (1,5))",
+        "confidence": "HIGH"
       }
     },
     "mtof": {
@@ -1462,23 +1465,6 @@
         "confidence": "MEDIUM",
         "instances": 616,
         "agreement": 0.974025974025974,
-        "source": "io_count_finding"
-      }
-    },
-    "r": {
-      "inlets": [],
-      "outlets": [
-        {
-          "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": "Control output"
-        }
-      ],
-      "_audit": {
-        "confidence": "HIGH",
-        "instances": 109,
-        "agreement": 1.0,
         "source": "io_count_finding"
       }
     },
@@ -1934,6 +1920,25 @@
       ],
       "_note": "zl has two hot inlets"
     },
+    "jweb~": {
+      "outlets": [
+        {
+          "id": 0
+        },
+        {
+          "id": 1
+        },
+        {
+          "id": 2,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        }
+      ],
+      "_audit": {
+        "source": "Q11 / C9 (261013-e43): C74/help/msp/jweb~.maxhelp `jweb~` => (1,3) [\"signal\",\"signal\",\"\"] (9.0.0), 1 box (refpage types outlet 2 signal; the help box wins)",
+        "confidence": "MEDIUM"
+      }
+    },
     "_domain_msp": "--- MSP Objects ---",
     "2d.wave~": {
       "outlets": [
@@ -2307,11 +2312,16 @@
       }
     },
     "gridmeter~": {
-      "outlets": [],
+      "outlets": [
+        {
+          "id": 0,
+          "type": "multichannelsignal",
+          "signal_role": "audio"
+        }
+      ],
       "_audit": {
-        "confidence": "HIGH",
-        "source": "outlet_type_correction",
-        "note": "gridmeter~ is display only - no outlets"
+        "source": "Q11 / C2 (261013-e43): C74/help/msp/gridmeter~.maxhelp `gridmeter~` => (1,1) [\"multichannelsignal\"] (9.0.0), 14 boxes",
+        "confidence": "HIGH"
       }
     },
     "in": {
@@ -2339,12 +2349,16 @@
           "type": "signal",
           "signal_role": "audio",
           "digest": "Sample value at index"
+        },
+        {
+          "id": 1,
+          "type": "signal",
+          "signal_role": "audio"
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "source": "outlet_count_correction",
-        "note": "Only 1 outlet per official docs. Outlet 1 was extraction error (inlet 1 digest duplicated as outlet 1)."
+        "source": "Q11 / C2 (261013-e43): C74/help/msp/index~.maxhelp `index~ poke_index` => (2,2) [\"signal\",\"signal\"] (9.0.0), 11 boxes (refpage 2 outlets)",
+        "confidence": "HIGH"
       }
     },
     "info~": {
@@ -2600,14 +2614,13 @@
       "outlets": [
         {
           "id": 0,
-          "type": "control",
-          "digest": "Control output",
-          "signal_role": "status"
+          "type": "multichannelsignal",
+          "signal_role": "audio"
         }
       ],
       "_audit": {
-        "confidence": "HELP_PATCH",
-        "source": "empty_io_coverage"
+        "source": "Q11 / C9 (261013-e43): C74/help/msp/out~.maxhelp `mcs.poly~ mcout_subpatcher 1` => (1,1) [\"multichannelsignal\"] (9.0.5), 2 boxes (I/O is content-defined: `mcs.poly~ poly_loadme 5` => (2,4) in poly~.maxhelp 9.2.0)",
+        "confidence": "HIGH"
       }
     },
     "mcs.tapout~": {
@@ -2634,16 +2647,13 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
-          "digest": "Control output",
-          "signal_role": "status"
+          "type": "multichannelsignal",
+          "signal_role": "audio"
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 1,
-        "agreement": 1.0,
-        "source": "io_count_finding"
+        "source": "Q11 / C9 (261013-e43): C74/help/msp/tapout~.maxhelp `mcs.tapout~ 100 200 300` => (3,1) [\"multichannelsignal\"] (9.0.0), 1 box",
+        "confidence": "HIGH"
       }
     },
     "mcs.vst~": {
@@ -2812,14 +2822,12 @@
         {
           "id": 0,
           "type": "signal",
-          "digest": "Control output",
-          "signal_role": "status"
+          "signal_role": "audio"
         },
         {
           "id": 1,
           "type": "signal",
-          "digest": "Control output",
-          "signal_role": "status"
+          "signal_role": "audio"
         },
         {
           "id": 2,
@@ -2829,10 +2837,8 @@
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 1,
-        "agreement": 1.0,
-        "source": "io_count_finding"
+        "source": "Q11 / C9 (261013-e43): C74/help/msp/pitchshift~.maxhelp `pitchshift~ 2` => (3,3) [\"signal\",\"signal\",\"\"] (9.0.0), 1 box",
+        "confidence": "HIGH"
       }
     },
     "playlist~": {
@@ -2852,15 +2858,23 @@
         {
           "id": 2,
           "type": "signal",
+          "signal_role": "audio"
+        },
+        {
+          "id": 3,
           "signal_role": "status",
-          "digest": "Playback state messages"
+          "_role_source": "default-status"
+        },
+        {
+          "id": 4,
+          "type": "dictionary",
+          "signal_role": "data"
         }
       ],
-      "_note": "Default 3 outlets. Audio outlet count varies with channelcount attribute.",
+      "_note": "5 outlets: audio, audio, audio, status, dictionary. MAX saves `playlist~` as (1,5) [signal, signal, signal, \"\", dictionary] (C74/help/max/chooser.maxhelp, 9.0.0). @channelcount may vary the audio outlets (not modelled).",
       "_audit": {
-        "confidence": "HIGH",
-        "source": "outlet_type_correction",
-        "note": "Default config: 2 signal + 1 control. DB had 5 outlets incorrectly."
+        "source": "Q11 / C2 (261013-e43): C74/help/max/chooser.maxhelp `playlist~` => (1,5) [\"signal\",\"signal\",\"signal\",\"\",\"dictionary\"] (9.0.0), 25 boxes (refpage 5 outlets)",
+        "confidence": "HIGH"
       }
     },
     "play~": {
@@ -2897,11 +2911,16 @@
       }
     },
     "poke~": {
-      "outlets": [],
+      "outlets": [
+        {
+          "id": 0,
+          "type": "signal",
+          "signal_role": "audio"
+        }
+      ],
       "_audit": {
-        "confidence": "HIGH",
-        "source": "outlet_type_correction",
-        "note": "poke~ has no outlets - it writes to buffer~ only"
+        "source": "Q11 / C2 (261013-e43): C74/help/max/gen.maxhelp `poke~ window` => (3,1) [\"signal\"] (9.1.0), 6 boxes (also `poke~ poke_index`, C74/help/msp/index~.maxhelp 9.0.0; refpage 1 outlet \"Channel\")",
+        "confidence": "HIGH"
       }
     },
     "polybuffer~": {
@@ -2979,15 +2998,22 @@
         {
           "id": 2,
           "type": "signal",
-          "signal_role": "status",
-          "digest": "Voice allocation data",
-          "_role_source": "default-status"
+          "signal_role": "audio"
+        },
+        {
+          "id": 3,
+          "type": "signal",
+          "signal_role": "audio"
+        },
+        {
+          "id": 4,
+          "type": "list",
+          "signal_role": "list"
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "source": "outlet_type_correction",
-        "note": "3 outlets (2 signal, 1 control). DB had 5 outlets incorrectly."
+        "source": "Q11 / C2 (261013-e43): C74/help/msp/retune~.maxhelp `retune~ 440` => (3,5) [\"signal\",\"signal\",\"signal\",\"signal\",\"list\"] (9.0.0), 5 boxes (refpage 5 outlets)",
+        "confidence": "HIGH"
       }
     },
     "sfinfo~": {
@@ -3161,23 +3187,25 @@
         {
           "id": 0,
           "type": "signal",
-          "digest": "Control output",
-          "signal_role": "status"
+          "signal_role": "audio"
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 3,
-        "agreement": 1.0,
-        "source": "io_count_finding"
+        "source": "Q11 / C9 (261013-e43): C74/help/msp/adoutput~.maxhelp `sfrecord~ 2` => (2,1) [\"signal\"] (9.0.0), 3 boxes (refpage: \"(signal) elapsed time (ms)\")",
+        "confidence": "HIGH"
       }
     },
     "spectroscope~": {
-      "outlets": [],
+      "outlets": [
+        {
+          "id": 0,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        }
+      ],
       "_audit": {
-        "confidence": "HIGH",
-        "source": "outlet_type_correction",
-        "note": "spectroscope~ is display only - no outlets"
+        "source": "Q11 / C2 (261013-e43): C74/help/msp/cross~.maxhelp `spectroscope~` => (2,1) [\"\"] (9.0.0), 57 boxes (57/57 bundle boxes; refpage 1 outlet)",
+        "confidence": "HIGH"
       }
     },
     "stash~": {
@@ -3191,19 +3219,21 @@
         {
           "id": 1,
           "type": "signal",
-          "signal_role": "data",
-          "digest": "Index (int)"
+          "signal_role": "audio"
         }
       ],
-      "_note": "Outlet 0 is signal, outlet 1 is control."
+      "_note": "Both outlets are signal: MAX saves `stash~` as (4,2) [signal, signal] (C74/help/msp/stash~.maxhelp, 9.0.0).",
+      "_audit": {
+        "source": "Q11 / C9 (261013-e43): C74/help/msp/stash~.maxhelp `stash~` => (4,2) [\"signal\",\"signal\"] (9.0.0), 7 boxes",
+        "confidence": "HIGH"
+      }
     },
     "stretch~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
-          "signal_role": "audio",
-          "digest": "Audio output"
+          "type": "float",
+          "signal_role": "float"
         },
         {
           "id": 1,
@@ -3212,7 +3242,11 @@
           "digest": "bang when done"
         }
       ],
-      "_note": "Outlet 0 is signal, outlet 1 is control bang."
+      "_note": "Outlet 0 is float progress, outlet 1 a bang when done: MAX saves `stretch~ stretchy` as (1,2) [float, bang] (C74/help/msp/stretch~.maxhelp, 9.0.0).",
+      "_audit": {
+        "source": "Q11 / C9 (261013-e43): C74/help/msp/stretch~.maxhelp `stretch~ stretchy` => (1,2) [\"float\",\"bang\"] (9.0.0), 2 boxes",
+        "confidence": "HIGH"
+      }
     },
     "sync~": {
       "outlets": [
@@ -3273,9 +3307,14 @@
           "type": "signal",
           "digest": "Mute flag 0/1 for instance (int)",
           "signal_role": "status"
+        },
+        {
+          "id": 2,
+          "type": "int",
+          "signal_role": "float"
         }
       ],
-      "_note": "Both outlets are control.",
+      "_note": "All 3 outlets are control (int): MAX saves `thispoly~ @automute 1` as (1,3) [int, int, int] (C74/help/msp/thispoly~.maxhelp, 9.0.5).",
       "_manual_original": {
         "outlets": [
           {
@@ -3302,10 +3341,8 @@
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 3,
-        "agreement": 1.0,
-        "source": "io_count_finding"
+        "source": "Q11 / C2 (261013-e43): C74/help/msp/thispoly~.maxhelp `thispoly~ @automute 1` => (1,3) [\"int\",\"int\",\"int\"] (9.0.5), 3 boxes (refpage 3 outlets)",
+        "confidence": "HIGH"
       }
     },
     "train~": {
@@ -3350,9 +3387,29 @@
           "type": "signal",
           "signal_role": "data",
           "digest": "Parameter index and value when changed"
+        },
+        {
+          "id": 4,
+          "type": "int",
+          "signal_role": "float"
+        },
+        {
+          "id": 5,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 6,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 7,
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
       ],
-      "_note": "Outlets 0-1 are signal, outlets 2-3 are control.",
+      "_note": "Outlets 0-1 signal, 2-7 control: MAX saves `vst~` as (2,8) [signal, signal, \"\", list, int, \"\", \"\", \"\"] (C74/help/msp/mc.midiplayer~.maxhelp, 9.0.0).",
       "_manual_original": {
         "outlets": [
           {
@@ -3397,10 +3454,8 @@
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 11,
-        "agreement": 1.0,
-        "source": "io_count_finding"
+        "source": "Q11 / C2 (261013-e43): C74/help/msp/mc.midiplayer~.maxhelp `vst~` => (2,8) [\"signal\",\"signal\",\"\",\"list\",\"int\",\"\",\"\",\"\"] (9.0.0), 12 boxes (refpage 8 outlets)",
+        "confidence": "HIGH"
       }
     },
     "windowed-fft~": {
@@ -4038,15 +4093,13 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
-          "digest": "Control output",
-          "signal_role": "status"
+          "type": "multichannelsignal",
+          "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
-          "digest": "Control output",
-          "signal_role": "status"
+          "type": "multichannelsignal",
+          "signal_role": "audio"
         },
         {
           "id": 2,
@@ -4068,10 +4121,8 @@
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 8,
-        "agreement": 1.0,
-        "source": "io_count_finding"
+        "source": "Q11 / C9 (261013-e43): C74/help/max/mc.assign.maxhelp `mc.adsr~ 10 150 0 100 @chans 6` => (5,5) [\"multichannelsignal\",\"multichannelsignal\",\"\",\"\",\"\"] (9.0.0), 11 boxes (8 bundle + 3 FlowSwing)",
+        "confidence": "HIGH"
       }
     },
     "mc.amxd~": {
@@ -4582,16 +4633,13 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
-          "digest": "Control output",
-          "signal_role": "status"
+          "type": "multichannelsignal",
+          "signal_role": "audio"
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 2,
-        "agreement": 1.0,
-        "source": "io_count_finding"
+        "source": "Q11 / C9 (261013-e43): C74/help/msp/stash~.maxhelp `mc.selector~ 2 1 @ramptime 100` => (3,1) [\"multichannelsignal\"] (9.0.0), 3 boxes (2 bundle + 1 grainflow)",
+        "confidence": "HIGH"
       }
     },
     "mc.sfplay~": {
@@ -5907,11 +5955,14 @@
           "hot": true
         }
       ],
-      "outlets": [],
+      "outlets": [
+        {
+          "id": 0
+        }
+      ],
       "_audit": {
-        "confidence": "HIGH",
-        "source": "manual_correction",
-        "note": "live.scope~ matches scope~ I/O: 2 signal inlets, 0 outlets"
+        "source": "Q11 / C2 (261013-e43): C74/help/m4l/live.routing.maxhelp `live.scope~` => (2,1) [\"bang\"] (9.0.0), 224 boxes",
+        "confidence": "HIGH"
       }
     },
     "_domain_rnbo": "--- RNBO Objects ---",
@@ -6480,6 +6531,32 @@
         "note": "Extracted DB had inlets=1 / outlets=1; maxref.xml lists inlets=1 / outlets=2. Override restores ref-accurate counts/digests."
       }
     },
+    "bp.arc.accum-2": {
+      "outlets": [
+        {
+          "id": 0,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        }
+      ],
+      "_audit": {
+        "source": "Q11 / C9 (261013-e43): C74/packages/BEAP/Help/bp.Granular.maxhelp `bp.arc.accum-2 1 -1000 1000` => (2,1) [\"\"] (8.0.6), 12 boxes",
+        "confidence": "HIGH"
+      }
+    },
+    "bp.arc.knob": {
+      "outlets": [
+        {
+          "id": 0,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        }
+      ],
+      "_audit": {
+        "source": "Q11 / C9 (261013-e43): C74/packages/BEAP/Help/bp.Granular.maxhelp `bp.arc.knob 1 0 bandwidth` => (3,1) [\"\"] (8.0.6), 12 boxes",
+        "confidence": "HIGH"
+      }
+    },
     "_domain_other": "--- Other Objects (not in domain JSONs) ---",
     "M4L.api.ObserveTransport": {
       "inlets": [
@@ -6503,8 +6580,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "M4L.api.ToggleTransport": {
       "inlets": [
@@ -6521,8 +6597,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "array.at": {
       "inlets": [
@@ -6558,10 +6633,9 @@
         "instances": 2,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
-    "del": {
+    "delay": {
       "inlets": [
         {
           "id": 0,
@@ -6589,8 +6663,7 @@
         "instances": 10,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.*": {
       "inlets": [
@@ -6626,8 +6699,7 @@
         "instances": 2,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.fx.rota": {
       "inlets": [
@@ -6651,8 +6723,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.gl.layer": {
       "inlets": [
@@ -6682,8 +6753,7 @@
         "instances": 15,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.gl.movie": {
       "inlets": [
@@ -6713,8 +6783,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.gl.pbr": {
       "inlets": [
@@ -6786,8 +6855,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.gl.polymovie": {
       "inlets": [
@@ -6823,8 +6891,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.mo.sin": {
       "inlets": [
@@ -6854,8 +6921,7 @@
         "instances": 3,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.time": {
       "inlets": [
@@ -6885,8 +6951,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.time.perlin": {
       "inlets": [
@@ -6916,8 +6981,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.time.saw": {
       "inlets": [
@@ -6947,8 +7011,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "jit.time.sin": {
       "inlets": [
@@ -6978,8 +7041,7 @@
         "instances": 2,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "mc.capture~": {
       "inlets": [
@@ -6997,8 +7059,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON. inlets[0].signal flipped true in Plan 30-04 (deferred-items.md MC tilde test resolution)."
+      }
     },
     "mc.receive~": {
       "outlets": [
@@ -7022,8 +7083,7 @@
           "signal": false,
           "digest": ""
         }
-      ],
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      ]
     },
     "mc.send~": {
       "inlets": [
@@ -7041,8 +7101,7 @@
         "instances": 2,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON. inlets[0].signal flipped true in Plan 30-04 (deferred-items.md MC tilde test resolution)."
+      }
     },
     "mc.sum~": {
       "outlets": [
@@ -7066,8 +7125,7 @@
           "signal": false,
           "digest": ""
         }
-      ],
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      ]
     },
     "mcp.record~": {
       "outlets": [
@@ -7103,8 +7161,7 @@
           "signal": false,
           "digest": ""
         }
-      ],
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      ]
     },
     "mcs.loudness~": {
       "inlets": [
@@ -7159,8 +7216,7 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "mcs.sfizz~": {
       "outlets": [
@@ -7190,10 +7246,9 @@
           "signal": false,
           "digest": ""
         }
-      ],
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      ]
     },
-    "v": {
+    "value": {
       "inlets": [
         {
           "id": 0,
@@ -7215,8 +7270,7 @@
         "instances": 11,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "bucket": {
       "inlets": [
@@ -7233,21 +7287,12 @@
           "type": "",
           "signal": false,
           "digest": "Control output"
-        },
-        {
-          "id": 1,
-          "type": "",
-          "signal": false,
-          "digest": "Control output"
         }
       ],
       "_audit": {
-        "confidence": "HIGH",
-        "instances": 1,
-        "agreement": 1.0,
-        "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+        "source": "Q11 / C2 (261013-e43): C74/help/max/anal.maxhelp `bucket` => (1,1) [\"\"] (9.0.0), 1 box (count from the Q10 variable_io rule; stale 2-port array truncated)",
+        "confidence": "HIGH"
+      }
     },
     "uzi": {
       "inlets": [
@@ -7289,8 +7334,7 @@
         "instances": 13,
         "agreement": 1.0,
         "source": "io_count_finding"
-      },
-      "_note": "No base domain entry -- override inactive until object added to domain JSON"
+      }
     },
     "bpatcher": {
       "inlets": [
@@ -10546,19 +10590,10 @@
           "digest": ""
         }
       ],
-      "outlets": [
-        {
-          "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
-        }
-      ],
+      "outlets": [],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "dict UI viewer (control in, control out)"
+        "source": "Q11 / C2 (261013-e43): C74/help/max/dict.pack.maxhelp `dict.view` => (1,0) [] (9.0.0), 123 boxes (70 bundle + 53 package)",
+        "confidence": "HIGH"
       }
     },
     "fluid.stftpass~": {
@@ -10768,16 +10803,18 @@
       "outlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 1,
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
       ],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "jit.line ramp generator"
+        "source": "Q11 / C2 (261013-e43): C74/packages/Jitter Tools/help/jit.fx-help/jit.fx.camera.maxhelp `jit.line` => (1,2) [\"\",\"\"] (9.1.0), 6 boxes (5 there + `jit.line 0.` in jit.path.ui.maxhelp 9.2.0)",
+        "confidence": "HIGH"
       }
     },
     "jit.mo.field": {
@@ -10888,16 +10925,23 @@
       "outlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "jit_matrix",
+          "signal_role": "data"
+        },
+        {
+          "id": 1,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 2,
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
       ],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "jit polymovie playback"
+        "source": "Q11 / C2 (261013-e43): C74/packages/Jitter Tools/help/jit.polymovie.maxhelp `jit.polymovie @vol 0` => (1,3) [\"jit_matrix\",\"\",\"\"] (9.1.0), 1 box",
+        "confidence": "MEDIUM"
       }
     },
     "live.adsrui": {
@@ -10907,47 +10951,185 @@
           "type": "",
           "signal": false,
           "digest": ""
-        }
-      ],
-      "outlets": [
+        },
         {
-          "id": 0,
+          "id": 1,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 2,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 3,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 4,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 5,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 6,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 7,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 8,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 9,
           "type": "",
           "signal": false,
           "digest": ""
         }
       ],
+      "outlets": [
+        {
+          "id": 0,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 1,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 2,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 3,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 4,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 5,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 6,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 7,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 8,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        },
+        {
+          "id": 9,
+          "signal_role": "status",
+          "_role_source": "default-status"
+        }
+      ],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "live ADSR UI editor"
+        "source": "Q11 / C2 (261013-e43): C74/packages/maxforlive-elements/help/live.adsrui.maxhelp `live.adsrui` => (10,10) [\"\" x10] (8.5.6), 23 boxes (also abl.dsp.dualbasicshapes~.maxhelp 9.0.0; every inlet receives only control cords)",
+        "confidence": "HIGH"
       }
     },
     "live.adsr~": {
       "inlets": [
         {
           "id": 0,
-          "type": "",
+          "type": "signal/float",
           "signal": true,
           "digest": ""
         },
         {
           "id": 1,
-          "type": "",
+          "type": "signal/float",
           "signal": true,
           "digest": ""
         },
         {
           "id": 2,
-          "type": "",
+          "type": "signal/float",
           "signal": true,
           "digest": ""
         },
         {
           "id": 3,
-          "type": "",
+          "type": "signal/float",
           "signal": true,
+          "digest": ""
+        },
+        {
+          "id": 4,
+          "type": "signal/float",
+          "signal": true,
+          "digest": ""
+        },
+        {
+          "id": 5,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 6,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 7,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 8,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 9,
+          "type": "",
+          "signal": false,
+          "digest": ""
+        },
+        {
+          "id": 10,
+          "type": "",
+          "signal": false,
           "digest": ""
         }
       ],
@@ -10955,15 +11137,22 @@
         {
           "id": 0,
           "type": "signal",
-          "signal": true,
-          "digest": ""
+          "signal_role": "audio"
+        },
+        {
+          "id": 1,
+          "type": "signal",
+          "signal_role": "audio"
+        },
+        {
+          "id": 2,
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
       ],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "live ADSR signal-rate envelope (4 control + 1 signal out)"
+        "source": "Q11 / C2 (261013-e43): C74/packages/maxforlive-elements/help/live.adsr~.maxhelp `live.adsr~ 600. 100. 0.5 1000.` => (11,3) [\"signal\",\"signal\",\"\"] (8.2.0), 20 boxes (also C74/packages/ableton-dsp/help/abl.dsp.dualbasicshapes~.maxhelp 9.0.0; inlets 0-4 receive cords from MAX-saved signal outlets, 5-10 control only; no refpage)",
+        "confidence": "HIGH"
       }
     },
     "mira.motion": {
@@ -10978,28 +11167,13 @@
       "outlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
-        },
-        {
-          "id": 1,
-          "type": "",
-          "signal": false,
-          "digest": ""
-        },
-        {
-          "id": 2,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
       ],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "mira motion sensor (3-axis gyro/accel)"
+        "source": "Q11 / C2 (261013-e43): C74/packages/mira/help/mira.motion.maxhelp `mira.motion` => (1,1) [\"\"] (7.3.1), 3 boxes (also mira.frame.maxhelp 7.3.4; refpage has no I/O lists)",
+        "confidence": "MEDIUM"
       }
     },
     "mira.multitouch": {
@@ -11107,13 +11281,16 @@
           "type": "signal",
           "signal_role": "audio",
           "digest": "Signal output"
+        },
+        {
+          "id": 1,
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
       ],
       "_audit": {
-        "confidence": "LOW",
-        "source": "manual_fallback_inferred",
-        "tool": "tools/extract_pkg_io.py",
-        "note": "Java MSP host (I/O determined by loaded class)"
+        "source": "Q11 / C2 (261013-e43): C74/packages/max-mxj/help/mxj~.maxhelp `mxj~ noise` => (1,2) [\"signal\",\"\"] (7.0.0), 1 box (I/O depends on the loaded Java class)",
+        "confidence": "MEDIUM"
       }
     },
     "osc-route": {
@@ -12276,11 +12453,14 @@
       "outlets": [
         {
           "id": 0,
-          "type": "control",
-          "digest": "out 1",
-          "signal_role": "audio"
+          "type": "float",
+          "signal_role": "float"
         }
-      ]
+      ],
+      "_audit": {
+        "source": "Q11 / C9 (261013-e43): C74/help/max/gen.maxhelp `gen` => (2,1) [\"float\"] (9.1.0), 21 boxes (every gen box saves outlet 0 \"float\")",
+        "confidence": "HIGH"
+      }
     },
     "gen.codebox": {
       "outlets": [
@@ -14910,9 +15090,8 @@
         },
         {
           "id": 1,
-          "type": "number",
-          "digest": "Scaled Signal (ch 2)",
-          "signal_role": "audio"
+          "signal_role": "status",
+          "_role_source": "default-status"
         },
         {
           "id": 2,
@@ -14926,7 +15105,11 @@
           "digest": "Parameter Raw Value (0.-1.)",
           "signal_role": "float"
         }
-      ]
+      ],
+      "_audit": {
+        "source": "Q11 / C9 (261013-e43): C74/help/max/mc.assign.maxhelp `mc.live.gain~` => (1,4) [\"multichannelsignal\",\"\",\"float\",\"list\"] (9.0.0), 109 boxes",
+        "confidence": "HIGH"
+      }
     },
     "mc.log~": {
       "outlets": [
@@ -15454,9 +15637,8 @@
         },
         {
           "id": 2,
-          "type": "signal",
-          "digest": "Playback Notifications",
-          "signal_role": "audio"
+          "signal_role": "status",
+          "_role_source": "default-status"
         },
         {
           "id": 3,
@@ -15464,7 +15646,11 @@
           "digest": "Current content",
           "signal_role": "list"
         }
-      ]
+      ],
+      "_audit": {
+        "source": "Q11 / C9 (261013-e43): C74/help/msp/matrix~.maxhelp `mc.playlist~` => (1,4) [\"multichannelsignal\",\"signal\",\"\",\"dictionary\"] (9.0.0), 19 boxes",
+        "confidence": "HIGH"
+      }
     },
     "mc.poltocar~": {
       "outlets": [
@@ -15658,17 +15844,19 @@
       "outlets": [
         {
           "id": 0,
-          "type": "int",
-          "digest": "Per-Voice Output",
-          "signal_role": "audio"
+          "signal_role": "status",
+          "_role_source": "default-status"
         },
         {
           "id": 1,
-          "type": "int",
-          "digest": "Output for Voice 2",
-          "signal_role": "audio"
+          "signal_role": "status",
+          "_role_source": "default-status"
         }
-      ]
+      ],
+      "_audit": {
+        "source": "Q11 / C9 (261013-e43): C74/help/msp/mc.pack~.maxhelp `mc.route 4` => (2,4) [\"\",\"\",\"\",\"\"] (9.0.0), 11 boxes (Q10 hand-off; outlets beyond the array inherit the last port)",
+        "confidence": "HIGH"
+      }
     },
     "mc.r~": {
       "outlets": [
@@ -15907,11 +16095,14 @@
         },
         {
           "id": 1,
-          "type": "signal",
-          "digest": "Index",
-          "signal_role": "data"
+          "type": "multichannelsignal",
+          "signal_role": "audio"
         }
-      ]
+      ],
+      "_audit": {
+        "source": "Q11 / C9 (261013-e43): C74/help/msp/stash~.maxhelp `mc.stash~` => (4,2) [\"multichannelsignal\",\"multichannelsignal\"] (9.0.0), 1 box (refpage outlet 1 is a signal \"Index\")",
+        "confidence": "HIGH"
+      }
     },
     "mc.stepdiv~": {
       "outlets": [
