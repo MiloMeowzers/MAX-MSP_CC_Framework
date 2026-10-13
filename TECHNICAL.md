@@ -459,15 +459,15 @@ Additional validation for RNBO export patches (`src/maxpat/rnbo_validation.py`):
 
 ### Write Hooks
 
-`src/maxpat/hooks.py` automatically triggers validation when writing files:
+`src/maxpat/hooks.py` runs a save gate before writing `.maxpat` and `.gendsp` files (`.js` validation is report-only):
 
 | Function | Validates | Blocks on Error |
 |----------|-----------|----------------|
-| `save_patch_roundtrip(patcher, path)` | Lossless round-trip; auto-commits to git via `auto_commit_patch()` | No |
-| `write_gendsp(code, path)` | Auto-commits to git | No |
+| `save_patch_roundtrip(patch_dict, path, original_text=None, *, force=False)` | Stale-file check, then the save gate: `validate_patch` (on a deepcopy) + `review_patch` with one cached DB, cord-removal warning, port x-rank check; auto-commits to git via `auto_commit_patch()` | New blockers / port reorder (`force=True` overrides) |
+| `write_gendsp(code, path, ..., *, force=False)` | The same save gate; auto-commits to git | New blockers / port reorder (`force=True` overrides) |
 | `write_js(code, path)` | Code validation (report-only); auto-commits to git | No |
 
-Validation is run on demand via `validate_patch()` rather than automatically on every save — this avoids rejecting third-party objects on load-edit-save cycles.
+The gate compares blocking findings with a baseline: `original_text`, else `git show HEAD:<path>`, else the file on disk. With no baseline the file is new and every blocker refuses. Findings are matched by rule template plus box ids (not message text), as a multiset, so only blockers the save introduces raise `PatchValidationError`. Findings that existed before the save never block, which is why third-party objects in user patches don't reject load-edit-save cycles. Cords present in HEAD (and in `original_text`) but missing from the new patch, walked recursively through subpatchers, emit one `SaveGateWarning`. A changed x-rank of any inlet/outlet present in both versions (subpatchers and abstraction top levels) blocks, because parent cords address ports by x-rank; a port appended rightmost does not. `force=True` saves anyway with a `SaveGateWarning` listing what was bypassed. `PatchValidationError` carries `findings` (the new ValidationResult/CriticResult objects), `port_changes` and `path`. Nothing is written or committed before the gate passes. `validate_file()` remains on demand.
 
 ---
 

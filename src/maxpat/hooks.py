@@ -1,6 +1,17 @@
-"""File write hooks that trigger validation on .maxpat, .gendsp, and .js output.
+"""File write hooks for .maxpat, .gendsp, and .js output.
 
-Implements FRM-05: auto hook on file write triggers validation.
+Save gate (fix-plan Q7, review A3 / R1): save_patch_roundtrip and
+write_gendsp run validate_patch on a deepcopy plus review_patch, with one
+cached ObjectDatabase, before anything is written or committed. Blocking
+findings are compared with a baseline -- original_text, else the HEAD
+version of the path, else the file on disk -- and matched by rule template
+plus box ids (never by finding text), so only blockers the save introduces
+raise PatchValidationError; with no baseline the file is new and every
+blocker refuses. Cords removed compared with HEAD (and original_text) emit
+one SaveGateWarning. A changed x-rank of a subpatcher or abstraction
+inlet/outlet raises PatchValidationError. ``force=True`` saves anyway with a
+SaveGateWarning listing what was bypassed. write_js validation stays
+report-only; validate_file runs on demand.
 
 Provides:
 - finalize_patch: Single-call layout cleanup hook for new and edited patches.
@@ -9,7 +20,8 @@ Provides:
 - validate_file: Load and validate an existing .maxpat file from disk.
 - validate_code_file: Validate .gendsp or .js code files from disk.
 - PatchGenerationError: Raised when unfixable errors prevent generation.
-- PatchValidationError: Raised when validation blocks file write.
+- PatchValidationError: Raised when the save gate blocks a file write.
+- SaveGateWarning: Warning for removed cords and force=True bypasses.
 - StaleFileError: Raised when a file changed on disk since it was read.
 
 Save safety (Q5): save_patch_roundtrip, write_gendsp and write_js auto-commit
