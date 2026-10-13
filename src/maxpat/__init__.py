@@ -41,6 +41,7 @@ from src.maxpat.hooks import (
     PatchGenerationError,
     PatchValidationError,
     StaleFileError,
+    SaveGateWarning,
 )
 from src.maxpat.codegen import (
     build_genexpr,
@@ -114,6 +115,7 @@ __all__ = [
     "PatchGenerationError",
     "PatchValidationError",
     "StaleFileError",
+    "SaveGateWarning",
     # Database
     "ObjectDatabase",
     # RNBO

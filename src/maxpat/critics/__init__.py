@@ -40,10 +40,14 @@ def _has_rnbo_boxes(patch_dict: dict) -> bool:
     return False
 
 
-def _has_package_boxes(patch_dict: dict) -> bool:
-    """Check if a patch contains any package objects."""
-    from src.maxpat.db_lookup import ObjectDatabase
-    db = ObjectDatabase()
+def _has_package_boxes(patch_dict: dict, db=None) -> bool:
+    """Check if a patch contains any package objects.
+
+    *db* is an ObjectDatabase; one is constructed only when it is None.
+    """
+    if db is None:
+        from src.maxpat.db_lookup import ObjectDatabase
+        db = ObjectDatabase()
     patcher = patch_dict.get("patcher", {})
     for box_entry in patcher.get("boxes", []):
         box = box_entry.get("box", {})
@@ -62,6 +66,8 @@ def review_patch(
     code_context: dict | None = None,
     ext_code: str | None = None,
     ext_archetype: str = "message",
+    *,
+    db=None,
 ) -> list[CriticResult]:
     """Run all critics on a patch and return combined results.
 
@@ -87,6 +93,9 @@ def review_patch(
         ext_code: Optional C++ source code string for external code review.
         ext_archetype: Archetype for external code review ("message", "dsp",
             "scheduler"). Only used when ext_code is provided.
+        db: Keyword-only ObjectDatabase used for package detection and the
+            package critic. None (default) constructs one per call, as
+            before; the save gate passes one cached instance (Q7).
 
     Returns:
         Combined list of CriticResult from all active critics.
@@ -110,8 +119,8 @@ def review_patch(
         results.extend(review_external(ext_code, archetype=ext_archetype))
 
     # Package critic: auto-invoke when package objects detected
-    if _has_package_boxes(patch_dict):
-        results.extend(review_packages(patch_dict))
+    if _has_package_boxes(patch_dict, db=db):
+        results.extend(review_packages(patch_dict, db=db))
 
     return results
 

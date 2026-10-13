@@ -24,11 +24,15 @@ raises StaleFileError when original_text no longer matches the file on disk;
 
 from __future__ import annotations
 
+import copy
+import functools
 import json
 import os
+import re
 import warnings
+from collections import Counter
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from src.maxpat.validation import validate_patch, has_blocking_errors, ValidationResult
 
@@ -244,6 +248,15 @@ def save_patch_roundtrip(
     not exist yet is never stale. Re-read after every save before saving the
     same file again.
 
+    Save gate (fix-plan Q7, review A3 / R1): after the stale check and
+    before anything is written, validate_patch (on a deepcopy) and
+    review_patch run on the new dict with one cached ObjectDatabase. Their
+    blocking findings are compared with the baseline -- original_text, else
+    the HEAD version of the path, else the file on disk -- by rule template
+    plus box ids, never by finding text. Only findings the save introduces
+    raise PatchValidationError; pre-existing ones save. A new file (no
+    baseline) refuses every blocker. The caller's dict is never modified.
+
     Args:
         patch_dict: The .maxpat dict (output of Patcher.to_dict()).
         path: Destination file path.
@@ -252,8 +265,9 @@ def save_patch_roundtrip(
             None, uses 4-space indent (MAX 9.1.2 default) and skips the
             stale check.
         force: Keyword-only. Overwrite a stale file anyway, with a
-            UserWarning. Use only when the user confirms the on-disk changes
-            can be discarded.
+            UserWarning, and bypass the save gate, with a SaveGateWarning
+            listing what was bypassed. Use only when the user confirms the
+            on-disk changes can be discarded or the findings are accepted.
 
     Returns:
         The full git commit hash of the path-scoped auto-commit (fix-plan
@@ -265,6 +279,9 @@ def save_patch_roundtrip(
     Raises:
         StaleFileError: original_text no longer matches the file on disk and
             force is False. The file is untouched and nothing is committed.
+        PatchValidationError: the save gate found blocking findings the save
+            would introduce and force is False. Raised before anything is
+            written or committed; ``findings`` and ``port_changes`` say why.
     """
     path = Path(path)
 
@@ -279,6 +296,9 @@ def save_patch_roundtrip(
                 UserWarning,
                 stacklevel=2,
             )
+
+    # Save gate (Q7, A3 / R1): after the stale check, before mkdir/write/commit.
+    _run_save_gate(patch_dict, path, original_text, force=force)
 
     if original_text is not None:
         indent = detect_indent(original_text)
@@ -335,7 +355,34 @@ class PatchGenerationError(Exception):
 
 
 class PatchValidationError(Exception):
-    """Raised when validation finds blocking errors that prevent file write."""
+    """Raised when the save gate refuses a write (fix-plan Q7, A3 / R1).
+
+    save_patch_roundtrip() and write_gendsp() raise it BEFORE anything is
+    written or committed when the save would introduce a blocking validation
+    error or critic blocker (any blocker, for a new file), or would change
+    the x-rank of a subpatcher/abstraction inlet or outlet. Fix the findings,
+    or pass force=True to save anyway (with a SaveGateWarning).
+
+    Still constructible from a bare message: ``PatchValidationError("msg")``.
+
+    Attributes:
+        path: The file that was not written, or None.
+        findings: The new blocking ValidationResult / CriticResult objects.
+        port_changes: Human-readable port x-rank changes (list of str).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        path: "str | Path | None" = None,
+        findings=(),
+        port_changes=(),
+    ) -> None:
+        self.path = path
+        self.findings = list(findings)
+        self.port_changes = list(port_changes)
+        super().__init__(message)
 
 
 class StaleFileError(Exception):
@@ -376,6 +423,230 @@ class JsWriteResult(list):
     """
 
     commit_hash: "str | None" = None
+
+
+# ===========================================================================
+# Save gate (Q7, review A3 / R1)
+# ===========================================================================
+#
+# save_patch_roundtrip() and write_gendsp() call _run_save_gate() before any
+# mkdir, write or commit. The gate never mutates the caller's dict: only
+# deepcopies reach validate_patch/review_patch, and apply_fixes is never
+# called.
+
+
+class SaveGateWarning(UserWarning):
+    """Warning emitted by the save gate (fix-plan Q7).
+
+    Raised as a warning (never an error) for removed cords, and when
+    ``force=True`` bypasses a refusal; the message lists what was bypassed.
+    """
+
+
+class GateReport(NamedTuple):
+    """Result of comparing a patch dict with its baseline (pure, no I/O)."""
+
+    new_blockers: list
+    removed_cords: list
+    port_changes: list
+
+
+@functools.lru_cache(maxsize=1)
+def _gate_db():
+    """One process-wide ObjectDatabase for the save gate.
+
+    Cached for the life of the process, so edits to the DB files made while
+    the process runs are not seen by the gate until it restarts.
+    """
+    from src.maxpat.db_lookup import ObjectDatabase
+
+    return ObjectDatabase()
+
+
+_GATE_ID_RE = re.compile(r"\bobj-\d+\b")
+_GATE_QUOTED_RE = re.compile(r"'[^']*'|\"[^\"]*\"")
+_GATE_NUM_RE = re.compile(r"\d+(\.\d+)?")
+_GATE_WS_RE = re.compile(r"\s+")
+
+
+def _finding_key(result) -> tuple:
+    """Hashable identity of a blocking finding: rule template + box ids.
+
+    Finding text is never compared as-is. The key is
+    ``(origin, template, ids, proposed_removal)``:
+
+    - origin: ``("validate", layer, level)`` or ``("review", severity)``;
+    - template: the text with box ids replaced by ``<id>`` first, then
+      quoted spans by ``<q>``, then numbers by ``<n>``, whitespace collapsed;
+    - ids: sorted unique ``obj-N`` ids from the text, plus the source and
+      destination ids of ``proposed_removal`` when set;
+    - proposed_removal: the cord tuple, or None.
+    """
+    if isinstance(result, ValidationResult):
+        origin: tuple = ("validate", result.layer, result.level)
+        text = result.message or ""
+        removal = result.proposed_removal
+    else:
+        origin = ("review", getattr(result, "severity", None))
+        text = getattr(result, "finding", "") or ""
+        removal = None
+
+    ids = set(_GATE_ID_RE.findall(text))
+    if removal is not None and len(removal) >= 3:
+        ids.add(str(removal[0]))
+        ids.add(str(removal[2]))
+
+    template = _GATE_ID_RE.sub("<id>", text)
+    template = _GATE_QUOTED_RE.sub("<q>", template)
+    template = _GATE_NUM_RE.sub("<n>", template)
+    template = _GATE_WS_RE.sub(" ", template).strip()
+    return (origin, template, tuple(sorted(ids)), removal)
+
+
+def _blocking_findings(patch_dict: dict) -> list:
+    """Blocking validation errors and critic blockers of *patch_dict*.
+
+    Runs validate_patch and review_patch on deepcopies with the cached gate
+    DB, swallowing incidental warnings. Validation errors mirror
+    ``has_blocking_errors(..., is_new=True)``: every error blocks, including
+    proposed removals, except a legacy ``auto_fixed`` one without a
+    proposal. Pre-existing findings are exempted by the baseline diff, not
+    here.
+    """
+    from src.maxpat.critics import review_patch
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        v_results = validate_patch(copy.deepcopy(patch_dict), db=_gate_db())
+        c_results = review_patch(copy.deepcopy(patch_dict), db=_gate_db())
+
+    found = [
+        r for r in v_results
+        if r.level == "error" and not (r.auto_fixed and r.proposed_removal is None)
+    ]
+    found.extend(r for r in c_results if r.severity == "blocker")
+    return found
+
+
+def _head_text(path: "str | Path") -> "str | None":
+    """Text of *path* at HEAD in its own git repo, or None. Never raises."""
+    from src.maxpat.project import _run_git
+
+    try:
+        abs_path = Path(path).resolve()
+        anc = abs_path.parent
+        while not anc.exists() and anc.parent != anc:
+            anc = anc.parent
+        root_out = _run_git(anc, ["rev-parse", "--show-toplevel"]).stdout.strip()
+        root = Path(root_out).resolve()
+        rel = abs_path.relative_to(root)
+        result = _run_git(root, ["show", "HEAD:" + rel.as_posix()], ok_codes=(0, 128))
+    except (RuntimeError, ValueError, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+def _parse_patch_text(text: "str | None") -> "dict | None":
+    """json.loads *text*; None when absent, invalid, or without a patcher dict."""
+    if text is None:
+        return None
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("patcher"), dict):
+        return None
+    return data
+
+
+def _gate_report(new_dict: dict, baseline_dict: "dict | None", ref_dicts: list) -> GateReport:
+    """Compare *new_dict* with its blocker baseline and cord/port references.
+
+    Pure (no I/O). ``baseline_dict`` None means a new file: every blocking
+    finding is new. Otherwise a finding is new when its key's count in the
+    new patch exceeds its count in the baseline (multiset match).
+    """
+    new_findings = _blocking_findings(new_dict)
+    if baseline_dict is None:
+        new_blockers = list(new_findings)
+    else:
+        base_counts = Counter(_finding_key(r) for r in _blocking_findings(baseline_dict))
+        seen: Counter = Counter()
+        new_blockers = []
+        for r in new_findings:
+            key = _finding_key(r)
+            seen[key] += 1
+            if seen[key] > base_counts[key]:
+                new_blockers.append(r)
+
+    return GateReport(new_blockers, [], [])
+
+
+def _run_save_gate(
+    patch_dict: dict,
+    path: "str | Path",
+    original_text: "str | None",
+    *,
+    force: bool,
+) -> None:
+    """Refuse a save that introduces blockers (Q7). Writes nothing.
+
+    Blocker baseline: original_text, else the HEAD version of *path*, else
+    the file on disk (OQ1-A). No baseline means a new file, where every
+    blocker refuses. Raises PatchValidationError, or with ``force=True``
+    warns SaveGateWarning and returns.
+    """
+    path = Path(path)
+    head_text = _head_text(path)
+    disk_text = None
+    if original_text is None and head_text is None and path.exists():
+        try:
+            disk_text = path.read_text()
+        except (OSError, ValueError):
+            disk_text = None
+
+    if original_text is not None:
+        base_label, baseline = "original_text", _parse_patch_text(original_text)
+    elif head_text is not None:
+        base_label, baseline = "HEAD", _parse_patch_text(head_text)
+    else:
+        base_label, baseline = "the file on disk", _parse_patch_text(disk_text)
+    if baseline is None:
+        base_label = "new file: every blocker refuses"
+
+    refs: list = []
+    for label, text in (("HEAD", head_text), ("original_text", original_text)):
+        parsed = _parse_patch_text(text)
+        if parsed is not None:
+            refs.append((label, parsed))
+    if not refs:
+        parsed = _parse_patch_text(disk_text)
+        if parsed is not None:
+            refs.append(("the file on disk", parsed))
+
+    report = _gate_report(patch_dict, baseline, [d for _, d in refs])
+
+    if not report.new_blockers and not report.port_changes:
+        return None
+
+    lines = [f"save gate findings for {path} (baseline: {base_label}):"]
+    if report.new_blockers:
+        lines.append(f"{len(report.new_blockers)} new blocking finding(s):")
+        lines.extend(f"  {r!r}" for r in report.new_blockers)
+    lines.append("Fix them, or pass force=True to save anyway.")
+    message = "\n".join(lines)
+
+    if force:
+        warnings.warn(f"force=True: saving despite {message}", SaveGateWarning, stacklevel=3)
+        return None
+    raise PatchValidationError(
+        message,
+        path=path,
+        findings=report.new_blockers,
+        port_changes=report.port_changes,
+    )
 
 
 def write_gendsp(

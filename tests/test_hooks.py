@@ -335,7 +335,7 @@ class TestWriteAndSync:
         from src.maxpat.hooks import save_patch_roundtrip
 
         fpath = tmp_path / "test.maxpat"
-        data = {"patcher": {"boxes": []}}
+        data = {"patcher": {"boxes": [], "lines": []}}
         with mock_patch("src.maxpat.hooks._write_and_sync") as mock_sync:
             save_patch_roundtrip(data, fpath)
             mock_sync.assert_called_once()
