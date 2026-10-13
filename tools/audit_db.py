@@ -7,8 +7,9 @@ optionally, one JSON document via --json.
 
 Read-only contract
 ------------------
-* The ONLY file this tool ever opens for writing is the ``--json`` target,
-  and that path is screened by :func:`guard_output_path`, which refuses any
+* The ONLY files this tool ever opens for writing are the ``--json`` target
+  and, in help-io mode, the ``--write-baseline`` target. Both paths are
+  screened by :func:`guard_output_path` before any work, which refuses any
   path resolving under ``<repo-root>/patches`` or
   ``<repo-root>/.claude/max-objects``.
 * The Max binary is NEVER executed. The installed version is read from
@@ -32,11 +33,25 @@ Every section key is always present in the envelope, and every section
 degrades to ``{"available": false, "reason": ...}`` rather than raising, so
 a machine with no Max installed still gets the DB- and patch-derived data.
 
+Help-io mode
+------------
+``--help-io`` replaces the sections above with the help-box I/O oracle
+(:mod:`tools.help_io`, quick 261012-ubw / Q9): every ``.maxhelp`` in the
+bundle and in the installed packages' help dirs (``--packages-dir``) is
+compared box by box with ``compute_io_counts`` / ``get_outlet_types``. The
+envelope is ``{mode, generated_at, repo_root, max_app, packages_dir,
+install, help_io}``; ``--write-baseline`` writes the canonical baseline that
+``tests/test_help_io.py`` diffs against. Without ``--help-io`` the default
+audit is unchanged.
+
 Usage
 -----
     python3 tools/audit_db.py
     python3 tools/audit_db.py --json /tmp/db-audit.json
     python3 tools/audit_db.py --max-app /Applications/Max.app --patch-source head
+    python3 tools/audit_db.py --help-io
+    python3 tools/audit_db.py --help-io --json /tmp/help-io.json
+    python3 tools/audit_db.py --help-io --write-baseline tests/fixtures/help_io_baseline.json
 
 Origin: NH-01 in .planning/quick/260921-g5d-.../260921-g5d-REVIEW-FINDINGS.md,
 promoted to a committed harness by quick-260921-knq. Provenance style follows
@@ -63,6 +78,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.maxpat.db_lookup import DOMAIN_LOAD_ORDER, ObjectDatabase  # noqa: E402
 from src.maxpat.maxclass_map import UI_MAXCLASSES  # noqa: E402
+from tools import help_io  # noqa: E402
 
 DEFAULT_MAX_APP = Path("/Applications/Max.app")
 
@@ -901,6 +917,52 @@ def run_audit(
     }
 
 
+def run_help_io(
+    repo_root: str | Path | None = None,
+    db_root: str | Path | None = None,
+    max_app: str | Path | None = None,
+    packages_dir: str | Path | None = None,
+) -> dict:
+    """Run the help-box I/O oracle and return its envelope (never raises).
+
+    An unavailable bundle or a DB load failure yields an unavailable
+    ``help_io`` section, exactly as the default audit degrades.
+    """
+    root = Path(repo_root) if repo_root is not None else ROOT
+    db = Path(db_root) if db_root is not None else root / ".claude" / "max-objects"
+    app = Path(max_app) if max_app is not None else DEFAULT_MAX_APP
+    pkgs = Path(packages_dir) if packages_dir is not None else help_io.DEFAULT_PACKAGES_DIR
+
+    install = audit_install(app)
+    if not install.get("available"):
+        section = help_io.unavailable_section(
+            f"Max bundle unavailable: {install.get('reason')}"
+        )
+    else:
+        try:
+            database: ObjectDatabase | None = ObjectDatabase(db_root=db)
+            db_reason = None
+        except Exception as exc:  # noqa: BLE001 -- any load failure degrades
+            database = None
+            db_reason = f"could not load object database at {db}: {exc}"
+        if database is None:
+            section = help_io.unavailable_section(db_reason)
+        else:
+            section = help_io.scan_help_io(
+                app, pkgs, database, install.get("short_version")
+            )
+
+    return {
+        "mode": "help-io",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "repo_root": str(root.resolve()),
+        "max_app": str(app),
+        "packages_dir": str(pkgs),
+        "install": install,
+        "help_io": section,
+    }
+
+
 def _headline(section: dict, render) -> str:
     """Render a section's headline count, or its unavailable reason."""
     if section.get("available") is False:
@@ -1015,11 +1077,67 @@ def build_parser() -> argparse.ArgumentParser:
         default="head",
         help="Read committed .maxpat content from git HEAD (default) or from disk.",
     )
+    parser.add_argument(
+        "--help-io",
+        action="store_true",
+        help="Run the help-box I/O oracle instead of the default audit: compare "
+        "every MAX-saved .maxhelp box with compute_io_counts / get_outlet_types.",
+    )
+    parser.add_argument(
+        "--packages-dir",
+        default=str(help_io.DEFAULT_PACKAGES_DIR),
+        help="Installed packages dir scanned in --help-io mode "
+        "(default: ~/Documents/Max 9/Packages).",
+    )
+    parser.add_argument(
+        "--write-baseline",
+        default=None,
+        help="--help-io only: write the canonical help-io baseline here "
+        "(tests/fixtures/help_io_baseline.json).",
+    )
     return parser
 
 
+def _main_help_io(args, repo_root: Path, out_path: Path | None) -> int:
+    """--help-io dispatch: scan, then write the JSON and/or the baseline."""
+    baseline_path: Path | None = None
+    if args.write_baseline:
+        try:
+            baseline_path = guard_output_path(args.write_baseline, repo_root)
+        except OutputPathRejected as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+    envelope = run_help_io(
+        repo_root=repo_root,
+        db_root=args.db_root,
+        max_app=args.max_app,
+        packages_dir=args.packages_dir,
+    )
+    section = envelope["help_io"]
+    if baseline_path is not None and not section.get("available"):
+        print(
+            f"error: cannot write a help-io baseline: {section.get('reason')}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if out_path is not None:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(envelope, indent=2, sort_keys=False) + "\n")
+    if baseline_path is not None:
+        baseline_path.parent.mkdir(parents=True, exist_ok=True)
+        baseline_path.write_text(help_io.dump_baseline(help_io.build_baseline(section)))
+
+    print(help_io.format_help_io_summary(envelope, out_path, baseline_path))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.write_baseline and not args.help_io:
+        parser.error("--write-baseline requires --help-io")
     repo_root = Path(args.repo_root) if args.repo_root else ROOT
 
     # Screen the output path BEFORE doing any work, so a rejected target
@@ -1031,6 +1149,9 @@ def main(argv: list[str] | None = None) -> int:
         except OutputPathRejected as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
+
+    if args.help_io:
+        return _main_help_io(args, repo_root, out_path)
 
     report = run_audit(
         repo_root=repo_root,

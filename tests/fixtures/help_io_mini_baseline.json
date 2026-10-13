@@ -1,0 +1,59 @@
+{
+ "generator": "test fixture: hand-written mini help-io baseline for tests/test_help_io.py::TestDiff (not generated from Max)",
+ "max_version": "9.9.9",
+ "names": {
+  "bundle": {
+   "alpha": {
+    "boxes": 4,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,2 db=1,0": 2
+    },
+    "type_mismatches": 0
+   },
+   "beta~": {
+    "boxes": 3,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal db=control": 1
+    },
+    "type_mismatches": 1
+   }
+  },
+  "package:Demo": {
+   "demo.obj": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   }
+  }
+ },
+ "schema": 1,
+ "sources": {
+  "bundle": {
+   "boxes_compared": 7,
+   "files": 2,
+   "mismatching_boxes": 3,
+   "mismatching_names": 2,
+   "version": "9.9.9"
+  },
+  "package:Demo": {
+   "boxes_compared": 2,
+   "files": 1,
+   "mismatching_boxes": 1,
+   "mismatching_names": 1,
+   "version": "1.0.0"
+  }
+ },
+ "totals": {
+  "boxes_compared": 9,
+  "count_mismatch_names": 2,
+  "files": 3,
+  "mismatching_boxes": 4,
+  "mismatching_names": 3,
+  "type_mismatch_names": 1
+ }
+}

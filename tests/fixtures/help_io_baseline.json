@@ -1,0 +1,5803 @@
+{
+ "generator": "python3 tools/audit_db.py --help-io --write-baseline tests/fixtures/help_io_baseline.json",
+ "max_version": "9.2.0",
+ "names": {
+  "bundle": {
+   "abl.dsp.distortion~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=5,2 db=6,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "abl.dsp.euclid~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=4,2 db=4,3": 1,
+     "count args=1 max=4,2 db=4,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "abl.dsp.fuzz~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=3 max=5,2 db=6,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "abl.dsp.modulator~": {
+    "boxes": 4,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,2 db=4,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "abl.dsp.overdrive~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=5,2 db=6,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "abl.dsp.pulsate~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=4,2 db=2,2": 1,
+     "count args=1 max=4,2 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "abl.dsp.ringmod~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=3,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "abl.dsp.tarp~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=2,1 db=3,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "abl.dsp.wander~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,2 db=4,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "array.expr": {
+    "boxes": 3,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=4 max=1,1 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "array.routepass": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=2 max=3,3 db=1,1": 1,
+     "count args=3 max=4,4 db=1,1": 1,
+     "count args=4 max=5,5 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "b": {
+    "boxes": 40,
+    "count_mismatches": 36,
+    "signatures": {
+     "count args=0 max=1,2 db=1,3": 30,
+     "count args=1 max=1,1 db=1,3": 3,
+     "count args=1 max=1,2 db=1,3": 3
+    },
+    "type_mismatches": 0
+   },
+   "bondo": {
+    "boxes": 26,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=4,4 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "bp.arc.accum-2": {
+    "boxes": 12,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 12
+    },
+    "type_mismatches": 12
+   },
+   "bp.arc.knob": {
+    "boxes": 12,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 12
+    },
+    "type_mismatches": 12
+   },
+   "bucket": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,1 db=1,2": 1,
+     "count args=1 max=1,6 db=1,2": 1,
+     "count args=1 max=1,8 db=1,2": 1,
+     "count args=2 max=1,4 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "buddy": {
+    "boxes": 32,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=4,4 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "coll": {
+    "boxes": 113,
+    "count_mismatches": 113,
+    "signatures": {
+     "count args=0 max=1,4 db=2,4": 43,
+     "count args=1 max=1,4 db=2,4": 56,
+     "count args=2 max=1,4 db=2,4": 14
+    },
+    "type_mismatches": 0
+   },
+   "combine": {
+    "boxes": 19,
+    "count_mismatches": 19,
+    "signatures": {
+     "count args=2 max=2,2 db=2,1": 9,
+     "count args=3 max=3,2 db=3,1": 3,
+     "count args=4 max=4,2 db=4,1": 1,
+     "count args=7 max=7,2 db=7,1": 4,
+     "count args=9 max=9,2 db=9,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "comment": {
+    "boxes": 18516,
+    "count_mismatches": 22,
+    "signatures": {
+     "count args=0 max=0,0 db=1,0": 22
+    },
+    "type_mismatches": 0
+   },
+   "ctlin": {
+    "boxes": 9,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=1 max=1,2 db=1,3": 1,
+     "count args=2 max=1,1 db=1,3": 1,
+     "count args=2 max=1,2 db=1,3": 5
+    },
+    "type_mismatches": 0
+   },
+   "curve~": {
+    "boxes": 6,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=3,3 db=3,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "dict": {
+    "boxes": 108,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,4 db=2,5": 2
+    },
+    "type_mismatches": 0
+   },
+   "dict.pack": {
+    "boxes": 47,
+    "count_mismatches": 47,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 12,
+     "count args=11 max=4,1 db=1,1": 2,
+     "count args=11 max=6,1 db=1,1": 1,
+     "count args=12 max=4,1 db=1,1": 2,
+     "count args=15 max=16,1 db=1,1": 1,
+     "count args=2 max=3,1 db=1,1": 3,
+     "count args=3 max=4,1 db=1,1": 4,
+     "count args=4 max=4,1 db=1,1": 4,
+     "count args=6 max=3,1 db=1,1": 1,
+     "count args=7 max=6,1 db=1,1": 4,
+     "count args=8 max=4,1 db=1,1": 9,
+     "count args=8 max=5,1 db=1,1": 1,
+     "count args=9 max=4,1 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "dict.unpack": {
+    "boxes": 37,
+    "count_mismatches": 14,
+    "signatures": {
+     "count args=2 max=1,3 db=1,2": 9,
+     "count args=3 max=1,4 db=1,2": 1,
+     "count args=4 max=1,5 db=1,2": 1,
+     "count args=6 max=1,7 db=1,2": 3
+    },
+    "type_mismatches": 0
+   },
+   "dict.view": {
+    "boxes": 70,
+    "count_mismatches": 70,
+    "signatures": {
+     "count args=0 max=1,0 db=1,1": 70
+    },
+    "type_mismatches": 0
+   },
+   "expr": {
+    "boxes": 148,
+    "count_mismatches": 80,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 13,
+     "count args=1 max=4,1 db=1,1": 2,
+     "count args=10 max=1,1 db=10,1": 1,
+     "count args=11 max=2,1 db=11,1": 1,
+     "count args=21 max=2,1 db=21,1": 1,
+     "count args=3 max=1,1 db=3,1": 29,
+     "count args=3 max=2,1 db=3,1": 1,
+     "count args=4 max=1,1 db=4,1": 2,
+     "count args=5 max=1,1 db=5,1": 6,
+     "count args=5 max=2,1 db=5,1": 3,
+     "count args=5 max=3,1 db=5,1": 6,
+     "count args=6 max=1,1 db=6,1": 2,
+     "count args=6 max=2,1 db=6,1": 1,
+     "count args=7 max=1,1 db=7,1": 3,
+     "count args=7 max=2,1 db=7,1": 1,
+     "count args=8 max=1,1 db=8,1": 4,
+     "count args=8 max=2,1 db=8,1": 1,
+     "count args=9 max=1,1 db=9,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "fffb~": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,32 db=1,8": 1
+    },
+    "type_mismatches": 0
+   },
+   "gain~": {
+    "boxes": 47,
+    "count_mismatches": 20,
+    "signatures": {
+     "count args=0 max=2,2 db=1,2": 20
+    },
+    "type_mismatches": 0
+   },
+   "gate": {
+    "boxes": 185,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=1 max=2,1 db=2,0": 3
+    },
+    "type_mismatches": 0
+   },
+   "gate~": {
+    "boxes": 176,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=1 max=2,3 db=2,1": 3,
+     "count args=2 max=2,5 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "gen": {
+    "boxes": 9,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=1,1 db=2,1": 7,
+     "count args=0 max=3,1 db=2,1": 1,
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "grab": {
+    "boxes": 6,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=1,3 db=1,2": 1,
+     "count args=2 max=1,1 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "gridmeter~": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=1,1 db=1,0": 6
+    },
+    "type_mismatches": 0
+   },
+   "groove~": {
+    "boxes": 17,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=2 max=3,3 db=3,2": 6,
+     "count args=2 max=3,5 db=3,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "if": {
+    "boxes": 36,
+    "count_mismatches": 17,
+    "signatures": {
+     "count args=5 max=2,1 db=1,1": 4,
+     "count args=7 max=2,1 db=1,1": 1,
+     "count args=8 max=1,2 db=1,1": 10,
+     "count args=8 max=2,1 db=1,1": 1,
+     "count args=9 max=3,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "in": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,1 db=0,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "index~": {
+    "boxes": 11,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=1 max=2,2 db=2,1": 11
+    },
+    "type_mismatches": 0
+   },
+   "info~": {
+    "boxes": 10,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=1 max=1,9 db=1,10": 4
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 1845,
+    "count_mismatches": 1845,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 1845
+    },
+    "type_mismatches": 0
+   },
+   "jit.avc": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=1,0 db=2,1": 2,
+     "count args=0 max=1,1 db=2,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "jit.catch~": {
+    "boxes": 13,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 1,
+     "count args=1 max=7,2 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.cycle": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=1 max=1,3 db=1,2": 1,
+     "count args=1 max=1,5 db=1,2": 1,
+     "count args=1 max=1,9 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.gl.environment": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=1,2 db=2,2": 5
+    },
+    "type_mismatches": 0
+   },
+   "jit.gl.meshwarp": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "jit.gl.multiple": {
+    "boxes": 18,
+    "count_mismatches": 13,
+    "signatures": {
+     "count args=1 max=1,2 db=2,2": 1,
+     "count args=1 max=3,2 db=2,2": 7,
+     "count args=1 max=4,2 db=2,2": 2,
+     "count args=2 max=3,2 db=2,2": 3
+    },
+    "type_mismatches": 0
+   },
+   "jit.gl.slab": {
+    "boxes": 9,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.gl.textmult": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,2 db=1,0": 1,
+     "count args=1 max=4,2 db=1,0": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.gl.textureset": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "jit.gl.tf": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "jit.line": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 5,
+     "count args=1 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.mo.field": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.mo.fieldmask": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "jit.mo.func": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "jit.mo.join": {
+    "boxes": 15,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=2 max=1,2 db=3,2": 7
+    },
+    "type_mismatches": 0
+   },
+   "jit.mo.time": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "jit.movie~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,4 db=2,4": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.pack": {
+    "boxes": 28,
+    "count_mismatches": 17,
+    "signatures": {
+     "count args=1 max=1,2 db=4,2": 4,
+     "count args=1 max=2,2 db=4,2": 8,
+     "count args=1 max=3,2 db=4,2": 3,
+     "count args=2 max=3,2 db=4,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "jit.phys.multiple": {
+    "boxes": 4,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,3 db=3,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.polymovie": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,3 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.reverse": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=6,6 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.scissors": {
+    "boxes": 5,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,5 db=1,7": 4
+    },
+    "type_mismatches": 0
+   },
+   "jit.unpack": {
+    "boxes": 21,
+    "count_mismatches": 13,
+    "signatures": {
+     "count args=1 max=1,2 db=1,5": 2,
+     "count args=1 max=1,3 db=1,5": 4,
+     "count args=1 max=1,4 db=1,5": 2,
+     "count args=1 max=1,6 db=1,5": 3,
+     "count args=2 max=1,6 db=1,5": 2
+    },
+    "type_mismatches": 0
+   },
+   "join": {
+    "boxes": 48,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=2,1 db=0,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "jstrigger": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=6 max=1,2 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "jweb~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal/signal/control db=signal/signal/signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "line~": {
+    "boxes": 173,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,3 db=2,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "list.delace": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.indexmap": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.join": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.lace": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.len": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.lookup": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=2,2 db=2,1": 1,
+     "count args=7 max=2,2 db=2,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "list.median": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.queue": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.reg": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,2 db=2,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "list.rev": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.rot": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.stack": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.sum": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.swap": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.thin": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.union": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.unique": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "live.adsrui": {
+    "boxes": 23,
+    "count_mismatches": 23,
+    "signatures": {
+     "count args=0 max=10,10 db=1,1": 23
+    },
+    "type_mismatches": 0
+   },
+   "live.adsr~": {
+    "boxes": 20,
+    "count_mismatches": 20,
+    "signatures": {
+     "count args=0 max=11,3 db=4,1": 17,
+     "count args=4 max=11,3 db=4,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "live.comment": {
+    "boxes": 132,
+    "count_mismatches": 65,
+    "signatures": {
+     "count args=0 max=0,0 db=1,0": 65
+    },
+    "type_mismatches": 0
+   },
+   "live.gain~": {
+    "boxes": 380,
+    "count_mismatches": 162,
+    "signatures": {
+     "count args=0 max=1,4 db=2,5": 158,
+     "count args=0 max=24,27 db=2,5": 1,
+     "count args=0 max=6,9 db=2,5": 1,
+     "count args=0 max=64,67 db=2,5": 1,
+     "count args=0 max=8,11 db=2,5": 1
+    },
+    "type_mismatches": 0
+   },
+   "live.meter~": {
+    "boxes": 35,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,1 db=1,2": 4
+    },
+    "type_mismatches": 0
+   },
+   "live.scope~": {
+    "boxes": 111,
+    "count_mismatches": 111,
+    "signatures": {
+     "count args=0 max=2,1 db=2,0": 111
+    },
+    "type_mismatches": 0
+   },
+   "makenote": {
+    "boxes": 79,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=3 max=4,3 db=3,2": 3
+    },
+    "type_mismatches": 0
+   },
+   "matrix": {
+    "boxes": 7,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=2 max=2,2 db=3,3": 2,
+     "count args=2 max=5,5 db=3,3": 4
+    },
+    "type_mismatches": 0
+   },
+   "mc.adsr~": {
+    "boxes": 8,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal/signal/control/control/control db=control/control/control/control/control": 8
+    },
+    "type_mismatches": 8
+   },
+   "mc.live.gain~": {
+    "boxes": 69,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal/control/control/control db=signal/signal/control/control": 69
+    },
+    "type_mismatches": 69
+   },
+   "mc.playlist~": {
+    "boxes": 19,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal/signal/control/control db=signal/signal/signal/control": 19
+    },
+    "type_mismatches": 19
+   },
+   "mc.range~": {
+    "boxes": 10,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,1 db=1,3": 1,
+     "count args=1 max=1,1 db=1,3": 3
+    },
+    "type_mismatches": 0
+   },
+   "mc.route": {
+    "boxes": 11,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=1 max=2,10 db=2,2": 3,
+     "count args=1 max=2,30 db=2,2": 1,
+     "count args=1 max=2,4 db=2,2": 6,
+     "count args=1 max=2,8 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "mc.selector~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal db=control": 2
+    },
+    "type_mismatches": 2
+   },
+   "mc.separate~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 1,
+     "count args=3 max=1,4 db=1,3": 2
+    },
+    "type_mismatches": 0
+   },
+   "mc.stash~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal/signal db=signal/control": 1
+    },
+    "type_mismatches": 1
+   },
+   "mc.targetlist": {
+    "boxes": 8,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=8,2 db=4,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "mc.transpose~": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=2 max=2,4 db=2,2": 2,
+     "count args=2 max=3,2 db=2,2": 1,
+     "count args=2 max=4,2 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "mcs.poly~": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=2,4 db=1,1": 1,
+     "type max=signal db=control": 1
+    },
+    "type_mismatches": 1
+   },
+   "mcs.sig~": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=4,1 db=1,1": 2,
+     "count args=3 max=3,1 db=1,1": 1,
+     "count args=6 max=6,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "mcs.tapout~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal db=control": 1
+    },
+    "type_mismatches": 1
+   },
+   "metro": {
+    "boxes": 280,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=1 max=2,3 db=2,1": 4
+    },
+    "type_mismatches": 0
+   },
+   "midiformat": {
+    "boxes": 72,
+    "count_mismatches": 26,
+    "signatures": {
+     "count args=0 max=7,1 db=7,2": 26
+    },
+    "type_mismatches": 0
+   },
+   "midiparse": {
+    "boxes": 62,
+    "count_mismatches": 39,
+    "signatures": {
+     "count args=0 max=1,7 db=1,8": 39
+    },
+    "type_mismatches": 0
+   },
+   "mira.frame": {
+    "boxes": 7,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=0 max=0,0 db=1,0": 7
+    },
+    "type_mismatches": 0
+   },
+   "mira.motion": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,1 db=1,3": 3
+    },
+    "type_mismatches": 0
+   },
+   "mira.multitouch": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,1 db=1,4": 3
+    },
+    "type_mismatches": 0
+   },
+   "mousestate": {
+    "boxes": 6,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,10 db=1,5": 2
+    },
+    "type_mismatches": 0
+   },
+   "mpeformat": {
+    "boxes": 3,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=3,2 db=16,2": 1,
+     "count args=1 max=5,2 db=16,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "mtr": {
+    "boxes": 12,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=1 max=3,3 db=2,2": 2,
+     "count args=1 max=4,4 db=2,2": 5,
+     "count args=1 max=5,5 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "mxj": {
+    "boxes": 210,
+    "count_mismatches": 201,
+    "signatures": {
+     "count args=1 max=1,10 db=1,1": 1,
+     "count args=1 max=1,13 db=1,1": 1,
+     "count args=1 max=1,2 db=1,1": 144,
+     "count args=1 max=1,3 db=1,1": 6,
+     "count args=1 max=1,4 db=1,1": 3,
+     "count args=1 max=1,5 db=1,1": 1,
+     "count args=1 max=2,2 db=1,1": 9,
+     "count args=1 max=2,3 db=1,1": 1,
+     "count args=1 max=3,3 db=1,1": 1,
+     "count args=1 max=3,5 db=1,1": 1,
+     "count args=2 max=1,2 db=1,1": 6,
+     "count args=2 max=1,4 db=1,1": 1,
+     "count args=2 max=1,9 db=1,1": 1,
+     "count args=2 max=2,2 db=1,1": 1,
+     "count args=2 max=2,3 db=1,1": 4,
+     "count args=2 max=3,2 db=1,1": 5,
+     "count args=3 max=1,2 db=1,1": 1,
+     "count args=3 max=3,2 db=1,1": 12,
+     "count args=4 max=3,1 db=1,1": 1,
+     "count args=6 max=1,4 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "mxj~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "notein": {
+    "boxes": 73,
+    "count_mismatches": 28,
+    "signatures": {
+     "count args=1 max=1,2 db=1,3": 9,
+     "count args=2 max=1,2 db=1,3": 19
+    },
+    "type_mismatches": 0
+   },
+   "nrpnin": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=1,2 db=1,4": 1
+    },
+    "type_mismatches": 0
+   },
+   "onecopy": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,0 db=0,0": 1
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 1629,
+    "count_mismatches": 1629,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 1629
+    },
+    "type_mismatches": 0
+   },
+   "pack": {
+    "boxes": 449,
+    "count_mismatches": 27,
+    "signatures": {
+     "count args=0 max=2,1 db=0,1": 27
+    },
+    "type_mismatches": 0
+   },
+   "pak": {
+    "boxes": 446,
+    "count_mismatches": 12,
+    "signatures": {
+     "count args=0 max=2,1 db=0,1": 12
+    },
+    "type_mismatches": 0
+   },
+   "pipe": {
+    "boxes": 27,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=13 max=13,12 db=2,1": 1,
+     "count args=3 max=3,2 db=2,1": 1,
+     "count args=4 max=4,3 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "pitchshift~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal/signal/control db=control/control/control": 1
+    },
+    "type_mismatches": 1
+   },
+   "playlist~": {
+    "boxes": 25,
+    "count_mismatches": 25,
+    "signatures": {
+     "count args=0 max=1,5 db=1,3": 25
+    },
+    "type_mismatches": 0
+   },
+   "plot~": {
+    "boxes": 100,
+    "count_mismatches": 35,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 19,
+     "count args=0 max=3,1 db=1,1": 5,
+     "count args=0 max=4,1 db=1,1": 1,
+     "count args=0 max=5,1 db=1,1": 7,
+     "count args=0 max=6,1 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "plugin~": {
+    "boxes": 7,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=4 max=4,4 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "plugout~": {
+    "boxes": 8,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=4,4 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "poke~": {
+    "boxes": 7,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=1 max=3,1 db=3,0": 6
+    },
+    "type_mismatches": 0
+   },
+   "polyin": {
+    "boxes": 3,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=1,2 db=1,3": 1,
+     "count args=2 max=1,1 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "preset": {
+    "boxes": 46,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,4 db=1,5": 4
+    },
+    "type_mismatches": 0
+   },
+   "print": {
+    "boxes": 719,
+    "count_mismatches": 16,
+    "signatures": {
+     "count args=2 max=2,0 db=1,0": 6,
+     "count args=3 max=3,0 db=1,0": 5,
+     "count args=4 max=4,0 db=1,0": 1,
+     "count args=5 max=5,0 db=1,0": 4
+    },
+    "type_mismatches": 0
+   },
+   "r": {
+    "boxes": 473,
+    "count_mismatches": 473,
+    "signatures": {
+     "count args=1 max=0,1 db=1,1": 473
+    },
+    "type_mismatches": 0
+   },
+   "receive": {
+    "boxes": 10,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=1 max=0,1 db=1,1": 8
+    },
+    "type_mismatches": 0
+   },
+   "retune~": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=3,5 db=3,3": 3,
+     "count args=1 max=3,5 db=3,3": 2
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 432,
+    "count_mismatches": 432,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 292,
+     "count args=10 max=11,11 db=1,11": 1,
+     "count args=12 max=13,13 db=1,13": 1,
+     "count args=2 max=3,3 db=1,3": 65,
+     "count args=3 max=4,4 db=1,4": 28,
+     "count args=4 max=5,5 db=1,5": 12,
+     "count args=5 max=6,6 db=1,6": 22,
+     "count args=6 max=7,7 db=1,7": 5,
+     "count args=7 max=8,8 db=1,8": 2,
+     "count args=8 max=4,4 db=1,9": 1,
+     "count args=8 max=9,9 db=1,9": 1,
+     "count args=9 max=10,10 db=1,10": 2
+    },
+    "type_mismatches": 0
+   },
+   "routepass": {
+    "boxes": 56,
+    "count_mismatches": 56,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 41,
+     "count args=2 max=3,3 db=1,3": 6,
+     "count args=3 max=4,4 db=1,4": 1,
+     "count args=4 max=5,5 db=1,5": 8
+    },
+    "type_mismatches": 0
+   },
+   "router": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=2 max=4,5 db=3,4": 2
+    },
+    "type_mismatches": 0
+   },
+   "rpnin": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=1,2 db=1,4": 1
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 328,
+    "count_mismatches": 328,
+    "signatures": {
+     "count args=0 max=2,2 db=1,1": 3,
+     "count args=1 max=2,2 db=1,2": 166,
+     "count args=2 max=3,3 db=1,3": 113,
+     "count args=3 max=4,4 db=1,4": 32,
+     "count args=4 max=5,5 db=1,5": 7,
+     "count args=5 max=6,6 db=1,6": 6,
+     "count args=8 max=9,9 db=1,9": 1
+    },
+    "type_mismatches": 0
+   },
+   "select": {
+    "boxes": 198,
+    "count_mismatches": 198,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 70,
+     "count args=2 max=3,3 db=1,3": 11,
+     "count args=3 max=4,4 db=1,4": 7,
+     "count args=4 max=5,5 db=1,5": 2,
+     "count args=7 max=8,8 db=1,8": 108
+    },
+    "type_mismatches": 0
+   },
+   "sfizz~": {
+    "boxes": 7,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=2,2 db=2,8": 2,
+     "count args=1 max=2,2 db=2,8": 4
+    },
+    "type_mismatches": 0
+   },
+   "sfplay~": {
+    "boxes": 18,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=3 max=2,4 db=2,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "sfrecord~": {
+    "boxes": 3,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal db=control": 3
+    },
+    "type_mismatches": 3
+   },
+   "snowfall~": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,3 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "spectroscope~": {
+    "boxes": 57,
+    "count_mismatches": 57,
+    "signatures": {
+     "count args=0 max=2,1 db=2,0": 57
+    },
+    "type_mismatches": 0
+   },
+   "sprintf": {
+    "boxes": 16,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 1,
+     "count args=1 max=4,1 db=1,1": 1,
+     "count args=2 max=2,1 db=1,1": 2,
+     "count args=4 max=2,1 db=1,1": 1,
+     "count args=5 max=2,1 db=1,1": 1,
+     "count args=9 max=6,1 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "stash~": {
+    "boxes": 5,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal/signal db=signal/control": 5
+    },
+    "type_mismatches": 5
+   },
+   "stretch~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control/control db=signal/control": 2
+    },
+    "type_mismatches": 2
+   },
+   "string.sprintf": {
+    "boxes": 6,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=1 max=1,1 db=2,1": 2,
+     "count args=1 max=4,1 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "string.withpass": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=3 max=4,4 db=1,1": 1,
+     "count args=4 max=5,5 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "switch": {
+    "boxes": 106,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=3,1 db=2,1": 8
+    },
+    "type_mismatches": 0
+   },
+   "sxformat": {
+    "boxes": 3,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=16 max=2,1 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "t": {
+    "boxes": 940,
+    "count_mismatches": 16,
+    "signatures": {
+     "count args=4 max=1,1 db=1,4": 8,
+     "count args=5 max=1,1 db=1,5": 8
+    },
+    "type_mismatches": 0
+   },
+   "textedit": {
+    "boxes": 27,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=0 max=1,3 db=1,4": 7
+    },
+    "type_mismatches": 0
+   },
+   "thispoly~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,3 db=1,2": 3
+    },
+    "type_mismatches": 0
+   },
+   "twist~": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,1 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "unjoin": {
+    "boxes": 18,
+    "count_mismatches": 18,
+    "signatures": {
+     "count args=0 max=1,3 db=1,2": 8,
+     "count args=1 max=1,10 db=1,9": 2,
+     "count args=1 max=1,3 db=1,2": 1,
+     "count args=1 max=1,4 db=1,3": 2,
+     "count args=1 max=1,5 db=1,4": 4,
+     "count args=1 max=1,6 db=1,5": 1
+    },
+    "type_mismatches": 0
+   },
+   "unpack": {
+    "boxes": 419,
+    "count_mismatches": 59,
+    "signatures": {
+     "count args=0 max=1,2 db=1,0": 59
+    },
+    "type_mismatches": 0
+   },
+   "vexpr": {
+    "boxes": 56,
+    "count_mismatches": 25,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 9,
+     "count args=1 max=3,1 db=1,1": 4,
+     "count args=1 max=4,1 db=1,1": 1,
+     "count args=3 max=1,1 db=3,1": 4,
+     "count args=3 max=2,1 db=3,1": 7
+    },
+    "type_mismatches": 0
+   },
+   "vst~": {
+    "boxes": 12,
+    "count_mismatches": 12,
+    "signatures": {
+     "count args=0 max=2,8 db=2,4": 12
+    },
+    "type_mismatches": 0
+   },
+   "xbendin": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,1 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "xctlin": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=1,1 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "xnotein": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,3 db=1,4": 1
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:CNMAT Externals": {
+   "2threshattack~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=2,2 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "OSC-route": {
+    "boxes": 22,
+    "count_mismatches": 19,
+    "signatures": {
+     "count args=2 max=1,3 db=1,2": 2,
+     "count args=3 max=1,4 db=1,2": 11,
+     "count args=4 max=1,3 db=1,2": 1,
+     "count args=4 max=1,4 db=1,2": 2,
+     "count args=4 max=1,5 db=1,2": 1,
+     "count args=6 max=1,7 db=1,2": 1,
+     "count args=7 max=1,8 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "OSC-schedule": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=1,3 db=1,2": 5
+    },
+    "type_mismatches": 0
+   },
+   "OSC-timetag": {
+    "boxes": 49,
+    "count_mismatches": 49,
+    "signatures": {
+     "count args=0 max=1,1 db=1,2": 34,
+     "count args=0 max=2,1 db=1,2": 15
+    },
+    "type_mismatches": 0
+   },
+   "OpenSoundControl": {
+    "boxes": 24,
+    "count_mismatches": 24,
+    "signatures": {
+     "count args=0 max=1,3 db=1,2": 23,
+     "count args=1 max=1,3 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "SDIF-buffer": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=1 max=1,1 db=1,2": 8
+    },
+    "type_mismatches": 0
+   },
+   "SDIF-info": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=1,1 db=1,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "SDIF-listpoke": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,0 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "SDIF-ranges": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,1 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "accumulate~": {
+    "boxes": 16,
+    "count_mismatches": 16,
+    "signatures": {
+     "count args=0 max=2,1 db=1,2": 16
+    },
+    "type_mismatches": 0
+   },
+   "analyzer~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,9 db=1,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "b": {
+    "boxes": 4,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,2 db=1,3": 2,
+     "count args=1 max=1,4 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "bdist": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=3,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bench": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 2,
+     "count args=1 max=2,1 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "bench~": {
+    "boxes": 4,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=2 max=1,2 db=2,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "bpf": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,3 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "cambio~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,1 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "cnmatrix~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=3 max=5,2 db=2,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "coll": {
+    "boxes": 31,
+    "count_mismatches": 31,
+    "signatures": {
+     "count args=0 max=1,4 db=2,4": 15,
+     "count args=1 max=1,4 db=2,4": 1,
+     "count args=2 max=1,4 db=2,4": 15
+    },
+    "type_mismatches": 0
+   },
+   "decaying-sinusoids~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=3 max=1,1 db=2,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "deinterleave": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,3 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "expr": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=3 max=1,1 db=3,1": 2,
+     "count args=7 max=2,1 db=7,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "firbank~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,32 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "gain~": {
+    "boxes": 22,
+    "count_mismatches": 22,
+    "signatures": {
+     "count args=0 max=2,2 db=1,2": 22
+    },
+    "type_mismatches": 0
+   },
+   "in": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,1 db=0,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 69,
+    "count_mismatches": 69,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 69
+    },
+    "type_mismatches": 0
+   },
+   "interleave": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=1 max=3,1 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "lcm": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 2,
+     "count args=2 max=2,1 db=1,1": 1,
+     "count args=7 max=7,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list-accum": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list-interpolate": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 5,
+     "count args=2 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "loudness~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=1,1 db=1,6": 1
+    },
+    "type_mismatches": 0
+   },
+   "migrator": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=3 max=1,4 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "mxj": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=1,3 db=1,1": 1,
+     "count args=1 max=1,4 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "o.compose": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "o.route": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 2,
+     "count args=2 max=1,3 db=1,1": 2,
+     "count args=7 max=1,8 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "osc-route": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=3 max=1,4 db=1,2": 1,
+     "count args=4 max=1,5 db=1,2": 1,
+     "count args=7 max=1,8 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "oscillators~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=3 max=1,1 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 80,
+    "count_mismatches": 80,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 80
+    },
+    "type_mismatches": 0
+   },
+   "peqbank~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=20 max=1,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "poly.bus~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=1,4 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "poly.send~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,0 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "preset": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,4 db=1,5": 2
+    },
+    "type_mismatches": 0
+   },
+   "printit": {
+    "boxes": 10,
+    "count_mismatches": 10,
+    "signatures": {
+     "count args=0 max=1,0 db=1,1": 8,
+     "count args=1 max=1,0 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "r": {
+    "boxes": 25,
+    "count_mismatches": 25,
+    "signatures": {
+     "count args=1 max=0,1 db=1,1": 25
+    },
+    "type_mismatches": 0
+   },
+   "randdist": {
+    "boxes": 9,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 1,
+     "count args=2 max=1,2 db=1,1": 5,
+     "count args=3 max=1,2 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "rbfi": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=1,5 db=1,1": 8
+    },
+    "type_mismatches": 0
+   },
+   "res-transform": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 2,
+     "count args=13 max=2,1 db=1,1": 2,
+     "count args=3 max=2,1 db=1,1": 1,
+     "count args=7 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "resonators~": {
+    "boxes": 10,
+    "count_mismatches": 10,
+    "signatures": {
+     "count args=0 max=1,2 db=2,1": 2,
+     "count args=1 max=1,2 db=2,1": 1,
+     "count args=3 max=1,2 db=2,1": 3,
+     "count args=4 max=1,2 db=2,1": 3,
+     "count args=9 max=1,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 24,
+    "count_mismatches": 24,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 7,
+     "count args=2 max=3,3 db=1,3": 11,
+     "count args=3 max=4,4 db=1,4": 4,
+     "count args=4 max=5,5 db=1,5": 1,
+     "count args=5 max=6,6 db=1,6": 1
+    },
+    "type_mismatches": 0
+   },
+   "routepass": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=3,3 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 2,
+     "count args=2 max=3,3 db=1,3": 1,
+     "count args=3 max=4,4 db=1,4": 1,
+     "count args=4 max=5,5 db=1,5": 1
+    },
+    "type_mismatches": 0
+   },
+   "select": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=3 max=4,4 db=1,4": 1
+    },
+    "type_mismatches": 0
+   },
+   "sinusoids~": {
+    "boxes": 14,
+    "count_mismatches": 14,
+    "signatures": {
+     "count args=0 max=1,1 db=2,1": 9,
+     "count args=1 max=1,1 db=2,1": 1,
+     "count args=2 max=1,1 db=2,1": 2,
+     "count args=4 max=1,1 db=2,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "slipOSC": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,3 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "spectroscope~": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=2,1 db=2,0": 6
+    },
+    "type_mismatches": 0
+   },
+   "sprintf": {
+    "boxes": 19,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 1,
+     "count args=4 max=2,1 db=1,1": 6
+    },
+    "type_mismatches": 0
+   },
+   "trampoline": {
+    "boxes": 4,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=3,3 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "vexpr": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "vsnapshot~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=2,1 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "waveguide~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,1 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "xydisplay": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,4 db=1,1": 4
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:FlowSwing": {
+   "b": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=1 max=1,1 db=1,3": 7,
+     "count args=1 max=1,2 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "gridmeter~": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=1,1 db=1,0": 8
+    },
+    "type_mismatches": 0
+   },
+   "gswitch": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=4,1 db=3,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "index~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=2,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 20,
+    "count_mismatches": 20,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 20
+    },
+    "type_mismatches": 0
+   },
+   "live.gain~": {
+    "boxes": 13,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=1,4 db=2,5": 8
+    },
+    "type_mismatches": 0
+   },
+   "mc.adsr~": {
+    "boxes": 3,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal/signal/control/control/control db=control/control/control/control/control": 3
+    },
+    "type_mismatches": 3
+   },
+   "mcs.sig~": {
+    "boxes": 17,
+    "count_mismatches": 17,
+    "signatures": {
+     "count args=5 max=5,1 db=1,1": 16,
+     "count args=6 max=6,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 21,
+    "count_mismatches": 21,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 21
+    },
+    "type_mismatches": 0
+   },
+   "pack": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,1 db=0,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "r": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=0,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 4
+    },
+    "type_mismatches": 0
+   },
+   "routepass": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "spectroscope~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,1 db=2,0": 1
+    },
+    "type_mismatches": 0
+   },
+   "sprintf": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "unpack": {
+    "boxes": 3,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,2 db=1,0": 2
+    },
+    "type_mismatches": 0
+   },
+   "vst~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,8 db=2,4": 1
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:FluidCorpusManipulation": {
+   "b": {
+    "boxes": 16,
+    "count_mismatches": 12,
+    "signatures": {
+     "count args=1 max=1,1 db=1,3": 12
+    },
+    "type_mismatches": 0
+   },
+   "bondo": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=3,3 db=2,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "coll": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,4 db=2,4": 2
+    },
+    "type_mismatches": 0
+   },
+   "combine": {
+    "boxes": 26,
+    "count_mismatches": 26,
+    "signatures": {
+     "count args=2 max=2,2 db=2,1": 20,
+     "count args=3 max=3,2 db=3,1": 2,
+     "count args=4 max=4,2 db=4,1": 4
+    },
+    "type_mismatches": 0
+   },
+   "comment": {
+    "boxes": 1384,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=0,0 db=1,0": 2
+    },
+    "type_mismatches": 0
+   },
+   "dict": {
+    "boxes": 20,
+    "count_mismatches": 17,
+    "signatures": {
+     "count args=0 max=2,4 db=2,5": 13,
+     "count args=1 max=2,4 db=2,5": 4
+    },
+    "type_mismatches": 0
+   },
+   "dict.pack": {
+    "boxes": 21,
+    "count_mismatches": 21,
+    "signatures": {
+     "count args=2 max=2,1 db=1,1": 2,
+     "count args=2 max=3,1 db=1,1": 12,
+     "count args=3 max=2,1 db=1,1": 2,
+     "count args=7 max=7,1 db=1,1": 5
+    },
+    "type_mismatches": 0
+   },
+   "dict.unpack": {
+    "boxes": 12,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=1 max=1,1 db=1,2": 9
+    },
+    "type_mismatches": 0
+   },
+   "dict.view": {
+    "boxes": 43,
+    "count_mismatches": 43,
+    "signatures": {
+     "count args=0 max=1,0 db=1,1": 43
+    },
+    "type_mismatches": 0
+   },
+   "expr": {
+    "boxes": 77,
+    "count_mismatches": 76,
+    "signatures": {
+     "count args=12 max=1,1 db=12,1": 1,
+     "count args=17 max=1,1 db=17,1": 1,
+     "count args=2 max=1,1 db=2,1": 4,
+     "count args=3 max=1,1 db=3,1": 1,
+     "count args=3 max=2,1 db=3,1": 2,
+     "count args=4 max=1,1 db=4,1": 26,
+     "count args=5 max=1,1 db=5,1": 4,
+     "count args=5 max=2,1 db=5,1": 29,
+     "count args=5 max=3,1 db=5,1": 2,
+     "count args=7 max=1,1 db=7,1": 6
+    },
+    "type_mismatches": 0
+   },
+   "fluid.ampfeature~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.ampgate~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,2 db=2,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "fluid.ampslice~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,2 db=2,2": 3
+    },
+    "type_mismatches": 0
+   },
+   "fluid.audiotransport~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,2 db=3,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "fluid.buf2list": {
+    "boxes": 33,
+    "count_mismatches": 33,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 32,
+     "count args=1 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufampfeature~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufampgate~": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 4
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufampslice~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufaudiotransport~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufchroma~": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 4
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufhpss~": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,4 db=1,1": 4
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufloudness~": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 4
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufmelbands~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 1,
+     "count args=1 max=1,2 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufmfcc~": {
+    "boxes": 10,
+    "count_mismatches": 10,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 5,
+     "count args=1 max=1,2 db=1,1": 5
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufnmfcross~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufnmfseed~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,3 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufnmf~": {
+    "boxes": 15,
+    "count_mismatches": 15,
+    "signatures": {
+     "count args=0 max=1,4 db=1,2": 15
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufnoveltyfeature~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufnoveltyslice~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufonsetfeature~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufonsetslice~": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=1,2 db=2,2": 5
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufpitch~": {
+    "boxes": 14,
+    "count_mismatches": 14,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 14
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufsinefeature~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,3 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufsines~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,3 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufspectralshape~": {
+    "boxes": 11,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 11
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufstats~": {
+    "boxes": 24,
+    "count_mismatches": 24,
+    "signatures": {
+     "count args=0 max=2,2 db=1,2": 24
+    },
+    "type_mismatches": 0
+   },
+   "fluid.bufstft~": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=1,4 db=1,2": 5
+    },
+    "type_mismatches": 0
+   },
+   "fluid.buftransientslice~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.buftransients~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,3 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "fluid.hpss~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,4 db=2,3": 2,
+     "count args=2 max=1,4 db=2,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.nmffilter~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=1 max=1,3 db=3,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "fluid.nmfmorph~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=3,2 db=3,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.noveltyfeature~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.noveltyslice~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,2 db=2,2": 3
+    },
+    "type_mismatches": 0
+   },
+   "fluid.onsetfeature~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "fluid.onsetslice~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,2 db=2,2": 3
+    },
+    "type_mismatches": 0
+   },
+   "fluid.sinefeature~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=1,3 db=2,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "fluid.sines~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,3 db=2,2": 3
+    },
+    "type_mismatches": 0
+   },
+   "fluid.stats": {
+    "boxes": 11,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=1 max=1,3 db=1,2": 9,
+     "count args=1 max=2,3 db=1,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "fluid.transientslice~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,2 db=2,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "fluid.transients~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,3 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "groove~": {
+    "boxes": 6,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=2 max=3,25 db=3,2": 1,
+     "count args=2 max=3,3 db=3,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "if": {
+    "boxes": 9,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=11 max=2,1 db=1,1": 8
+    },
+    "type_mismatches": 0
+   },
+   "info~": {
+    "boxes": 21,
+    "count_mismatches": 18,
+    "signatures": {
+     "count args=1 max=1,9 db=1,10": 18
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 340,
+    "count_mismatches": 340,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 340
+    },
+    "type_mismatches": 0
+   },
+   "jstrigger": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=3 max=1,1 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.reg": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "live.gain~": {
+    "boxes": 29,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=0 max=1,4 db=2,5": 11
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 319,
+    "count_mismatches": 319,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 319
+    },
+    "type_mismatches": 0
+   },
+   "playlist~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,5 db=1,3": 2
+    },
+    "type_mismatches": 0
+   },
+   "r": {
+    "boxes": 13,
+    "count_mismatches": 13,
+    "signatures": {
+     "count args=1 max=0,1 db=1,1": 13
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 192,
+    "count_mismatches": 192,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 176,
+     "count args=2 max=3,3 db=1,3": 16
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 21,
+    "count_mismatches": 21,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 11,
+     "count args=2 max=3,3 db=1,3": 7,
+     "count args=3 max=4,4 db=1,4": 1,
+     "count args=4 max=5,5 db=1,5": 2
+    },
+    "type_mismatches": 0
+   },
+   "spectroscope~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,1 db=2,0": 2
+    },
+    "type_mismatches": 0
+   },
+   "sprintf": {
+    "boxes": 29,
+    "count_mismatches": 12,
+    "signatures": {
+     "count args=2 max=2,1 db=1,1": 6,
+     "count args=3 max=3,1 db=1,1": 6
+    },
+    "type_mismatches": 0
+   },
+   "unjoin": {
+    "boxes": 13,
+    "count_mismatches": 13,
+    "signatures": {
+     "count args=0 max=1,3 db=1,2": 9,
+     "count args=1 max=1,4 db=1,3": 2,
+     "count args=1 max=1,8 db=1,7": 2
+    },
+    "type_mismatches": 0
+   },
+   "vexpr": {
+    "boxes": 32,
+    "count_mismatches": 32,
+    "signatures": {
+     "count args=2 max=1,1 db=2,1": 3,
+     "count args=3 max=1,1 db=3,1": 7,
+     "count args=3 max=2,1 db=3,1": 12,
+     "count args=4 max=1,1 db=4,1": 2,
+     "count args=4 max=2,1 db=4,1": 2,
+     "count args=5 max=2,1 db=5,1": 3,
+     "count args=7 max=2,1 db=7,1": 1,
+     "count args=8 max=1,1 db=8,1": 2
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:RNBO": {
+   "comment": {
+    "boxes": 1468,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=0,0 db=1,0": 6
+    },
+    "type_mismatches": 0
+   },
+   "dict.view": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=1,0 db=1,1": 5
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 11,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 11
+    },
+    "type_mismatches": 0
+   },
+   "join": {
+    "boxes": 7,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=2,1 db=0,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "list.lookup": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=7 max=2,2 db=2,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 8
+    },
+    "type_mismatches": 0
+   },
+   "pack": {
+    "boxes": 5,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=2,1 db=0,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "plot~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "r": {
+    "boxes": 9,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=1 max=0,1 db=1,1": 9
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 56,
+    "count_mismatches": 56,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 44,
+     "count args=2 max=3,3 db=1,3": 12
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 4,
+     "count args=2 max=3,3 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "sxformat": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=16 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "unpack": {
+    "boxes": 4,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=1,0": 1
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:Rhythm and Time Toolkit": {
+   "coll": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,4 db=2,4": 1
+    },
+    "type_mismatches": 0
+   },
+   "info~": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=1 max=1,9 db=1,10": 6
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 32,
+    "count_mismatches": 32,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 32
+    },
+    "type_mismatches": 0
+   },
+   "limi~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,1 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "live.scope~": {
+    "boxes": 113,
+    "count_mismatches": 113,
+    "signatures": {
+     "count args=0 max=2,1 db=2,0": 113
+    },
+    "type_mismatches": 0
+   },
+   "mc.live.gain~": {
+    "boxes": 7,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal/control/control/control db=signal/signal/control/control": 7
+    },
+    "type_mismatches": 7
+   },
+   "outlet": {
+    "boxes": 37,
+    "count_mismatches": 37,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 37
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 12,
+    "count_mismatches": 12,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 12
+    },
+    "type_mismatches": 0
+   },
+   "routepass": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 5
+    },
+    "type_mismatches": 0
+   },
+   "rtt.counter~": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=2,3 db=2,2": 8
+    },
+    "type_mismatches": 0
+   },
+   "rtt.euclidean~": {
+    "boxes": 7,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=0 max=3,4 db=3,1": 7
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "stash~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal/signal db=signal/control": 2
+    },
+    "type_mismatches": 2
+   },
+   "twist~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,1 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "vst~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,8 db=2,4": 2
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:abclib": {
+   "abc.hoa.map~": {
+    "boxes": 23,
+    "count_mismatches": 23,
+    "signatures": {
+     "count args=0 max=1,1 db=1,0": 1,
+     "count args=1 max=1,1 db=1,0": 19,
+     "count args=1 max=2,1 db=1,0": 2,
+     "count args=1 max=3,1 db=1,0": 1
+    },
+    "type_mismatches": 0
+   },
+   "abc.hoa.wider~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal db=control": 1
+    },
+    "type_mismatches": 1
+   },
+   "combine": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=2 max=2,2 db=2,1": 8
+    },
+    "type_mismatches": 0
+   },
+   "expr": {
+    "boxes": 14,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=3 max=1,1 db=3,1": 3,
+     "count args=5 max=1,1 db=5,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 127,
+    "count_mismatches": 127,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 127
+    },
+    "type_mismatches": 0
+   },
+   "live.gain~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,4 db=2,5": 2
+    },
+    "type_mismatches": 0
+   },
+   "mc.live.gain~": {
+    "boxes": 7,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal/control/control/control db=signal/signal/control/control": 7
+    },
+    "type_mismatches": 7
+   },
+   "mc.separate~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=1,3 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 77,
+    "count_mismatches": 77,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 77
+    },
+    "type_mismatches": 0
+   },
+   "r": {
+    "boxes": 124,
+    "count_mismatches": 124,
+    "signatures": {
+     "count args=1 max=0,1 db=1,1": 124
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 70,
+    "count_mismatches": 70,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 6,
+     "count args=3 max=4,4 db=1,4": 56,
+     "count args=6 max=7,7 db=1,7": 8
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=10 max=11,11 db=1,11": 1,
+     "count args=5 max=6,6 db=1,6": 1
+    },
+    "type_mismatches": 0
+   },
+   "select": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "spectroscope~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=2,1 db=2,0": 3
+    },
+    "type_mismatches": 0
+   },
+   "sprintf": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:bach": {
+   "b": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=1 max=1,1 db=1,3": 2,
+     "count args=1 max=1,4 db=1,3": 3
+    },
+    "type_mismatches": 0
+   },
+   "bach.args": {
+    "boxes": 15,
+    "count_mismatches": 13,
+    "signatures": {
+     "count args=0 max=1,3 db=2,4": 6,
+     "count args=0 max=3,5 db=2,4": 1,
+     "count args=0 max=4,6 db=2,4": 1,
+     "count args=1 max=3,5 db=2,4": 2,
+     "count args=2 max=1,3 db=2,4": 1,
+     "count args=3 max=4,6 db=2,4": 1,
+     "count args=4 max=1,3 db=2,4": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.beatbox": {
+    "boxes": 8,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=6,1 db=6,7": 6
+    },
+    "type_mismatches": 0
+   },
+   "bach.beatunbox": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=1,6 db=5,6": 5,
+     "count args=1 max=5,5 db=5,6": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.cartesianprod": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 2,
+     "count args=1 max=4,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.classify": {
+    "boxes": 7,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=0 max=2,3 db=1,1": 7
+    },
+    "type_mismatches": 0
+   },
+   "bach.clip": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=2 max=3,1 db=2,1": 1,
+     "count args=6 max=3,1 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.collect": {
+    "boxes": 33,
+    "count_mismatches": 33,
+    "signatures": {
+     "count args=0 max=3,1 db=1,2": 32,
+     "count args=1 max=5,3 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.contains": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 1,
+     "count args=1 max=1,2 db=1,1": 1,
+     "count args=2 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.delace": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,3 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.derive": {
+    "boxes": 6,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,1 db=2,2": 3
+    },
+    "type_mismatches": 0
+   },
+   "bach.eig": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=2,0": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.eval": {
+    "boxes": 37,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 1,
+     "count args=0 max=2,2 db=1,1": 1,
+     "count args=3 max=2,1 db=1,1": 1,
+     "count args=3 max=3,1 db=1,1": 1,
+     "count args=5 max=3,1 db=1,1": 4,
+     "count args=8 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.expr": {
+    "boxes": 78,
+    "count_mismatches": 43,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 7,
+     "count args=12 max=4,1 db=1,1": 1,
+     "count args=15 max=4,1 db=1,1": 1,
+     "count args=19 max=10,1 db=1,1": 1,
+     "count args=19 max=4,1 db=1,1": 2,
+     "count args=27 max=6,1 db=1,1": 1,
+     "count args=3 max=2,1 db=1,1": 10,
+     "count args=3 max=3,1 db=1,1": 2,
+     "count args=31 max=6,1 db=1,1": 1,
+     "count args=31 max=8,1 db=1,1": 1,
+     "count args=5 max=2,1 db=1,1": 8,
+     "count args=5 max=3,1 db=1,1": 4,
+     "count args=7 max=2,1 db=1,1": 1,
+     "count args=7 max=3,1 db=1,1": 2,
+     "count args=7 max=4,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.ezmidiplay": {
+    "boxes": 18,
+    "count_mismatches": 18,
+    "signatures": {
+     "count args=0 max=3,2 db=2,2": 13,
+     "count args=1 max=3,2 db=2,2": 5
+    },
+    "type_mismatches": 0
+   },
+   "bach.f2mc": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 2,
+     "count args=1 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.filter": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=1 max=2,2 db=1,1": 7,
+     "count args=2 max=2,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.find": {
+    "boxes": 14,
+    "count_mismatches": 14,
+    "signatures": {
+     "count args=0 max=3,3 db=1,1": 7,
+     "count args=1 max=3,3 db=1,1": 6,
+     "count args=3 max=3,3 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.hypercomment": {
+    "boxes": 95,
+    "count_mismatches": 95,
+    "signatures": {
+     "count args=0 max=1,1 db=1,0": 95
+    },
+    "type_mismatches": 0
+   },
+   "bach.integrate": {
+    "boxes": 5,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,1 db=2,2": 3
+    },
+    "type_mismatches": 0
+   },
+   "bach.iter": {
+    "boxes": 47,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=1 max=3,5 db=2,3": 2,
+     "count args=1 max=4,7 db=2,3": 4
+    },
+    "type_mismatches": 0
+   },
+   "bach.join": {
+    "boxes": 30,
+    "count_mismatches": 30,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 11,
+     "count args=1 max=2,1 db=1,1": 4,
+     "count args=1 max=3,1 db=1,1": 14,
+     "count args=1 max=4,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.keys": {
+    "boxes": 40,
+    "count_mismatches": 39,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 16,
+     "count args=16 max=1,17 db=1,1": 1,
+     "count args=2 max=1,3 db=1,1": 14,
+     "count args=3 max=1,4 db=1,1": 7,
+     "count args=4 max=1,5 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.lace": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=3,1 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "bach.lookup": {
+    "boxes": 38,
+    "count_mismatches": 38,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 38
+    },
+    "type_mismatches": 0
+   },
+   "bach.mc2f": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 3,
+     "count args=1 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.mean": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,1 db=2,1": 3,
+     "count args=1 max=1,1 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.minmax": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,4 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.nth": {
+    "boxes": 30,
+    "count_mismatches": 30,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 10,
+     "count args=1 max=2,1 db=1,1": 6,
+     "count args=2 max=2,1 db=1,1": 12,
+     "count args=4 max=2,1 db=1,1": 1,
+     "count args=7 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.pack": {
+    "boxes": 15,
+    "count_mismatches": 13,
+    "signatures": {
+     "count args=15 max=15,1 db=1,1": 1,
+     "count args=2 max=2,1 db=1,1": 4,
+     "count args=3 max=3,1 db=1,1": 8
+    },
+    "type_mismatches": 0
+   },
+   "bach.pick": {
+    "boxes": 64,
+    "count_mismatches": 48,
+    "signatures": {
+     "count args=16 max=1,8 db=1,1": 1,
+     "count args=2 max=1,2 db=1,1": 38,
+     "count args=3 max=1,3 db=1,1": 5,
+     "count args=4 max=1,2 db=1,1": 3,
+     "count args=5 max=1,4 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.pipe": {
+    "boxes": 4,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=4,3 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.playkeys": {
+    "boxes": 33,
+    "count_mismatches": 33,
+    "signatures": {
+     "count args=1 max=1,1 db=0,1": 4,
+     "count args=2 max=1,1 db=0,1": 6,
+     "count args=2 max=1,2 db=0,1": 1,
+     "count args=3 max=1,2 db=0,1": 6,
+     "count args=3 max=1,3 db=0,1": 2,
+     "count args=4 max=1,2 db=0,1": 1,
+     "count args=4 max=1,4 db=0,1": 5,
+     "count args=5 max=1,3 db=0,1": 4,
+     "count args=5 max=1,5 db=0,1": 2,
+     "count args=6 max=1,3 db=0,1": 1,
+     "count args=6 max=1,5 db=0,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.portal": {
+    "boxes": 25,
+    "count_mismatches": 25,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 20,
+     "count args=1 max=2,3 db=1,1": 2,
+     "count args=1 max=3,4 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "bach.primeform": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=1 max=2,2 db=1,1": 4
+    },
+    "type_mismatches": 0
+   },
+   "bach.quantize": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=3,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.read": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 5
+    },
+    "type_mismatches": 0
+   },
+   "bach.reduce": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=2,3 db=1,1": 3,
+     "count args=1 max=2,3 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.reg": {
+    "boxes": 34,
+    "count_mismatches": 34,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 33,
+     "count args=1 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.replace": {
+    "boxes": 9,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=2 max=4,2 db=1,1": 5,
+     "count args=4 max=4,2 db=1,1": 3,
+     "count args=6 max=4,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.resample": {
+    "boxes": 11,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=1 max=1,2 db=2,1": 11
+    },
+    "type_mismatches": 0
+   },
+   "bach.shelf": {
+    "boxes": 14,
+    "count_mismatches": 14,
+    "signatures": {
+     "count args=0 max=1,3 db=1,2": 10,
+     "count args=1 max=1,3 db=1,2": 4
+    },
+    "type_mismatches": 0
+   },
+   "bach.sieve": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=3,2 db=1,1": 5,
+     "count args=1 max=3,2 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "bach.slice": {
+    "boxes": 19,
+    "count_mismatches": 19,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 19
+    },
+    "type_mismatches": 0
+   },
+   "bach.sort": {
+    "boxes": 9,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=0 max=2,4 db=1,1": 9
+    },
+    "type_mismatches": 0
+   },
+   "bach.step": {
+    "boxes": 17,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=1 max=5,7 db=3,3": 4
+    },
+    "type_mismatches": 0
+   },
+   "bach.submatrix": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=4 max=5,1 db=5,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.symdiff": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=3,3 db=4,3": 8
+    },
+    "type_mismatches": 0
+   },
+   "bach.textin": {
+    "boxes": 8,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=2,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.textout": {
+    "boxes": 12,
+    "count_mismatches": 12,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 11,
+     "count args=1 max=2,3 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.thin": {
+    "boxes": 9,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=0 max=2,3 db=1,1": 9
+    },
+    "type_mismatches": 0
+   },
+   "bach.tree": {
+    "boxes": 39,
+    "count_mismatches": 39,
+    "signatures": {
+     "count args=0 max=1,3 db=1,1": 5,
+     "count args=0 max=1,4 db=1,1": 2,
+     "count args=0 max=1,5 db=1,1": 32
+    },
+    "type_mismatches": 0
+   },
+   "bach.union": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=3,3 db=4,3": 8
+    },
+    "type_mismatches": 0
+   },
+   "bach.weights": {
+    "boxes": 4,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=1 max=2,1 db=3,1": 1,
+     "count args=1 max=5,1 db=3,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "bach.wellshape": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=2,1 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.wordcloud": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=2,1 db=0,2": 8
+    },
+    "type_mismatches": 0
+   },
+   "bach.write": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=2,0 db=1,1": 4
+    },
+    "type_mismatches": 0
+   },
+   "coll": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=1,4 db=2,4": 2
+    },
+    "type_mismatches": 0
+   },
+   "combine": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=3 max=3,2 db=3,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "dict": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,4 db=2,5": 1,
+     "count args=1 max=2,4 db=2,5": 1
+    },
+    "type_mismatches": 0
+   },
+   "dict.view": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=1,0 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "expr": {
+    "boxes": 26,
+    "count_mismatches": 26,
+    "signatures": {
+     "count args=11 max=2,1 db=11,1": 1,
+     "count args=19 max=2,1 db=19,1": 1,
+     "count args=2 max=1,1 db=2,1": 1,
+     "count args=3 max=1,1 db=3,1": 2,
+     "count args=5 max=1,1 db=5,1": 8,
+     "count args=7 max=1,1 db=7,1": 5,
+     "count args=7 max=2,1 db=7,1": 2,
+     "count args=7 max=3,1 db=7,1": 6
+    },
+    "type_mismatches": 0
+   },
+   "if": {
+    "boxes": 17,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=10 max=3,1 db=1,1": 1,
+     "count args=11 max=2,1 db=1,1": 3,
+     "count args=8 max=1,2 db=1,1": 2,
+     "count args=8 max=2,2 db=1,1": 4,
+     "count args=9 max=2,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 178,
+    "count_mismatches": 178,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 178
+    },
+    "type_mismatches": 0
+   },
+   "jstrigger": {
+    "boxes": 15,
+    "count_mismatches": 15,
+    "signatures": {
+     "count args=1 max=1,1 db=1,3": 15
+    },
+    "type_mismatches": 0
+   },
+   "live.gain~": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,4 db=2,5": 4
+    },
+    "type_mismatches": 0
+   },
+   "makenote": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=3 max=4,3 db=3,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 169,
+    "count_mismatches": 169,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 169
+    },
+    "type_mismatches": 0
+   },
+   "preset": {
+    "boxes": 7,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=0 max=1,4 db=1,5": 7
+    },
+    "type_mismatches": 0
+   },
+   "r": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=0,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 469,
+    "count_mismatches": 469,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 469
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 38,
+    "count_mismatches": 38,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 32,
+     "count args=2 max=3,3 db=1,3": 3,
+     "count args=3 max=4,4 db=1,4": 2,
+     "count args=4 max=5,5 db=1,5": 1
+    },
+    "type_mismatches": 0
+   },
+   "vexpr": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=3 max=1,1 db=3,1": 1
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:cv.jit": {
+   "b": {
+    "boxes": 2,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "coll": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,4 db=2,4": 1
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 54,
+    "count_mismatches": 54,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 54
+    },
+    "type_mismatches": 0
+   },
+   "jit.pack": {
+    "boxes": 6,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,2 db=4,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "jit.unpack": {
+    "boxes": 6,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=1 max=1,3 db=1,5": 3,
+     "count args=1 max=1,4 db=1,5": 2
+    },
+    "type_mismatches": 0
+   },
+   "live.gain~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,4 db=2,5": 1
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 57,
+    "count_mismatches": 57,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 57
+    },
+    "type_mismatches": 0
+   },
+   "pack": {
+    "boxes": 8,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,1 db=0,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "r": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=1 max=0,1 db=1,1": 5
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 13,
+    "count_mismatches": 13,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 12,
+     "count args=2 max=3,3 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "routepass": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 9,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 2,
+     "count args=2 max=3,3 db=1,3": 4,
+     "count args=3 max=4,4 db=1,4": 3
+    },
+    "type_mismatches": 0
+   },
+   "unpack": {
+    "boxes": 18,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,2 db=1,0": 2
+    },
+    "type_mismatches": 0
+   },
+   "vexpr": {
+    "boxes": 31,
+    "count_mismatches": 25,
+    "signatures": {
+     "count args=3 max=1,1 db=3,1": 20,
+     "count args=3 max=2,1 db=3,1": 5
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:dada": {
+   "b": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=1,1 db=1,3": 2
+    },
+    "type_mismatches": 0
+   },
+   "bach.expr": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=5 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.ezmidiplay": {
+    "boxes": 21,
+    "count_mismatches": 21,
+    "signatures": {
+     "count args=0 max=3,2 db=2,2": 16,
+     "count args=1 max=3,2 db=2,2": 5
+    },
+    "type_mismatches": 0
+   },
+   "bach.hypercomment": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,1 db=1,0": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.iter": {
+    "boxes": 6,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=3,5 db=2,3": 2
+    },
+    "type_mismatches": 0
+   },
+   "bach.join": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 3,
+     "count args=1 max=3,1 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "bach.keys": {
+    "boxes": 31,
+    "count_mismatches": 31,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 19,
+     "count args=2 max=1,3 db=1,1": 8,
+     "count args=3 max=1,4 db=1,1": 2,
+     "count args=4 max=1,5 db=1,1": 1,
+     "count args=7 max=1,8 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.lookup": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "bach.mc2f": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.minmax": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,4 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.pack": {
+    "boxes": 3,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=2 max=2,1 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "bach.pick": {
+    "boxes": 15,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=2 max=1,2 db=1,1": 3,
+     "count args=3 max=1,3 db=1,1": 3,
+     "count args=5 max=1,5 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "bach.portal": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.reg": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 4
+    },
+    "type_mismatches": 0
+   },
+   "bach.slice": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "combine": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,2 db=0,1": 2,
+     "count args=2 max=2,2 db=2,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "dada.bodies": {
+    "boxes": 9,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=0 max=2,5 db=1,5": 9
+    },
+    "type_mismatches": 0
+   },
+   "dada.boids": {
+    "boxes": 7,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=0 max=2,4 db=1,4": 7
+    },
+    "type_mismatches": 0
+   },
+   "dada.bounce": {
+    "boxes": 10,
+    "count_mismatches": 10,
+    "signatures": {
+     "count args=0 max=2,5 db=1,5": 10
+    },
+    "type_mismatches": 0
+   },
+   "dada.distances": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=1,4 db=1,2": 5
+    },
+    "type_mismatches": 0
+   },
+   "dada.graph": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=1,3 db=1,2": 5
+    },
+    "type_mismatches": 0
+   },
+   "dada.kaleido": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=2,5 db=1,5": 6
+    },
+    "type_mismatches": 0
+   },
+   "dada.life": {
+    "boxes": 19,
+    "count_mismatches": 19,
+    "signatures": {
+     "count args=0 max=2,4 db=1,4": 19
+    },
+    "type_mismatches": 0
+   },
+   "dada.machines": {
+    "boxes": 11,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=0 max=2,4 db=1,1": 11
+    },
+    "type_mismatches": 0
+   },
+   "dada.multibrot": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=2,5 db=1,5": 5
+    },
+    "type_mismatches": 0
+   },
+   "dada.music~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,3 db=1,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "dada.nodes": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=2,4 db=1,2": 4
+    },
+    "type_mismatches": 0
+   },
+   "dada.platform": {
+    "boxes": 11,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=0 max=2,4 db=1,4": 11
+    },
+    "type_mismatches": 0
+   },
+   "dada.segment": {
+    "boxes": 13,
+    "count_mismatches": 13,
+    "signatures": {
+     "count args=0 max=2,3 db=1,2": 13
+    },
+    "type_mismatches": 0
+   },
+   "dada.stage": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=2,3 db=1,3": 3
+    },
+    "type_mismatches": 0
+   },
+   "dada.terrain~": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=2,1 db=1,0": 8
+    },
+    "type_mismatches": 0
+   },
+   "expr": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=2 max=1,1 db=2,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "if": {
+    "boxes": 5,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=11 max=3,1 db=1,1": 1,
+     "count args=6 max=3,1 db=1,1": 1,
+     "count args=8 max=1,2 db=1,1": 1,
+     "count args=9 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 20,
+    "count_mismatches": 20,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 20
+    },
+    "type_mismatches": 0
+   },
+   "live.gain~": {
+    "boxes": 11,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=0 max=1,4 db=2,5": 11
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 17,
+    "count_mismatches": 17,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 17
+    },
+    "type_mismatches": 0
+   },
+   "preset": {
+    "boxes": 9,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=1,4 db=1,5": 8
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 5
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 3,
+     "count args=2 max=3,3 db=1,3": 1
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:ears": {
+   "bach.delace": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=1,3 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "bach.ezmidiplay": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=3,2 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.f2mc": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.hypercomment": {
+    "boxes": 107,
+    "count_mismatches": 107,
+    "signatures": {
+     "count args=0 max=1,1 db=1,0": 107
+    },
+    "type_mismatches": 0
+   },
+   "bach.join": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 1,
+     "count args=1 max=2,1 db=1,1": 1,
+     "count args=1 max=3,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.keys": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "bach.lookup": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "bach.pick": {
+    "boxes": 4,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=2 max=1,2 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "bach.reg": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "bach.symdiff": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=3,3 db=4,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "combine": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=2,2 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "ears.!-~": {
+    "boxes": 6,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 6
+    },
+    "type_mismatches": 6
+   },
+   "ears.!/~": {
+    "boxes": 6,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 6
+    },
+    "type_mismatches": 6
+   },
+   "ears.!=~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "ears.*~": {
+    "boxes": 6,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 6
+    },
+    "type_mismatches": 6
+   },
+   "ears.+~": {
+    "boxes": 14,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 14
+    },
+    "type_mismatches": 14
+   },
+   "ears.-~": {
+    "boxes": 6,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 6
+    },
+    "type_mismatches": 6
+   },
+   "ears./~": {
+    "boxes": 6,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 6
+    },
+    "type_mismatches": 6
+   },
+   "ears.==~": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 6
+    },
+    "type_mismatches": 0
+   },
+   "ears.assemble~": {
+    "boxes": 5,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 5
+    },
+    "type_mismatches": 5
+   },
+   "ears.biquad~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 2
+    },
+    "type_mismatches": 2
+   },
+   "ears.channel~": {
+    "boxes": 9,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 9
+    },
+    "type_mismatches": 9
+   },
+   "ears.clicks~": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=3,1 db=2,1": 5
+    },
+    "type_mismatches": 0
+   },
+   "ears.clip~": {
+    "boxes": 9,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 9
+    },
+    "type_mismatches": 9
+   },
+   "ears.collect~": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=3,1 db=1,3": 3,
+     "count args=1 max=4,2 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "ears.cqt~": {
+    "boxes": 6,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control/control db=signal/signal": 6
+    },
+    "type_mismatches": 6
+   },
+   "ears.crop~": {
+    "boxes": 20,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 20
+    },
+    "type_mismatches": 20
+   },
+   "ears.dcfilter~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.delace~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,4 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "ears.dynamics~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 2
+    },
+    "type_mismatches": 2
+   },
+   "ears.envelope~": {
+    "boxes": 7,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 2,
+     "count args=1 max=2,1 db=1,1": 4,
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.essentia~": {
+    "boxes": 17,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=1 max=2,5 db=2,1": 4,
+     "count args=2 max=3,2 db=2,1": 1,
+     "count args=3 max=4,3 db=2,1": 1,
+     "count args=4 max=5,4 db=2,1": 1,
+     "type max=control db=signal": 10
+    },
+    "type_mismatches": 10
+   },
+   "ears.expr~": {
+    "boxes": 12,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 5,
+     "count args=1 max=3,1 db=1,1": 1,
+     "type max=control db=signal": 6
+    },
+    "type_mismatches": 6
+   },
+   "ears.fade~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=2 max=3,1 db=1,3": 2
+    },
+    "type_mismatches": 0
+   },
+   "ears.fft~": {
+    "boxes": 4,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control/control db=signal/signal": 4
+    },
+    "type_mismatches": 4
+   },
+   "ears.filterempty~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.format~": {
+    "boxes": 8,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 8
+    },
+    "type_mismatches": 8
+   },
+   "ears.freeverb~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=3,1 db=1,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "ears.fromdiffs~": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 6
+    },
+    "type_mismatches": 0
+   },
+   "ears.fromsamps~": {
+    "boxes": 7,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 7
+    },
+    "type_mismatches": 7
+   },
+   "ears.gain~": {
+    "boxes": 7,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 7
+    },
+    "type_mismatches": 7
+   },
+   "ears.griffinlim~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control/control db=signal/signal": 2
+    },
+    "type_mismatches": 2
+   },
+   "ears.hoa.decode~": {
+    "boxes": 4,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 4
+    },
+    "type_mismatches": 4
+   },
+   "ears.hoa.encode~": {
+    "boxes": 8,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 8
+    },
+    "type_mismatches": 8
+   },
+   "ears.hoa.mirror~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.hoa.rotate~": {
+    "boxes": 3,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 3
+    },
+    "type_mismatches": 3
+   },
+   "ears.info~": {
+    "boxes": 32,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=2 max=1,2 db=1,1": 3,
+     "count args=3 max=1,3 db=1,1": 1,
+     "count args=5 max=1,5 db=1,1": 1,
+     "count args=8 max=1,8 db=1,1": 1,
+     "count args=9 max=1,9 db=1,1": 2,
+     "type max=control db=signal": 24
+    },
+    "type_mismatches": 24
+   },
+   "ears.interp~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=3,1 db=2,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "ears.istft~": {
+    "boxes": 4,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=0 max=2,1 db=2,2": 1,
+     "count args=1 max=2,1 db=2,2": 2,
+     "type max=control/control db=signal/signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.iter~": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,3 db=1,2": 2,
+     "count args=1 max=2,4 db=1,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "ears.join~": {
+    "boxes": 3,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 3
+    },
+    "type_mismatches": 3
+   },
+   "ears.lace~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 1,
+     "count args=1 max=3,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "ears.mixdown~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=2,1 db=1,2": 1,
+     "count args=2 max=2,1 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "ears.mix~": {
+    "boxes": 9,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=0 max=3,1 db=3,2": 8,
+     "count args=1 max=3,1 db=3,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "ears.model.sine.analysis~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control/control/control db=signal/signal/signal": 2
+    },
+    "type_mismatches": 2
+   },
+   "ears.model.sine.synthesis~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 2
+    },
+    "type_mismatches": 2
+   },
+   "ears.model.sps.analysis~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control/control/control/control db=signal/signal/signal/signal": 2
+    },
+    "type_mismatches": 2
+   },
+   "ears.model.sps.synthesis~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control/control/control db=signal/signal/signal": 2
+    },
+    "type_mismatches": 2
+   },
+   "ears.model.stochastic.analysis~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 2
+    },
+    "type_mismatches": 2
+   },
+   "ears.model.stochastic.synthesis~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 2
+    },
+    "type_mismatches": 2
+   },
+   "ears.normalize~": {
+    "boxes": 17,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 17
+    },
+    "type_mismatches": 17
+   },
+   "ears.offset~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=2,1 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "ears.onepole~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 2
+    },
+    "type_mismatches": 2
+   },
+   "ears.overdrive~": {
+    "boxes": 5,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 5
+    },
+    "type_mismatches": 5
+   },
+   "ears.pack~": {
+    "boxes": 4,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=3,1 db=1,1": 1,
+     "type max=control db=signal": 3
+    },
+    "type_mismatches": 3
+   },
+   "ears.pan~": {
+    "boxes": 6,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 6
+    },
+    "type_mismatches": 6
+   },
+   "ears.paulfreeze~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.paulstretch~": {
+    "boxes": 7,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 7
+    },
+    "type_mismatches": 7
+   },
+   "ears.peaks~": {
+    "boxes": 4,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 4
+    },
+    "type_mismatches": 4
+   },
+   "ears.phaseunwrap~": {
+    "boxes": 3,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 3
+    },
+    "type_mismatches": 3
+   },
+   "ears.phasewrap~": {
+    "boxes": 4,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 4
+    },
+    "type_mismatches": 4
+   },
+   "ears.process~": {
+    "boxes": 23,
+    "count_mismatches": 23,
+    "signatures": {
+     "count args=1 max=1,1 db=2,3": 12,
+     "count args=1 max=1,2 db=2,3": 3,
+     "count args=1 max=2,1 db=2,3": 4,
+     "count args=1 max=2,2 db=2,3": 2,
+     "count args=2 max=1,1 db=2,3": 1,
+     "count args=3 max=1,1 db=2,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "ears.reg~": {
+    "boxes": 13,
+    "count_mismatches": 13,
+    "signatures": {
+     "count args=0 max=2,1 db=1,1": 4,
+     "count args=1 max=2,1 db=1,1": 9
+    },
+    "type_mismatches": 0
+   },
+   "ears.repeat~": {
+    "boxes": 3,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 3
+    },
+    "type_mismatches": 3
+   },
+   "ears.resample~": {
+    "boxes": 12,
+    "count_mismatches": 12,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 12
+    },
+    "type_mismatches": 0
+   },
+   "ears.rev~": {
+    "boxes": 3,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 3
+    },
+    "type_mismatches": 3
+   },
+   "ears.roll.sampling~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 2
+    },
+    "type_mismatches": 2
+   },
+   "ears.roll.synthesis~": {
+    "boxes": 3,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 3
+    },
+    "type_mismatches": 3
+   },
+   "ears.roll.toreaper~": {
+    "boxes": 3,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 3
+    },
+    "type_mismatches": 3
+   },
+   "ears.rot~": {
+    "boxes": 3,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 3
+    },
+    "type_mismatches": 3
+   },
+   "ears.rubberband~": {
+    "boxes": 12,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 12
+    },
+    "type_mismatches": 12
+   },
+   "ears.soundtouch~": {
+    "boxes": 5,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 5
+    },
+    "type_mismatches": 5
+   },
+   "ears.specshow~": {
+    "boxes": 27,
+    "count_mismatches": 27,
+    "signatures": {
+     "count args=0 max=3,0 db=1,0": 27
+    },
+    "type_mismatches": 0
+   },
+   "ears.split~": {
+    "boxes": 9,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control/control db=signal/signal": 9
+    },
+    "type_mismatches": 9
+   },
+   "ears.stft~": {
+    "boxes": 21,
+    "count_mismatches": 21,
+    "signatures": {
+     "count args=0 max=1,2 db=0,2": 20,
+     "count args=0 max=2,2 db=0,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "ears.tempogram~": {
+    "boxes": 2,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 2
+    },
+    "type_mismatches": 2
+   },
+   "ears.timesquash~": {
+    "boxes": 7,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=1 max=2,1 db=3,3": 3,
+     "count args=2 max=2,1 db=3,3": 2,
+     "count args=2 max=2,2 db=3,3": 2
+    },
+    "type_mismatches": 0
+   },
+   "ears.todiffs~": {
+    "boxes": 6,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 6
+    },
+    "type_mismatches": 6
+   },
+   "ears.tosamps~": {
+    "boxes": 4,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 4
+    },
+    "type_mismatches": 4
+   },
+   "ears.trans~": {
+    "boxes": 7,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 7
+    },
+    "type_mismatches": 7
+   },
+   "ears.trim~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.unpack~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 1,
+     "count args=3 max=1,4 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "ears.vamp~": {
+    "boxes": 5,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,1 db=2,2": 2,
+     "count args=2 max=3,3 db=2,2": 1,
+     "count args=4 max=5,5 db=2,2": 1,
+     "type max=control/control db=signal/signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.waveset.average~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.waveset.decimate~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.waveset.interp~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.waveset.repeat~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.waveset.shuffle~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.waveset.split~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.waveset.subs~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 1
+    },
+    "type_mismatches": 1
+   },
+   "ears.window~": {
+    "boxes": 6,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 6
+    },
+    "type_mismatches": 6
+   },
+   "ears.write~": {
+    "boxes": 11,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control/control db=signal/signal": 11
+    },
+    "type_mismatches": 11
+   },
+   "expr": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=1,1 db=2,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "info~": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=1,9 db=1,10": 5
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 22,
+    "count_mismatches": 22,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 22
+    },
+    "type_mismatches": 0
+   },
+   "mc.curve~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=3,3 db=3,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 30,
+    "count_mismatches": 30,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 30
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 2,
+     "count args=3 max=4,4 db=1,4": 4
+    },
+    "type_mismatches": 0
+   },
+   "routepass": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 4
+    },
+    "type_mismatches": 0
+   },
+   "sprintf": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=7 max=2,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:ease": {
+   "b": {
+    "boxes": 5,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=1 max=1,1 db=1,3": 3,
+     "count args=1 max=1,2 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 9,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 9
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 6
+    },
+    "type_mismatches": 0
+   },
+   "playlist~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,5 db=1,3": 2
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "unjoin": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=1,5 db=1,4": 1
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:grainflow": {
+   "dict": {
+    "boxes": 20,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,4 db=2,5": 1,
+     "count args=2 max=2,4 db=2,5": 1
+    },
+    "type_mismatches": 0
+   },
+   "dict.view": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,0 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "expr": {
+    "boxes": 5,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.chorus~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=3 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.scrubSynth~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=5,8 db=5,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.spat.speakers": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 5,
+     "count args=1 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.spat.spirograph": {
+    "boxes": 4,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=control db=signal": 4
+    },
+    "type_mismatches": 4
+   },
+   "grainflow.spat.split": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=3,2 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.spat.volume": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=0 max=1,1 db=1,2": 6
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.spatview~": {
+    "boxes": 20,
+    "count_mismatches": 20,
+    "signatures": {
+     "count args=0 max=1,1 db=1,0": 20
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.streams~": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=3 max=4,9 db=4,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.synth~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=3 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.util.3dspread": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 2
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.util.grainRecord~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=3,2 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.util.phasor~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=1 max=3,2 db=3,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.util.rateSizePhasor~": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=3 max=3,2 db=3,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.util.stereoPan~": {
+    "boxes": 18,
+    "count_mismatches": 16,
+    "signatures": {
+     "count args=0 max=2,2 db=2,1": 9,
+     "count args=1 max=2,2 db=2,1": 7,
+     "type max=signal db=control": 2
+    },
+    "type_mismatches": 2
+   },
+   "grainflow.util.vbap3d": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "grainflow.waveform~": {
+    "boxes": 16,
+    "count_mismatches": 16,
+    "signatures": {
+     "count args=0 max=1,2 db=1,0": 16
+    },
+    "type_mismatches": 0
+   },
+   "grainflow~": {
+    "boxes": 42,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=2 max=4,8 db=4,9": 3
+    },
+    "type_mismatches": 0
+   },
+   "if": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=8 max=1,2 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 32,
+    "count_mismatches": 32,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 32
+    },
+    "type_mismatches": 0
+   },
+   "jit.gl.multiple": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=2 max=4,2 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.pack": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=3,2 db=4,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "mc.live.gain~": {
+    "boxes": 26,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal/control/control/control db=signal/signal/control/control": 26
+    },
+    "type_mismatches": 26
+   },
+   "mc.selector~": {
+    "boxes": 1,
+    "count_mismatches": 0,
+    "signatures": {
+     "type max=signal db=control": 1
+    },
+    "type_mismatches": 1
+   },
+   "mc.separate~": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=1 max=1,2 db=1,1": 8
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 61,
+    "count_mismatches": 61,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 61
+    },
+    "type_mismatches": 0
+   },
+   "playlist~": {
+    "boxes": 9,
+    "count_mismatches": 9,
+    "signatures": {
+     "count args=0 max=1,5 db=1,3": 9
+    },
+    "type_mismatches": 0
+   },
+   "r": {
+    "boxes": 20,
+    "count_mismatches": 20,
+    "signatures": {
+     "count args=1 max=0,1 db=1,1": 20
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 19,
+    "count_mismatches": 19,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 16,
+     "count args=2 max=3,3 db=1,3": 3
+    },
+    "type_mismatches": 0
+   },
+   "routepass": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 2,
+     "count args=3 max=4,4 db=1,4": 2
+    },
+    "type_mismatches": 0
+   },
+   "unjoin": {
+    "boxes": 13,
+    "count_mismatches": 13,
+    "signatures": {
+     "count args=0 max=1,3 db=1,2": 4,
+     "count args=1 max=1,3 db=1,2": 1,
+     "count args=1 max=1,4 db=1,3": 5,
+     "count args=1 max=1,5 db=1,4": 3
+    },
+    "type_mismatches": 0
+   },
+   "vexpr": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,1 db=1,1": 1,
+     "count args=3 max=1,1 db=3,1": 1
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:ml.star": {
+   "b": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=1,3": 1
+    },
+    "type_mismatches": 0
+   },
+   "coll": {
+    "boxes": 19,
+    "count_mismatches": 19,
+    "signatures": {
+     "count args=0 max=1,4 db=2,4": 8,
+     "count args=1 max=1,4 db=2,4": 11
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 38,
+    "count_mismatches": 38,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 38
+    },
+    "type_mismatches": 0
+   },
+   "ml.vmm.bin": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=2,1 db=2,2": 2,
+     "count args=2 max=2,1 db=2,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "ml.vmm.lzms": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=2,2 db=2,1": 2,
+     "count args=2 max=2,2 db=2,1": 3
+    },
+    "type_mismatches": 0
+   },
+   "outlet": {
+    "boxes": 19,
+    "count_mismatches": 19,
+    "signatures": {
+     "count args=0 max=1,0 db=2,0": 19
+    },
+    "type_mismatches": 0
+   },
+   "r": {
+    "boxes": 6,
+    "count_mismatches": 6,
+    "signatures": {
+     "count args=1 max=0,1 db=1,1": 6
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 26,
+    "count_mismatches": 26,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 12,
+     "count args=2 max=3,3 db=1,3": 14
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=3 max=4,4 db=1,4": 1,
+     "count args=8 max=9,9 db=1,9": 2
+    },
+    "type_mismatches": 0
+   },
+   "seq": {
+    "boxes": 7,
+    "count_mismatches": 7,
+    "signatures": {
+     "count args=0 max=1,2 db=1,3": 7
+    },
+    "type_mismatches": 0
+   },
+   "unpack": {
+    "boxes": 20,
+    "count_mismatches": 10,
+    "signatures": {
+     "count args=0 max=1,2 db=1,0": 10
+    },
+    "type_mismatches": 0
+   }
+  },
+  "package:nn_tilde": {
+   "dict.view": {
+    "boxes": 4,
+    "count_mismatches": 4,
+    "signatures": {
+     "count args=0 max=1,0 db=1,1": 4
+    },
+    "type_mismatches": 0
+   },
+   "inlet": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=0 max=0,1 db=1,1": 8
+    },
+    "type_mismatches": 0
+   },
+   "mc.nn~": {
+    "boxes": 14,
+    "count_mismatches": 10,
+    "signatures": {
+     "count args=2 max=1,8 db=1,0": 2,
+     "count args=2 max=3,3 db=1,0": 5,
+     "count args=2 max=8,1 db=1,0": 2,
+     "count args=3 max=8,8 db=1,0": 1
+    },
+    "type_mismatches": 0
+   },
+   "mc.separate~": {
+    "boxes": 3,
+    "count_mismatches": 3,
+    "signatures": {
+     "count args=2 max=1,3 db=1,2": 1,
+     "count args=4 max=1,5 db=1,4": 1,
+     "count args=7 max=1,8 db=1,7": 1
+    },
+    "type_mismatches": 0
+   },
+   "mcs.nn~": {
+    "boxes": 15,
+    "count_mismatches": 10,
+    "signatures": {
+     "count args=0 max=1,0 db=2,2": 4,
+     "count args=2 max=1,1 db=2,2": 1,
+     "count args=2 max=4,4 db=2,2": 1,
+     "count args=3 max=3,3 db=2,2": 4
+    },
+    "type_mismatches": 0
+   },
+   "mcs.sig~": {
+    "boxes": 5,
+    "count_mismatches": 5,
+    "signatures": {
+     "count args=0 max=3,1 db=1,1": 4,
+     "count args=0 max=4,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "nn~": {
+    "boxes": 21,
+    "count_mismatches": 15,
+    "signatures": {
+     "count args=0 max=1,0 db=1,1": 9,
+     "count args=1 max=1,2 db=1,1": 1,
+     "count args=2 max=1,2 db=1,1": 1,
+     "count args=2 max=1,8 db=1,1": 1,
+     "count args=2 max=3,3 db=1,1": 1,
+     "count args=2 max=8,1 db=1,1": 1,
+     "count args=4 max=4,4 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "playlist~": {
+    "boxes": 11,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=0 max=1,5 db=1,3": 11
+    },
+    "type_mismatches": 0
+   },
+   "r": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=1 max=0,1 db=1,1": 1
+    },
+    "type_mismatches": 0
+   },
+   "route": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 2
+    },
+    "type_mismatches": 0
+   },
+   "sel": {
+    "boxes": 8,
+    "count_mismatches": 8,
+    "signatures": {
+     "count args=1 max=2,2 db=1,2": 8
+    },
+    "type_mismatches": 0
+   }
+  }
+ },
+ "schema": 1,
+ "sources": {
+  "bundle": {
+   "boxes_compared": 77909,
+   "files": 2114,
+   "mismatching_boxes": 6867,
+   "mismatching_names": 164,
+   "version": "9.2.0"
+  },
+  "package:CNMAT Externals": {
+   "boxes_compared": 4444,
+   "files": 58,
+   "mismatching_boxes": 524,
+   "mismatching_names": 61,
+   "version": "1.0.5"
+  },
+  "package:FlowSwing": {
+   "boxes_compared": 664,
+   "files": 7,
+   "mismatching_boxes": 101,
+   "mismatching_names": 18,
+   "version": "2.6.1"
+  },
+  "package:FluidCorpusManipulation": {
+   "boxes_compared": 7312,
+   "files": 78,
+   "mismatching_boxes": 1391,
+   "mismatching_names": 67,
+   "version": "1.0.9"
+  },
+  "package:RNBO": {
+   "boxes_compared": 2605,
+   "files": 563,
+   "mismatching_boxes": 110,
+   "mismatching_names": 13,
+   "version": "1.4.3"
+  },
+  "package:Rhythm and Time Toolkit": {
+   "boxes_compared": 1654,
+   "files": 27,
+   "mismatching_boxes": 236,
+   "mismatching_names": 15,
+   "version": "1.0.0"
+  },
+  "package:abclib": {
+   "boxes_compared": 5278,
+   "files": 67,
+   "mismatching_boxes": 452,
+   "mismatching_names": 15,
+   "version": "1.1.2"
+  },
+  "package:bach": {
+   "boxes_compared": 11991,
+   "files": 240,
+   "mismatching_boxes": 1694,
+   "mismatching_names": 73,
+   "version": "0.8.3"
+  },
+  "package:cv.jit": {
+   "boxes_compared": 3041,
+   "files": 70,
+   "mismatching_boxes": 178,
+   "mismatching_names": 14,
+   "version": "2.0.2"
+  },
+  "package:dada": {
+   "boxes_compared": 2353,
+   "files": 31,
+   "mismatching_boxes": 278,
+   "mismatching_names": 39,
+   "version": "0.3.1"
+  },
+  "package:ears": {
+   "boxes_compared": 4327,
+   "files": 103,
+   "mismatching_boxes": 722,
+   "mismatching_names": 110,
+   "version": "0.1.0"
+  },
+  "package:ease": {
+   "boxes_compared": 377,
+   "files": 6,
+   "mismatching_boxes": 24,
+   "mismatching_names": 6,
+   "version": "1.2.3"
+  },
+  "package:grainflow": {
+   "boxes_compared": 2389,
+   "files": 45,
+   "mismatching_boxes": 292,
+   "mismatching_names": 35,
+   "version": "2.1.2"
+  },
+  "package:ml.star": {
+   "boxes_compared": 1850,
+   "files": 17,
+   "mismatching_boxes": 138,
+   "mismatching_names": 11,
+   "version": "1.3.0"
+  },
+  "package:nn_tilde": {
+   "boxes_compared": 506,
+   "files": 4,
+   "mismatching_boxes": 77,
+   "mismatching_names": 11,
+   "version": "v1.6.0"
+  }
+ },
+ "totals": {
+  "boxes_compared": 126700,
+  "count_mismatch_names": 363,
+  "files": 3430,
+  "mismatching_boxes": 13084,
+  "mismatching_names": 441,
+  "type_mismatch_names": 88
+ }
+}
