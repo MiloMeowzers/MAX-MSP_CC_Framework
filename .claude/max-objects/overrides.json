@@ -16474,34 +16474,34 @@
       "description": "One signal inlet per channel argument. Default (no args): 2 inlets."
     },
     "pack": {
-      "inlet_count": "arg_count",
+      "inlet_count": "arg_count_or_default",
       "outlet_count": "fixed:1",
       "default_inlets": 2,
-      "description": "Number of arguments determines number of inlets. Default: 2 inlets."
+      "description": "Number of arguments determines number of inlets; bare pack keeps the default 2 inlets.",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `pack` = 2/1 (C74/extras/KeyMidi.maxpat); arg_count -> arg_count_or_default",
+        "confidence": "HIGH"
+      }
     },
     "unpack": {
       "inlet_count": "fixed:1",
-      "outlet_count": "arg_count",
+      "outlet_count": "arg_count_or_default",
       "default_outlets": 2,
-      "description": "Number of arguments determines number of outlets. Default: 2 outlets."
+      "description": "Number of arguments determines number of outlets; bare unpack keeps the default 2 outlets.",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `unpack` = 1/2 (C74/extras/GlobalTransport.maxpat); arg_count -> arg_count_or_default",
+        "confidence": "HIGH"
+      }
     },
     "trigger": {
       "inlet_count": "fixed:1",
-      "outlet_count": "arg_count",
+      "outlet_count": "arg_count_or_default",
       "default_outlets": 2,
-      "description": "Number of arguments determines number of outlets. Each argument (i, f, b, l, s) creates one outlet. Default: 2 outlets."
-    },
-    "route": {
-      "inlet_count": "fixed:1",
-      "outlet_count": "arg_count+1",
-      "default_outlets": 3,
-      "description": "Number of arguments determines outlets + 1 unmatched outlet. Default: 3 outlets."
-    },
-    "select": {
-      "inlet_count": "fixed:1",
-      "outlet_count": "arg_count+1",
-      "default_outlets": 2,
-      "description": "Number of arguments determines outlets + 1 unmatched outlet."
+      "description": "Number of arguments determines number of outlets. Each argument (i, f, b, l, s or a literal) creates one outlet; quoted words are one argument. Bare trigger has 2 outlets.",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `t \"LCD Text / Icon (Inactive)\"` = 1/1 (C74/help/m4l/live.routing.maxhelp); bare = 1/2 is refpage-derived (trigger.maxref.xml: \"If there are no arguments, there are two outlets\"; no MAX-saved bare box)",
+        "confidence": "MEDIUM"
+      }
     },
     "gate": {
       "inlet_count": "fixed:2",
@@ -16512,8 +16512,12 @@
     "switch": {
       "inlet_count": "first_arg+1",
       "outlet_count": "fixed:1",
-      "default_inlets": 2,
-      "description": "First argument + 1 sets number of inlets."
+      "default_inlets": 3,
+      "description": "First argument + 1 sets number of inlets (control inlet + N data inlets). Bare switch = 3 inlets.",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `switch` = 3/1 (C74/help/max/switch.maxhelp), `switch 3` = 4/1 (C74/help/jitter/jit.keyscreen.maxhelp); default_inlets 2 -> 3",
+        "confidence": "HIGH"
+      }
     },
     "spray": {
       "inlet_count": "fixed:1",
@@ -16553,15 +16557,14 @@
     },
     "unjoin": {
       "inlet_count": "fixed:1",
-      "outlet_count": "first_arg",
-      "default_outlets": 2,
-      "description": "First argument sets number of outlets."
-    },
-    "expr": {
-      "inlet_count": "arg_count",
-      "outlet_count": "fixed:1",
-      "default_inlets": 1,
-      "description": "Inlet count equals the number of distinct $iN/$fN/$sN variables in the expression argument (not the simple arg count). Default 1."
+      "outlet_count": "first_arg+1",
+      "default_outlets": 3,
+      "description": "First argument sets the number of data outlets, plus the rightmost (unmatched) outlet that is always present. Bare unjoin = 3 outlets. trailing_outlets 1: the last outlet is the DB's last.",
+      "trailing_outlets": 1,
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `unjoin` = 1/3 (C74/help/jitter/jit.playlist.maxhelp), `unjoin 4` = 1/5 (C74/help/msp/plot~.maxhelp); refpage: \"in addition to the rightmost outlet, which is always present\"",
+        "confidence": "HIGH"
+      }
     },
     "expr~": {
       "inlet_count": "arg_count",
@@ -16617,15 +16620,14 @@
       }
     },
     "combine": {
-      "inlet_count": "arg_count",
-      "outlet_count": "fixed:1",
-      "default_inlets": 2,
-      "default_outlets": 1,
-      "description": "Number of arguments determines number of inlets. Default: 2 inlets.",
+      "inlet_count": "arg_count_or_default",
+      "outlet_count": "fixed:2",
+      "default_inlets": 1,
+      "default_outlets": 2,
+      "description": "Number of arguments determines number of inlets (bare combine: 1 inlet); always 2 outlets (combined symbol, then the done outlet).",
       "_audit": {
-        "source": "review-260420-j15",
-        "confidence": "HIGH",
-        "finding": "DQ-02 / FN-01: lifted from per-domain inline io_rule (combine had variable_io=true but no overrides.json rule)."
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `combine sound 74 @triggers 1` = 2/2 (C74/help/max/combine.maxhelp), `combine e i` = 2/2 (abclib), bare `combine` = 1/2 (dada/help/dada.machines.maxhelp, appversion 7.3.4); supersedes review-260420-j15 DQ-02 / FN-01 (fixed:1 outlet, arg_count inlets)",
+        "confidence": "MEDIUM"
       }
     },
     "router": {
@@ -16638,18 +16640,6 @@
         "source": "review-260420-j15",
         "confidence": "HIGH",
         "finding": "DQ-02 / FN-01: lifted from per-domain inline io_rule (router had variable_io=true but no overrides.json rule; compute_io_counts was returning wrong default counts)."
-      }
-    },
-    "routepass": {
-      "inlet_count": "fixed:1",
-      "outlet_count": "arg_count+1",
-      "default_inlets": 1,
-      "default_outlets": 2,
-      "description": "Outlets = arg count + 1 (extra outlet passes unmatched through). Default: 2 outlets (matches routepass DB entry).",
-      "_audit": {
-        "source": "review-260421-b3a + quick-260421-bti",
-        "confidence": "HIGH",
-        "finding": "FN-01 / DQ-02: lifted from extract_objects.py VARIABLE_IO_RULES constant with formula normalized from 'arg_count_plus_1' to 'arg_count+1'. 260421-bti aligned default_outlets (3 \u2192 2) with the routepass per-domain DB entry; behaviorally identical because arg_count+1 formula never falls through to default_outlets. Aliases 't' and 'sel' intentionally NOT lifted because alias resolution runs before rule lookup in compute_io_counts."
       }
     },
     "mc.combine~": {
@@ -16773,10 +16763,14 @@
       }
     },
     "pak": {
-      "inlet_count": "arg_count",
+      "inlet_count": "arg_count_or_default",
       "outlet_count": "fixed:1",
       "default_inlets": 2,
-      "description": "Like pack: number of arguments determines number of inlets (all hot). Default: 2 inlets."
+      "description": "Like pack: number of arguments determines number of inlets (all hot); bare pak keeps the default 2 inlets.",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `pak` = 2/1 (C74/help/m4l/live.push.maxhelp), `pak 0 0 0` = 3/1 (C74/help/max/jit.cellblock.maxhelp); arg_count -> arg_count_or_default",
+        "confidence": "HIGH"
+      }
     },
     "sfplay~": {
       "inlet_count": "fixed:2",
@@ -16790,12 +16784,6 @@
         "confidence": "HIGH"
       }
     },
-    "vexpr": {
-      "inlet_count": "arg_count",
-      "outlet_count": "fixed:1",
-      "default_inlets": 1,
-      "description": "Inlet count equals the highest $iN/$fN/$sN index in the expression (max 9). Default 1. Refpage-verified 2026-09-27."
-    },
     "play~": {
       "inlet_count": "",
       "outlet_count": "second_arg+1",
@@ -16805,6 +16793,110 @@
       "description": "play~ buf N: N signal outlets + 1 bang outlet (playback reached its destination or stopped). Missing or non-integer channel arg falls back to the default 2 (1 channel + bang). trailing_outlets 1: with args, the LAST outlet is the DB's last (the bang) and every earlier outlet repeats DB outlet 0 (audio).",
       "_audit": {
         "source": "Q2 / A1 (261012-c5i): MAX-saved help boxes `play~ foo 2` = 1/3 [signal, signal, bang] (ears package help) and `play~ playme` = 1/2 [signal, bang]; msp-ref play~ refpage args buffer-name, number-of-output-channels (default 1)",
+        "confidence": "HIGH"
+      }
+    },
+    "gate~": {
+      "inlet_count": "fixed:2",
+      "outlet_count": "first_arg",
+      "default_outlets": 1,
+      "description": "gate~ N: 2 inlets (control, signal), N signal outlets; bare gate~ = 1 outlet.",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `gate~ 3 @ramptime 100` = 2/3 (C74/help/msp/gate~.maxhelp), `gate~ 5 2` = 2/5 (C74/help/max/crosspatch.maxhelp), `gate~` = 2/1 (C74/help/msp/freqshift~.maxhelp)",
+        "confidence": "HIGH"
+      }
+    },
+    "bucket": {
+      "inlet_count": "fixed:1",
+      "outlet_count": "first_arg",
+      "default_outlets": 1,
+      "description": "bucket N: N outlets (bucket brigade); bare bucket = 1 outlet (refpage: \"no argument: one outlet\").",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `bucket` = 1/1 (C74/help/max/anal.maxhelp), `bucket 4 1` = 1/4 (C74/help/max/bucket.maxhelp)",
+        "confidence": "HIGH"
+      }
+    },
+    "buddy": {
+      "inlet_count": "first_arg",
+      "outlet_count": "first_arg",
+      "default_inlets": 2,
+      "default_outlets": 2,
+      "description": "buddy N: N inlets and N outlets; bare buddy = 2 and 2 (refpage: \"no argument: two inlets and two outlets\").",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `buddy 4` = 4/4 and `buddy` = 2/2 (C74/help/max/buddy.maxhelp)",
+        "confidence": "HIGH"
+      }
+    },
+    "bangbang": {
+      "inlet_count": "fixed:1",
+      "outlet_count": "first_arg",
+      "default_outlets": 2,
+      "description": "bangbang / b N: N outlets; bare = 2 outlets.",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `b` = 1/2 (C74/extras/GlobalTransport.maxpat), `b 1` = 1/1 (C74/help/max/cpuclock.maxhelp), `bangbang` = 1/2 (C74/packages/Node for Max/patchers/debug-monitor/n4m.monitor.maxpat), `b 17` = 1/17 (bundle)",
+        "confidence": "HIGH"
+      }
+    },
+    "groove~": {
+      "inlet_count": "fixed:3",
+      "outlet_count": "second_arg+1",
+      "default_outlets": 2,
+      "trailing_outlets": 1,
+      "description": "groove~ buf N: N signal outlets + the sync outlet; fewer than 2 args = 1 channel + sync. trailing_outlets 1: the last outlet is the DB's sync outlet, earlier outlets repeat DB outlet 0.",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `groove~ audio 2` = 3/3 (C74/help/m4l/chucker~.maxhelp), `groove~ helpgroove02 4 @loop 1` = 3/5 (C74/help/msp/groove~.maxhelp)",
+        "confidence": "HIGH"
+      }
+    },
+    "tapout~": {
+      "inlet_count": "arg_count_or_default",
+      "outlet_count": "arg_count_or_default",
+      "default_inlets": 1,
+      "default_outlets": 1,
+      "description": "tapout~: one delay-time inlet and one signal outlet per tap argument; bare = 1 tap.",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `tapout~ 0 0` = 2/2 (C74/patchers/m4l/Lessons resources/M4L.dl.vdelay~.maxpat), `tapout~ 100` = 1/1 (C74/help/msp/plugin~.maxhelp)",
+        "confidence": "HIGH"
+      }
+    },
+    "record~": {
+      "inlet_count": "second_arg+2",
+      "outlet_count": "fixed:1",
+      "default_inlets": 3,
+      "description": "record~ buf N: N signal inlets + start and end point inlets; fewer than 2 args = 1 channel (3 inlets). Inlet layout (channel 2 at inlet 1) is not modelled (S6/Q33).",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `record~ this 2` = 4/1 (C74/media/legacy-tutorials/msp-tut/mypvoc2~.maxpat), `record~ foo` = 3/1 (C74/help/msp/plugphasor~.maxhelp)",
+        "confidence": "HIGH"
+      }
+    },
+    "jit.pack": {
+      "inlet_count": "first_arg",
+      "outlet_count": "fixed:2",
+      "default_inlets": 4,
+      "description": "jit.pack N: N matrix inlets (planes), 2 outlets (matrix, dump); bare = 4 inlets.",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `jit.pack 2` = 2/2 (C74/help/jitter/jit.fft.maxhelp), `jit.pack 3 float32` = 3/2 (C74/help/jitter/jit.p.shiva.maxhelp)",
+        "confidence": "HIGH"
+      }
+    },
+    "jit.unpack": {
+      "inlet_count": "fixed:1",
+      "outlet_count": "first_arg+1",
+      "default_outlets": 5,
+      "trailing_outlets": 1,
+      "description": "jit.unpack N: N matrix outlets + the dump outlet; bare = 4 + dump. trailing_outlets 1: the last outlet is the DB's dump outlet.",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `jit.unpack 2` = 1/3 (C74/help/jitter/jit.fft.maxhelp), `jit.unpack 5 float32` = 1/6 (C74/help/jitter/jit.p.shiva.maxhelp)",
+        "confidence": "HIGH"
+      }
+    },
+    "mc.route": {
+      "inlet_count": "fixed:2",
+      "outlet_count": "first_arg",
+      "default_outlets": 2,
+      "description": "mc.route N: 2 inlets, N outlets; bare = 2 outlets. Outlet signal roles are Q11 (C9) scope.",
+      "_audit": {
+        "source": "Q10 / C1 (261013-cyg): MAX-saved `mc.route 4` = 2/4 (C74/help/msp/mc.pack~.maxhelp)",
         "confidence": "HIGH"
       }
     }

@@ -314,11 +314,16 @@ class TestVariableIO:
         assert bd["box"]["numoutlets"] == 1
 
     def test_route_two_args(self):
-        """Route with 2 args has 1 inlet and 3 outlets (2 + unmatched)."""
+        """Route with 2 args has 3 inlets and 3 outlets (2 + unmatched).
+
+        Q10 / C1 (261013-cyg): MAX saves `route time transport` as (3,3)
+        (C74/help/jitter/jit.avc.maxhelp); each match gets an inlet that
+        sets it, so the old 1-inlet expectation was wrong.
+        """
         p = Patcher()
         b = p.add_box("route", args=["foo", "bar"])
         bd = b.to_dict()
-        assert bd["box"]["numinlets"] == 1
+        assert bd["box"]["numinlets"] == 3
         assert bd["box"]["numoutlets"] == 3
 
     def test_trigger_alias_t(self):

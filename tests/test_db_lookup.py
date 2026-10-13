@@ -612,11 +612,14 @@ def test_compute_io_counts_honors_overrides_rules_for_lifted_objects():
     assert db.compute_io_counts("cycle", ["5"]) == (1, 5)
     assert db.compute_io_counts("cycle", []) == (1, 2)
 
-    # combine: arg count = inlet count
-    assert db.compute_io_counts("combine", ["a", "b", "c"]) == (3, 1)
-    # FN-03 fix (REVIEW 260420-j15): arg_count formula now always evaluates
-    # len(args), so no-args returns 0 inlets, not the default_inlets=2.
-    assert db.compute_io_counts("combine", []) == (0, 1)
+    # combine: arg count = inlet count; 2 outlets (combined symbol + the
+    # trigger-done outlet). Q10 / C1 (261013-cyg): MAX evidence overturns
+    # FN-03 of REVIEW 260420-j15 -- MAX saves `combine sound 74 @triggers 1`
+    # as (2,2) (C74/help/max/combine.maxhelp) and bare `combine` as (1,2)
+    # (dada/help/dada.machines.maxhelp), so bare uses the defaults and
+    # there are always 2 outlets.
+    assert db.compute_io_counts("combine", ["a", "b", "c"]) == (3, 2)
+    assert db.compute_io_counts("combine", []) == (1, 2)
 
     # router: first_arg inlets, second_arg outlets; no-arg = 2x2
     # (first_arg/second_arg keep their default-fallback semantics)
@@ -646,20 +649,30 @@ def test_compute_io_counts_trigger_with_full_args():
     assert db.compute_io_counts("trigger", ["b", "i", "f"]) == (1, 3)
 
 
-def test_compute_io_counts_trigger_no_args_post_fn03():
-    """FN-03: trigger uses outlet_count='arg_count'. Empty args → 0 outlets,
-    not the default 2. Deliberate semantic shift from REVIEW 260420-j15.
+def test_compute_io_counts_trigger_no_args_matches_refpage():
+    """Q10 / C1 (261013-cyg): bare trigger = (1,2).
+
+    MAX evidence overturns FN-03 of REVIEW 260420-j15 (which expected 0
+    outlets): trigger.maxref.xml says "If there are no arguments, there are
+    two outlets", so the rule is now arg_count_or_default with
+    default_outlets 2. No MAX-saved bare trigger box exists (refpage-derived).
     """
     db = ObjectDatabase()
-    assert db.compute_io_counts("trigger", []) == (1, 0)
+    assert db.compute_io_counts("trigger", []) == (1, 2)
 
 
-def test_compute_io_counts_route_no_args_post_fn03():
-    """FN-03: route uses outlet_count='arg_count+1'. Empty args → 1 outlet
-    (just the unmatched), not the default 3.
+def test_compute_io_counts_route_no_args_matches_refpage():
+    """Q10 / C1 (261013-cyg): bare route = (2,2).
+
+    MAX evidence overturns FN-03 of REVIEW 260420-j15 (which expected (1,1)).
+    route is now an I/O resolver (src/maxpat/io_resolvers.py): N args give
+    N+1 inlets and N+1 outlets (MAX-saved `route time transport` = (3,3),
+    C74/help/jitter/jit.avc.maxhelp). No MAX-saved bare `route` box exists;
+    route.maxref.xml says "If there is no argument, there is one other
+    outlet, which is assigned the number 0", so bare = (2,2).
     """
     db = ObjectDatabase()
-    assert db.compute_io_counts("route", []) == (1, 1)
+    assert db.compute_io_counts("route", []) == (2, 2)
 
 
 # ── get_outlet_types TC-02 (REVIEW 260420-j15) ──────────────────
@@ -697,37 +710,36 @@ def test_get_outlet_types_unknown_returns_empty():
 
 # ── variable_io registry refactor (REVIEW 260421-b3a FN-01 / DQ-02) ────
 
-def test_compute_io_counts_routepass_uses_loaded_formula():
-    """Regression: routepass's rule was living in extract_objects.py's
-    VARIABLE_IO_RULES constant, not in overrides.json. compute_io_counts
-    consulted only overrides.json, so routepass fell through to default
-    array lengths. The output (1, 3) was coincidentally right for 2 args
-    because the default_outlets happened to match arg_count+1 at N=2.
+def test_compute_io_counts_routepass_resolver():
+    """Q10 / C1 (261013-cyg): routepass N args = (N+1, N+1).
 
-    After quick-260421-b3a lifted routepass into overrides.json with the
-    normalized 'arg_count+1' formula, the answer (1, 3) now comes from
-    the formula path — proven by checking a three-arg case where the old
-    fallback would return (1, 3) but the formula returns (1, 4).
+    Supersedes the REVIEW 260421-b3a formula-path test, which expected
+    (1,3)/(1,4): MAX saves `routepass 0 1` as (3,3)
+    (C74/help/jitter/jit.displays.maxhelp) -- every match also gets an
+    inlet that sets it. routepass moved from a variable_io_rules formula to
+    an I/O resolver, and a rule must not coexist with it.
     """
+    from src.maxpat.io_resolvers import IO_RESOLVERS
+
     db = ObjectDatabase()
-    # The original FN-01 regression case (same number, correct code path):
-    assert db.compute_io_counts("routepass", ["a", "b"]) == (1, 3)
-    # The arg-count-aware check: 3 args → 4 outlets (3 matches + 1 pass-through)
-    assert db.compute_io_counts("routepass", ["a", "b", "c"]) == (1, 4)
+    assert db.compute_io_counts("routepass", ["a", "b"]) == (3, 3)
+    assert db.compute_io_counts("routepass", ["a", "b", "c"]) == (4, 4)
+    assert "routepass" in IO_RESOLVERS
+    assert "routepass" not in db._variable_io_rules
 
 
 def test_compute_io_counts_routepass_normalized_default_outlets():
-    """Quick-260421-bti: lock in the normalized routepass rule shape.
+    """Q10 / C1 (261013-cyg): routepass counts with and without args.
 
-    User spec: inlet_count='fixed:1', outlet_count='arg_count+1',
-    default_inlets=1, default_outlets=2 — the default_outlets value was
-    aligned with the routepass DB entry (2 outlets). The assertion below
-    is redundant with the b3a test above on behavior, but explicitly
-    anchors this quick task's spec so a future default_outlets drift
-    would still have a traceable regression signal.
+    The quick-260421-bti rule shape this anchored no longer exists
+    (routepass is an I/O resolver). `routepass 0 1` = (3,3) is MAX-saved
+    (C74/help/jitter/jit.displays.maxhelp); bare routepass = (2,2) follows
+    routepass.maxref.xml ("If there is no argument, there is one other
+    outlet").
     """
     db = ObjectDatabase()
-    assert db.compute_io_counts("routepass", ["a", "b"]) == (1, 3)
+    assert db.compute_io_counts("routepass", ["a", "b"]) == (3, 3)
+    assert db.compute_io_counts("routepass", []) == (2, 2)
 
 
 def test_load_time_validation_rejects_unknown_formula(tmp_path):

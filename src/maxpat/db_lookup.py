@@ -11,6 +11,8 @@ import warnings
 from collections import defaultdict
 from pathlib import Path
 
+from src.maxpat.io_resolvers import IO_RESOLVERS, normalize_args
+
 # Load core domains last so they take priority over RNBO duplicates
 # (e.g., MSP cycle~ has 1 outlet, RNBO cycle~ has 2)
 DOMAIN_LOAD_ORDER = [
@@ -208,6 +210,18 @@ class ObjectDatabase:
         if pkg_info_path.exists():
             self._package_info = json.loads(pkg_info_path.read_text())
 
+        # Derived variable_io flag (Q10 / C1): every canonical name with an
+        # I/O resolver or a variable_io_rules entry computes its counts from
+        # its args, so it reports variable_io True in memory -- one answer
+        # for Box construction, Patcher.modify_box, _io_is_content_defined
+        # and the audit parser/analyzer. The domain JSON files are untouched.
+        for name in itertools.chain(self._variable_io_rules, IO_RESOLVERS):
+            if name.startswith("_"):
+                continue
+            obj = self._objects.get(name)
+            if obj is not None:
+                obj["variable_io"] = True
+
     def _validate_variable_io_rules(self) -> None:
         """Assert every loaded rule uses a supported formula.
 
@@ -215,7 +229,18 @@ class ObjectDatabase:
         ('inlet_count' or 'outlet_count'), and the unknown formula. The
         supported set mirrors what _apply_io_formula actually consumes —
         anything else would silently fall back to the default count.
+
+        Also raises when an object has both a resolver in
+        ``io_resolvers.IO_RESOLVERS`` and a rule here (Q10 / S6): the
+        resolver would silently win, so the rule must be deleted.
         """
+        conflicts = sorted(set(self._variable_io_rules) & set(IO_RESOLVERS))
+        if conflicts:
+            raise ValueError(
+                f"variable_io_rules entries {conflicts} conflict with I/O "
+                "resolvers in src/maxpat/io_resolvers.py (the resolver wins); "
+                "delete the rule from overrides.json variable_io_rules."
+            )
         for name, rule in self._variable_io_rules.items():
             trailing = rule.get("trailing_outlets")
             if trailing is not None and (
@@ -765,9 +790,21 @@ class ObjectDatabase:
     def compute_io_counts(self, name: str, args: list[str] | None = None) -> tuple[int, int]:
         """Compute actual inlet/outlet counts, handling variable I/O objects.
 
-        For variable_io objects (trigger, pack, route, etc.), the inlet/outlet
-        count depends on the arguments provided. This method applies the formula
-        from overrides.json variable_io_rules.
+        ``args`` are first normalized the way MAX reads box text
+        (``io_resolvers.normalize_args``): joined, re-tokenized with double
+        quotes and backslash escapes respected, and truncated at the first
+        ``@attribute`` token. Pre-split and quote-joined args therefore give
+        the same answer (``t "a b"`` has one argument).
+
+        Then, in order:
+
+        1. Unknown object -> ``(0, 0)``.
+        2. A per-object resolver in ``io_resolvers.IO_RESOLVERS`` (Q10 / S6:
+           receive, select/route/routepass, expr/vexpr/if, sprintf, pipe,
+           notein, ctlin) gets ``(args, (db_inlets, db_outlets))``.
+        3. Otherwise variable_io objects apply their overrides.json
+           ``variable_io_rules`` formula; everything else returns the DB
+           array lengths.
 
         Args:
             name: Object name or alias.
@@ -776,8 +813,7 @@ class ObjectDatabase:
         Returns:
             (inlets, outlets) tuple.
         """
-        if args is None:
-            args = []
+        args = normalize_args(args)
 
         canonical = self._aliases.get(name, name)
         obj = self._objects.get(canonical)
@@ -785,9 +821,15 @@ class ObjectDatabase:
         if not obj:
             return (0, 0)
 
+        defaults = (len(obj.get("inlets", [])), len(obj.get("outlets", [])))
+
+        resolver = IO_RESOLVERS.get(canonical)
+        if resolver is not None:
+            return resolver(args, defaults)
+
         # If not a variable_io object, return default counts from database
         if not obj.get("variable_io"):
-            return (len(obj.get("inlets", [])), len(obj.get("outlets", [])))
+            return defaults
 
         # Apply variable I/O rules
         rule = self._variable_io_rules.get(canonical, {})
