@@ -1083,7 +1083,7 @@ def _route_clear_path(
     return flat
 
 
-def _generate_midpoints(patcher: Patcher) -> None:
+def _generate_midpoints(patcher: Patcher, *, eligible=None) -> None:
     """Add midpoints to patchlines for clean segmented cable routing.
 
     Handles four routing patterns:
@@ -1105,6 +1105,15 @@ def _generate_midpoints(patcher: Patcher) -> None:
        obstacles get no midpoints (clean straight lines).
 
     Only adds midpoints to lines that don't already have them.
+
+    Args:
+        patcher: The Patcher whose lines are routed (not recursive).
+        eligible: Optional callable taking a Patchline and returning bool.
+            When given, lines for which it returns False are skipped (left
+            exactly as they are). The edit-path ``finalize_patch`` passes
+            one that admits only new cords and cords touching an added or
+            moved box (Q6 / B1). Default None routes every line that has no
+            midpoints, which is the ``apply_layout`` behavior.
     """
     box_map = {b.id: b for b in patcher.boxes}
 
@@ -1115,6 +1124,8 @@ def _generate_midpoints(patcher: Patcher) -> None:
 
     for line in patcher.lines:
         if line.midpoints:
+            continue
+        if eligible is not None and not eligible(line):
             continue
 
         src_box = box_map.get(line.source_id)

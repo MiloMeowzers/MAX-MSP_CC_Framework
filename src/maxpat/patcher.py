@@ -232,6 +232,10 @@ class Box:
         # Raw dict for lossless round-trip (None for newly created boxes)
         self._raw: dict | None = None
 
+        # Copy of patching_rect taken at load (from_dict); None for new boxes.
+        # The edit-path finalize compares x/y with it to detect moved boxes.
+        self._loaded_rect: tuple | None = None
+
     @property
     def right_edge(self) -> float:
         """X coordinate of the box's right edge (x + width)."""
@@ -1129,11 +1133,25 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         - Skips inlet/outlet objects that already have non-empty comments.
         - Recurses into nested subpatchers.
 
+        On loaded boxes (with ``_raw``) the comment is also written to
+        ``_raw["comment"]`` so it serializes to disk (Q6).
+
         Returns:
             self for method chaining.
         """
         self._populate_comments_recursive(self)
         return self
+
+    @staticmethod
+    def _set_assistance_comment(box: Box, text: str) -> None:
+        """Set an inferred assistance comment so it reaches disk.
+
+        Writes extra_attrs (creation path) and, for loaded boxes, ``_raw``
+        (the round-trip path Box.to_dict serializes from).
+        """
+        box.extra_attrs["comment"] = text
+        if box._raw is not None:
+            box._raw["comment"] = text
 
     @staticmethod
     def _populate_comments_recursive(patcher: "Patcher") -> None:
@@ -1172,9 +1190,9 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                     if downstream is not None:
                         prefix = "signal" if inlet_box.name.endswith("~") else "signal" if downstream.name.endswith("~") else "data"
                         desc = downstream.text[:40] if downstream.text else downstream.name
-                        inlet_box.extra_attrs["comment"] = f"{prefix} to {desc}"
+                        Patcher._set_assistance_comment(inlet_box, f"{prefix} to {desc}")
                     else:
-                        inlet_box.extra_attrs["comment"] = f"inlet {idx + 1}"
+                        Patcher._set_assistance_comment(inlet_box, f"inlet {idx + 1}")
 
                 # Process outlets: find upstream connections
                 for idx, outlet_box in enumerate(outlet_boxes):
@@ -1191,9 +1209,9 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                     if upstream is not None:
                         prefix = "signal" if outlet_box.name.endswith("~") else "signal" if upstream.name.endswith("~") else "data"
                         desc = upstream.text[:40] if upstream.text else upstream.name
-                        outlet_box.extra_attrs["comment"] = f"{prefix} from {desc}"
+                        Patcher._set_assistance_comment(outlet_box, f"{prefix} from {desc}")
                     else:
-                        outlet_box.extra_attrs["comment"] = f"outlet {idx + 1}"
+                        Patcher._set_assistance_comment(outlet_box, f"outlet {idx + 1}")
 
                 # Recurse into the inner patcher
                 Patcher._populate_comments_recursive(inner)
@@ -1304,6 +1322,9 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             if "patcher" in raw:
                 raw["patcher"] = None  # sentinel preserves key position in ordered dict
             box._raw = raw
+            # Load-time position snapshot (a copy: patching_rect is shared
+            # with _raw and mutated in place by modify_box(position=...)).
+            box._loaded_rect = tuple(box.patching_rect)
 
             p.boxes.append(box)
 

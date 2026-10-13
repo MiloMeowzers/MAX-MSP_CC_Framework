@@ -127,8 +127,12 @@ def finalize_patch(patcher: "Patcher", is_new: bool = True) -> None:
         and midpoint generation for all patchers and subpatchers.
 
     For edited patches (is_new=False):
-        Regenerates cable midpoints and populates assistance comments
-        without repositioning existing objects.
+        Never clears existing cable midpoints (Q6 / B1). It routes only
+        cords that have no midpoints AND are new or touch a box added or
+        moved in this edit, recursively through subpatchers, and fills
+        empty inlet/outlet assistance comments (written to ``_raw`` so they
+        reach disk). Existing objects are never repositioned. A moved box's
+        already-routed cords keep their midpoints.
 
     Args:
         patcher: The Patcher instance to finalize.
@@ -146,20 +150,51 @@ def finalize_patch(patcher: "Patcher", is_new: bool = True) -> None:
         _finalize_midpoints_recursive(patcher, _generate_midpoints)
 
 
+def _box_added_or_moved(box) -> bool:
+    """True when a box was added or moved since the patch was loaded.
+
+    Added: the box has no ``_raw`` (created in this session) or no load-time
+    snapshot (``_loaded_rect``; builder boxes made via ``Box.__new__`` lack
+    the attribute). Moved: its x or y differs from the snapshot. A resize
+    alone (width/height change, e.g. from a text edit) is not a move.
+    """
+    if box._raw is None:
+        return True
+    snap = getattr(box, "_loaded_rect", None)
+    if snap is None:
+        return True
+    return (
+        box.patching_rect[0] != snap[0] or box.patching_rect[1] != snap[1]
+    )
+
+
 def _finalize_midpoints_recursive(
     patcher: "Patcher",
     generate_fn: "callable",
 ) -> None:
-    """Clear and regenerate midpoints on a patcher and all nested subpatchers.
+    """Route eligible unrouted cords on a patcher and all nested subpatchers.
+
+    Never clears existing midpoints (Q6 / B1). A cord is eligible when it is
+    new (``line._raw is None``) or its source or destination box was added
+    or moved in this edit; ``generate_fn`` itself still skips any cord that
+    already has midpoints. Net rule: a cord is routed only if it has no
+    midpoints and is new or touches an added or moved box.
 
     Args:
         patcher: The Patcher instance to process.
-        generate_fn: The _generate_midpoints function from layout module.
+        generate_fn: The _generate_midpoints function from layout module
+            (called with the keyword-only ``eligible`` filter).
     """
-    # Clear existing midpoints before regenerating
-    for line in patcher.lines:
-        line.midpoints = []
-    generate_fn(patcher)
+    touched = {b.id for b in patcher.boxes if _box_added_or_moved(b)}
+
+    def _eligible(line) -> bool:
+        return (
+            line._raw is None
+            or line.source_id in touched
+            or line.dest_id in touched
+        )
+
+    generate_fn(patcher, eligible=_eligible)
 
     # Recurse into subpatchers
     for box in patcher.boxes:
