@@ -104,7 +104,7 @@ None.
 | 261012-sam | Implement Q8 in .planning/reviews/2026-10-11-fix-plan.md — CI tests, release tarball, installer | 2026-10-13 | 18b6f3b | Verified | [261012-sam-implement-q8-in-planning-reviews-2026-10](./quick/261012-sam-implement-q8-in-planning-reviews-2026-10/) |
 | 261012-ubw | Implement Q9 in .planning/reviews/2026-10-11-fix-plan.md — help-box I/O oracle | 2026-10-13 | a8bce3a | Verified | [261012-ubw-implement-q9-in-planning-reviews-2026-10](./quick/261012-ubw-implement-q9-in-planning-reviews-2026-10/) |
 | 261013-cyg | Implement Q10 in .planning/reviews/2026-10-11-fix-plan.md — correct argument-dependent I/O counts | 2026-10-13 | 46465a7 | Verified | [261013-cyg-implement-q10-in-planning-reviews-2026-1](./quick/261013-cyg-implement-q10-in-planning-reviews-2026-1/) |
-| 261013-e43 | Implement Q11 in .planning/reviews/2026-10-11-fix-plan.md — per-port override merge and corrected overrides | 2026-10-13 | 67108d1 | Unverified (verifier not run) | [261013-e43-implement-q11-in-planning-reviews-2026-1](./quick/261013-e43-implement-q11-in-planning-reviews-2026-1/) |
+| 261013-e43 | Implement Q11 in .planning/reviews/2026-10-11-fix-plan.md — per-port override merge and corrected overrides | 2026-10-13 | 67108d1 | Verified | [261013-e43-implement-q11-in-planning-reviews-2026-1](./quick/261013-e43-implement-q11-in-planning-reviews-2026-1/) |
 
 ## Deferred Items
 
