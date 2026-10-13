@@ -33,9 +33,10 @@ Comparison definition
   in :data:`GEN_RNBO_CONTAINERS`, or an inner patcher whose
   ``classnamespace`` is in :data:`SKIPPED_NAMESPACES`. Every other inner
   patcher is walked, up to :data:`MAX_PATCHER_DEPTH`.
-* newobj boxes: the name is token 0 of ``text.split()``; the arguments are
-  the following tokens up to (not including) the first token starting with
-  ``@`` -- attributes are not arguments. Other boxes (OQ1-A) are keyed by
+* newobj boxes: the name is token 0 of the quote-aware tokens
+  (``io_resolvers.split_box_text``); the arguments are the following tokens
+  up to (not including) the first token starting with ``@`` -- attributes
+  are not arguments. Other boxes (OQ1-A) are keyed by
   their maxclass with no arguments.
 * Not compared, only counted: malformed boxes (non-int counts, empty or
   non-string newobj text), content-defined boxes (an embedded ``patcher``,
@@ -67,6 +68,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.maxpat import io_resolvers  # noqa: E402
 from src.maxpat.patcher import CONTENT_DEFINED_NAMES  # noqa: E402
 from src.maxpat.validation import _CONTAINER_NAMES  # noqa: E402
 
@@ -128,16 +130,13 @@ _SIGNAL_TYPES = ("signal", "multichannelsignal")
 
 
 def box_args(text: str) -> tuple[str, list[str]]:
-    """Split newobj text into (name, positional args); args stop at the first @."""
-    tokens = text.split()
-    if not tokens:
-        return ("", [])
-    args: list[str] = []
-    for tok in tokens[1:]:
-        if tok.startswith("@"):
-            break
-        args.append(tok)
-    return (tokens[0], args)
+    """Split newobj text into (name, positional args); args stop at the first @.
+
+    Delegates to :func:`src.maxpat.io_resolvers.box_args` (Q10 hand-off):
+    double quotes and backslash escapes are respected, so
+    ``t "LCD Text / Icon (Inactive)"`` has one argument.
+    """
+    return io_resolvers.box_args(text)
 
 
 def signal_class(outlettype) -> str:

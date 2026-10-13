@@ -217,7 +217,7 @@
      "count args=3 max=4,1 db=1,1": 4,
      "count args=4 max=4,1 db=1,1": 4,
      "count args=6 max=3,1 db=1,1": 1,
-     "count args=7 max=6,1 db=1,1": 4,
+     "count args=6 max=6,1 db=1,1": 4,
      "count args=8 max=4,1 db=1,1": 9,
      "count args=8 max=5,1 db=1,1": 1,
      "count args=9 max=4,1 db=1,1": 3
@@ -245,7 +245,7 @@
    },
    "expr": {
     "boxes": 148,
-    "count_mismatches": 80,
+    "count_mismatches": 78,
     "signatures": {
      "count args=1 max=2,1 db=1,1": 13,
      "count args=1 max=4,1 db=1,1": 2,
@@ -262,7 +262,7 @@
      "count args=6 max=2,1 db=6,1": 1,
      "count args=7 max=1,1 db=7,1": 3,
      "count args=7 max=2,1 db=7,1": 1,
-     "count args=8 max=1,1 db=8,1": 4,
+     "count args=8 max=1,1 db=8,1": 2,
      "count args=8 max=2,1 db=8,1": 1,
      "count args=9 max=1,1 db=9,1": 3
     },
@@ -1183,22 +1183,6 @@
     },
     "type_mismatches": 0
    },
-   "r": {
-    "boxes": 473,
-    "count_mismatches": 473,
-    "signatures": {
-     "count args=1 max=0,1 db=1,1": 473
-    },
-    "type_mismatches": 0
-   },
-   "receive": {
-    "boxes": 10,
-    "count_mismatches": 8,
-    "signatures": {
-     "count args=1 max=0,1 db=1,1": 8
-    },
-    "type_mismatches": 0
-   },
    "retune~": {
     "boxes": 5,
     "count_mismatches": 5,
@@ -1216,12 +1200,11 @@
      "count args=10 max=11,11 db=1,11": 1,
      "count args=12 max=13,13 db=1,13": 1,
      "count args=2 max=3,3 db=1,3": 65,
-     "count args=3 max=4,4 db=1,4": 28,
+     "count args=3 max=4,4 db=1,4": 29,
      "count args=4 max=5,5 db=1,5": 12,
      "count args=5 max=6,6 db=1,6": 22,
      "count args=6 max=7,7 db=1,7": 5,
      "count args=7 max=8,8 db=1,8": 2,
-     "count args=8 max=4,4 db=1,9": 1,
      "count args=8 max=9,9 db=1,9": 1,
      "count args=9 max=10,10 db=1,10": 2
     },
@@ -1381,15 +1364,6 @@
     "count_mismatches": 2,
     "signatures": {
      "count args=16 max=2,1 db=1,1": 2
-    },
-    "type_mismatches": 0
-   },
-   "t": {
-    "boxes": 940,
-    "count_mismatches": 16,
-    "signatures": {
-     "count args=4 max=1,1 db=1,4": 8,
-     "count args=5 max=1,1 db=1,5": 8
     },
     "type_mismatches": 0
    },
@@ -1850,14 +1824,6 @@
     },
     "type_mismatches": 0
    },
-   "r": {
-    "boxes": 25,
-    "count_mismatches": 25,
-    "signatures": {
-     "count args=1 max=0,1 db=1,1": 25
-    },
-    "type_mismatches": 0
-   },
    "randdist": {
     "boxes": 9,
     "count_mismatches": 9,
@@ -2095,14 +2061,6 @@
     "count_mismatches": 1,
     "signatures": {
      "count args=0 max=2,1 db=0,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "r": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=1 max=0,1 db=1,1": 1
     },
     "type_mismatches": 0
    },
@@ -2605,7 +2563,7 @@
     "boxes": 9,
     "count_mismatches": 8,
     "signatures": {
-     "count args=11 max=2,1 db=1,1": 8
+     "count args=9 max=2,1 db=1,1": 8
     },
     "type_mismatches": 0
    },
@@ -2662,14 +2620,6 @@
     "count_mismatches": 2,
     "signatures": {
      "count args=0 max=1,5 db=1,3": 2
-    },
-    "type_mismatches": 0
-   },
-   "r": {
-    "boxes": 13,
-    "count_mismatches": 13,
-    "signatures": {
-     "count args=1 max=0,1 db=1,1": 13
     },
     "type_mismatches": 0
    },
@@ -2798,14 +2748,6 @@
     "count_mismatches": 2,
     "signatures": {
      "count args=0 max=2,1 db=1,1": 2
-    },
-    "type_mismatches": 0
-   },
-   "r": {
-    "boxes": 9,
-    "count_mismatches": 9,
-    "signatures": {
-     "count args=1 max=0,1 db=1,1": 9
     },
     "type_mismatches": 0
    },
@@ -3043,14 +2985,6 @@
     },
     "type_mismatches": 0
    },
-   "r": {
-    "boxes": 124,
-    "count_mismatches": 124,
-    "signatures": {
-     "count args=1 max=0,1 db=1,1": 124
-    },
-    "type_mismatches": 0
-   },
    "route": {
     "boxes": 70,
     "count_mismatches": 70,
@@ -3223,7 +3157,7 @@
     "count_mismatches": 43,
     "signatures": {
      "count args=1 max=2,1 db=1,1": 7,
-     "count args=12 max=4,1 db=1,1": 1,
+     "count args=1 max=4,1 db=1,1": 1,
      "count args=15 max=4,1 db=1,1": 1,
      "count args=19 max=10,1 db=1,1": 1,
      "count args=19 max=4,1 db=1,1": 2,
@@ -3416,9 +3350,8 @@
      "count args=1 max=1,1 db=0,1": 4,
      "count args=2 max=1,1 db=0,1": 6,
      "count args=2 max=1,2 db=0,1": 1,
-     "count args=3 max=1,2 db=0,1": 6,
+     "count args=3 max=1,2 db=0,1": 7,
      "count args=3 max=1,3 db=0,1": 2,
-     "count args=4 max=1,2 db=0,1": 1,
      "count args=4 max=1,4 db=0,1": 5,
      "count args=5 max=1,3 db=0,1": 4,
      "count args=5 max=1,5 db=0,1": 2,
@@ -3666,12 +3599,11 @@
    },
    "expr": {
     "boxes": 26,
-    "count_mismatches": 26,
+    "count_mismatches": 24,
     "signatures": {
      "count args=11 max=2,1 db=11,1": 1,
      "count args=19 max=2,1 db=19,1": 1,
-     "count args=2 max=1,1 db=2,1": 1,
-     "count args=3 max=1,1 db=3,1": 2,
+     "count args=3 max=1,1 db=3,1": 1,
      "count args=5 max=1,1 db=5,1": 8,
      "count args=7 max=1,1 db=7,1": 5,
      "count args=7 max=2,1 db=7,1": 2,
@@ -3736,14 +3668,6 @@
     "count_mismatches": 7,
     "signatures": {
      "count args=0 max=1,4 db=1,5": 7
-    },
-    "type_mismatches": 0
-   },
-   "r": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=1 max=0,1 db=1,1": 1
     },
     "type_mismatches": 0
    },
@@ -3838,14 +3762,6 @@
     "count_mismatches": 2,
     "signatures": {
      "count args=0 max=2,1 db=0,1": 2
-    },
-    "type_mismatches": 0
-   },
-   "r": {
-    "boxes": 5,
-    "count_mismatches": 5,
-    "signatures": {
-     "count args=1 max=0,1 db=1,1": 5
     },
     "type_mismatches": 0
    },
@@ -4166,8 +4082,7 @@
     "signatures": {
      "count args=11 max=3,1 db=1,1": 1,
      "count args=6 max=3,1 db=1,1": 1,
-     "count args=8 max=1,2 db=1,1": 1,
-     "count args=9 max=1,2 db=1,1": 1
+     "count args=8 max=1,2 db=1,1": 2
     },
     "type_mismatches": 0
    },
@@ -5428,14 +5343,6 @@
     },
     "type_mismatches": 0
    },
-   "r": {
-    "boxes": 20,
-    "count_mismatches": 20,
-    "signatures": {
-     "count args=1 max=0,1 db=1,1": 20
-    },
-    "type_mismatches": 0
-   },
    "route": {
     "boxes": 19,
     "count_mismatches": 19,
@@ -5532,14 +5439,6 @@
     "count_mismatches": 19,
     "signatures": {
      "count args=0 max=1,0 db=2,0": 19
-    },
-    "type_mismatches": 0
-   },
-   "r": {
-    "boxes": 6,
-    "count_mismatches": 6,
-    "signatures": {
-     "count args=1 max=0,1 db=1,1": 6
     },
     "type_mismatches": 0
    },
@@ -5658,14 +5557,6 @@
     },
     "type_mismatches": 0
    },
-   "r": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=1 max=0,1 db=1,1": 1
-    },
-    "type_mismatches": 0
-   },
    "route": {
     "boxes": 2,
     "count_mismatches": 2,
@@ -5689,36 +5580,36 @@
   "bundle": {
    "boxes_compared": 77909,
    "files": 2114,
-   "mismatching_boxes": 6867,
-   "mismatching_names": 164,
+   "mismatching_boxes": 6368,
+   "mismatching_names": 161,
    "version": "9.2.0"
   },
   "package:CNMAT Externals": {
    "boxes_compared": 4444,
    "files": 58,
-   "mismatching_boxes": 524,
-   "mismatching_names": 61,
+   "mismatching_boxes": 499,
+   "mismatching_names": 60,
    "version": "1.0.5"
   },
   "package:FlowSwing": {
    "boxes_compared": 664,
    "files": 7,
-   "mismatching_boxes": 101,
-   "mismatching_names": 18,
+   "mismatching_boxes": 100,
+   "mismatching_names": 17,
    "version": "2.6.1"
   },
   "package:FluidCorpusManipulation": {
    "boxes_compared": 7312,
    "files": 78,
-   "mismatching_boxes": 1391,
-   "mismatching_names": 67,
+   "mismatching_boxes": 1378,
+   "mismatching_names": 66,
    "version": "1.0.9"
   },
   "package:RNBO": {
    "boxes_compared": 2605,
    "files": 563,
-   "mismatching_boxes": 110,
-   "mismatching_names": 13,
+   "mismatching_boxes": 101,
+   "mismatching_names": 12,
    "version": "1.4.3"
   },
   "package:Rhythm and Time Toolkit": {
@@ -5731,22 +5622,22 @@
   "package:abclib": {
    "boxes_compared": 5278,
    "files": 67,
-   "mismatching_boxes": 452,
-   "mismatching_names": 15,
+   "mismatching_boxes": 328,
+   "mismatching_names": 14,
    "version": "1.1.2"
   },
   "package:bach": {
    "boxes_compared": 11991,
    "files": 240,
-   "mismatching_boxes": 1694,
-   "mismatching_names": 73,
+   "mismatching_boxes": 1691,
+   "mismatching_names": 72,
    "version": "0.8.3"
   },
   "package:cv.jit": {
    "boxes_compared": 3041,
    "files": 70,
-   "mismatching_boxes": 178,
-   "mismatching_names": 14,
+   "mismatching_boxes": 173,
+   "mismatching_names": 13,
    "version": "2.0.2"
   },
   "package:dada": {
@@ -5773,31 +5664,31 @@
   "package:grainflow": {
    "boxes_compared": 2389,
    "files": 45,
-   "mismatching_boxes": 292,
-   "mismatching_names": 35,
+   "mismatching_boxes": 272,
+   "mismatching_names": 34,
    "version": "2.1.2"
   },
   "package:ml.star": {
    "boxes_compared": 1850,
    "files": 17,
-   "mismatching_boxes": 138,
-   "mismatching_names": 11,
+   "mismatching_boxes": 132,
+   "mismatching_names": 10,
    "version": "1.3.0"
   },
   "package:nn_tilde": {
    "boxes_compared": 506,
    "files": 4,
-   "mismatching_boxes": 77,
-   "mismatching_names": 11,
+   "mismatching_boxes": 76,
+   "mismatching_names": 10,
    "version": "v1.6.0"
   }
  },
  "totals": {
   "boxes_compared": 126700,
-  "count_mismatch_names": 363,
+  "count_mismatch_names": 360,
   "files": 3430,
-  "mismatching_boxes": 13084,
-  "mismatching_names": 441,
+  "mismatching_boxes": 12378,
+  "mismatching_names": 438,
   "type_mismatch_names": 88
  }
 }
