@@ -247,3 +247,258 @@ class TestAssistanceCommentsPersist:
                             f"{text}/{ib['id']} has an empty comment on disk"
                         )
         assert checked == 13 + 10 + 13
+
+
+# ---------------------------------------------------------------------------
+# B2 / B3: modify_box(args=...) keeps user work
+# ---------------------------------------------------------------------------
+
+def _obj(box_id, text, nin, nout, x=30.0, y=30.0, maxclass="newobj", **extra):
+    box = {
+        "id": box_id,
+        "maxclass": maxclass,
+        "numinlets": nin,
+        "numoutlets": nout,
+        "outlettype": [""] * nout,
+        "patching_rect": [x, y, 80.0, 22.0],
+    }
+    if text is not None:
+        box["text"] = text
+    box.update(extra)
+    return {"box": box}
+
+
+def _cord(src, outlet, dst, inlet):
+    return {"patchline": {"source": [src, outlet], "destination": [dst, inlet]}}
+
+
+def _loaded(boxes, lines, db):
+    return Patcher.from_dict(
+        {"patcher": {"boxes": boxes, "lines": lines}}, db=db,
+    )
+
+
+def _cords_of(patcher, box):
+    return sorted(
+        (l.source_id, l.source_outlet, l.dest_id, l.dest_inlet)
+        for l in patcher.lines
+        if l.source_id == box.id or l.dest_id == box.id
+    )
+
+
+def _fd_box4(p):
+    matches = [
+        b for b in p.boxes
+        if b.maxclass == "newobj" and b.text == "gen~ FDNverb"
+    ]
+    assert len(matches) == 1
+    return matches[0]
+
+
+def _port_harness(center_text, nin, nout, db, **center_extra):
+    """A loaded box with a cord into every inlet and out of every outlet."""
+    boxes = [_obj("obj-1", center_text, nin, nout, x=200, y=200, **center_extra)]
+    lines = []
+    for i in range(nin):
+        boxes.append(_obj(f"obj-in{i}", "t b", 1, 1, x=100 + i * 90, y=100))
+        lines.append(_cord(f"obj-in{i}", 0, "obj-1", i))
+    for o in range(nout):
+        boxes.append(_obj(f"obj-out{o}", "print", 1, 0, x=100 + o * 90, y=300))
+        lines.append(_cord("obj-1", o, f"obj-out{o}", 0))
+    p = _loaded(boxes, lines, db)
+    return p, _box(p, "obj-1")
+
+
+class TestModifyBoxContentDefined:
+
+    def test_fdnverb_same_args_keeps_io_and_cords(self, db):
+        p = _load(FD, db)
+        box4 = _fd_box4(p)
+        assert (box4.numinlets, box4.numoutlets) == (2, 2)
+        assert len(p.lines) == 41
+        rect_before = list(box4.patching_rect)
+
+        result = p.modify_box(box4, args=["FDNverb"])
+
+        assert (box4.numinlets, box4.numoutlets) == (2, 2)
+        assert len(p.lines) == 41
+        assert result.orphaned == []
+        assert list(box4.patching_rect) == rect_before
+        assert p.to_dict()["patcher"]["lines"] == _read_json(FD)["patcher"]["lines"]
+
+    def test_fdnverb_changed_args_keeps_io_and_cords(self, db):
+        p = _load(FD, db)
+        box4 = _fd_box4(p)
+
+        result = p.modify_box(box4, args=["FDNverb2"])
+
+        assert box4.text == "gen~ FDNverb2"
+        assert (box4.numinlets, box4.numoutlets) == (2, 2)
+        assert len(p.lines) == 41
+        assert result.orphaned == []
+        assert box4._raw["numoutlets"] == 2
+        assert box4._raw["text"] == "gen~ FDNverb2"
+
+    def test_p_subpatcher_keeps_io_and_cords(self, db):
+        p = Patcher(db=db)
+        sub, _ = p.add_subpatcher("articulation", inlets=2, outlets=2, x=200, y=200)
+        srcs = [p.add_box("t", ["b"], x=100 + i * 90, y=100, skip_overlap_check=True)
+                for i in range(2)]
+        dsts = [p.add_box("print", x=100 + i * 90, y=300, skip_overlap_check=True)
+                for i in range(2)]
+        for i in range(2):
+            p.add_connection(srcs[i], 0, sub, i)
+            p.add_connection(sub, i, dsts[i], 0)
+
+        q = _reload(p, db)
+        qsub = _box(q, sub.id)
+        before = _cords_of(q, qsub)
+        assert len(before) == 4
+
+        result = q.modify_box(qsub, args=["phrasing"])
+
+        assert qsub.text == "p phrasing"
+        assert (qsub.numinlets, qsub.numoutlets) == (2, 2)
+        assert _cords_of(q, qsub) == before
+        assert result.orphaned == []
+
+    def test_js_keeps_io_and_cords(self, db):
+        boxes = [
+            _obj("obj-1", "js engine.js", 3, 2, x=200, y=200),
+            _obj("obj-2", "t b", 1, 1, x=100, y=100),
+            _obj("obj-3", "t b", 1, 1, x=190, y=100),
+            _obj("obj-4", "t b", 1, 1, x=280, y=100),
+            _obj("obj-5", "print", 1, 0, x=200, y=300),
+        ]
+        lines = [
+            _cord("obj-2", 0, "obj-1", 0),
+            _cord("obj-3", 0, "obj-1", 1),
+            _cord("obj-4", 0, "obj-1", 2),
+            _cord("obj-1", 1, "obj-5", 0),
+        ]
+        p = _loaded(boxes, lines, db)
+        js = _box(p, "obj-1")
+
+        result = p.modify_box(js, args=["engine2.js"])
+
+        assert js.text == "js engine2.js"
+        assert (js.numinlets, js.numoutlets) == (3, 2)
+        assert len(p.lines) == 4
+        assert result.orphaned == []
+
+    def test_unknown_abstraction_keeps_io_and_cords(self, db):
+        p, box = _port_harness("q6-test-abstraction 1", 2, 2, db)
+        before = _cords_of(p, box)
+        assert len(before) == 4
+
+        result = p.modify_box(box, args=["2"])
+
+        assert box.text == "q6-test-abstraction 2"
+        assert (box.numinlets, box.numoutlets) == (2, 2)
+        assert _cords_of(p, box) == before
+        assert result.orphaned == []
+
+    def test_io_is_content_defined_predicate(self, db):
+        fd = _load(FD, db)
+        assert fd._io_is_content_defined(_fd_box4(fd)) is True
+
+        p = Patcher(db=db)
+        sub, _ = p.add_subpatcher("x", inlets=1, outlets=1)
+        assert p._io_is_content_defined(sub) is True
+
+        boxes = [
+            _obj("obj-1", None, 1, 1, maxclass="bpatcher", name="child.maxpat"),
+            _obj("obj-2", "js thing.js", 1, 1),
+            _obj("obj-3", "node.script s.js", 1, 2),
+            _obj("obj-4", "q6-unknown-thing", 1, 1),
+            _obj("obj-5", "cycle~ 440", 2, 1),
+            _obj("obj-6", "trigger b b", 1, 2),
+            _obj("obj-7", "pack 0 0", 2, 1),
+            _obj("obj-8", "expr $f1+$f2", 2, 1),
+        ]
+        q = _loaded(boxes, [], db)
+        for bid in ("obj-1", "obj-2", "obj-3", "obj-4", "obj-5"):
+            assert q._io_is_content_defined(_box(q, bid)) is True, bid
+        for bid in ("obj-6", "obj-7", "obj-8"):
+            assert q._io_is_content_defined(_box(q, bid)) is False, bid
+
+
+class TestModifyBoxVariableIO:
+
+    def test_pack_shrink_orphans_only_out_of_range_cord(self, db):
+        p, box = _port_harness("pack 0 0 0", 3, 0, db)
+
+        result = p.modify_box(box, args=["0", "0"])
+
+        assert box.numinlets == 2
+        assert result.orphaned == [{
+            "source_id": "obj-in2", "source_outlet": 0,
+            "dest_id": "obj-1", "dest_inlet": 2,
+        }]
+        assert _cords_of(p, box) == [
+            ("obj-in0", 0, "obj-1", 0), ("obj-in1", 0, "obj-1", 1),
+        ]
+        assert box._raw["numinlets"] == 2
+
+    def test_trigger_grow_keeps_all_cords(self, db):
+        p, box = _port_harness("trigger b i f", 0, 3, db)
+        before = _cords_of(p, box)
+
+        result = p.modify_box(box, args=["b", "b", "b", "b"])
+
+        assert box.numoutlets == 4
+        assert _cords_of(p, box) == before
+        assert result.orphaned == []
+
+    def test_unchanged_text_is_a_noop(self, db):
+        p, box = _port_harness("expr $f1+$f2", 2, 1, db)
+        before = _cords_of(p, box)
+        rect_before = list(box.patching_rect)
+
+        result = p.modify_box(box, args=["$f1+$f2"])
+
+        assert box.numinlets == 2
+        assert _cords_of(p, box) == before
+        assert list(box.patching_rect) == rect_before
+        assert result.orphaned == []
+
+
+class TestModifyBoxText:
+
+    def test_new_message_text_has_no_prefix(self, db):
+        p = Patcher(db=db)
+        msg = p.add_message("read a.wav")
+        io = (msg.numinlets, msg.numoutlets)
+
+        p.modify_box(msg, args=["read", "drums.wav"])
+
+        assert msg.text == "read drums.wav"
+        assert (msg.numinlets, msg.numoutlets) == io
+
+    def test_loaded_message_text_reaches_disk(self, db):
+        p = Patcher(db=db)
+        msg = p.add_message("read a.wav", x=30, y=30)
+        pr = p.add_box("print", x=30, y=100, skip_overlap_check=True)
+        p.add_connection(msg, 0, pr, 0)
+
+        q = _reload(p, db)
+        qmsg = _box(q, msg.id)
+        io = (qmsg.numinlets, qmsg.numoutlets)
+
+        result = q.modify_box(qmsg, args=["read", "drums.wav"])
+
+        assert qmsg.text == "read drums.wav"
+        assert qmsg._raw["text"] == "read drums.wav"
+        assert (qmsg.numinlets, qmsg.numoutlets) == io
+        assert len(q.lines) == 1
+        assert result.orphaned == []
+        out = {e["box"]["id"]: e["box"] for e in q.to_dict()["patcher"]["boxes"]}
+        assert out[msg.id]["text"] == "read drums.wav"
+
+    def test_new_comment_text_has_no_prefix(self, db):
+        p = Patcher(db=db)
+        c = p.add_comment("Old")
+
+        p.modify_box(c, args=["New", "label"])
+
+        assert c.text == "New label"

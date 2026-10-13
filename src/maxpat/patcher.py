@@ -29,6 +29,14 @@ from src.maxpat.defaults import (
 # Collision detection padding (px) around boxes for readability
 COLLISION_PAD = 5.0
 
+# Objects whose I/O comes from their content (embedded patcher, script,
+# loaded file), not from their arguments. modify_box(args=...) keeps their
+# I/O counts and cords instead of recomputing from the DB (Q6 / B2).
+CONTENT_DEFINED_NAMES = frozenset({
+    "p", "patcher", "bpatcher", "gen~", "mc.gen~", "jit.gen", "poly~",
+    "mc.poly~", "js", "jsui", "v8", "v8ui", "node.script",
+})
+
 from src.maxpat.maxclass_map import resolve_maxclass, is_ui_object, UI_MAXCLASSES
 from src.maxpat.graph import GraphMixin
 from src.maxpat.analysis import AnalysisMixin, SECTION_SIGNATURES, _SECTION_NAME_PRIORITY
@@ -556,6 +564,30 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             f"{dst_box.id}[{dst_inlet}]"
         )
 
+    def _io_is_content_defined(self, box: Box) -> bool:
+        """True when a box's I/O comes from its content, not its args.
+
+        modify_box(args=...) keeps the I/O counts and cords of such boxes
+        (Q6 / B2). True for: an embedded patcher, a bpatcher (the DB marks
+        it variable_io with an uncomputable rule), no DB, a name in
+        ``CONTENT_DEFINED_NAMES`` (alias-resolved), a name not in the DB
+        (abstraction or unknown), or a DB object not marked ``variable_io``.
+        False only for a DB ``variable_io`` object that hits none of these.
+        """
+        if box._inner_patcher is not None:
+            return True
+        if box.maxclass == "bpatcher":
+            return True
+        if not self.db:
+            return True
+        canonical = self.db._aliases.get(box.name, box.name)
+        if canonical in CONTENT_DEFINED_NAMES:
+            return True
+        entry = self.db.lookup(box.name)
+        if entry is None:
+            return True
+        return not entry.get("variable_io")
+
     def modify_box(
         self,
         box: Box,
@@ -567,13 +599,29 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
     ) -> EditResult:
         """Modify a box's attributes in-place.
 
-        Changes args (with I/O recomputation for variable_io), position,
-        color, or extra_attrs. When I/O count shrinks, orphaned connections
-        are auto-removed and returned in the result.
+        Changes args, position, color, or extra_attrs.
+
+        ``args`` rules (Q6 / B2 / B3):
+
+        - message/comment boxes: text becomes ``" ".join(args)`` with no
+          maxclass prefix; I/O is unchanged.
+        - content-defined boxes (see ``_io_is_content_defined``: embedded
+          patchers, bpatchers, ``CONTENT_DEFINED_NAMES``, names not in the
+          DB, and DB objects not marked ``variable_io``): text becomes
+          ``name + args``; I/O counts, outlettype and every cord are kept.
+        - DB ``variable_io`` objects: I/O is recomputed from the DB. Cords
+          whose indices stay in range are kept; out-of-range cords are
+          removed and returned in ``EditResult.orphaned`` (the only way
+          this method orphans).
+        - If the resulting text equals the current text, nothing else
+          changes: no I/O recompute, no resize, no cord change.
+
+        Loaded boxes have text, I/O, outlettype and patching_rect synced to
+        ``_raw`` so the change reaches disk.
 
         Args:
             box: The box to modify (must be in this patcher).
-            args: New arguments (triggers I/O recomputation for variable_io).
+            args: New arguments (rules above).
             position: New [x, y] position.
             color: New box color [r, g, b, a] -- sets extra_attrs["bgcolor"].
             extra_attrs: Dict of additional attributes to set/update.
@@ -592,50 +640,61 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         orphaned: list[dict] = []
 
         if args is not None:
-            # Update args and text
-            box.args = list(args)
-            parts = [box.name] + list(args)
-            box.text = " ".join(parts).strip()
+            new_args = list(args)
+            if box.maxclass in ("message", "comment"):
+                new_text = " ".join(new_args).strip()
+                recompute = False
+            else:
+                new_text = " ".join([box.name] + new_args).strip()
+                recompute = not self._io_is_content_defined(box)
 
-            # Recompute I/O counts via database
-            if self.db:
-                box.numinlets, box.numoutlets = self.db.compute_io_counts(
-                    box.name, args
-                )
-                box.outlettype = self.db.get_outlet_types(box.name, args)
+            box.args = new_args
 
-            # Recalculate box size
-            w, h = calculate_box_size(box.text, box.maxclass)
-            box.patching_rect[2] = w
-            box.patching_rect[3] = h
+            # Identical text: nothing else changes (Q6 / B2).
+            if new_text != box.text:
+                box.text = new_text
 
-            # Orphan connections to removed outlets/inlets
-            surviving = []
-            for pl in self.lines:
-                orphan = False
-                if pl.source_id == box.id and pl.source_outlet >= box.numoutlets:
-                    orphan = True
-                if pl.dest_id == box.id and pl.dest_inlet >= box.numinlets:
-                    orphan = True
-                if orphan:
-                    orphaned.append({
-                        "source_id": pl.source_id,
-                        "source_outlet": pl.source_outlet,
-                        "dest_id": pl.dest_id,
-                        "dest_inlet": pl.dest_inlet,
-                    })
-                else:
-                    surviving.append(pl)
-            self.lines = surviving
+                # Recompute I/O counts via database (variable_io only)
+                if recompute:
+                    box.numinlets, box.numoutlets = self.db.compute_io_counts(
+                        box.name, new_args
+                    )
+                    box.outlettype = self.db.get_outlet_types(
+                        box.name, new_args
+                    )
 
-            # Sync _raw dict
-            if box._raw is not None:
-                box._raw["text"] = box.text
-                box._raw["numinlets"] = box.numinlets
-                box._raw["numoutlets"] = box.numoutlets
-                if "outlettype" in box._raw:
-                    box._raw["outlettype"] = box.outlettype
-                box._raw["patching_rect"] = box.patching_rect
+                # Recalculate box size
+                w, h = calculate_box_size(box.text, box.maxclass)
+                box.patching_rect[2] = w
+                box.patching_rect[3] = h
+
+                # Orphan connections to removed outlets/inlets
+                surviving = []
+                for pl in self.lines:
+                    orphan = False
+                    if pl.source_id == box.id and pl.source_outlet >= box.numoutlets:
+                        orphan = True
+                    if pl.dest_id == box.id and pl.dest_inlet >= box.numinlets:
+                        orphan = True
+                    if orphan:
+                        orphaned.append({
+                            "source_id": pl.source_id,
+                            "source_outlet": pl.source_outlet,
+                            "dest_id": pl.dest_id,
+                            "dest_inlet": pl.dest_inlet,
+                        })
+                    else:
+                        surviving.append(pl)
+                self.lines = surviving
+
+                # Sync _raw dict
+                if box._raw is not None:
+                    box._raw["text"] = box.text
+                    box._raw["numinlets"] = box.numinlets
+                    box._raw["numoutlets"] = box.numoutlets
+                    if "outlettype" in box._raw:
+                        box._raw["outlettype"] = box.outlettype
+                    box._raw["patching_rect"] = box.patching_rect
 
         if position is not None:
             box.patching_rect[0] = position[0]
