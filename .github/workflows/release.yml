@@ -5,24 +5,26 @@ on:
     tags: ['v*']
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+    permissions:
+      contents: read
+
   release:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v6
 
-      - name: Build tarball
-        run: |
-          tar czf framework.tar.gz \
-            --exclude-from=.release-ignore \
-            --transform 's,^\./,MAX-MSP_CC_Framework/,' \
-            . || [[ $? -eq 1 ]]
+      - name: Build release archive
+        run: bash scripts/build_release.sh "$RUNNER_TEMP/framework.tar.gz"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          files: framework.tar.gz
+          files: ${{ runner.temp }}/framework.tar.gz
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

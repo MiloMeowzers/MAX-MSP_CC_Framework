@@ -7,6 +7,10 @@ Covers review findings:
   code. The release is now ``git archive`` of HEAD with anchored
   ``.gitattributes`` export-ignore rules, built by ``scripts/build_release.sh``
   -- the same script release.yml runs.
+- A4: the only workflow published tags without running pytest. test.yml now
+  runs the suite on every branch push and PR (Python 3.10 and 3.12), and
+  release.yml's release job needs it. requirements-dev.txt must cover every
+  third-party import.
 
 The only git command these tests run against the checkout is the read-only
 ``git archive`` inside ``scripts/build_release.sh``, writing into pytest's
@@ -16,8 +20,10 @@ committed state, not the working tree.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -289,3 +295,89 @@ class TestBuildScript:
         assert SCRIPT.is_file(), "scripts/build_release.sh is missing"
         r = _run_script(str(tmp_path / "out.tar.gz"), "no-such-ref-q8")
         assert r.returncode != 0, r.stdout
+
+
+WORKFLOWS = REPO_ROOT / ".github" / "workflows"
+REQUIREMENTS_DEV = REPO_ROOT / "requirements-dev.txt"
+
+
+class TestCiConfig:
+    """A4: CI runs the suite; the release is gated on it and uses the build script."""
+
+    def test_test_workflow(self):
+        path = WORKFLOWS / "test.yml"
+        assert path.is_file(), ".github/workflows/test.yml is missing"
+        text = path.read_text()
+        for needle in (
+            "workflow_call",
+            "pull_request",
+            "branches:",
+            "ubuntu-latest",
+            "python -m pip install -r requirements-dev.txt",
+            "python -m pytest -q",
+            "'3.10'",
+            "'3.12'",
+        ):
+            assert needle in text, f"test.yml lacks {needle!r}"
+
+    def test_release_workflow_gated_and_uses_build_script(self):
+        text = (WORKFLOWS / "release.yml").read_text()
+        assert "uses: ./.github/workflows/test.yml" in text
+        assert re.search(r"needs:\s*\[?\s*test\b", text), "release job does not need test"
+        assert 'bash scripts/build_release.sh "$RUNNER_TEMP/framework.tar.gz"' in text
+        assert "${{ runner.temp }}/framework.tar.gz" in text
+
+    def test_release_workflow_drops_tar_build(self):
+        text = (WORKFLOWS / "release.yml").read_text()
+        assert "--exclude-from" not in text
+        assert "|| [[" not in text, "release.yml masks an exit code"
+        assert "tar czf" not in text
+
+    def test_release_ignore_removed(self):
+        assert not (REPO_ROOT / ".release-ignore").exists()
+
+
+def _requirement_names() -> set[str]:
+    names = set()
+    for line in REQUIREMENTS_DEV.read_text().splitlines():
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        names.add(re.split(r"[<>=!~\[; ]", line, maxsplit=1)[0].strip().lower())
+    return names
+
+
+class TestDevRequirements:
+    """A4: requirements-dev.txt installs every third-party package the code imports."""
+
+    SCAN_DIRS = ("src", "tests", "tools", "scripts", ".claude/scripts")
+
+    def test_core_requirements_listed(self):
+        assert REQUIREMENTS_DEV.is_file(), "requirements-dev.txt is missing"
+        assert {"numpy", "scipy", "pytest"} <= _requirement_names()
+
+    def test_third_party_imports_covered(self):
+        assert REQUIREMENTS_DEV.is_file(), "requirements-dev.txt is missing"
+        files = []
+        for d in self.SCAN_DIRS:
+            base = REPO_ROOT / d
+            if base.is_dir():
+                files.extend(
+                    f for f in base.rglob("*.py") if "__pycache__" not in f.parts
+                )
+        local = {"src", "tests", "tools", "scripts"}
+        for f in files:
+            local.add(f.stem)
+            for parent in f.relative_to(REPO_ROOT).parts[:-1]:
+                local.add(parent)
+        imported = set()
+        for f in files:
+            tree = ast.parse(f.read_text(encoding="utf-8"), filename=str(f))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported.update(a.name.split(".")[0] for a in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                    imported.add(node.module.split(".")[0])
+        third_party = imported - set(sys.stdlib_module_names) - local
+        missing = {n for n in third_party if n.lower() not in _requirement_names()}
+        assert not missing, f"third-party imports missing from requirements-dev.txt: {sorted(missing)}"

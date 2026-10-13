@@ -1,0 +1,6 @@
+# Test and CI dependencies: pip install -r requirements-dev.txt
+# numpy and scipy are also runtime dependencies of src/maxpat/dsp_sim.
+# Lower bounds are the lowest versions verified on Python 3.10 (Q8).
+numpy>=2.2
+scipy>=1.15
+pytest>=9.0
