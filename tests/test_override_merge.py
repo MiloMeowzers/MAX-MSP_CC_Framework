@@ -298,6 +298,18 @@ Q11_COUNT_TARGETS = (
     "live.scope~", "gridmeter~", "bucket", "mousestate", "live.adsr~",
     "live.adsrui", "dict.view", "jit.polymovie", "jit.line", "mxj~",
     "mira.motion",
+    # Task 3: their count fixes expose a wrong outlet-2 role, so the count
+    # and the role are fixed together (rows in MAX_SAVED_ROLES).
+    "retune~", "playlist~",
+)
+
+# The 16 C9 bundle names whose outlet signal class contradicted MAX-saved
+# boxes (the live oracle's bundle type-mismatch names at 45f23b4).
+Q11_ROLE_TARGETS = (
+    "bp.arc.accum-2", "bp.arc.knob", "gen", "jweb~", "mc.adsr~",
+    "mc.live.gain~", "mc.playlist~", "mc.route", "mc.selector~", "mc.stash~",
+    "mcs.poly~", "mcs.tapout~", "pitchshift~", "sfrecord~", "stash~",
+    "stretch~",
 )
 
 # Boxes saved by older Max versions with the pre-9 count. The oracle may
@@ -378,7 +390,8 @@ class TestMaxSavedCounts:
         _assert_row(db, name, args, counts, classes, roles)
 
     def test_every_target_has_a_row(self):
-        assert {r[0] for r in MAX_SAVED_COUNTS} == set(Q11_COUNT_TARGETS)
+        rows = {r[0] for r in MAX_SAVED_COUNTS} | {r[0] for r in MAX_SAVED_ROLES}
+        assert set(Q11_COUNT_TARGETS) <= rows
 
     def test_live_adsr_inlets(self, db):
         inlets = db.lookup("live.adsr~")["inlets"]
@@ -409,6 +422,186 @@ class TestMaxSavedCounts:
             if "signal_role" in p and "signal" in p
         ]
         assert both == []
+
+
+# ---------------------------------------------------------------------------
+# Task 3 (C9): outlet signal roles match MAX-saved help boxes
+# ---------------------------------------------------------------------------
+
+MAX_SAVED_ROLES = [
+    ("retune~", ["440"], (3, 5), "SSSSc", ("audio",) * 4 + ("list",),
+     "C74/help/msp/retune~.maxhelp (9.0.0) `retune~ 440` (3,5) [signal x4, list]"),
+    ("playlist~", [], (1, 5), "SSScc", ("audio", "audio", "audio", "status", "data"),
+     "C74/help/max/chooser.maxhelp (9.0.0) `playlist~` (1,5) "
+     "[signal, signal, signal, \"\", dictionary]; 25 bundle boxes"),
+    ("bp.arc.accum-2", ["1", "-1000", "1000"], (2, 1), "c", ("status",),
+     "C74/packages/BEAP/Help/bp.Granular.maxhelp (8.0.6) "
+     "`bp.arc.accum-2 1 -1000 1000` (2,1) [\"\"]; 12 boxes"),
+    ("bp.arc.knob", ["1", "0", "bandwidth"], (3, 1), "c", ("status",),
+     "C74/packages/BEAP/Help/bp.Granular.maxhelp (8.0.6) "
+     "`bp.arc.knob 1 0 bandwidth` (3,1) [\"\"]; 12 boxes"),
+    ("gen", [], (2, 1), "c", ("float",),
+     "C74/help/max/gen.maxhelp (9.1.0) `gen` (2,1) [float]; all 21 gen boxes"),
+    ("jweb~", [], (1, 3), "SSc", ("audio", "audio", "status"),
+     "C74/help/msp/jweb~.maxhelp (9.0.0) `jweb~` (1,3) [signal, signal, \"\"]; 1 box"),
+    ("mc.adsr~", ["10", "150", "0", "100"], (5, 5), "SSccc",
+     ("audio", "audio", "status", "status", "status"),
+     "C74/help/max/mc.assign.maxhelp (9.0.0) `mc.adsr~ 10 150 0 100 @chans 6` (5,5) "
+     "[multichannelsignal x2, \"\", \"\", \"\"]"),
+    ("mc.live.gain~", [], (1, 4), "Sccc", ("audio", "status", "float", "float"),
+     "C74/help/max/mc.assign.maxhelp (9.0.0) `mc.live.gain~` (1,4) "
+     "[multichannelsignal, \"\", float, list]; 109 boxes"),
+    ("mc.playlist~", [], (1, 4), "SScc", ("audio", "audio", "status", "list"),
+     "C74/help/msp/matrix~.maxhelp (9.0.0) `mc.playlist~` (1,4) "
+     "[multichannelsignal, signal, \"\", dictionary]; 19 boxes"),
+    ("mc.route", ["4"], (2, 4), "cccc", ("status", "status", None, None),
+     "C74/help/msp/mc.pack~.maxhelp (9.0.0) `mc.route 4` (2,4) [\"\" x4]; 11 boxes"),
+    ("mc.selector~", ["2", "1"], (3, 1), "S", ("audio",),
+     "C74/help/msp/stash~.maxhelp (9.0.0) `mc.selector~ 2 1 @ramptime 100` (3,1) "
+     "[multichannelsignal]"),
+    ("mc.stash~", [], (4, 2), "SS", ("audio", "audio"),
+     "C74/help/msp/stash~.maxhelp (9.0.0) `mc.stash~` (4,2) [multichannelsignal x2]"),
+    ("mcs.poly~", ["mcout_subpatcher", "1"], (1, 1), "S", ("audio",),
+     "C74/help/msp/out~.maxhelp (9.0.5) `mcs.poly~ mcout_subpatcher 1` (1,1) "
+     "[multichannelsignal]"),
+    ("mcs.tapout~", ["100", "200", "300"], (3, 1), "S", ("audio",),
+     "C74/help/msp/tapout~.maxhelp (9.0.0) `mcs.tapout~ 100 200 300` (3,1) "
+     "[multichannelsignal]"),
+    ("pitchshift~", ["2"], (3, 3), "SSc", ("audio", "audio", "status"),
+     "C74/help/msp/pitchshift~.maxhelp (9.0.0) `pitchshift~ 2` (3,3) [signal, signal, \"\"]"),
+    ("sfrecord~", ["2"], (2, 1), "S", ("audio",),
+     "C74/help/msp/adoutput~.maxhelp (9.0.0) `sfrecord~ 2` (2,1) [signal]"),
+    ("stash~", [], (4, 2), "SS", ("audio", "audio"),
+     "C74/help/msp/stash~.maxhelp (9.0.0) `stash~` (4,2) [signal, signal]; 7 boxes"),
+    ("stretch~", ["stretchy"], (1, 2), "cc", ("float", "trigger"),
+     "C74/help/msp/stretch~.maxhelp (9.0.0) `stretch~ stretchy` (1,2) [float, bang]; 2 boxes"),
+]
+
+
+class TestMaxSavedRoles:
+
+    @pytest.mark.parametrize(
+        "name,args,counts,classes,roles,citation", MAX_SAVED_ROLES,
+        ids=[_row_id(r) for r in MAX_SAVED_ROLES],
+    )
+    def test_matches_max_saved_box(self, db, name, args, counts, classes, roles, citation):
+        _assert_row(db, name, args, counts, classes, roles)
+
+    def test_rows_cover_role_targets(self):
+        assert {r[0] for r in MAX_SAVED_ROLES} == set(Q11_ROLE_TARGETS) | {"retune~", "playlist~"}
+
+    def test_role_ports_carry_no_signal_key(self):
+        ov = _override_objects()
+        both = [
+            (name, p.get("id"))
+            for name in Q11_ROLE_TARGETS + ("retune~", "playlist~")
+            for p in ov[name].get("outlets", [])
+            if "signal_role" in p and "signal" in p
+        ]
+        assert both == []
+
+
+# ---------------------------------------------------------------------------
+# Outlet downgrade guard (Q2 OQ1-A hand-off)
+# ---------------------------------------------------------------------------
+
+def _outlet_flips(db: ObjectDatabase) -> list:
+    """Every (name, i) where the base outlet is signal, the MERGED outlet is
+    control, and the override port has no curated signal_role. Computed on
+    the merged DB so ``{"id": N}`` stubs and roles count. Indices beyond
+    either the base or the override array are not flips."""
+    base = _base_entries()
+    aliases = _aliases()
+    flips = []
+    for key, entry in _override_objects().items():
+        if key.startswith("_") or not isinstance(entry, dict):
+            continue
+        ov_outlets = entry.get("outlets")
+        if not isinstance(ov_outlets, list):
+            continue
+        name = aliases.get(key, key)
+        base_outlets = (base.get(name) or {}).get("outlets") or []
+        merged = db._objects[name].get("outlets") or []
+        for i in range(min(len(base_outlets), len(ov_outlets))):
+            b, o, m = base_outlets[i], ov_outlets[i], merged[i]
+            if not all(isinstance(x, dict) for x in (b, o, m)):
+                continue
+            if b.get("signal") is True and not m.get("signal") and "signal_role" not in o:
+                flips.append((name, i))
+    return sorted(flips)
+
+
+_GEN_REASON = (
+    "Gen operator: MAX saves outlettype \"\" for every box inside a gen "
+    "patcher; the help-io oracle skips gen internals (Q2 OQ1-A, 2026-10-12)"
+)
+_GEN_FLIP_OPERATORS = (
+    "bool", "buffer", "channels", "constant", "dcblock", "delta", "dim",
+    "fixnan", "fold", "fract", "history", "hypot", "isnan", "latch", "min",
+    "mix", "mstosamps", "noise", "or", "phasewrap", "phasor", "pi", "radians",
+    "sah", "samplerate", "sampstoms", "selector", "train", "triangle", "trunc",
+    "wrap",
+)
+
+# Reviewed exceptions: base says signal, overrides say control, on evidence.
+_OUTLET_DOWNGRADE_ALLOWLIST: dict = {
+    ("pong", 0): (
+        "MAX saves `pong 0. 1. @mode fold` with outlettype [\"\"] "
+        "(C74/help/max/pong.maxhelp, 9.0.0)"
+    ),
+    ("buffer~", 0): (
+        "MAX saves buffer~ outlettype [\"float\", \"bang\"] in 275+ boxes, "
+        "e.g. C74/help/max/array.tobuffer.maxhelp"
+    ),
+    ("buffer~", 1): (
+        "MAX saves buffer~ outlettype [\"float\", \"bang\"] in 275+ boxes, "
+        "e.g. C74/help/max/array.tobuffer.maxhelp"
+    ),
+    ("jit.peek~", 1): (
+        "MAX saves jit.peek~ outlettype [\"signal\", \"\"] (jit.peek~.maxhelp)"
+    ),
+    ("jit.poke~", 0): (
+        "MAX saves jit.poke~ outlettype [\"\"] (jit.poke~.maxhelp)"
+    ),
+    ("jit.release~", 1): (
+        "MAX saves jit.release~ outlettype [\"signal\", \"\"] (jit.release~.maxhelp)"
+    ),
+    ("amxd~", 2): (
+        "MAX saves amxd~ outlettype [\"signal\", \"signal\", \"\", \"\"] "
+        "(C74/help/max/autopattr.maxhelp)"
+    ),
+    ("amxd~", 3): (
+        "MAX saves amxd~ outlettype [\"signal\", \"signal\", \"\", \"\"] "
+        "(C74/help/max/autopattr.maxhelp)"
+    ),
+    ("live.modulate~", 0): (
+        "MAX saves live.modulate~ outlettype [\"\"] "
+        "(C74/help/m4l/live.modulate~.maxhelp, 9.1.3)"
+    ),
+}
+_OUTLET_DOWNGRADE_ALLOWLIST.update({(op, 0): _GEN_REASON for op in _GEN_FLIP_OPERATORS})
+
+
+class TestOutletDowngradeGuard:
+
+    def test_allowlist_is_the_q2_handoff(self):
+        assert len(_OUTLET_DOWNGRADE_ALLOWLIST) == 40
+        assert len({k[0] for k in _OUTLET_DOWNGRADE_ALLOWLIST}) == 38
+
+    def test_no_unreviewed_outlet_downgrades(self, db):
+        unreviewed = [f for f in _outlet_flips(db) if f not in _OUTLET_DOWNGRADE_ALLOWLIST]
+        assert unreviewed == [], (
+            f"{len(unreviewed)} override outlet(s) turn a base signal outlet "
+            f"into control without a curated signal_role: {unreviewed}"
+        )
+
+    def test_allowlist_entries_are_live_and_reasoned(self, db):
+        live = set(_outlet_flips(db))
+        for key, reason in _OUTLET_DOWNGRADE_ALLOWLIST.items():
+            assert key in live, f"stale allowlist entry {key}: not a live flip"
+            assert isinstance(reason, str) and reason.strip(), (
+                f"allowlist entry {key} has no reason"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -459,3 +652,18 @@ class TestOracleQ11:
             if not set(entry["signatures"]) <= allowed or entry["type_mismatches"]:
                 bad[name] = entry["signatures"]
         assert not bad, bad
+
+    def test_role_targets_clean_in_bundle(self, live_section):
+        _skip_if_stale(live_section)
+        bundle = live_section["names"].get("bundle", {})
+        bad = {
+            name: bundle[name]["signatures"]
+            for name in Q11_ROLE_TARGETS
+            if bundle.get(name, {}).get("type_mismatches", 0)
+        }
+        assert not bad, bad
+
+    def test_bundle_has_no_type_mismatches(self, live_section):
+        _skip_if_stale(live_section)
+        bundle = live_section["names"].get("bundle", {})
+        assert sorted(n for n, e in bundle.items() if e["type_mismatches"]) == []

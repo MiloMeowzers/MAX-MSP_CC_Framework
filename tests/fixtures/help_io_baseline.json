@@ -103,22 +103,6 @@
     },
     "type_mismatches": 0
    },
-   "bp.arc.accum-2": {
-    "boxes": 12,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=control db=signal": 12
-    },
-    "type_mismatches": 12
-   },
-   "bp.arc.knob": {
-    "boxes": 12,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=control db=signal": 12
-    },
-    "type_mismatches": 12
-   },
    "comment": {
     "boxes": 18516,
     "count_mismatches": 22,
@@ -203,10 +187,9 @@
     "count_mismatches": 8,
     "signatures": {
      "count args=0 max=1,1 db=2,1": 7,
-     "count args=0 max=3,1 db=2,1": 1,
-     "type max=control db=signal": 1
+     "count args=0 max=3,1 db=2,1": 1
     },
-    "type_mismatches": 1
+    "type_mismatches": 0
    },
    "grab": {
     "boxes": 6,
@@ -417,14 +400,6 @@
     },
     "type_mismatches": 0
    },
-   "jweb~": {
-    "boxes": 1,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal/signal/control db=signal/signal/signal": 1
-    },
-    "type_mismatches": 1
-   },
    "line~": {
     "boxes": 173,
     "count_mismatches": 2,
@@ -615,30 +590,6 @@
     },
     "type_mismatches": 0
    },
-   "mc.adsr~": {
-    "boxes": 8,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal/signal/control/control/control db=control/control/control/control/control": 8
-    },
-    "type_mismatches": 8
-   },
-   "mc.live.gain~": {
-    "boxes": 69,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal/control/control/control db=signal/signal/control/control": 69
-    },
-    "type_mismatches": 69
-   },
-   "mc.playlist~": {
-    "boxes": 19,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal/signal/control/control db=signal/signal/signal/control": 19
-    },
-    "type_mismatches": 19
-   },
    "mc.range~": {
     "boxes": 10,
     "count_mismatches": 4,
@@ -648,25 +599,6 @@
     },
     "type_mismatches": 0
    },
-   "mc.route": {
-    "boxes": 11,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=control/control/control/control db=signal/signal/signal/signal": 6,
-     "type max=control/control/control/control/control/control/control/control db=signal/signal/signal/signal/signal/signal/signal/signal": 1,
-     "type max=control/control/control/control/control/control/control/control/control/control db=signal/signal/signal/signal/signal/signal/signal/signal/signal/signal": 3,
-     "type max=control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control/control db=signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal/signal": 1
-    },
-    "type_mismatches": 11
-   },
-   "mc.selector~": {
-    "boxes": 2,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal db=control": 2
-    },
-    "type_mismatches": 2
-   },
    "mc.separate~": {
     "boxes": 3,
     "count_mismatches": 3,
@@ -675,14 +607,6 @@
      "count args=3 max=1,4 db=1,3": 2
     },
     "type_mismatches": 0
-   },
-   "mc.stash~": {
-    "boxes": 1,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal/signal db=signal/control": 1
-    },
-    "type_mismatches": 1
    },
    "mc.targetlist": {
     "boxes": 8,
@@ -706,10 +630,9 @@
     "boxes": 2,
     "count_mismatches": 1,
     "signatures": {
-     "count args=2 max=2,4 db=1,1": 1,
-     "type max=signal db=control": 1
+     "count args=2 max=2,4 db=1,1": 1
     },
-    "type_mismatches": 1
+    "type_mismatches": 0
    },
    "mcs.sig~": {
     "boxes": 4,
@@ -720,14 +643,6 @@
      "count args=6 max=6,1 db=1,1": 1
     },
     "type_mismatches": 0
-   },
-   "mcs.tapout~": {
-    "boxes": 1,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal db=control": 1
-    },
-    "type_mismatches": 1
    },
    "metro": {
     "boxes": 280,
@@ -847,22 +762,6 @@
     },
     "type_mismatches": 0
    },
-   "pitchshift~": {
-    "boxes": 1,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal/signal/control db=control/control/control": 1
-    },
-    "type_mismatches": 1
-   },
-   "playlist~": {
-    "boxes": 25,
-    "count_mismatches": 25,
-    "signatures": {
-     "count args=0 max=1,5 db=1,3": 25
-    },
-    "type_mismatches": 0
-   },
    "plot~": {
     "boxes": 100,
     "count_mismatches": 35,
@@ -927,15 +826,6 @@
     },
     "type_mismatches": 0
    },
-   "retune~": {
-    "boxes": 5,
-    "count_mismatches": 5,
-    "signatures": {
-     "count args=0 max=3,5 db=3,3": 3,
-     "count args=1 max=3,5 db=3,3": 2
-    },
-    "type_mismatches": 0
-   },
    "router": {
     "boxes": 2,
     "count_mismatches": 2,
@@ -969,14 +859,6 @@
     },
     "type_mismatches": 0
    },
-   "sfrecord~": {
-    "boxes": 3,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal db=control": 3
-    },
-    "type_mismatches": 3
-   },
    "snowfall~": {
     "boxes": 2,
     "count_mismatches": 1,
@@ -984,22 +866,6 @@
      "count args=1 max=1,3 db=1,1": 1
     },
     "type_mismatches": 0
-   },
-   "stash~": {
-    "boxes": 5,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal/signal db=signal/control": 5
-    },
-    "type_mismatches": 5
-   },
-   "stretch~": {
-    "boxes": 2,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=control/control db=signal/control": 2
-    },
-    "type_mismatches": 2
    },
    "string.sprintf": {
     "boxes": 6,
@@ -1533,14 +1399,6 @@
     },
     "type_mismatches": 0
    },
-   "mc.adsr~": {
-    "boxes": 3,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal/signal/control/control/control db=control/control/control/control/control": 3
-    },
-    "type_mismatches": 3
-   },
    "mcs.sig~": {
     "boxes": 17,
     "count_mismatches": 17,
@@ -1993,14 +1851,6 @@
     },
     "type_mismatches": 0
    },
-   "playlist~": {
-    "boxes": 2,
-    "count_mismatches": 2,
-    "signatures": {
-     "count args=0 max=1,5 db=1,3": 2
-    },
-    "type_mismatches": 0
-   },
    "poke~": {
     "boxes": 4,
     "count_mismatches": 4,
@@ -2093,14 +1943,6 @@
     },
     "type_mismatches": 0
    },
-   "mc.live.gain~": {
-    "boxes": 7,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal/control/control/control db=signal/signal/control/control": 7
-    },
-    "type_mismatches": 7
-   },
    "outlet": {
     "boxes": 37,
     "count_mismatches": 37,
@@ -2124,14 +1966,6 @@
      "count args=0 max=3,4 db=3,1": 7
     },
     "type_mismatches": 0
-   },
-   "stash~": {
-    "boxes": 2,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal/signal db=signal/control": 2
-    },
-    "type_mismatches": 2
    },
    "twist~": {
     "boxes": 1,
@@ -2177,14 +2011,6 @@
      "count args=0 max=1,4 db=2,5": 2
     },
     "type_mismatches": 0
-   },
-   "mc.live.gain~": {
-    "boxes": 7,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal/control/control/control db=signal/signal/control/control": 7
-    },
-    "type_mismatches": 7
    },
    "mc.separate~": {
     "boxes": 1,
@@ -3989,14 +3815,6 @@
      "count args=0 max=1,0 db=2,0": 6
     },
     "type_mismatches": 0
-   },
-   "playlist~": {
-    "boxes": 2,
-    "count_mismatches": 2,
-    "signatures": {
-     "count args=0 max=1,5 db=1,3": 2
-    },
-    "type_mismatches": 0
    }
   },
   "package:grainflow": {
@@ -4164,22 +3982,6 @@
     },
     "type_mismatches": 0
    },
-   "mc.live.gain~": {
-    "boxes": 26,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal/control/control/control db=signal/signal/control/control": 26
-    },
-    "type_mismatches": 26
-   },
-   "mc.selector~": {
-    "boxes": 1,
-    "count_mismatches": 0,
-    "signatures": {
-     "type max=signal db=control": 1
-    },
-    "type_mismatches": 1
-   },
    "mc.separate~": {
     "boxes": 8,
     "count_mismatches": 8,
@@ -4193,14 +3995,6 @@
     "count_mismatches": 61,
     "signatures": {
      "count args=0 max=1,0 db=2,0": 61
-    },
-    "type_mismatches": 0
-   },
-   "playlist~": {
-    "boxes": 9,
-    "count_mismatches": 9,
-    "signatures": {
-     "count args=0 max=1,5 db=1,3": 9
     },
     "type_mismatches": 0
    }
@@ -4312,14 +4106,6 @@
      "count args=4 max=4,4 db=1,1": 1
     },
     "type_mismatches": 0
-   },
-   "playlist~": {
-    "boxes": 11,
-    "count_mismatches": 11,
-    "signatures": {
-     "count args=0 max=1,5 db=1,3": 11
-    },
-    "type_mismatches": 0
    }
   }
  },
@@ -4328,8 +4114,8 @@
   "bundle": {
    "boxes_compared": 77909,
    "files": 2114,
-   "mismatching_boxes": 4523,
-   "mismatching_names": 123,
+   "mismatching_boxes": 4344,
+   "mismatching_names": 107,
    "version": "9.2.0"
   },
   "package:CNMAT Externals": {
@@ -4342,15 +4128,15 @@
   "package:FlowSwing": {
    "boxes_compared": 664,
    "files": 7,
-   "mismatching_boxes": 70,
-   "mismatching_names": 6,
+   "mismatching_boxes": 67,
+   "mismatching_names": 5,
    "version": "2.6.1"
   },
   "package:FluidCorpusManipulation": {
    "boxes_compared": 7312,
    "files": 78,
-   "mismatching_boxes": 942,
-   "mismatching_names": 55,
+   "mismatching_boxes": 940,
+   "mismatching_names": 54,
    "version": "1.0.9"
   },
   "package:RNBO": {
@@ -4363,15 +4149,15 @@
   "package:Rhythm and Time Toolkit": {
    "boxes_compared": 1654,
    "files": 27,
-   "mismatching_boxes": 101,
-   "mismatching_names": 9,
+   "mismatching_boxes": 92,
+   "mismatching_names": 7,
    "version": "1.0.0"
   },
   "package:abclib": {
    "boxes_compared": 5278,
    "files": 67,
-   "mismatching_boxes": 238,
-   "mismatching_names": 7,
+   "mismatching_boxes": 231,
+   "mismatching_names": 6,
    "version": "1.1.2"
   },
   "package:bach": {
@@ -4405,15 +4191,15 @@
   "package:ease": {
    "boxes_compared": 377,
    "files": 6,
-   "mismatching_boxes": 17,
-   "mismatching_names": 3,
+   "mismatching_boxes": 15,
+   "mismatching_names": 2,
    "version": "1.2.3"
   },
   "package:grainflow": {
    "boxes_compared": 2389,
    "files": 45,
-   "mismatching_boxes": 227,
-   "mismatching_names": 25,
+   "mismatching_boxes": 191,
+   "mismatching_names": 22,
    "version": "2.1.2"
   },
   "package:ml.star": {
@@ -4426,17 +4212,17 @@
   "package:nn_tilde": {
    "boxes_compared": 506,
    "files": 4,
-   "mismatching_boxes": 62,
-   "mismatching_names": 7,
+   "mismatching_boxes": 51,
+   "mismatching_names": 6,
    "version": "v1.6.0"
   }
  },
  "totals": {
   "boxes_compared": 126700,
-  "count_mismatch_names": 323,
+  "count_mismatch_names": 321,
   "files": 3430,
-  "mismatching_boxes": 8919,
-  "mismatching_names": 402,
-  "type_mismatch_names": 89
+  "mismatching_boxes": 8670,
+  "mismatching_names": 386,
+  "type_mismatch_names": 73
  }
 }
