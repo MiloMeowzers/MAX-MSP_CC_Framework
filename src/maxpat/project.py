@@ -114,22 +114,44 @@ def set_active_project(name: str, base_dir: Path) -> None:
 def get_active_project(base_dir: Path) -> dict | None:
     """Get the currently active project.
 
-    Returns None if:
-    - No .active-project.json exists
-    - The referenced project directory doesn't exist (desync detection)
+    Never raises for a bad pointer file. Returns None (silently) when:
+    - patches/.active-project.json is missing or not a regular file
+    - it cannot be read or decoded (OSError, invalid UTF-8, invalid JSON,
+      including an empty file)
+    - the decoded value is not a JSON object
+    - its "name" is missing or not a non-empty string -- this includes the
+      legacy pointer that installers before Q8 wrote (no "name" key)
+    - the name is "." or "..", or contains "/", "\\" or NUL (it must be a
+      single path component under patches/)
+    - the referenced project directory doesn't exist (desync detection)
+
+    The name is deliberately NOT checked against _PROJECT_NAME_RE: existing
+    projects such as FDNVerb predate that rule.
 
     Args:
         base_dir: Root directory containing the patches/ folder.
 
     Returns:
-        Dict with 'name' and 'activated' keys, or None.
+        The pointer dict (with 'name' and 'activated' keys), or None.
     """
     active_file = base_dir / "patches" / ".active-project.json"
     if not active_file.is_file():
         return None
 
-    data = json.loads(active_file.read_text())
-    project_dir = base_dir / "patches" / data["name"]
+    try:
+        data = json.loads(active_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    name = data.get("name")
+    if not isinstance(name, str) or not name:
+        return None
+    if name in (".", "..") or any(c in name for c in ("/", "\\", "\0")):
+        return None
+
+    project_dir = base_dir / "patches" / name
     if not project_dir.is_dir():
         return None
 

@@ -7,7 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 
-const VERSION = '1.0.0';
+// The release workflow stamps package.json from the tag before publishing.
+const VERSION = require('../package.json').version;
 const RELEASE_URL = 'https://github.com/taylorbrook/MAX-MSP_CC_Framework/releases/latest/download/framework.tar.gz';
 const MAX_REDIRECTS = 5;
 
@@ -52,15 +53,11 @@ fs.mkdirSync(targetDir, { recursive: true });
 
 downloadAndExtract(RELEASE_URL, targetDir)
   .then(() => {
-    // Create patches directory and active-project config
+    // Create the patches directory. No active-project pointer is written: a fresh install has no active project until /max-new or /max-switch sets one.
     const patchesDir = path.join(targetDir, 'patches');
     if (!fs.existsSync(patchesDir)) {
       fs.mkdirSync(patchesDir, { recursive: true });
     }
-    fs.writeFileSync(
-      path.join(patchesDir, '.active-project.json'),
-      JSON.stringify({ active_project: null }, null, 2) + '\n'
-    );
 
     // Initialize git repo
     try {

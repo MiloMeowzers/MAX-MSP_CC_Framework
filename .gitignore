@@ -14,3 +14,7 @@ __pycache__/
 
 # GSD runtime sentinels (per-run dispatch state, not project content)
 .gsd/
+
+# Per-checkout local state -- never committed (review B11, I2)
+/patches/.active-project.json
+/.claude/projects/

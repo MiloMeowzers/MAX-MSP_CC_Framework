@@ -1,6 +1,8 @@
 """Tests for project lifecycle management -- creation, tracking, status."""
 
 import json
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -22,6 +24,19 @@ from src.maxpat.project import (
     save_project_config,
     get_allowed_packages,
 )
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+_INSTALLER_JS = REPO_ROOT / "installer" / "bin" / "create-max-framework.js"
+# Built from parts so no source line reads like a live pointer write.
+_POINTER_NAME = "." + "active-project.json"
+_LEGACY_KEY = "active" + "_project"
+
+
+def _write_pointer(base: Path, text: str) -> None:
+    """Create base/patches/ and write ``text`` as the active-project pointer."""
+    patches = base / "patches"
+    patches.mkdir(parents=True, exist_ok=True)
+    (patches / _POINTER_NAME).write_text(text)
 
 
 class TestCreateProject:
@@ -118,6 +133,74 @@ class TestActiveProject:
 
         result = get_active_project(tmp_path)
         assert result is None
+
+    # -- Q8 I1 / B11: missing, malformed and legacy pointer files ------------
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            json.dumps({_LEGACY_KEY: None}),  # what installers before Q8 wrote
+            "{not json",
+            "",
+            json.dumps(["my-synth"]),
+            json.dumps({"name": None}),
+            json.dumps({"name": 5}),
+            json.dumps({"name": ""}),
+        ],
+        ids=["legacy", "invalid-json", "empty", "list", "null-name", "int-name", "empty-name"],
+    )
+    def test_get_active_malformed_pointer_returns_none(self, tmp_path: Path, text: str):
+        _write_pointer(tmp_path, text)
+        assert get_active_project(tmp_path) is None
+
+    def test_get_active_traversal_name_returns_none(self, tmp_path: Path):
+        (tmp_path / "outside").mkdir()
+        _write_pointer(tmp_path, json.dumps({"name": "../outside"}))
+        assert get_active_project(tmp_path) is None
+
+    def test_get_active_multi_component_name_returns_none(self, tmp_path: Path):
+        (tmp_path / "patches" / "a" / "b").mkdir(parents=True)
+        _write_pointer(tmp_path, json.dumps({"name": "a/b"}))
+        assert get_active_project(tmp_path) is None
+
+    def test_get_active_uppercase_project_still_resolves(self, tmp_path: Path):
+        """Guard: existing projects like FDNVerb fail _PROJECT_NAME_RE but are valid."""
+        (tmp_path / "patches" / "FDNVerb").mkdir(parents=True)
+        data = {"name": "FDNVerb", "activated": "x"}
+        _write_pointer(tmp_path, json.dumps(data))
+        assert get_active_project(tmp_path) == data
+
+
+class TestInstallers:
+    """Q8 I1 / I3: installers write no pointer; --version reads package.json."""
+
+    def test_install_sh_writes_no_pointer(self):
+        lines = (REPO_ROOT / "install.sh").read_text().splitlines()
+        code = "\n".join(ln for ln in lines if not ln.strip().startswith("#"))
+        assert _POINTER_NAME not in code
+        assert _LEGACY_KEY not in code
+
+    def test_npm_installer_writes_no_pointer(self):
+        lines = _INSTALLER_JS.read_text().splitlines()
+        code = "\n".join(
+            ln for ln in lines if not ln.strip().startswith(("//", "/*", "*"))
+        )
+        assert _POINTER_NAME not in code
+        assert _LEGACY_KEY not in code
+
+    @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+    @pytest.mark.parametrize("flag", ["--version", "-v"])
+    def test_version_reads_package_json(self, tmp_path: Path, flag: str):
+        pkg = json.loads((REPO_ROOT / "installer" / "package.json").read_text())
+        r = subprocess.run(
+            [shutil.which("node"), str(_INSTALLER_JS), flag],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert r.returncode == 0, r.stderr
+        assert r.stdout.strip() == "create-max-framework v" + pkg["version"]
 
 
 class TestReadStatus:

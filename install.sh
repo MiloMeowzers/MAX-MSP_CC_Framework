@@ -44,9 +44,8 @@ echo ""
 mkdir -p "$PROJECT_NAME"
 curl -fsSL "$RELEASE_URL" | tar xz -C "$PROJECT_NAME" --strip-components=1
 
-# Create patches directory and active-project config
+# Create the patches directory. No active-project pointer is written: a fresh install has no active project until /max-new or /max-switch sets one.
 mkdir -p "${PROJECT_NAME}/patches"
-echo '{"active_project": null}' > "${PROJECT_NAME}/patches/.active-project.json"
 
 # Initialize git repo
 git init "$PROJECT_NAME" > /dev/null 2>&1 || true
