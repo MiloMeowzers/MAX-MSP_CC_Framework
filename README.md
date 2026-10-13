@@ -169,7 +169,7 @@ The `patches/` directory contains example and user-created projects:
 
 The framework has four core layers:
 
-**Direct .maxpat Editing (v3.0)** — The `.maxpat` file is the single source of truth. Patches are loaded into `Patcher`/`Box`/`Patchline` objects, edited with search, mutation, and graph query methods, and written back with lossless round-trip preservation. All user state — positions, colors, varnames, custom attributes, manual edits made in MAX — survives the load-edit-save cycle. Every patch save auto-commits to git for safety. No intermediate code generation step.
+**Direct .maxpat Editing (v3.0)** — The `.maxpat` file is the single source of truth. Patches are loaded into `Patcher`/`Box`/`Patchline` objects, edited with search, mutation, and graph query methods, and written back with lossless round-trip preservation. All user state — positions, colors, varnames, custom attributes, manual edits made in MAX — survives the load-edit-save cycle. Every patch save under `patches/<project>/` auto-commits just that file to git for safety. No intermediate code generation step.
 
 **Object Database** — A verified knowledge base of 3,445 MAX objects (`.claude/max-objects/`) across 7 core domains plus 29 packages (bundled and community) with full inlet/outlet schemas, typed per-outlet signal metadata (`signal_role`), domain-restriction and install-state flags, argument formats, variable I/O rules, RNBO compatibility flags, and package source tracking. Package objects include DB-driven bpatcher dimensions for layout. Every object used in generation is looked up here — nothing is guessed.
 

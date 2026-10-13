@@ -146,6 +146,8 @@ The structure critic (`src/maxpat/critics/structure_critic.py`) detects fan-out 
 
 Every `save_patch_roundtrip()`, `write_gendsp()`, and `write_js()` call automatically commits the saved file to git via `auto_commit_patch()`. This prevents work loss from stash operations, branch switches, or concurrent Claude instances.
 
+Before writing, `save_patch_roundtrip()` and `write_gendsp()` also run a save gate (validation + critics against the `original_text` / HEAD / on-disk baseline): a save that introduces a blocker or reorders a subpatcher's inlets/outlets raises `PatchValidationError` and nothing is written or committed; removed cords emit a `SaveGateWarning`. Fix the findings; `force=True` bypasses only with user confirmation. See CLAUDE.md Rule #7.
+
 ### Rules
 
 1. **Never use `git stash`** during patch work. Stash operations have caused orphaned work in the past (3 stashes with significant patch changes were found abandoned). If you need to switch context, commit first.

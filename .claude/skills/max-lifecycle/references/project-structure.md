@@ -77,7 +77,7 @@ updated: 2026-03-10T15:30:00Z
 ```
 
 ### generated/
-All output from specialist agents. Files written via `save_patch_roundtrip()`, `write_gendsp()`, `write_js()` hooks which trigger validation on write.
+All output from specialist agents. Files written via `save_patch_roundtrip()`, `write_gendsp()`, `write_js()` hooks. `.maxpat`/`.gendsp` saves run a blocking save gate (new blockers or port reorders raise `PatchValidationError`); `.js` validation is report-only.
 
 ### test-results/
 Manual test results from `/max-test` runs. Each file is a completed checklist with Pass/Fail markings.

@@ -46,7 +46,7 @@ Summary:
 
 ### Edited Patches (via /max-iterate)
 
-The critic loop applies equally to edited patches. After edits, `validate_patch()` runs, then `review_patch()` on `patcher.to_dict()`. The save path is `save_patch_roundtrip()`. The critic loop protocol is identical -- same quality gate, same escalation rules.
+The critic loop applies equally to edited patches. After edits, `validate_patch()` runs, then `review_patch()` on `patcher.to_dict()`. The save path is `save_patch_roundtrip()`, which re-runs both pipelines as a save gate and raises `PatchValidationError` on any blocker the edit introduced -- the critic loop should already have cleared them, so the gate is a backstop. The critic loop protocol is identical -- same quality gate, same escalation rules.
 
 ## Severity Handling
 
