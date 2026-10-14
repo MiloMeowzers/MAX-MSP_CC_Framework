@@ -8,7 +8,9 @@ Rules:
   SCAFFOLD-04: ensure_parameter_enable sets parameter_enable=1 + saved_attribute_attributes
                on parameter-capable live.* controls only (LIVE_PARAMETER_OBJECTS);
                Float type/unitstyle defaults only on float-native classes
-  SCAFFOLD-05: ensure_m4l_prefixes adds --- prefix to named objects
+  SCAFFOLD-05: ensure_m4l_prefixes adds the --- prefix to device-local names
+               consistently across every reference, or leaves a name alone
+               and reports it (plan_m4l_prefixes; review D2)
   D-01: Never override existing non-empty values
   D-02: Derive longname from varname (snake_case -> Title Case)
   D-03: Derive shortname from longname via abbreviation table (max 8 chars)
@@ -25,7 +27,11 @@ Rules:
 
 from __future__ import annotations
 
+import re
+import warnings
+
 from src.maxpat.critics.m4l_critic import LIVE_PARAMETER_OBJECTS
+from src.maxpat.db_lookup import inner_patcher_scope
 from src.maxpat.m4l_constants import ParamType, UnitStyle
 from src.maxpat.utils import get_box_name
 
@@ -195,40 +201,298 @@ def ensure_parameter_enable(patch_dict: dict) -> dict:
 # SCAFFOLD-05: M4L --- prefix enforcement
 # ---------------------------------------------------------------------------
 
-_NAMED_OBJECTS = frozenset({
-    "buffer~", "coll", "dict", "send", "receive", "send~", "receive~", "value"
+# Declarers: max-scope newobj boxes whose tokens[1] is a device-local name
+# that gets the --- prefix. Lone receive names are treated as device-local
+# too (as before); a name meant to cross devices must be left out of polish
+# or it will be prefixed.
+_DECLARER_CLASSES = frozenset({
+    "send", "s", "receive", "r", "send~", "receive~",
+    "value", "v", "pv", "coll", "dict", "buffer~",
 })
 
+# Buffer users whose tokens[1] names a buffer~ (rewritten with it).
+_BUFFER_USER_CLASSES = frozenset({
+    "play~", "groove~", "index~", "peek~", "poke~", "info~",
+})
 
-def ensure_m4l_prefixes(patch_dict: dict) -> dict:
-    """Add --- prefix to named objects in M4L devices.
+# Objects whose code or patcher lives outside the dict (cannot be scanned).
+_EXTERNAL_CLASSES = frozenset({
+    "js", "jsui", "v8", "v8ui", "node.script", "poly~", "mc.poly~",
+    "pfft~", "bpatcher",
+})
+_EXTERNAL_MAXCLASSES = frozenset({"jsui", "v8ui", "bpatcher"})
 
-    Scans all boxes recursively. Targets objects whose first argument
-    is a name (not #N substitution or empty). Idempotent (D-05).
+# Subpatcher title tokens are labels, not name references.
+_TITLE_CLASSES = frozenset({"p", "patcher"})
+
+# Box attributes that never hold a name reference.
+_IGNORED_ATTR_KEYS = frozenset({
+    "id", "maxclass", "varname", "text", "code", "fontname", "fontface",
+    "annotation", "annotation_name", "hint", "comment",
+})
+
+_SKIPPED_MAXCLASSES = frozenset({"comment", "live.comment"})
+_MESSAGE_SPLIT = re.compile(r"([,;])")
+_PREFIX = "---"
+
+
+def _walk_patch_boxes(boxes: list, scope: str = "max"):
+    """Yield (box, scope) for every box, recursing into embedded patchers.
+
+    Comments (comment / live.comment) are skipped entirely.
     """
-    patcher = patch_dict.get("patcher", {})
-    boxes = patcher.get("boxes", [])
-    _prefix_boxes(boxes)
+    for entry in boxes or []:
+        if not isinstance(entry, dict):
+            continue
+        box = entry.get("box", entry)
+        if not isinstance(box, dict):
+            continue
+        if box.get("maxclass") in _SKIPPED_MAXCLASSES:
+            continue
+        yield box, scope
+        inner = box.get("patcher")
+        if isinstance(inner, dict):
+            yield from _walk_patch_boxes(
+                inner.get("boxes", []), inner_patcher_scope(box, scope))
+
+
+def _tokens(box: dict) -> list[str]:
+    text = box.get("text")
+    return text.split() if isinstance(text, str) else []
+
+
+def _is_float(token: str) -> bool:
+    try:
+        float(token)
+    except ValueError:
+        return False
+    return True
+
+
+def _candidate_name(token: str) -> bool:
+    return not (token.startswith(("#", "$", "@", _PREFIX)) or _is_float(token))
+
+
+def _message_segments(text: str) -> list[str]:
+    """Split message text on , and ; keeping the separators."""
+    return _MESSAGE_SPLIT.split(text)
+
+
+def _set_target(segment: str) -> str | None:
+    """The name of a ``set <name>`` message segment, else None."""
+    toks = segment.split()
+    if len(toks) >= 2 and toks[0] == "set":
+        return toks[1]
+    return None
+
+
+def _describe(box: dict) -> str:
+    text = box.get("text")
+    label = f"'{text}'" if isinstance(text, str) and text else box.get("maxclass", "?")
+    return f"{box.get('id', '?')} {label}"
+
+
+def plan_m4l_prefixes(patch_dict: dict, db=None) -> dict:
+    """Decide which device-local names can be --- prefixed consistently.
+
+    Pure: never mutates patch_dict. Returns
+    ``{"rename": [sorted names], "report_only": {name: reason}}``.
+
+    Rules (review D2, Q15):
+      - Candidates are tokens[1] of max-scope newobj declarers
+        (send/s/receive/r/send~/receive~/value/v/pv/coll/dict/buffer~) that
+        are not #/$/@/--- prefixed and not numbers. Names inside gen~/rnbo~
+        patchers are never candidates.
+      - Positions the pass can rewrite (max scope only): tokens[1] of
+        declarers and buffer users (play~/groove~/index~/peek~/poke~/info~),
+        waveform~ ``buffername``, and the target of ``set <name>`` message
+        segments.
+      - A candidate is report-only when the name also appears anywhere else
+        (any scope): as another newobj token (p/patcher titles excepted), a
+        message token (e.g. ``; level 0.5``), a delimited word in a box's
+        ``code``, or a top-level string attribute of another box (e.g. umenu
+        items); when it is used by a buffer user / waveform~ with no local
+        ``buffer~ <name>``; when ``---<name>`` already exists; or when the
+        patch holds external code or patchers (js, jsui, v8, v8ui,
+        node.script, poly~, mc.poly~, pfft~, non-embedded bpatcher, or an
+        abstraction unknown to the object DB), which cannot be scanned.
+      - Comments are never read or written.
+    """
+    patcher = patch_dict.get("patcher", {}) if isinstance(patch_dict, dict) else {}
+    walked = list(_walk_patch_boxes(patcher.get("boxes", [])))
+
+    candidates: set[str] = set()
+    buffer_declared: set[str] = set()
+    for box, scope in walked:
+        if scope != "max" or box.get("maxclass") != "newobj":
+            continue
+        toks = _tokens(box)
+        if len(toks) >= 2 and toks[0] in _DECLARER_CLASSES and _candidate_name(toks[1]):
+            candidates.add(toks[1])
+            if toks[0] == "buffer~":
+                buffer_declared.add(toks[1])
+
+    report: dict[str, str] = {}
+
+    def block(name: str, reason: str) -> None:
+        if name in candidates and name not in report:
+            report[name] = reason
+
+    if not candidates:
+        return {"rename": [], "report_only": {}}
+
+    # External code / patchers: nothing can be proven safe.
+    external = None
+    for box, scope in walked:
+        if scope != "max" or isinstance(box.get("patcher"), dict):
+            continue
+        maxclass = box.get("maxclass", "")
+        if maxclass in _EXTERNAL_MAXCLASSES:
+            external = box
+            break
+        if maxclass == "newobj":
+            toks = _tokens(box)
+            if not toks:
+                continue
+            if toks[0] in _EXTERNAL_CLASSES:
+                external = box
+                break
+            if db is None:
+                from src.maxpat.db_lookup import ObjectDatabase
+                db = ObjectDatabase()
+            if not db.exists(toks[0]):
+                external = box
+                break
+    if external is not None:
+        reason = f"external code/patcher {_describe(external)} cannot be scanned"
+        for name in sorted(candidates):
+            block(name, reason)
+
+    prefixed_present: set[str] = set()
+    for box, scope in walked:
+        maxclass = box.get("maxclass", "")
+        toks = _tokens(box)
+        if maxclass == "newobj":
+            if toks and toks[0] in _TITLE_CLASSES:
+                continue
+            handled = (scope == "max" and len(toks) >= 2
+                       and (toks[0] in _DECLARER_CLASSES
+                            or toks[0] in _BUFFER_USER_CLASSES))
+            for i, tok in enumerate(toks):
+                if tok.startswith(_PREFIX):
+                    prefixed_present.add(tok[len(_PREFIX):])
+                if handled and i == 1:
+                    continue
+                block(tok, f"newobj {_describe(box)} references it")
+            if (scope == "max" and len(toks) >= 2
+                    and toks[0] in _BUFFER_USER_CLASSES
+                    and toks[1] not in buffer_declared):
+                block(toks[1], f"{_describe(box)} uses it with no local buffer~")
+        elif maxclass == "message":
+            text = box.get("text") if isinstance(box.get("text"), str) else ""
+            for seg in _message_segments(text):
+                if seg in (",", ";"):
+                    continue
+                target = _set_target(seg) if scope == "max" else None
+                for i, tok in enumerate(seg.split()):
+                    tok = tok.rstrip(",;")
+                    if tok.startswith(_PREFIX):
+                        prefixed_present.add(tok[len(_PREFIX):])
+                    if target is not None and i == 1:
+                        continue
+                    block(tok, f"message {_describe(box)} references it")
+        else:
+            for key, value in box.items():
+                if key in _IGNORED_ATTR_KEYS:
+                    continue
+                values = value if isinstance(value, list) else [value]
+                for v in values:
+                    if not isinstance(v, str):
+                        continue
+                    if v.startswith(_PREFIX):
+                        prefixed_present.add(v[len(_PREFIX):])
+                    if (key == "buffername" and maxclass == "waveform~"
+                            and scope == "max"):
+                        if v not in buffer_declared:
+                            block(v, f"{_describe(box)} uses it with no local buffer~")
+                        continue
+                    block(v, f"{_describe(box)} attribute '{key}' references it")
+        code = box.get("code")
+        if isinstance(code, str):
+            for name in candidates:
+                if re.search(r"(?<![\w.~\-])" + re.escape(name) + r"(?![\w.~\-])", code):
+                    block(name, f"code in {_describe(box)} references it")
+
+    for name in sorted(candidates & prefixed_present):
+        block(name, f"{_PREFIX}{name} already exists; renaming would merge them")
+
+    return {
+        "rename": sorted(candidates - set(report)),
+        "report_only": {name: report[name] for name in sorted(report)},
+    }
+
+
+def ensure_m4l_prefixes(patch_dict: dict, db=None) -> dict:
+    """Add the --- prefix to device-local names, consistently or not at all.
+
+    Uses plan_m4l_prefixes: each name in ``rename`` is rewritten at every
+    handled max-scope position (declarer / buffer-user tokens[1], waveform~
+    buffername, ``set <name>`` message targets), so senders, receivers and
+    buffer users stay linked. Names in ``report_only`` are left untouched and
+    reported in one UserWarning. Comments are never touched. Idempotent.
+    """
+    plan = plan_m4l_prefixes(patch_dict, db=db)
+    rename = set(plan["rename"])
+    if rename:
+        patcher = patch_dict.get("patcher", {})
+        for box, scope in list(_walk_patch_boxes(patcher.get("boxes", []))):
+            if scope != "max":
+                continue
+            _rename_in_box(box, rename)
+    if plan["report_only"]:
+        details = "; ".join(f"{n} ({r})" for n, r in plan["report_only"].items())
+        warnings.warn(
+            f"ensure_m4l_prefixes: left {len(plan['report_only'])} name(s) "
+            f"unprefixed: {details}",
+            UserWarning,
+            stacklevel=2,
+        )
     return patch_dict
 
 
-def _prefix_boxes(boxes: list[dict]) -> None:
-    """Recursively scan and prefix named objects."""
-    for box_entry in boxes:
-        box = box_entry.get("box", box_entry)
-        text = box.get("text", "")
-        if text:
-            tokens = text.split()
-            if (len(tokens) >= 2
-                    and tokens[0] in _NAMED_OBJECTS
-                    and not tokens[1].startswith("---")
-                    and not tokens[1].startswith("#")):
-                tokens[1] = "---" + tokens[1]
-                box["text"] = " ".join(tokens)
-
-        inner_patcher = box.get("patcher")
-        if inner_patcher:
-            _prefix_boxes(inner_patcher.get("boxes", []))
+def _rename_in_box(box: dict, rename: set) -> None:
+    """Rewrite the handled positions of one max-scope box."""
+    maxclass = box.get("maxclass", "")
+    if maxclass == "newobj":
+        toks = _tokens(box)
+        if (len(toks) >= 2 and toks[1] in rename
+                and (toks[0] in _DECLARER_CLASSES
+                     or toks[0] in _BUFFER_USER_CLASSES)):
+            toks[1] = _PREFIX + toks[1]
+            box["text"] = " ".join(toks)
+    elif maxclass == "message":
+        text = box.get("text")
+        if not isinstance(text, str):
+            return
+        parts = _message_segments(text)
+        changed = False
+        for i, seg in enumerate(parts):
+            if seg in (",", ";"):
+                continue
+            target = _set_target(seg)
+            if target is not None and target in rename:
+                parts[i] = re.sub(
+                    r"^(\s*set\s+)" + re.escape(target) + r"(?=\s|$)",
+                    lambda m: m.group(1) + _PREFIX + target,
+                    seg,
+                )
+                changed = True
+        if changed:
+            box["text"] = "".join(parts)
+    elif maxclass == "waveform~":
+        name = box.get("buffername")
+        if isinstance(name, str) and name in rename:
+            box["buffername"] = _PREFIX + name
 
 
 # ---------------------------------------------------------------------------
@@ -549,7 +813,8 @@ def polish_m4l_device(patch_dict: dict) -> dict:
 
     Composes all five polish passes in correct order:
     1. ensure_parameter_enable -- sets parameter_enable=1 + saa defaults (SCAFFOLD-04)
-    2. ensure_m4l_prefixes -- adds --- prefix to named objects (SCAFFOLD-05)
+    2. ensure_m4l_prefixes -- --- prefixes names consistently; warns on names it
+       cannot rename safely (SCAFFOLD-05)
     3. derive_parameter_names -- fills longname/shortname/varname gaps
     4. organize_push_banks -- groups params into semantic Push banks
     5. populate_info_text -- sets annotation/annotation_name

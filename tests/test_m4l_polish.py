@@ -1255,6 +1255,243 @@ class TestM4LPrefixEnforcement:
         assert result_box["text"] == "send ---myname"
 
 
+    # -- D2 (Q15): consistent renaming or report-only ----------------------
+
+    @staticmethod
+    def _texts(patch):
+        return [e["box"].get("text") for e in patch["patcher"]["boxes"]]
+
+    def test_send_and_short_receive_renamed_together(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes
+
+        patch = _make_patch_with_controls([
+            _nb("obj-1", "send level"),
+            _nb("obj-2", "r level"),
+            _comment("obj-3", "send the dry signal"),
+        ])
+        ensure_m4l_prefixes(patch)
+        assert self._texts(patch) == [
+            "send ---level", "r ---level", "send the dry signal",
+        ]
+
+    def test_buffer_and_users_renamed_together(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes
+
+        patch = _buffer_users_patch()
+        ensure_m4l_prefixes(patch)
+        assert self._texts(patch) == [
+            "buffer~ ---grains",
+            "play~ ---grains 2",
+            "groove~ ---grains 2",
+            "index~ ---grains",
+            "peek~ ---grains",
+            "poke~ ---grains",
+            "info~ ---grains",
+            "set ---grains, bang",
+            None,
+        ]
+        assert patch["patcher"]["boxes"][-1]["box"]["buffername"] == "---grains"
+
+    def test_value_pv_and_signal_names(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes
+
+        patch = _make_patch_with_controls([
+            _nb("obj-1", "s x1"), _nb("obj-2", "receive x1"),
+            _nb("obj-3", "v x2"), _nb("obj-4", "value x2"),
+            _nb("obj-5", "pv x3"), _nb("obj-6", "pv x3"),
+            _nb("obj-7", "send~ x4"), _nb("obj-8", "receive~ x4"),
+        ])
+        ensure_m4l_prefixes(patch)
+        assert self._texts(patch) == [
+            "s ---x1", "receive ---x1", "v ---x2", "value ---x2",
+            "pv ---x3", "pv ---x3", "send~ ---x4", "receive~ ---x4",
+        ]
+
+    def test_semicolon_message_blocks_rename(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes, plan_m4l_prefixes
+
+        patch = _make_patch_with_controls([
+            _nb("obj-1", "send level"),
+            _nb("obj-2", "r level"),
+            _msg("obj-3", "; level 0.5"),
+        ])
+        assert "level" in plan_m4l_prefixes(patch)["report_only"]
+        with pytest.warns(UserWarning, match="level"):
+            ensure_m4l_prefixes(patch)
+        assert self._texts(patch) == ["send level", "r level", "; level 0.5"]
+
+    def test_unhandled_consumer_blocks_rename(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes, plan_m4l_prefixes
+
+        patch = _make_patch_with_controls([
+            _nb("obj-1", "buffer~ grains"), _nb("obj-2", "record~ grains"),
+        ])
+        assert "grains" in plan_m4l_prefixes(patch)["report_only"]
+        with pytest.warns(UserWarning, match="grains"):
+            ensure_m4l_prefixes(patch)
+        assert self._texts(patch) == ["buffer~ grains", "record~ grains"]
+
+    def test_buffer_user_without_local_buffer_blocks(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes, plan_m4l_prefixes
+
+        patch = _make_patch_with_controls([
+            _nb("obj-1", "send grains"), _nb("obj-2", "play~ grains"),
+        ])
+        assert "grains" in plan_m4l_prefixes(patch)["report_only"]
+        with pytest.warns(UserWarning, match="grains"):
+            ensure_m4l_prefixes(patch)
+        assert self._texts(patch) == ["send grains", "play~ grains"]
+
+    @pytest.mark.parametrize("external", [
+        {"maxclass": "newobj", "text": "js helper.js"},
+        {"maxclass": "jsui"},
+        {"maxclass": "newobj", "text": "poly~ voice 4"},
+        {"maxclass": "newobj", "text": "myabstraction"},
+    ], ids=["js", "jsui", "poly~", "abstraction"])
+    def test_external_script_blocks_everything(self, external):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes, plan_m4l_prefixes
+
+        ext = dict(external, id="obj-9", numinlets=1, numoutlets=1)
+        patch = _make_patch_with_controls([
+            ext, _nb("obj-1", "send a"), _nb("obj-2", "r a"),
+        ])
+        before = copy.deepcopy(patch)
+        assert "a" in plan_m4l_prefixes(patch)["report_only"]
+        with pytest.warns(UserWarning, match=r"unprefixed: a \(external"):
+            ensure_m4l_prefixes(patch)
+        assert patch == before
+
+    def test_codebox_reference_blocks(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes, plan_m4l_prefixes
+
+        gen = _nb("obj-2", "gen~")
+        gen["patcher"] = {"boxes": [{"box": {
+            "id": "obj-1", "maxclass": "codebox", "numinlets": 0,
+            "numoutlets": 1,
+            "code": 'Buffer b("grains");\nout1 = peek(b, 0, 0);',
+        }}], "lines": []}
+        patch = _make_patch_with_controls([_nb("obj-1", "buffer~ grains"), gen])
+        assert "grains" in plan_m4l_prefixes(patch)["report_only"]
+        with pytest.warns(UserWarning, match="grains"):
+            ensure_m4l_prefixes(patch)
+        assert self._texts(patch)[0] == "buffer~ grains"
+
+    def test_gen_and_rnbo_inner_names_not_collected(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes, plan_m4l_prefixes
+
+        rnbo = _nb("obj-1", "rnbo~")
+        rnbo["patcher"] = {"boxes": [{"box": _nb("obj-1", "send foo")}],
+                           "lines": []}
+        patch = _make_patch_with_controls([rnbo])
+        before = copy.deepcopy(patch)
+        assert plan_m4l_prefixes(patch) == {"rename": [], "report_only": {}}
+        ensure_m4l_prefixes(patch)
+        assert patch == before
+
+    def test_prefixed_collision_blocks(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes, plan_m4l_prefixes
+
+        patch = _make_patch_with_controls([
+            _nb("obj-1", "send level"), _nb("obj-2", "receive ---level"),
+        ])
+        assert "level" in plan_m4l_prefixes(patch)["report_only"]
+        with pytest.warns(UserWarning, match="level"):
+            ensure_m4l_prefixes(patch)
+        assert self._texts(patch) == ["send level", "receive ---level"]
+
+    def test_message_box_is_not_a_declarer(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes, plan_m4l_prefixes
+
+        patch = _make_patch_with_controls([_msg("obj-1", "send level")])
+        assert plan_m4l_prefixes(patch) == {"rename": [], "report_only": {}}
+        ensure_m4l_prefixes(patch)
+        assert self._texts(patch) == ["send level"]
+
+    def test_subpatcher_title_does_not_block(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes
+
+        sub = _nb("obj-3", "p fx")
+        sub["patcher"] = {"boxes": [], "lines": []}
+        patch = _make_patch_with_controls([
+            _nb("obj-1", "send fx"), _nb("obj-2", "r fx"), sub,
+        ])
+        ensure_m4l_prefixes(patch)
+        assert self._texts(patch) == ["send ---fx", "r ---fx", "p fx"]
+
+    def test_plan_is_pure(self):
+        from src.maxpat.m4l_polish import plan_m4l_prefixes
+
+        patch = _buffer_users_patch()
+        before = copy.deepcopy(patch)
+        plan = plan_m4l_prefixes(patch)
+        assert patch == before
+        assert plan == {"rename": ["grains"], "report_only": {}}
+
+    def test_nested_rename_is_consistent(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes
+
+        sub = _nb("obj-2", "p effects")
+        sub["patcher"] = {"boxes": [{"box": _nb("obj-1", "r level")}],
+                          "lines": []}
+        patch = _make_patch_with_controls([_nb("obj-1", "send level"), sub])
+        ensure_m4l_prefixes(patch)
+        assert self._texts(patch)[0] == "send ---level"
+        inner = patch["patcher"]["boxes"][1]["box"]["patcher"]["boxes"][0]["box"]
+        assert inner["text"] == "r ---level"
+
+    def test_idempotent_with_reports(self):
+        from src.maxpat.m4l_polish import ensure_m4l_prefixes
+
+        patch = _buffer_users_patch()
+        patch["patcher"]["boxes"] += [
+            {"box": _nb("obj-20", "send level")},
+            {"box": _nb("obj-21", "r level")},
+            {"box": _msg("obj-22", "; level 0.5")},
+        ]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ensure_m4l_prefixes(patch)
+            once = copy.deepcopy(patch)
+            ensure_m4l_prefixes(patch)
+        assert patch == once
+        assert once["patcher"]["boxes"][0]["box"]["text"] == "buffer~ ---grains"
+        assert once["patcher"]["boxes"][-3]["box"]["text"] == "send level"
+
+
+def _nb(box_id: str, text: str) -> dict:
+    """A newobj box dict."""
+    return {"id": box_id, "maxclass": "newobj", "text": text,
+            "numinlets": 1, "numoutlets": 1, "outlettype": [""]}
+
+
+def _msg(box_id: str, text: str) -> dict:
+    """A message box dict."""
+    return {"id": box_id, "maxclass": "message", "text": text,
+            "numinlets": 2, "numoutlets": 1, "outlettype": [""]}
+
+
+def _comment(box_id: str, text: str) -> dict:
+    """A comment box dict."""
+    return {"id": box_id, "maxclass": "comment", "text": text,
+            "numinlets": 1, "numoutlets": 0}
+
+
+def _buffer_users_patch() -> dict:
+    """buffer~ grains plus every handled buffer user (D2 repro, case 2)."""
+    return _make_patch_with_controls([
+        _nb("obj-1", "buffer~ grains"),
+        _nb("obj-2", "play~ grains 2"),
+        _nb("obj-3", "groove~ grains 2"),
+        _nb("obj-4", "index~ grains"),
+        _nb("obj-5", "peek~ grains"),
+        _nb("obj-6", "poke~ grains"),
+        _nb("obj-7", "info~ grains"),
+        _msg("obj-8", "set grains, bang"),
+        {"id": "obj-9", "maxclass": "waveform~", "buffername": "grains",
+         "numinlets": 5, "numoutlets": 6},
+    ])
+
+
 # ===========================================================================
 # TestEnforcementIntegration -- SCAFFOLD-04 + SCAFFOLD-05 via polish_m4l_device
 # ===========================================================================
