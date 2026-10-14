@@ -2,10 +2,10 @@
 gsd_state_version: "1.0"
 milestone: v5.0
 status: completed
-last_updated: "2026-10-13T17:56:05.603Z"
+last_updated: "2026-10-14T00:26:01.537Z"
 last_activity: 2026-10-13
 last_activity_desc: "Completed quick task 261001-hwb: Max 9.2.0 update — object DB re-synced from the installed bundle, 9.2 guidance added"
-state_head: 67108d121fc15a6a336edf2da6307182b75843a5
+state_head: 3261b39d3999aa925cb448ce7b8c9fb2f869ecdd
 progress:
   total_phases: 5
   completed_phases: 5
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v5.0)
 Phase: —
 Plan: —
 Status: v5.0 shipped; awaiting `/gsd-new-milestone` to start next cycle
-Last activity: 2026-10-13 - Completed quick task 261013-e43: Implement Q11 — per-port override merge and corrected overrides
+Last activity: 2026-10-13 - Completed quick task 261013-mv6: Implement Q12 — restrict RNBO/Gen-only names, fix GenExpr namespace
 
 Previous: 2026-09-21 - Completed quick task 260921-kfd: SF-04/SF-06/SF-07 closed — CLAUDE.md `live.*` extraction note revised (all 30 resolve); added refpage `<c74object name>`-is-authoritative rule and refpage-placeholder (54.5%) counts-not-types / never-overwrite-overrides rule
 
@@ -105,6 +105,7 @@ None.
 | 261012-ubw | Implement Q9 in .planning/reviews/2026-10-11-fix-plan.md — help-box I/O oracle | 2026-10-13 | a8bce3a | Verified | [261012-ubw-implement-q9-in-planning-reviews-2026-10](./quick/261012-ubw-implement-q9-in-planning-reviews-2026-10/) |
 | 261013-cyg | Implement Q10 in .planning/reviews/2026-10-11-fix-plan.md — correct argument-dependent I/O counts | 2026-10-13 | 46465a7 | Verified | [261013-cyg-implement-q10-in-planning-reviews-2026-1](./quick/261013-cyg-implement-q10-in-planning-reviews-2026-1/) |
 | 261013-e43 | Implement Q11 in .planning/reviews/2026-10-11-fix-plan.md — per-port override merge and corrected overrides | 2026-10-13 | 67108d1 | Verified | [261013-e43-implement-q11-in-planning-reviews-2026-1](./quick/261013-e43-implement-q11-in-planning-reviews-2026-1/) |
+| 261013-mv6 | Implement Q12 in .planning/reviews/2026-10-11-fix-plan.md — restrict RNBO/Gen-only names, fix GenExpr namespace | 2026-10-14 | 3261b39d | Verified | [261013-mv6-implement-q12-in-planning-reviews-2026-1](./quick/261013-mv6-implement-q12-in-planning-reviews-2026-1/) |
 
 ## Deferred Items
 
