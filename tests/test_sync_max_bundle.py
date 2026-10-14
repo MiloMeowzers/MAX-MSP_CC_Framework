@@ -1200,3 +1200,84 @@ class TestPackageDestinations:
         argv = ["--apply", "new", "--apply", "define", "--names", "pkg.fresh", "pkg.alias", "jit.gl.fresh"]
         assert _run(world, *argv) == 0
         assert _sha(overrides) == before
+
+
+# ── ui_maxclasses survey (review C5, Q13) ─────────────────────────
+
+
+def _write_json(path: Path, data) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def _survey_tree(tmp_path: Path) -> Path:
+    c74 = tmp_path / "C74"
+    _write_json(c74 / "help" / "max" / "w.maxhelp", {"patcher": {"boxes": [
+        {"box": {"maxclass": "toggle", "patching_rect": [0, 0, 24, 24]}},
+        {"box": {"maxclass": "zz.widget", "patching_rect": [0, 0, 100, 40]}},
+        {"box": {"maxclass": "newobj", "text": "p tab", "patcher": {"boxes": [
+            {"box": {"maxclass": "zz.widget", "patching_rect": [0, 0, 120, 60]}},
+            {"box": {"maxclass": "newobj", "text": "zz.textual 1"}},
+        ]}}},
+    ]}})
+    _write_json(c74 / "patchers" / "x.maxpat", {"patcher": {"boxes": [
+        {"box": {"maxclass": "newobj", "text": "zz.both"}},
+        {"box": {"maxclass": "zz.both", "patching_rect": [0, 0, 10, 10]}},
+        {"box": {"maxclass": "zz.label", "text": "hello", "patching_rect": [0, 0, 50, 20]}},
+    ]}})
+    (c74 / "patchers" / "bad.maxpat").write_text("{not json", encoding="utf-8")
+    ref = c74 / "docs" / "refpages" / "max-ref" / "y.maxref.xml"
+    ref.parent.mkdir(parents=True, exist_ok=True)
+    ref.write_text(_refpage("y"), encoding="utf-8")
+    return c74
+
+
+class TestUiMaxclassSurvey:
+    def test_survey(self, tmp_path: Path) -> None:
+        survey = sync.survey_maxclasses(_survey_tree(tmp_path))
+        assert survey["files_scanned"] == 2
+        assert len(survey["read_errors"]) == 1
+        assert survey["read_errors"][0]["file"] == "patchers/bad.maxpat"
+        widget = survey["observed"]["zz.widget"]
+        assert widget["boxes"] == 2
+        assert widget["files"] == 1
+        assert widget["top_level_boxes"] == 1
+        assert widget["median_size"] == [110.0, 50.0]
+        assert widget["example"] == "help/max/w.maxhelp"
+        assert survey["observed"]["zz.label"]["text_boxes"] == 1
+        assert survey["newobj"]["zz.textual"] == 1
+        assert survey["newobj"]["p"] == 1
+        assert survey["newobj"]["zz.both"] == 1
+
+    def test_section(self, tmp_path: Path) -> None:
+        survey = sync.survey_maxclasses(_survey_tree(tmp_path))
+        section = sync.section_ui_maxclasses(
+            survey, ui_set=frozenset({"toggle", "zz.textual", "zz.unseen"})
+        )
+        assert section["available"] is True
+        assert section["survey_set"] == ["toggle", "zz.both", "zz.label", "zz.widget"]
+        assert section["missing_from_ui_set"] == ["zz.both", "zz.label", "zz.widget"]
+        assert section["newobj_only_in_bundle"] == ["zz.textual"]
+        assert section["unobserved_in_bundle"] == ["zz.unseen"]
+        assert section["written_both_ways"] == ["zz.both"]
+        assert section["evidence"]["zz.both"]["newobj_boxes"] == 1
+        assert section["newobj_evidence"] == {"zz.textual": 1}
+        assert section["ui_set_size"] == 3
+
+    def test_run_report_section_is_read_only(self, world: dict) -> None:
+        from src.maxpat.maxclass_map import UI_MAXCLASSES
+
+        before = _tree_bytes(world["db_root"])
+        map_py = sync.ROOT / "src" / "maxpat" / "maxclass_map.py"
+        sizing_py = sync.ROOT / "src" / "maxpat" / "sizing.py"
+        hashes = (_sha(map_py), _sha(sizing_py))
+        report = sync.run_report(world["db_root"], world["app"])
+        section = report["sections"]["ui_maxclasses"]
+        assert section["available"] is True
+        assert section["ui_set_size"] == len(UI_MAXCLASSES)
+        assert "ui maxclasses" in sync.format_summary(report)
+        assert _tree_bytes(world["db_root"]) == before
+        assert (_sha(map_py), _sha(sizing_py)) == hashes
+
+    def test_section_key_is_last(self) -> None:
+        assert sync.SECTION_KEYS[-1] == "ui_maxclasses"

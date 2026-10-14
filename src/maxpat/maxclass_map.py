@@ -14,6 +14,10 @@ Non-UI ``live.*`` objects (live.thisdevice, live.path, live.object, ...) and
 ``p``/``patcher`` are deliberately absent on bundle evidence: Max 9.2 saves
 each of them only as a newobj box with the name in ``text``, never with its
 own maxclass (review C4, fix-plan Q13).
+
+``python3 tools/sync_max_bundle.py`` (section ``ui_maxclasses``) regenerates
+the set from a survey of every box in the bundle's .maxpat/.maxhelp files for
+review; the set itself is still edited by hand.
 """
 
 # All UI maxclass names that use their own name (NOT "newobj") in .maxpat files.
@@ -73,6 +77,14 @@ UI_MAXCLASSES: frozenset[str] = frozenset({
     "dict.view",      # Max-bundled dict viewer UI widget
     "dada.bounce",    # dada package physics-balls UI widget
     "bach.roll",      # bach package notation-roll UI widget
+    # Bundle-verified UI widgets (review C5, Q13): Max 9.2.0 saves each with
+    # its own maxclass and never as newobj; `python3 tools/sync_max_bundle.py`
+    # (section ui_maxclasses) re-derives the evidence. markup and progress
+    # have no DB entry, so add_box refuses them (Rule #1).
+    "jit.fpsgui", "jit.playlist", "jit.pworld", "plot~",
+    "mc.ezdac~", "mc.live.gain~", "markup", "v8ui", "v8.codebox",
+    "live.adsrui", "mc.number~", "itable", "multirange", "gridmeter~",
+    "node.codebox", "text.codebox", "zplane~", "progress",
 })
 
 

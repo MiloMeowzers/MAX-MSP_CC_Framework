@@ -24,6 +24,8 @@ What this is, and is not
   refuses any path inside ``patches/`` or the DB tree, and
   :func:`write_extraction_log` (``--refresh-log``), which can only replace
   ``<db-root>/extraction-log.json``.
+* It never writes ``src/maxpat/maxclass_map.py`` or ``src/maxpat/sizing.py``;
+  the ``ui_maxclasses`` section only reports against them.
 
 Sources of shape
 ----------------
@@ -41,6 +43,9 @@ Sources of shape
   page with no DB entry. The DB does not record inherited attributes as a
   rule, so these are report-only and land only for attribute names given
   explicitly to ``--apply inherited --attributes``.
+* UI maxclasses: every box maxclass the bundle's .maxpat/.maxhelp files carry
+  (section ``ui_maxclasses``, review C5 / Q13), diffed against UI_MAXCLASSES;
+  report-only.
 
 The refpage parser is the repo's one parser, ``parse_standard_xml`` in
 ``.claude/scripts/extract_objects.py``, loaded by file path -- not a copy.
@@ -74,6 +79,7 @@ import importlib.util
 import json
 import os
 import re
+import statistics
 import sys
 import tempfile
 import warnings
@@ -87,6 +93,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.maxpat.db_lookup import ObjectDatabase  # noqa: E402
+from src.maxpat.maxclass_map import UI_MAXCLASSES  # noqa: E402
 from tools.audit_db import (  # noqa: E402
     CORE_DOMAIN_DIRS,
     CORE_REFPAGE_DIRS,
@@ -143,6 +150,7 @@ SECTION_KEYS = [
     "collisions",
     "alias_docs",
     "shadowed_by_override",
+    "ui_maxclasses",
 ]
 
 
@@ -410,6 +418,135 @@ def find_help_boxes(index: dict, name: str, extra_stems: tuple[str, ...] = ()) -
                 "errors": errors,
             }
     return {"help_stem": None, "files": [], "boxes": [], "ui_boxes": [], "errors": errors}
+
+
+# ---------------------------------------------------------------------------
+# UI maxclass survey (review C5, Q13) -- report-only
+# ---------------------------------------------------------------------------
+
+
+def _survey_boxes(patcher, depth: int, rel: str, observed: dict, newobj: dict) -> None:
+    if depth > MAX_PATCHER_DEPTH or not isinstance(patcher, dict):
+        return
+    boxes = patcher.get("boxes")
+    if not isinstance(boxes, list):
+        return
+    for entry in boxes:
+        box = entry.get("box") if isinstance(entry, dict) else None
+        if not isinstance(box, dict):
+            continue
+        maxclass = box.get("maxclass")
+        text = box.get("text")
+        has_text = isinstance(text, str) and bool(text.strip())
+        if maxclass == "newobj":
+            if has_text:
+                token = text.split()[0]
+                newobj[token] = newobj.get(token, 0) + 1
+        elif isinstance(maxclass, str) and maxclass:
+            rec = observed.setdefault(maxclass, {
+                "boxes": 0, "files": set(), "top_level_boxes": 0,
+                "text_boxes": 0, "widths": [], "heights": [], "example": rel,
+            })
+            rec["boxes"] += 1
+            rec["files"].add(rel)
+            if depth == 0:
+                rec["top_level_boxes"] += 1
+            if has_text:
+                rec["text_boxes"] += 1
+            rect = box.get("patching_rect")
+            if (
+                isinstance(rect, list) and len(rect) == 4
+                and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in rect)
+            ):
+                rec["widths"].append(float(rect[2]))
+                rec["heights"].append(float(rect[3]))
+        _survey_boxes(box.get("patcher"), depth + 1, rel, observed, newobj)
+
+
+def survey_maxclasses(c74: Path) -> dict:
+    """Every box maxclass (and newobj first token) in the bundle's patches.
+
+    Walks all .maxpat/.maxhelp files under *c74* at any patcher depth (bounded
+    by MAX_PATCHER_DEPTH). Read-only.
+    """
+    c74 = Path(c74)
+    try:
+        files = sorted(
+            p for p in c74.rglob("*") if p.suffix in (".maxpat", ".maxhelp") and p.is_file()
+        )
+    except (PermissionError, OSError):
+        files = []
+    observed: dict[str, dict] = {}
+    newobj: dict[str, int] = {}
+    read_errors: list[dict] = []
+    scanned = 0
+    for path in files:
+        rel = path.relative_to(c74).as_posix()
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            read_errors.append({"file": rel, "reason": str(exc)})
+            continue
+        scanned += 1
+        if not isinstance(data, dict):
+            continue
+        _survey_boxes(data.get("patcher"), 0, rel, observed, newobj)
+    out: dict[str, dict] = {}
+    for mc in sorted(observed):
+        rec = observed[mc]
+        median = None
+        if rec["widths"]:
+            median = [
+                round(statistics.median(rec["widths"]), 1),
+                round(statistics.median(rec["heights"]), 1),
+            ]
+        out[mc] = {
+            "boxes": rec["boxes"],
+            "files": len(rec["files"]),
+            "top_level_boxes": rec["top_level_boxes"],
+            "text_boxes": rec["text_boxes"],
+            "median_size": median,
+            "example": rec["example"],
+        }
+    return {
+        "files_scanned": scanned,
+        "read_errors": read_errors,
+        "observed": out,
+        "newobj": dict(sorted(newobj.items())),
+    }
+
+
+def section_ui_maxclasses(survey: dict, ui_set=UI_MAXCLASSES) -> dict:
+    """Diff the bundle maxclass survey against UI_MAXCLASSES (report-only)."""
+    observed = survey["observed"]
+    newobj = survey["newobj"]
+    missing = sorted(set(observed) - set(ui_set))
+    newobj_only = sorted(n for n in ui_set if n not in observed and newobj.get(n, 0) >= 1)
+    unobserved = sorted(n for n in ui_set if n not in observed and newobj.get(n, 0) < 1)
+    both = sorted(n for n in observed if newobj.get(n, 0) >= 1)
+    evidence = {
+        n: {**observed[n], "newobj_boxes": newobj.get(n, 0)}
+        for n in sorted(set(missing) | set(both))
+    }
+    return {
+        "available": True,
+        "files_scanned": survey["files_scanned"],
+        "read_errors": survey["read_errors"],
+        "ui_set_size": len(ui_set),
+        "survey_set": sorted(observed),
+        "missing_from_ui_set": missing,
+        "newobj_only_in_bundle": newobj_only,
+        "unobserved_in_bundle": unobserved,
+        "written_both_ways": both,
+        "evidence": evidence,
+        "newobj_evidence": {n: newobj[n] for n in newobj_only},
+        "note": (
+            "Report only: UI_MAXCLASSES (src/maxpat/maxclass_map.py) and UI_SIZES "
+            "(src/maxpat/sizing.py) are edited by hand; add a missing name only after "
+            "checking it is a widget MAX saves with its own maxclass, and remove a "
+            "newobj-only name."
+        ),
+    }
 
 
 def build_bundle_index(max_app: str | Path) -> dict:
@@ -1140,6 +1277,7 @@ def run_report(db_root: str | Path, max_app: str | Path, index: dict | None = No
         ],
         "entries": shadowed,
     }
+    sections["ui_maxclasses"] = section_ui_maxclasses(survey_maxclasses(Path(index["c74"])))
     return {
         "tool": "sync_max_bundle",
         "db_root": str(db_root),
@@ -1877,6 +2015,16 @@ def format_summary(report: dict) -> str:
         f"  shadowed by override: {shadow['count']} objects, "
         f"{len(shadow['with_missing_names'])} lacking refpage names"
         + (f": {', '.join(shadow['with_missing_names'])}" if shadow["with_missing_names"] else "")
+    )
+    ui = s["ui_maxclasses"]
+    lines.append(
+        f"  ui maxclasses   : {len(ui['survey_set'])} in bundle survey "
+        f"({ui['files_scanned']} files); "
+        f"{len(ui['missing_from_ui_set'])} missing from UI_MAXCLASSES"
+        + (f": {', '.join(ui['missing_from_ui_set'])}" if ui["missing_from_ui_set"] else "")
+        + f"; {len(ui['newobj_only_in_bundle'])} UI entries MAX writes only as newobj"
+        + (f": {', '.join(ui['newobj_only_in_bundle'])}" if ui["newobj_only_in_bundle"] else "")
+        + f"; {len(ui['unobserved_in_bundle'])} unobserved (report-only)"
     )
     return "\n".join(lines)
 

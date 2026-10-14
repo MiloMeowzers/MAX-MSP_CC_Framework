@@ -261,9 +261,9 @@ class TestNonUiNamesAreNewobj:
             assert name in UI_MAXCLASSES, name
 
     def test_set_sizes(self):
-        """90 -> 75 names after C4 (T1); 93 after the C5 additions (T3)."""
-        assert len(UI_MAXCLASSES) == 75
-        assert len(UI_SIZES) == 66
+        """90 -> 75 names after C4 (T1), then 93 / 84 after the 18 C5 additions (T3)."""
+        assert len(UI_MAXCLASSES) == 93
+        assert len(UI_SIZES) == 84
 
     @pytest.mark.parametrize("name", REMOVED_LIVE)
     def test_add_box_serializes_as_newobj_with_text(self, name, db):
@@ -443,3 +443,157 @@ class TestBuilderGuards:
             p.insert_into_connection(osc, gain, "p", ["foo"])
         assert self._state(p)[0] == before[0]
         assert self._state(p)[2] == before[2]
+
+
+# ---------------------------------------------------------------------------
+# Review C5 / fix-plan Q13: bundle-verified UI maxclasses
+# ---------------------------------------------------------------------------
+
+# Each appears as a box ``maxclass`` in bundled Max 9.2.0 .maxpat/.maxhelp
+# files (at any patcher depth) and never as a newobj first token.
+ADDED_UI = [
+    "jit.fpsgui", "jit.playlist", "jit.pworld", "plot~", "mc.ezdac~",
+    "mc.live.gain~", "markup", "v8ui", "v8.codebox", "live.adsrui",
+    "mc.number~", "itable", "multirange", "gridmeter~", "node.codebox",
+    "text.codebox", "zplane~", "progress",
+]
+# No DB entry (and no refpage): add_box refuses them rather than guess I/O.
+DB_LESS_UI = ["markup", "progress"]
+BUILDABLE_UI = [n for n in ADDED_UI if n not in DB_LESS_UI]
+
+# Per-axis median patching_rect Max 9.2.0 saved; markup is text-bearing.
+ADDED_UI_SIZES = {
+    "jit.fpsgui": (80.0, 36.0),
+    "jit.playlist": (226.0, 41.0),
+    "jit.pworld": (640.0, 360.0),
+    "plot~": (259.0, 155.0),
+    "mc.ezdac~": (45.0, 45.0),
+    "mc.live.gain~": (136.0, 47.0),
+    "markup": None,
+    "v8ui": (99.0, 90.0),
+    "v8.codebox": (426.0, 258.0),
+    "live.adsrui": (104.7, 50.0),
+    "mc.number~": (75.0, 35.0),
+    "itable": (238.0, 145.0),
+    "multirange": (365.0, 160.0),
+    "gridmeter~": (129.0, 30.0),
+    "node.codebox": (524.0, 301.0),
+    "text.codebox": (535.0, 200.0),
+    "zplane~": (256.0, 256.0),
+    "progress": (32.0, 32.0),
+}
+
+
+class TestBundleVerifiedUiMaxclasses:
+    """C5: the 18 widgets MAX saves with their own maxclass (hermetic)."""
+
+    @pytest.mark.parametrize("name", ADDED_UI)
+    def test_in_ui_set(self, name):
+        assert name in UI_MAXCLASSES
+        assert resolve_maxclass(name) == name
+        assert is_ui_object(name) is True
+
+    def test_sizes(self):
+        for name, size in ADDED_UI_SIZES.items():
+            assert name in UI_SIZES, name
+            assert UI_SIZES[name] == size, name
+            if size is not None:
+                assert calculate_box_size("", name) == size, name
+
+    @pytest.mark.parametrize("name", BUILDABLE_UI)
+    def test_buildable_with_own_maxclass(self, name, db):
+        p = Patcher(db=db)
+        p.add_box(name)
+        box = _box_dicts(p)[0]
+        assert box["maxclass"] == name
+        assert "text" not in box
+        assert box["patching_rect"][2:] == list(UI_SIZES[name])
+        assert (box["numinlets"], box["numoutlets"]) == db.compute_io_counts(name, [])
+
+    @pytest.mark.parametrize("name", DB_LESS_UI)
+    def test_db_less_refused(self, name, db):
+        p = Patcher(db=db)
+        with pytest.raises(ValueError) as exc:
+            p.add_box(name)
+        assert "UI maxclass" in str(exc.value)
+        assert "Rule #1" in str(exc.value)
+        assert p.boxes == []
+
+
+# ---------------------------------------------------------------------------
+# requires_max: the installed bundle is the oracle
+# ---------------------------------------------------------------------------
+
+
+def _c74():
+    from tests.conftest import MAX_APP_PATH
+    return MAX_APP_PATH / "Contents" / "Resources" / "C74"
+
+
+@pytest.fixture(scope="module")
+def bundle_survey():
+    import tools.sync_max_bundle as sync
+    return sync.survey_maxclasses(_c74())
+
+
+@pytest.mark.requires_max
+class TestBundleEvidence:
+    """Each addition is an own-maxclass box; each removal is newobj-only."""
+
+    def test_added_names_are_own_maxclass_only(self, bundle_survey):
+        for name in ADDED_UI:
+            assert bundle_survey["observed"].get(name, {}).get("boxes", 0) >= 1, name
+            assert bundle_survey["newobj"].get(name, 0) == 0, name
+
+    def test_removed_names_are_newobj_only(self, bundle_survey):
+        for name in REMOVED_NON_UI:
+            assert name not in bundle_survey["observed"], name
+            assert bundle_survey["newobj"].get(name, 0) >= 1, name
+
+    def test_section_residuals(self, bundle_survey):
+        import tools.sync_max_bundle as sync
+        section = sync.section_ui_maxclasses(bundle_survey)
+        assert not set(ADDED_UI) & set(section["missing_from_ui_set"])
+        # colorpicker is the documented residual (decision requested in Q13).
+        assert set(section["newobj_only_in_bundle"]) <= {"colorpicker"}
+        assert section["files_scanned"] >= 3000
+        assert section["read_errors"] == []
+
+
+@pytest.mark.requires_max
+class TestBundledHelpPatches:
+    """MAX-saved help patches raise no "Wrong maxclass" at their top level."""
+
+    def test_no_wrong_maxclass_in_bundled_help(self, db):
+        c74 = _c74()
+        roots = [c74 / "help"] + sorted(c74.glob("packages/*/help"))
+        files = []
+        for root in roots:
+            if root.is_dir():
+                files.extend(root.rglob("*.maxhelp"))
+        checked = 0
+        found: list[str] = []
+        for f in sorted(files):
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if not isinstance(d, dict) or not isinstance(d.get("patcher"), dict):
+                continue
+            checked += 1
+            rel = f.relative_to(c74).as_posix()
+            try:
+                msgs = [r.message for r in validate_patch(copy.deepcopy(d), db=db)]
+            except IndexError:
+                # Review G8 (Q19 fixes it): a newobj box with blank text
+                # crashes validate_patch; check the maxclass layer directly.
+                assert any(
+                    e.get("box", {}).get("maxclass") == "newobj"
+                    and not str(e.get("box", {}).get("text") or "").strip()
+                    for e in d["patcher"].get("boxes", [])
+                    if isinstance(e, dict)
+                ), rel
+                msgs = [r.message for r in _validate_maxclass_usage(d)]
+            found.extend(f"{rel}: {m}" for m in msgs if m.startswith("Wrong maxclass"))
+        assert checked >= 2000, checked
+        assert found == [], found[:10]
