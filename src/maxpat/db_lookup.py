@@ -5,6 +5,7 @@ computing variable I/O counts, and checking PD blocklist. This is the single
 source of truth for object existence and metadata during patch generation.
 """
 
+import copy
 import itertools
 import json
 import warnings
@@ -512,6 +513,47 @@ class ObjectDatabase:
                 out.append(item)
         return out
 
+    def attributes(self, name: str) -> dict | None:
+        """Typed attributes: own definitions, plus inherited group-page ones.
+
+        ``lookup()`` returns only the object's own ``attributes``; this adds
+        each groups.json inherited attribute that has a group-page definition
+        (OB3D ``position`` -> float, MC ``chans`` -> int, ...). Own definitions
+        always win. Inherited names no group page types (``dim``, ``fun``,
+        ...) are left out -- see :meth:`selectors`. Returns a deep copy, or
+        None for an unknown name.
+        """
+        canonical = self._aliases.get(name, name)
+        obj = self._objects.get(canonical)
+        if obj is None:
+            return None
+        own = obj.get("attributes")
+        out = copy.deepcopy(own) if isinstance(own, dict) else {}
+        for attr in self._group_names(canonical, "attributes"):
+            definition = self._group_attribute_definitions.get(attr)
+            if isinstance(definition, dict) and "definition" in definition:
+                out.setdefault(attr, copy.deepcopy(definition["definition"]))
+        return out
+
+    def selectors(self, name: str) -> set[str] | None:
+        """Every selector an object accepts: messages, own and inherited attributes.
+
+        The union of :meth:`messages`, the object's own attribute names, and
+        EVERY inherited attribute name (typed or not), since MAX accepts an
+        attribute name as a message. Use this for "is this message legal"
+        checks. Returns a fresh set, or None for an unknown name.
+        """
+        canonical = self._aliases.get(name, name)
+        obj = self._objects.get(canonical)
+        if obj is None:
+            return None
+        out = set(self.messages(canonical) or [])
+        own = obj.get("attributes")
+        if isinstance(own, dict):
+            out.update(own)
+        out.update(self._group_names(canonical, "attributes"))
+        return out
+
     def _validate_variable_io_rules(self) -> None:
         """Assert every loaded rule uses a supported formula.
 
@@ -690,6 +732,11 @@ class ObjectDatabase:
 
         Returns:
             Object dict from the database, or None if not found or filtered.
+            Its ``messages`` / ``attributes`` are the object's OWN lists only:
+            names inherited from a group (MC wrapper, Jitter OB3D/MOP,
+            thispatcher help selectors; groups.json) are excluded. Use
+            :meth:`messages`, :meth:`attributes` or :meth:`selectors` for
+            message / attribute questions.
 
         Note:
             When an outlet has both `signal_role` and `signal` set in the

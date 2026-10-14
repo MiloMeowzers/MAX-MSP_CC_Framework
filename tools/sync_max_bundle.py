@@ -1205,12 +1205,20 @@ def group_attribute_definitions(index: dict) -> tuple[dict[str, dict], list[str]
     return definitions, sorted(ambiguous)
 
 
-def compute_inherited(index: dict, classified: dict, db: ObjectDatabase, raw_db: dict) -> dict:
+def compute_inherited(
+    index: dict,
+    classified: dict,
+    db: ObjectDatabase,
+    raw_db: dict,
+    groups: dict | None = None,
+) -> dict:
     """Group-page attributes an object refpage lists and its raw base entry lacks.
 
     `_pending` is what --apply inherited can write, restricted there to an
     explicit attribute allow-list. `undefined` counts the referenced names no
     group page defines (they cannot be added: there is no type to record).
+    A name `groups` (the groups.json data) already records for the member
+    counts as recorded: it is neither pending nor undefined.
     """
     definitions, ambiguous = group_attribute_definitions(index)
     objects: list[dict] = []
@@ -1232,8 +1240,9 @@ def compute_inherited(index: dict, classified: dict, db: ObjectDatabase, raw_db:
         if not isinstance(raw_attributes, dict):
             continue
         pending = {}
+        recorded = _effective_names(groups, key)
         for attr in referenced:
-            if attr in raw_attributes:
+            if attr in raw_attributes or attr in recorded:
                 continue
             if attr in definitions:
                 pending[attr] = copy.deepcopy(definitions[attr]["definition"])
@@ -1277,7 +1286,16 @@ GROUPS_COMMENT = (
 # Profile `source` per refpage-list family.
 GROUP_SOURCES = {
     "mc": "refpage <mcwrapper>",
+    "jit": "refpage <jittermethodlist>/<jitterattributelist>",
 }
+
+# thispatcher's selectors come from its help patch (decision 7), one profile.
+THISPATCHER_PROFILE = "thispatcher-help"
+
+# Upstream hops walked from a thispatcher box in its help patch.
+THISPATCHER_HOPS = 3
+
+_NUMERIC_TOKEN = re.compile(r"^-?\d")
 
 
 def canonical_groups_bytes(data: dict) -> bytes:
@@ -1324,8 +1342,98 @@ def _ref_group_lists(ref: dict) -> dict[str, tuple[list[str], list[str]]]:
     """{family: (messages, attributes)} a refpage lists by name, non-empty only."""
     lists = {
         "mc": (ref.get("mcwrapper_methods") or [], ref.get("mcwrapper_attributes") or []),
+        "jit": (ref.get("jitter_methods") or [], ref.get("inherited_attributes") or []),
     }
     return {family: pair for family, pair in lists.items() if pair[0] or pair[1]}
+
+
+def _box_text(box: dict) -> str:
+    text = box.get("text")
+    return text.strip() if isinstance(text, str) else ""
+
+
+def _upstream_selectors(box: dict) -> list[str]:
+    """Selectors a message box or `prepend X` box sends downstream."""
+    text = _box_text(box)
+    if box.get("maxclass") == "message":
+        if text.startswith(";"):
+            return []
+        out = []
+        for segment in text.split(","):
+            tokens = segment.split()
+            if tokens and not tokens[0].startswith("$") and not _NUMERIC_TOKEN.match(tokens[0]):
+                out.append(tokens[0])
+        return out
+    if box.get("maxclass") == "newobj":
+        tokens = text.split()
+        if len(tokens) > 1 and tokens[0] == "prepend":
+            return [tokens[1]]
+    return []
+
+
+def _walk_thispatcher_help(patcher, depth: int, found: set[str]) -> None:
+    if depth > MAX_PATCHER_DEPTH or not isinstance(patcher, dict):
+        return
+    boxes: dict[str, dict] = {}
+    for entry in patcher.get("boxes") or []:
+        box = entry.get("box") if isinstance(entry, dict) else None
+        if isinstance(box, dict) and isinstance(box.get("id"), str):
+            boxes[box["id"]] = box
+    upstream: dict[str, list[str]] = {}
+    for entry in patcher.get("lines") or []:
+        line = entry.get("patchline") if isinstance(entry, dict) else None
+        if not isinstance(line, dict):
+            continue
+        source, destination = line.get("source"), line.get("destination")
+        if isinstance(source, list) and isinstance(destination, list) and source and destination:
+            upstream.setdefault(destination[0], []).append(source[0])
+    for bid, box in boxes.items():
+        tokens = _box_text(box).split()
+        if box.get("maxclass") != "newobj" or tokens[:1] != ["thispatcher"]:
+            continue
+        visited = {bid}
+        frontier = [bid]
+        for _hop in range(THISPATCHER_HOPS):
+            following = []
+            for current in frontier:
+                for src in upstream.get(current, []):
+                    if src in visited or src not in boxes:
+                        continue
+                    visited.add(src)
+                    found.update(_upstream_selectors(boxes[src]))
+                    following.append(src)
+            frontier = following
+    for box in boxes.values():
+        _walk_thispatcher_help(box.get("patcher"), depth + 1, found)
+
+
+def thispatcher_help_selectors(index: dict) -> dict | None:
+    """Selectors the thispatcher help patch sends to a thispatcher box.
+
+    For every newobj ``thispatcher`` box (any patcher depth, bounded by
+    MAX_PATCHER_DEPTH), walks patch cords upstream up to THISPATCHER_HOPS
+    hops and collects the first token of each message-box segment (``;``
+    remote-send boxes, ``$N`` and numeric tokens skipped) and the X of each
+    ``prepend X``. Returns None when the bundle ships no thispatcher help.
+    """
+    files = index["help"].get("thispatcher", [])
+    if not files:
+        return None
+    found: set[str] = set()
+    errors: list[dict] = []
+    for path in files:
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            errors.append({"file": path, "reason": str(exc)})
+            continue
+        _walk_thispatcher_help(data.get("patcher") if isinstance(data, dict) else None, 0, found)
+    source = Path(files[0])
+    try:
+        source_rel = source.relative_to(Path(index["c74"])).as_posix()
+    except ValueError:
+        source_rel = source.as_posix()
+    return {"selectors": sorted(found), "source": source_rel, "errors": errors}
 
 
 def compute_groups(
@@ -1333,8 +1441,10 @@ def compute_groups(
 ) -> dict:
     """The groups.json target plus its dry-run report.
 
-    Membership comes only from the per-object refpage lists (``<mcwrapper>``),
-    never from a name prefix; members are keyed by the DB key
+    Membership comes only from the per-object refpage lists (``<mcwrapper>``,
+    ``<jittermethodlist>`` / ``<jitterattributelist>``), never from a name
+    prefix, plus the thispatcher help-patch selectors (fixed profile id
+    ``thispatcher-help``); members are keyed by the DB key
     :func:`locate_base_entry` returns. Names an existing groups.json already
     records are unioned in (a bundle update never shrinks a member). The
     target is in ``_target``.
@@ -1343,7 +1453,10 @@ def compute_groups(
     unresolved: list[str] = []
     for name in sorted(classified["authoritative"]):
         ref = classified["authoritative"][name]
-        if _is_doc_page(ref):
+        # Group pages (whitespace in the name) are never members. A refpage
+        # with no inlet/outlet/method lists can still document a real object
+        # (jit.graph, jit.plot); locate_base_entry decides membership.
+        if any(ch.isspace() for ch in ref["name"]):
             continue
         lists = _ref_group_lists(ref)
         if not lists:
@@ -1360,6 +1473,23 @@ def compute_groups(
             )
             slot["messages"].update(messages)
             slot["attributes"].update(attributes)
+
+    thispatcher_source = None
+    help_errors: list[dict] = []
+    help_selectors = thispatcher_help_selectors(index)
+    if help_selectors is not None:
+        help_errors = help_selectors["errors"]
+        resolved = _muted_lookup(db, "thispatcher")
+        located = (
+            locate_base_entry(resolved, "thispatcher", raw_db) if resolved is not None else None
+        )
+        if help_selectors["selectors"] and located is not None:
+            thispatcher_source = help_selectors["source"]
+            slot = wanted.setdefault(located[1], {}).setdefault(
+                "thispatcher",
+                {"messages": set(), "attributes": set(), "source": thispatcher_source},
+            )
+            slot["messages"].update(help_selectors["selectors"])
 
     existing_members = (existing or {}).get("members") or {}
     existing_profiles = (existing or {}).get("profiles") or {}
@@ -1385,7 +1515,11 @@ def compute_groups(
             attributes = sorted(slot["attributes"])
             if not messages and not attributes:
                 continue
-            pid = _profile_id(family, messages, attributes)
+            pid = (
+                THISPATCHER_PROFILE
+                if family == "thispatcher"
+                else _profile_id(family, messages, attributes)
+            )
             body = {
                 "family": family,
                 "messages": messages,
@@ -1451,7 +1585,8 @@ def compute_groups(
         ),
         "ambiguous_attributes": sorted(a for a in referenced if a in ambiguous),
         "unresolved": unresolved,
-        "thispatcher_source": None,
+        "thispatcher_source": thispatcher_source,
+        "help_read_errors": help_errors,
         "_target": target,
     }
 
@@ -1479,10 +1614,11 @@ def run_report(db_root: str | Path, max_app: str | Path, index: dict | None = No
     sections["new_objects"] = section_new_objects(index, classified, db)
     sections["define_missing"] = section_define_missing(index, db)
     sections["deltas"] = deltas
-    inherited = compute_inherited(index, classified, db, raw_db)
+    existing_groups = load_groups(db_root)
+    inherited = compute_inherited(index, classified, db, raw_db, groups=existing_groups)
     inherited.pop("_pending")
     sections["inherited_attributes"] = inherited
-    groups = compute_groups(index, classified, db, raw_db, load_groups(db_root))
+    groups = compute_groups(index, classified, db, raw_db, existing_groups)
     groups.pop("_target")
     sections["groups"] = groups
     sections["collisions"] = {
@@ -2079,7 +2215,7 @@ def apply_inherited(
     db = load_db(db_root)
     raw_db = load_raw_db(db_root)
     classified = classify_refs(index, db, db_root)
-    inherited = compute_inherited(index, classified, db, raw_db)
+    inherited = compute_inherited(index, classified, db, raw_db, groups=load_groups(db_root))
     wanted = set(attributes)
     touched: dict[str, dict] = {}
     applied = {"objects": [], "attributes": 0, "files": []}
@@ -2193,6 +2329,8 @@ def build_extraction_log(db_root: Path, report: dict, old: dict, now: _dt.dateti
                 "define_missing": sections["define_missing"]["names"],
                 "pending_messages": sections["deltas"]["pending_messages"],
                 "pending_attributes": sections["deltas"]["pending_attributes"],
+                "group_members": sections.get("groups", {}).get("members"),
+                "pending_group_names": sections.get("groups", {}).get("pending_names"),
             },
             "history": history,
         }
