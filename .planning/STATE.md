@@ -106,7 +106,7 @@ None.
 | 261013-cyg | Implement Q10 in .planning/reviews/2026-10-11-fix-plan.md — correct argument-dependent I/O counts | 2026-10-13 | 46465a7 | Verified | [261013-cyg-implement-q10-in-planning-reviews-2026-1](./quick/261013-cyg-implement-q10-in-planning-reviews-2026-1/) |
 | 261013-e43 | Implement Q11 in .planning/reviews/2026-10-11-fix-plan.md — per-port override merge and corrected overrides | 2026-10-13 | 67108d1 | Verified | [261013-e43-implement-q11-in-planning-reviews-2026-1](./quick/261013-e43-implement-q11-in-planning-reviews-2026-1/) |
 | 261013-mv6 | Implement Q12 in .planning/reviews/2026-10-11-fix-plan.md — restrict RNBO/Gen-only names, fix GenExpr namespace | 2026-10-14 | 3261b39d | Verified | [261013-mv6-implement-q12-in-planning-reviews-2026-1](./quick/261013-mv6-implement-q12-in-planning-reviews-2026-1/) |
-| 261013-q58 | Implement Q13 in .planning/reviews/2026-10-11-fix-plan.md — fix UI maxclass set | 2026-10-14 | c306849c | Needs Review | [261013-q58-implement-q13-in-planning-reviews-2026-1](./quick/261013-q58-implement-q13-in-planning-reviews-2026-1/) |
+| 261013-q58 | Implement Q13 in .planning/reviews/2026-10-11-fix-plan.md — fix UI maxclass set | 2026-10-14 | c306849c | Verified (user-confirmed in MAX 2026-10-13) | [261013-q58-implement-q13-in-planning-reviews-2026-1](./quick/261013-q58-implement-q13-in-planning-reviews-2026-1/) |
 
 ## Deferred Items
 
