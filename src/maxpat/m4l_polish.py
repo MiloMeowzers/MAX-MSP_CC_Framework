@@ -6,6 +6,8 @@ annotations for Ableton Info View.
 
 Rules:
   SCAFFOLD-04: ensure_parameter_enable sets parameter_enable=1 + saved_attribute_attributes
+               on parameter-capable live.* controls only (LIVE_PARAMETER_OBJECTS);
+               Float type/unitstyle defaults only on float-native classes
   SCAFFOLD-05: ensure_m4l_prefixes adds --- prefix to named objects
   D-01: Never override existing non-empty values
   D-02: Derive longname from varname (snake_case -> Title Case)
@@ -14,6 +16,7 @@ Rules:
   D-05: Parameters grouped into banks of 8 by semantic function
   D-06: Bank names auto-derived from parameter group content
   D-07: Partial banks padded with empty slots (dash)
+  Banks are stored where MAX keeps them: patcher.parameters.parameterbanks
   D-08: Info text describes what the parameter does
   D-09: Info text includes range from unitstyle and mmin/mmax
   D-10: Existing annotations not overridden
@@ -22,8 +25,20 @@ Rules:
 
 from __future__ import annotations
 
-from src.maxpat.critics.m4l_critic import _LIVE_NO_PARAM
+from src.maxpat.critics.m4l_critic import LIVE_PARAMETER_OBJECTS
 from src.maxpat.m4l_constants import ParamType, UnitStyle
+from src.maxpat.utils import get_box_name
+
+# Parameter-capable live.* classes whose native type is Float, so polish may
+# default parameter_type/unitstyle to Float. Bundle help/example patches
+# (Max 9.2.0) save live.dial as type 0 in 1447/1657 boxes, live.numbox
+# 884/1090, live.slider 34/51 and live.gain~ 444/445. The others are not
+# Float-native (live.tab type 2 in 328/328, live.menu 366/369, live.text
+# 1608/1624, live.toggle 732/735, live.button 218/268; live.grid/live.step
+# type 3), so they keep MAX's class default.
+_FLOAT_NATIVE_LIVE_CLASSES = frozenset({
+    "live.dial", "live.numbox", "live.slider", "live.gain~",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -118,10 +133,11 @@ def _abbreviate_shortname(longname: str, max_len: int = 8) -> str:
 # ---------------------------------------------------------------------------
 
 def _collect_live_controls(boxes: list[dict]) -> list[dict]:
-    """Recursively collect all live.* UI control boxes.
+    """Recursively collect all parameter-capable live.* control boxes.
 
-    Returns the inner box dicts (not the wrapper {"box": ...}).
-    Excludes non-parameter live objects (live.thisdevice, etc).
+    Returns the inner box dicts (not the wrapper {"box": ...}). Only classes
+    in LIVE_PARAMETER_OBJECTS are collected; live.comment, live.line,
+    live.meter~, live.thisdevice, live.banks etc. are not parameters.
     """
     controls: list[dict] = []
 
@@ -130,7 +146,7 @@ def _collect_live_controls(boxes: list[dict]) -> list[dict]:
         maxclass = box.get("maxclass", "")
 
         # Collect live.* controls that are parameterizable
-        if maxclass.startswith("live.") and maxclass not in _LIVE_NO_PARAM:
+        if maxclass in LIVE_PARAMETER_OBJECTS:
             controls.append(box)
 
         # Recurse into subpatchers
@@ -150,7 +166,10 @@ def ensure_parameter_enable(patch_dict: dict) -> dict:
     """Set parameter_enable=1 and saved_attribute_attributes on live.* controls.
 
     Fills gaps only -- never overrides existing values (D-05).
-    Excludes non-parameter live objects per _LIVE_NO_PARAM.
+    Only parameter-capable classes (LIVE_PARAMETER_OBJECTS) are touched.
+    parameter_type / parameter_unitstyle default to Float only on the
+    float-native classes (_FLOAT_NATIVE_LIVE_CLASSES); other controls get an
+    empty valueof dict so MAX's class default type applies.
 
     Must run BEFORE derive_parameter_names() so the valueof dict exists
     when the naming pass fills in parameter_longname.
@@ -165,8 +184,9 @@ def ensure_parameter_enable(patch_dict: dict) -> dict:
 
         saa = box.setdefault("saved_attribute_attributes", {})
         valueof = saa.setdefault("valueof", {})
-        valueof.setdefault("parameter_type", int(ParamType.FLOAT))
-        valueof.setdefault("parameter_unitstyle", int(UnitStyle.FLOAT))
+        if box.get("maxclass") in _FLOAT_NATIVE_LIVE_CLASSES:
+            valueof.setdefault("parameter_type", int(ParamType.FLOAT))
+            valueof.setdefault("parameter_unitstyle", int(UnitStyle.FLOAT))
 
     return patch_dict
 
@@ -320,8 +340,14 @@ def organize_push_banks(patch_dict: dict) -> dict:
     - Collects all live.* controls via _collect_live_controls
     - Classifies each parameter into a semantic group
     - Chunks each group into banks of 8, padding partial banks with "-"
-    - Creates or reuses the live.banks box
-    - Sets _parameter_banks attribute with bank data
+    - Writes patcher.parameters.parameterbanks in MAX's saved shape,
+      {"0": {"index": 0, "name": ..., "parameters": [8 longnames / "-"]}, ...},
+      only when it is absent or all-placeholder (every slot "-", MAX's
+      default); user-defined banks and sibling keys under
+      patcher.parameters are left untouched (D-01)
+    - Creates or reuses the live.banks box (either form); a new one is a
+      newobj with text "live.banks", as MAX saves it. A stale private
+      _parameter_banks key on an existing box is removed.
     """
     patcher = patch_dict.get("patcher", {})
     boxes = patcher.get("boxes", [])
@@ -356,18 +382,30 @@ def organize_push_banks(patch_dict: dict) -> dict:
             name = group_name if bank_num == 0 else f"{group_name} {bank_num + 1}"
             bank_dicts.append({"name": name, "parameters": padded})
 
-    # Find or create live.banks box
+    parameterbanks = {
+        str(i): {"index": i, "name": bank["name"],
+                 "parameters": bank["parameters"]}
+        for i, bank in enumerate(bank_dicts)
+    }
+    parameters = patcher.setdefault("parameters", {})
+    if _banks_replaceable(parameters.get("parameterbanks")):
+        parameters["parameterbanks"] = parameterbanks
+
+    # Find or create live.banks box (newobj text or legacy maxclass form)
     banks_box = None
     for entry in boxes:
         box = entry.get("box", entry)
-        if box.get("maxclass") == "live.banks":
+        if get_box_name(box) == "live.banks":
             banks_box = box
             break
 
     if banks_box is None:
+        # help/m4l/live.banks.maxhelp saves live.banks as a newobj; a
+        # maxclass "live.banks" box is refused by validate_patch.
         banks_box = {
             "id": "obj-live-banks",
-            "maxclass": "live.banks",
+            "maxclass": "newobj",
+            "text": "live.banks",
             "numinlets": 1,
             "numoutlets": 1,
             "outlettype": [""],
@@ -375,9 +413,23 @@ def organize_push_banks(patch_dict: dict) -> dict:
         }
         boxes.append({"box": banks_box})
 
-    banks_box["_parameter_banks"] = {"banks": bank_dicts}
+    banks_box.pop("_parameter_banks", None)
 
     return patch_dict
+
+
+def _banks_replaceable(existing) -> bool:
+    """True when parameterbanks is absent or MAX's all-"-" placeholder."""
+    if not existing:
+        return True
+    if not isinstance(existing, dict):
+        return False
+    for bank in existing.values():
+        if not isinstance(bank, dict):
+            return False
+        if any(slot != "-" for slot in bank.get("parameters", [])):
+            return False
+    return True
 
 
 def _resolve_duplicate_longnames(controls: list[dict]) -> None:

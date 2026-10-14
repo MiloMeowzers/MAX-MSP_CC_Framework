@@ -7,7 +7,13 @@ from varname), D-03 (shortname abbreviation), D-04 (varname from longname).
 
 from __future__ import annotations
 
+import copy
+import re
+import warnings
+
 import pytest
+
+from src.maxpat.utils import get_box_name
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +53,32 @@ def _make_live_control(
         box["saved_attribute_attributes"] = {"valueof": valueof}
 
     return box
+
+
+def _banks(patch: dict) -> list[dict]:
+    """Push banks in MAX's storage, patcher.parameters.parameterbanks, in order."""
+    pb = patch["patcher"]["parameters"]["parameterbanks"]
+    return [pb[k] for k in sorted(pb, key=int)]
+
+
+def _banks_box(patch: dict) -> dict | None:
+    """The live.banks box in either form (newobj text or legacy maxclass)."""
+    for entry in patch["patcher"]["boxes"]:
+        box = entry.get("box", entry)
+        if get_box_name(box) == "live.banks":
+            return box
+    return None
+
+
+def _walk_keys(obj):
+    """Yield every dict key in a nested JSON-like structure."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            yield k
+            yield from _walk_keys(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _walk_keys(v)
 
 
 def _make_patch_with_controls(controls: list[dict], **patcher_props) -> dict:
@@ -313,15 +345,10 @@ class TestPushBanks:
         organize_push_banks(patch)
 
         # Find live.banks box
-        banks_box = None
-        for entry in patch["patcher"]["boxes"]:
-            box = entry.get("box", entry)
-            if box.get("maxclass") == "live.banks":
-                banks_box = box
-                break
+        banks_box = _banks_box(patch)
         assert banks_box is not None, "live.banks box not found"
 
-        banks = banks_box["_parameter_banks"]["banks"]
+        banks = _banks(patch)
         bank_names = [b["name"] for b in banks]
         assert "Pitch" in bank_names
         assert "Filter" in bank_names
@@ -343,15 +370,10 @@ class TestPushBanks:
         patch = _make_patch_with_controls(controls)
         organize_push_banks(patch)
 
-        banks_box = None
-        for entry in patch["patcher"]["boxes"]:
-            box = entry.get("box", entry)
-            if box.get("maxclass") == "live.banks":
-                banks_box = box
-                break
+        banks_box = _banks_box(patch)
         assert banks_box is not None
 
-        bank = banks_box["_parameter_banks"]["banks"][0]
+        bank = _banks(patch)[0]
         assert len(bank["parameters"]) == 8
         assert bank["parameters"].count("-") == 5
 
@@ -367,15 +389,10 @@ class TestPushBanks:
         patch = _make_patch_with_controls(controls)
         organize_push_banks(patch)
 
-        banks_box = None
-        for entry in patch["patcher"]["boxes"]:
-            box = entry.get("box", entry)
-            if box.get("maxclass") == "live.banks":
-                banks_box = box
-                break
+        banks_box = _banks_box(patch)
         assert banks_box is not None
 
-        bank = banks_box["_parameter_banks"]["banks"][0]
+        bank = _banks(patch)[0]
         assert bank["name"] == "Filter"
 
     def test_bank_naming_amp(self):
@@ -390,15 +407,10 @@ class TestPushBanks:
         patch = _make_patch_with_controls(controls)
         organize_push_banks(patch)
 
-        banks_box = None
-        for entry in patch["patcher"]["boxes"]:
-            box = entry.get("box", entry)
-            if box.get("maxclass") == "live.banks":
-                banks_box = box
-                break
+        banks_box = _banks_box(patch)
         assert banks_box is not None
 
-        bank = banks_box["_parameter_banks"]["banks"][0]
+        bank = _banks(patch)[0]
         assert bank["name"] == "Amp"
 
     def test_banks_of_eight(self):
@@ -412,15 +424,10 @@ class TestPushBanks:
         patch = _make_patch_with_controls(controls)
         organize_push_banks(patch)
 
-        banks_box = None
-        for entry in patch["patcher"]["boxes"]:
-            box = entry.get("box", entry)
-            if box.get("maxclass") == "live.banks":
-                banks_box = box
-                break
+        banks_box = _banks_box(patch)
         assert banks_box is not None
 
-        banks = banks_box["_parameter_banks"]["banks"]
+        banks = _banks(patch)
         filter_banks = [b for b in banks if b["name"].startswith("Filter")]
         assert len(filter_banks) == 2
         assert len(filter_banks[0]["parameters"]) == 8
@@ -440,15 +447,10 @@ class TestPushBanks:
         patch = _make_patch_with_controls(controls)
         organize_push_banks(patch)
 
-        banks_box = None
-        for entry in patch["patcher"]["boxes"]:
-            box = entry.get("box", entry)
-            if box.get("maxclass") == "live.banks":
-                banks_box = box
-                break
+        banks_box = _banks_box(patch)
         assert banks_box is not None
 
-        bank = banks_box["_parameter_banks"]["banks"][0]
+        bank = _banks(patch)[0]
         assert bank["name"] == "Main"
 
     def test_live_banks_box_created(self):
@@ -458,19 +460,19 @@ class TestPushBanks:
         controls = [_make_named_control("obj-1", "Filter Cutoff")]
         patch = _make_patch_with_controls(controls)
         # Verify no live.banks exists before
-        for entry in patch["patcher"]["boxes"]:
-            assert entry["box"].get("maxclass") != "live.banks"
+        assert _banks_box(patch) is None
 
         organize_push_banks(patch)
 
-        found = any(
-            entry.get("box", entry).get("maxclass") == "live.banks"
-            for entry in patch["patcher"]["boxes"]
-        )
-        assert found, "live.banks box should have been created"
+        created = _banks_box(patch)
+        assert created is not None, "live.banks box should have been created"
+        # MAX saves live.banks as a newobj (help/m4l/live.banks.maxhelp);
+        # maxclass "live.banks" is refused by validate_patch.
+        assert created["maxclass"] == "newobj"
+        assert created["text"] == "live.banks"
 
     def test_live_banks_box_reused(self):
-        """If live.banks already exists, its _parameter_banks is updated."""
+        """An existing live.banks is reused and its stale _parameter_banks dropped."""
         from src.maxpat.m4l_polish import organize_push_banks
 
         existing_banks_box = {
@@ -490,10 +492,121 @@ class TestPushBanks:
         banks_boxes = [
             entry.get("box", entry)
             for entry in patch["patcher"]["boxes"]
-            if entry.get("box", entry).get("maxclass") == "live.banks"
+            if get_box_name(entry.get("box", entry)) == "live.banks"
         ]
         assert len(banks_boxes) == 1
-        assert len(banks_boxes[0]["_parameter_banks"]["banks"]) > 0
+        assert "_parameter_banks" not in banks_boxes[0]
+        assert len(_banks(patch)) > 0
+
+    def test_reuses_newobj_live_banks(self):
+        """An existing newobj-form live.banks is reused, not duplicated."""
+        from src.maxpat.m4l_polish import organize_push_banks
+
+        existing = {
+            "id": "obj-banks",
+            "maxclass": "newobj",
+            "text": "live.banks",
+            "numinlets": 1,
+            "numoutlets": 1,
+            "outlettype": [""],
+            "patching_rect": [20.0, 20.0, 70.0, 22.0],
+        }
+        controls = [_make_named_control("obj-1", "Filter Cutoff")]
+        patch = _make_patch_with_controls(controls + [existing])
+        organize_push_banks(patch)
+
+        banks_boxes = [
+            entry["box"] for entry in patch["patcher"]["boxes"]
+            if get_box_name(entry["box"]) == "live.banks"
+        ]
+        assert banks_boxes == [existing]
+        assert _banks(patch)[0]["parameters"][0] == "Filter Cutoff"
+
+    def test_parameterbanks_shape(self):
+        """(a) MAX's saved shape: string keys, index/name/parameters x 8."""
+        from src.maxpat.m4l_polish import organize_push_banks
+
+        patch = _make_patch_with_controls(
+            [_make_named_control("obj-1", "Filter Cutoff")]
+        )
+        organize_push_banks(patch)
+
+        assert patch["patcher"]["parameters"]["parameterbanks"] == {
+            "0": {
+                "index": 0,
+                "name": "Filter",
+                "parameters": ["Filter Cutoff", "-", "-", "-",
+                               "-", "-", "-", "-"],
+            },
+        }
+
+    def test_parameters_siblings_preserved(self):
+        """(b) Other keys under patcher.parameters survive."""
+        from src.maxpat.m4l_polish import organize_push_banks
+
+        patch = _make_patch_with_controls(
+            [_make_named_control("obj-1", "Filter Cutoff")],
+            parameters={"obj-20": ["Cutoff", "Cut", 0], "inherited_shortname": 1},
+        )
+        organize_push_banks(patch)
+
+        params = patch["patcher"]["parameters"]
+        assert params["obj-20"] == ["Cutoff", "Cut", 0]
+        assert params["inherited_shortname"] == 1
+        assert "parameterbanks" in params
+
+    def test_max_placeholder_bank_replaced(self):
+        """(c) MAX's all-'-' default bank is replaced by the computed banks."""
+        from src.maxpat.m4l_polish import organize_push_banks
+
+        patch = _make_patch_with_controls(
+            [_make_named_control("obj-1", "Filter Cutoff")],
+            parameters={"parameterbanks": {
+                "0": {"index": 0, "name": "", "parameters": ["-"] * 8},
+            }},
+        )
+        organize_push_banks(patch)
+
+        banks = _banks(patch)
+        assert banks[0]["name"] == "Filter"
+        assert banks[0]["parameters"][0] == "Filter Cutoff"
+
+    def test_user_defined_banks_preserved(self):
+        """(d) A parameterbanks with any real slot is left untouched (D-01)."""
+        from src.maxpat.m4l_polish import organize_push_banks
+
+        user = {
+            "0": {"index": 0, "name": "Mine",
+                  "parameters": ["Pitch Start", "-", "-", "-",
+                                 "-", "-", "-", "-"]},
+        }
+        patch = _make_patch_with_controls(
+            [_make_named_control("obj-1", "Filter Cutoff")],
+            parameters={"parameterbanks": copy.deepcopy(user)},
+        )
+        organize_push_banks(patch)
+
+        assert patch["patcher"]["parameters"]["parameterbanks"] == user
+
+    def test_no_private_bank_key_anywhere(self):
+        """(e) No _parameter_banks key anywhere in polished output."""
+        from src.maxpat.m4l_polish import polish_m4l_device
+
+        patch = _make_patch_with_controls([
+            _make_live_control("obj-1", varname="filter_cutoff"),
+            _make_live_control("obj-2", varname="amp_level"),
+        ])
+        polish_m4l_device(patch)
+
+        assert "_parameter_banks" not in set(_walk_keys(patch))
+
+    def test_empty_device_writes_no_parameterbanks(self):
+        """(f) No controls -> patcher gains no parameters key."""
+        from src.maxpat.m4l_polish import organize_push_banks
+
+        patch = _make_patch_with_controls([])
+        organize_push_banks(patch)
+        assert "parameters" not in patch["patcher"]
 
     def test_params_referenced_by_longname(self):
         """A2: bank parameter entries use parameter_longname values."""
@@ -503,15 +616,10 @@ class TestPushBanks:
         patch = _make_patch_with_controls(controls)
         organize_push_banks(patch)
 
-        banks_box = None
-        for entry in patch["patcher"]["boxes"]:
-            box = entry.get("box", entry)
-            if box.get("maxclass") == "live.banks":
-                banks_box = box
-                break
+        banks_box = _banks_box(patch)
         assert banks_box is not None
 
-        bank = banks_box["_parameter_banks"]["banks"][0]
+        bank = _banks(patch)[0]
         assert "Filter Cutoff" in bank["parameters"]
 
     def test_empty_device_no_banks(self):
@@ -524,7 +632,7 @@ class TestPushBanks:
         # Should not have created a live.banks box
         for entry in patch["patcher"]["boxes"]:
             box = entry.get("box", entry)
-            assert box.get("maxclass") != "live.banks"
+            assert get_box_name(box) != "live.banks"
 
 
 # ===========================================================================
@@ -683,12 +791,7 @@ class TestPolishCompositor:
         valueof = box["saved_attribute_attributes"]["valueof"]
         assert valueof.get("parameter_longname") == "Filter Cutoff"
         # Banks should have been created
-        banks_box = None
-        for entry in patch["patcher"]["boxes"]:
-            b = entry.get("box", entry)
-            if b.get("maxclass") == "live.banks":
-                banks_box = b
-                break
+        banks_box = _banks_box(patch)
         assert banks_box is not None
         # Info text should have been set
         assert box.get("annotation")
@@ -702,14 +805,9 @@ class TestPolishCompositor:
         polish_m4l_device(patch)
 
         # Banks should reference "Filter Cutoff" (derived longname)
-        banks_box = None
-        for entry in patch["patcher"]["boxes"]:
-            b = entry.get("box", entry)
-            if b.get("maxclass") == "live.banks":
-                banks_box = b
-                break
+        banks_box = _banks_box(patch)
         assert banks_box is not None
-        bank = banks_box["_parameter_banks"]["banks"][0]
+        bank = _banks(patch)[0]
         assert "Filter Cutoff" in bank["parameters"]
 
     def test_polish_returns_patch_dict(self):
@@ -730,7 +828,124 @@ class TestPolishCompositor:
         # No banks created
         for entry in result["patcher"]["boxes"]:
             box = entry.get("box", entry)
-            assert box.get("maxclass") != "live.banks"
+            assert get_box_name(box) != "live.banks"
+
+
+    def test_polished_skeleton_passes_save_gate(self, tmp_path):
+        """A polished add_m4l_gen_synth device saves as a new file (no blockers)."""
+        from src.maxpat.hooks import save_patch_roundtrip
+        from src.maxpat.m4l_polish import polish_m4l_device
+        from src.maxpat.patcher import Patcher
+
+        p = Patcher()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            p.add_m4l_gen_synth([("freq", 20.0, 2000.0), ("amp", 0.0, 0.5)])
+            d = p.to_dict()
+            polish_m4l_device(d)
+            save_patch_roundtrip(d, tmp_path / "dev.maxpat")
+        assert (tmp_path / "dev.maxpat").exists()
+
+
+# ===========================================================================
+# TestParameterCapableSet -- D5: refpage-grounded parameter-capable live.*
+# ===========================================================================
+
+_REFPAGE_PARAMETER_LIVE = frozenset({
+    "live.arrows", "live.button", "live.dial", "live.drop", "live.gain~",
+    "live.grid", "live.menu", "live.numbox", "live.slider", "live.step",
+    "live.tab", "live.text", "live.toggle",
+})
+
+
+class TestParameterCapableSet:
+    """Only refpage parameter-capable live.* classes get parameter attributes."""
+
+    def test_set_is_refpage_literal(self):
+        from src.maxpat.critics.m4l_critic import LIVE_PARAMETER_OBJECTS
+
+        assert LIVE_PARAMETER_OBJECTS == _REFPAGE_PARAMETER_LIVE
+
+    @pytest.mark.parametrize("maxclass", ["live.comment", "live.line", "live.meter~"])
+    def test_non_parameters_get_no_parameter_attrs(self, maxclass):
+        from src.maxpat.m4l_polish import polish_m4l_device
+
+        box = {"id": "obj-1", "maxclass": maxclass, "numinlets": 1, "numoutlets": 1}
+        patch = _make_patch_with_controls([box])
+        polish_m4l_device(patch)
+
+        for key in ("parameter_enable", "saved_attribute_attributes", "varname",
+                    "annotation", "annotation_name"):
+            assert key not in box, f"{maxclass} gained {key}"
+
+    def test_critic_ignores_non_parameters(self):
+        from src.maxpat.critics.m4l_critic import review_m4l
+
+        boxes = [
+            {"id": "obj-1", "maxclass": "newobj", "text": "plugout~",
+             "numinlets": 2, "numoutlets": 2, "outlettype": ["signal", "signal"]},
+            {"id": "obj-2", "maxclass": "live.comment", "numinlets": 1, "numoutlets": 0},
+            {"id": "obj-3", "maxclass": "live.line", "numinlets": 1, "numoutlets": 0},
+            {"id": "obj-4", "maxclass": "live.meter~", "numinlets": 1, "numoutlets": 1},
+            {"id": "obj-5", "maxclass": "live.dial", "numinlets": 1, "numoutlets": 2},
+        ]
+        patch = _make_patch_with_controls(boxes)
+        findings = [r.finding for r in review_m4l(patch, "instrument")
+                    if "missing parameter_enable" in r.finding]
+        assert len(findings) == 1
+        assert findings[0].startswith("live.dial (obj-5)")
+
+    @pytest.mark.parametrize(
+        "maxclass", ["live.dial", "live.numbox", "live.slider", "live.gain~"])
+    def test_float_native_defaults(self, maxclass):
+        from src.maxpat.m4l_polish import ensure_parameter_enable
+
+        box = {"id": "obj-1", "maxclass": maxclass, "numinlets": 1, "numoutlets": 2}
+        ensure_parameter_enable(_make_patch_with_controls([box]))
+
+        valueof = box["saved_attribute_attributes"]["valueof"]
+        assert valueof["parameter_type"] == 0       # Float
+        assert valueof["parameter_unitstyle"] == 1  # Float
+
+    @pytest.mark.parametrize(
+        "maxclass",
+        ["live.tab", "live.menu", "live.text", "live.toggle", "live.button"])
+    def test_enum_native_gets_no_type_default(self, maxclass):
+        from src.maxpat.m4l_polish import ensure_parameter_enable
+
+        box = {"id": "obj-1", "maxclass": maxclass, "numinlets": 1, "numoutlets": 2}
+        ensure_parameter_enable(_make_patch_with_controls([box]))
+
+        assert box["parameter_enable"] == 1
+        valueof = box["saved_attribute_attributes"]["valueof"]
+        assert "parameter_type" not in valueof
+        assert "parameter_unitstyle" not in valueof
+
+    def test_existing_type_never_overridden(self):
+        from src.maxpat.m4l_polish import ensure_parameter_enable
+
+        box = {"id": "obj-1", "maxclass": "live.tab", "numinlets": 1,
+               "numoutlets": 3, "parameter_enable": 1,
+               "saved_attribute_attributes": {"valueof": {"parameter_type": 2}}}
+        ensure_parameter_enable(_make_patch_with_controls([box]))
+        assert box["saved_attribute_attributes"]["valueof"]["parameter_type"] == 2
+
+    @pytest.mark.requires_max
+    def test_set_matches_refpages(self):
+        """The set is exactly the live.* refpages carrying <parameter />."""
+        from src.maxpat.critics.m4l_critic import LIVE_PARAMETER_OBJECTS
+        from tests.conftest import MAX_APP_PATH
+
+        refpages = MAX_APP_PATH / "Contents" / "Resources" / "C74" / "docs" / "refpages"
+        name_re = re.compile(r'<c74object\b[^>]*\bname="([^"]+)"')
+        param_re = re.compile(r"<parameter\s*/?>")
+        found = set()
+        for path in refpages.rglob("*.maxref.xml"):
+            text = path.read_text(encoding="utf-8", errors="replace")
+            m = name_re.search(text)
+            if m and m.group(1).startswith("live.") and param_re.search(text):
+                found.add(m.group(1))
+        assert found == set(LIVE_PARAMETER_OBJECTS)
 
 
 # ===========================================================================

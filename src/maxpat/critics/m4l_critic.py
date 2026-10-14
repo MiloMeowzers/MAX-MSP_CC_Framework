@@ -8,7 +8,8 @@ does not detect:
     need plugout~; midi_effect needs midiin + midiout; live.thisdevice is
     not required)
   - Duplicate parameter_longname across device (including subpatchers)
-  - Device quality: openinpresentation, devicewidth, parameter_enable
+  - Device quality: openinpresentation, devicewidth, parameter_enable on
+    parameter-capable live.* controls (LIVE_PARAMETER_OBJECTS; review D5)
   - Missing info text (annotation) on parameter controls
   - Missing live.banks for Push controller bank organization
 
@@ -42,10 +43,18 @@ _M4L_GAIN_STAGE_NAMES = frozenset({"gain~", "live.gain~"})
 # Top-level box names that mark a patch as an M4L device (Q4 / D4).
 _M4L_MARKER_NAMES = frozenset({"plugin~", "plugout~", "live.thisdevice"})
 
-# live.* maxclasses that should NOT require parameter_enable
-_LIVE_NO_PARAM = frozenset({"live.thisdevice", "live.banks", "live.path",
-                             "live.object", "live.observer", "live.remote~",
-                             "live.scope~", "live.colors"})
+# Parameter-capable live.* classes (review D5, Q15): exactly the live.*
+# refpages in Max 9.2.0 m4l-ref that carry a <parameter /> element (name read
+# from <c74object name>, never the filename). Pinned by
+# tests/test_m4l_polish.py::TestParameterCapableSet::test_set_matches_refpages
+# (requires_max). live.comment, live.line, live.meter~, live.banks,
+# live.thisdevice, live.observer etc. carry none. mc.live.gain~ also carries
+# <parameter /> but sits outside the "live." prefix scans that use this set.
+LIVE_PARAMETER_OBJECTS = frozenset({
+    "live.arrows", "live.button", "live.dial", "live.drop", "live.gain~",
+    "live.grid", "live.menu", "live.numbox", "live.slider", "live.step",
+    "live.tab", "live.text", "live.toggle",
+})
 
 
 def detect_m4l_device_type(patch_dict: dict) -> str | None:
@@ -343,11 +352,8 @@ def _check_device_quality(
         box = box_entry.get("box", box_entry)
         maxclass = box.get("maxclass", "")
 
-        if not maxclass.startswith("live."):
-            continue
-
-        # Skip non-parameter live objects
-        if maxclass in _LIVE_NO_PARAM:
+        # Only parameter-capable live.* controls need parameter_enable
+        if maxclass not in LIVE_PARAMETER_OBJECTS:
             continue
 
         if not box.get("parameter_enable"):
@@ -382,7 +388,7 @@ def _check_missing_info_text(
         box = box_entry.get("box", box_entry)
         maxclass = box.get("maxclass", "")
 
-        if maxclass.startswith("live.") and maxclass not in _LIVE_NO_PARAM:
+        if maxclass in LIVE_PARAMETER_OBJECTS:
             if box.get("parameter_enable") and not box.get("annotation"):
                 box_id = box.get("id", "?")
                 results.append(CriticResult(
@@ -421,11 +427,12 @@ def _check_missing_live_banks(
         box = box_entry.get("box", box_entry)
         maxclass = box.get("maxclass", "")
 
-        if maxclass == "live.banks":
+        # MAX saves live.banks as newobj text; the legacy maxclass form
+        # still counts (get_box_name covers both).
+        if get_box_name(box) == "live.banks":
             has_live_banks = True
 
-        if (maxclass.startswith("live.")
-                and maxclass not in _LIVE_NO_PARAM
+        if (maxclass in LIVE_PARAMETER_OBJECTS
                 and box.get("parameter_enable")):
             has_param_controls = True
 

@@ -887,7 +887,9 @@ class BuildersMixin:
 
         Args:
             code: GenExpr source code for the codebox.
-            num_inputs: Number of signal inputs. Auto-detected from code if None.
+            num_inputs: Number of signal inputs (`in` objects). Auto-detected
+                from code if None. The gen~ box always has at least 1 inlet,
+                so with 0 inputs it still accepts `param` messages.
             num_outputs: Number of signal outputs. Auto-detected from code if None.
             x: Horizontal position of the gen~ box.
             y: Vertical position of the gen~ box.
@@ -1021,7 +1023,9 @@ class BuildersMixin:
         parent_box.id = box_id
         parent_box.maxclass = "newobj"
         parent_box.text = "gen~"
-        parent_box.numinlets = num_inputs
+        # MAX always gives gen~ at least one inlet: it carries `param`
+        # messages even when the gen patcher has no `in` objects (D3).
+        parent_box.numinlets = max(1, num_inputs)
         parent_box.numoutlets = num_outputs
         parent_box.outlettype = ["signal"] * num_outputs
         parent_box.patching_rect = [x, y, w, h]

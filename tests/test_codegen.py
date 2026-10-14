@@ -416,15 +416,51 @@ class TestGenBox:
         assert "patcher" in gen_boxes[0]["box"]
 
     def test_add_gen_zero_inputs(self):
-        """Generator with no inputs (pure oscillator) creates gen~ with 0 inlets."""
+        """Generator with no inputs still gets 1 gen~ inlet.
+
+        MAX always gives gen~ a message inlet (it carries `param` messages)
+        even when the gen patcher has no `in` objects (review D3).
+        """
         from src.maxpat.patcher import Patcher
 
         p = Patcher()
         code = "Param freq(440, min=20, max=20000);\nout1 = cycle(freq);"
         box, inner = p.add_gen(code, num_inputs=0, num_outputs=1)
 
-        assert box.numinlets == 0
+        assert box.numinlets == 1
         assert box.numoutlets == 1
+
+    def test_add_gen_zero_inputs_accepts_param_message(self):
+        """D3 repro: a `freq $1` message wires to gen~ inlet 0; inner unchanged."""
+        from src.maxpat.patcher import Patcher
+
+        p = Patcher()
+        code = "Param freq(440, min=20, max=20000);\nout1 = cycle(freq);"
+        gen, inner = p.add_gen(code, num_inputs=0, num_outputs=1)
+        p.add_connection(p.add_message("freq $1"), 0, gen, 0)
+
+        assert not [b for b in inner.boxes if (b.text or "").startswith("in ")]
+        codebox = next(b for b in inner.boxes if b.maxclass == "codebox")
+        assert codebox.numinlets == 0
+
+    def test_m4l_gen_synth_gen_accepts_param_message(self):
+        """The add_m4l_gen_synth gen~ also takes a param message at inlet 0."""
+        import warnings
+        from src.maxpat.patcher import Patcher
+
+        p = Patcher()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            gen, _dials, _plugout = p.add_m4l_gen_synth([("freq", 20.0, 2000.0)])
+        p.add_connection(p.add_message("freq $1"), 0, gen, 0)
+
+    def test_add_gen_two_inputs_unchanged(self):
+        """num_inputs >= 1 keeps one gen~ inlet per input."""
+        from src.maxpat.patcher import Patcher
+
+        p = Patcher()
+        box, _inner = p.add_gen("out1 = in1 + in2;", num_inputs=2, num_outputs=1)
+        assert box.numinlets == 2
 
     def test_add_gen_in_patcher_boxes(self):
         """add_gen appends the gen~ box to the patcher's boxes list."""
