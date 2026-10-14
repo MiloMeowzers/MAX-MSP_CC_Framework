@@ -849,16 +849,25 @@ class TestEmbeddedGenExpr:
         ]
         assert len(delay_errors) >= 1, [r.message for r in results]
 
-    def test_embedded_clip_emits_error(self, db):
-        """clip( in embedded codebox triggers Check 8 via the walker."""
+    def test_embedded_clip_passes(self, db):
+        """GenExpr has clip(): an embedded codebox calling it is clean
+        (Check 8 retired in Q12 / G3)."""
         patch = self._patch_with_gen_codebox("out1 = clip(in1, 0., 1.);")
         results = validate_patch(patch, db=db)
-        clip_errors = [
+        clip_findings = [r for r in results if "clip" in r.message]
+        assert clip_findings == [], [r.message for r in clip_findings]
+
+    def test_embedded_metro_emits_error(self, db):
+        """A Max-only name called in an embedded codebox is an error tagged
+        with the gen~ box id (Q12 / G3: gen domain only)."""
+        patch = self._patch_with_gen_codebox("out1 = metro(in1);")
+        results = validate_patch(patch, db=db)
+        metro_errors = [
             r for r in results
-            if r.level == "error" and "clip()" in r.message
+            if r.level == "error" and "metro" in r.message
             and "gen~ 'g1'" in r.message
         ]
-        assert len(clip_errors) >= 1, [r.message for r in results]
+        assert len(metro_errors) >= 1, [r.message for r in results]
 
     def test_embedded_init_before_if_emits_error(self, db):
         """Variable assigned only inside if/else triggers Check 9."""
@@ -980,7 +989,7 @@ class TestEmbeddedGenExpr:
                         {"box": {
                             "id": "cbb",
                             "maxclass": "codebox",
-                            "code": "out1 = clip(in1, 0., 1.);",
+                            "code": "out1 = metro(in1);",
                         }}
                     ],
                     "lines": [],
@@ -995,7 +1004,7 @@ class TestEmbeddedGenExpr:
         ]
         beta_findings = [
             r for r in results
-            if "gen~ 'beta'" in r.message and "clip()" in r.message
+            if "gen~ 'beta'" in r.message and "metro" in r.message
         ]
         assert len(alpha_findings) >= 1, [r.message for r in results]
         assert len(beta_findings) >= 1, [r.message for r in results]

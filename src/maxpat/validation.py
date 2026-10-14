@@ -1124,8 +1124,9 @@ def _validate_embedded_genexpr(
     db: ObjectDatabase,
 ) -> list[ValidationResult]:
     """Walk top-level gen~ boxes; for each embedded codebox with a 'code'
-    attribute, run validate_genexpr (which carries Checks 1-9 including
-    the new Phase 29 Checks 7/8/9 -- delay() / clip() / init-before-if/else).
+    attribute, run validate_genexpr (which carries its Checks 1-9: the
+    gen-domain operator check 6, delay() 7 and init-before-if/else 9;
+    Check 8, the clip() rejection, was retired in Q12 -- GenExpr has clip()).
 
     Findings flow through the ValidationResult pipeline (consistent with
     .gendsp files going through hooks.validate_code_file). Tags each
