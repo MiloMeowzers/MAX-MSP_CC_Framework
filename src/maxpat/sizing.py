@@ -107,7 +107,6 @@ UI_SIZES: dict[str, tuple[float, float] | None] = {
     # Patcher structure
     "inlet":         (30.0, 30.0),
     "outlet":        (30.0, 30.0),
-    "patcher":       None,   # Text-based: "p subpatcher_name"
     "bpatcher":      (200.0, 100.0),
     # MSP UI
     "meter~":        (15.0, 100.0),
@@ -134,26 +133,11 @@ UI_SIZES: dict[str, tuple[float, float] | None] = {
     "live.scope~":   (131.0, 131.0),
     # Max for Live visual widgets (added)
     "live.arrows":   (54.0, 15.0),
-    "live.banks":    (315.0, 45.0),
-    "live.colors":   (168.0, 45.0),
     "live.comment":  (150.0, 18.0),
     "live.drop":     (140.0, 50.0),
     "live.grid":     (240.0, 165.0),
     "live.line":     (100.0, 35.0),
     "live.step":     (240.0, 60.0),
-    # Max for Live non-visual utility objects (text-sized)
-    "live.observer":     None,
-    "live.thisdevice":   None,
-    "live.path":         None,
-    "live.object":       None,
-    "live.map":          None,
-    "live.routing":      None,
-    "live.push":         None,
-    "live.miditool.in":  None,
-    "live.miditool.out": None,
-    "live.remote~":      None,
-    "live.param~":       None,
-    "live.modulate~":    None,
     # Text-based UI objects
     "comment":       None,
     "message":       None,

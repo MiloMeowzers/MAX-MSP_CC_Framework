@@ -264,23 +264,27 @@ class TestOverrideFloorBehavior:
 class TestLiveObjectSizes:
     """Tests for live.* object sizing and maxclass completeness."""
 
-    # All live.* objects from m4l/objects.json
-    ALL_LIVE_OBJECTS = [
-        "live.arrows", "live.banks", "live.button", "live.colors",
-        "live.comment", "live.dial", "live.drop", "live.gain~",
-        "live.grid", "live.line", "live.map", "live.menu",
-        "live.meter~", "live.miditool.in", "live.miditool.out",
-        "live.modulate~", "live.numbox", "live.object", "live.observer",
-        "live.param~", "live.path", "live.push", "live.remote~",
-        "live.routing", "live.slider", "live.step", "live.tab",
-        "live.text", "live.thisdevice", "live.toggle",
+    # live.* objects from m4l/objects.json, split by how MAX saves them
+    # (review C4, Q13). These 16 are widgets saved with their own maxclass.
+    LIVE_UI_WIDGETS = [
+        "live.arrows", "live.button", "live.comment", "live.dial",
+        "live.drop", "live.gain~", "live.grid", "live.line", "live.menu",
+        "live.meter~", "live.numbox", "live.slider", "live.step", "live.tab",
+        "live.text", "live.toggle",
+    ]
+
+    # Non-UI live.* objects: Max 9.2 saves them only as newobj with the name
+    # in ``text`` (never as their own maxclass in 3,139 bundle files).
+    LIVE_NON_UI = [
+        "live.banks", "live.colors", "live.map", "live.miditool.in",
+        "live.miditool.out", "live.modulate~", "live.object",
+        "live.observer", "live.param~", "live.path", "live.push",
+        "live.remote~", "live.routing", "live.thisdevice",
     ]
 
     # Visual widgets with fixed sizes
     VISUAL_WIDGETS = {
         "live.arrows": (54.0, 15.0),
-        "live.banks": (315.0, 45.0),
-        "live.colors": (168.0, 45.0),
         "live.comment": (150.0, 18.0),
         "live.drop": (140.0, 50.0),
         "live.grid": (240.0, 165.0),
@@ -289,18 +293,17 @@ class TestLiveObjectSizes:
         "live.scope~": (131.0, 131.0),
     }
 
-    # Non-visual utility objects (None = text-sized)
-    NON_VISUAL = [
-        "live.observer", "live.thisdevice", "live.path", "live.object",
-        "live.map", "live.routing", "live.push", "live.miditool.in",
-        "live.miditool.out", "live.remote~", "live.param~", "live.modulate~",
-    ]
-
-    def test_all_live_in_ui_maxclasses(self):
-        """All live.* objects from m4l DB are in UI_MAXCLASSES."""
+    def test_live_ui_widgets_in_ui_maxclasses(self):
+        """The live.* widgets MAX saves with their own maxclass are UI maxclasses."""
         from src.maxpat.maxclass_map import UI_MAXCLASSES
-        for obj_name in self.ALL_LIVE_OBJECTS:
+        for obj_name in self.LIVE_UI_WIDGETS:
             assert obj_name in UI_MAXCLASSES, f"{obj_name} missing from UI_MAXCLASSES"
+
+    def test_non_ui_live_objects_are_newobj(self):
+        """Non-UI live.* objects are not UI maxclasses (C4)."""
+        from src.maxpat.maxclass_map import UI_MAXCLASSES
+        for obj_name in self.LIVE_NON_UI:
+            assert obj_name not in UI_MAXCLASSES, f"{obj_name} is in UI_MAXCLASSES"
 
     def test_visual_widgets_have_fixed_sizes(self):
         """Visual live.* widgets return correct (w,h) from calculate_box_size."""
@@ -310,13 +313,13 @@ class TestLiveObjectSizes:
                 f"{obj_name}: expected {expected_size}, got ({w}, {h})"
             )
 
-    def test_non_visual_have_none_in_ui_sizes(self):
-        """Non-visual utility live.* objects have None in UI_SIZES."""
-        for obj_name in self.NON_VISUAL:
-            assert obj_name in UI_SIZES, f"{obj_name} missing from UI_SIZES"
-            assert UI_SIZES[obj_name] is None, (
-                f"{obj_name} should be None in UI_SIZES, got {UI_SIZES[obj_name]}"
-            )
+    def test_non_ui_live_objects_not_in_ui_sizes(self):
+        """Non-UI live.* objects take text/override newobj sizing, not a UI size."""
+        for obj_name in self.LIVE_NON_UI:
+            assert obj_name not in UI_SIZES, f"{obj_name} still in UI_SIZES"
+            w, h = calculate_box_size(obj_name, "newobj")
+            assert h == DEFAULT_HEIGHT, obj_name
+            assert w >= MIN_BOX_WIDTH, obj_name
 
 
 class TestBpatcherDBSizing:

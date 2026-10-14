@@ -9,6 +9,11 @@ evidence: a patch that MAX itself wrote or re-saved (discriminated by a non-zero
 ``patcher.appversion.revision`` -- this repo's generator hardcodes ``0``, see
 defaults.py) is authoritative for whether a box carries its own name as maxclass.
 Entries admitted that way name their confirming patch in an inline comment.
+
+Non-UI ``live.*`` objects (live.thisdevice, live.path, live.object, ...) and
+``p``/``patcher`` are deliberately absent on bundle evidence: Max 9.2 saves
+each of them only as a newobj box with the name in ``text``, never with its
+own maxclass (review C4, fix-plan Q13).
 """
 
 # All UI maxclass names that use their own name (NOT "newobj") in .maxpat files.
@@ -36,7 +41,7 @@ UI_MAXCLASSES: frozenset[str] = frozenset({
     "jsui", "fpic", "lcd", "hint",
     "dropfile", "ubutton", "playbar",
     # Patcher structure
-    "inlet", "outlet", "patcher", "bpatcher",
+    "inlet", "outlet", "bpatcher",
     # MSP UI (only objects that use their own name as maxclass in .maxpat)
     "meter~", "levelmeter~", "spectroscope~", "scope~",
     "number~", "gain~", "ezdac~", "ezadc~",
@@ -48,13 +53,16 @@ UI_MAXCLASSES: frozenset[str] = frozenset({
     "live.toggle", "live.button", "live.text",
     "live.menu", "live.tab", "live.meter~", "live.gain~",
     "live.scope~",
-    "live.arrows", "live.banks", "live.colors", "live.comment",
+    "live.arrows", "live.comment",
     "live.drop", "live.grid", "live.line", "live.step",
-    # Max for Live non-visual (use own maxclass but render as text boxes)
-    "live.observer", "live.thisdevice", "live.path", "live.object",
-    "live.map", "live.routing", "live.push",
-    "live.miditool.in", "live.miditool.out",
-    "live.remote~", "live.param~", "live.modulate~",
+    # Deliberately absent (review C4, Q13): the 14 non-UI live.* objects
+    # (live.observer, live.thisdevice, live.path, live.object, live.map,
+    # live.routing, live.push, live.miditool.in, live.miditool.out,
+    # live.remote~, live.param~, live.modulate~, live.banks, live.colors) and
+    # p/patcher. Max 9.2 saves them only as newobj with the name in `text`
+    # (live.thisdevice 107 boxes, live.path 112, live.object 99, patcher 126
+    # + p 6,901) and never as their own maxclass in 3,139 bundle files.
+    # A subpatcher is built with Patcher.add_subpatcher, not add_box("p").
     # Embedded code editors (not visual widgets, but MAX writes them with
     # their own maxclass and no `text` field -- confirmed in kicksynth.maxpat
     # at 02c9917 and terrain-synth.maxpat at 55757e0, both appversion 9.1.5;

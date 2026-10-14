@@ -40,6 +40,12 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 _STRUCTURAL_MAXCLASSES = frozenset({"inlet", "outlet", "patcher", "bpatcher"})
 
+# Maxclasses the maxclass-usage check (Layer 2b) exempts. MAX never saves
+# maxclass "patcher" -- p/patcher is a newobj box carrying an embedded patcher
+# (review C4) -- so that check does not exempt it, while
+# _STRUCTURAL_MAXCLASSES keeps "patcher" for name extraction.
+_MAXCLASS_USAGE_SKIP = frozenset({"inlet", "outlet", "bpatcher"})
+
 # Oscillator objects that need gain staging before dac~/ezdac~
 _OSCILLATOR_NAMES = frozenset({
     "cycle~", "saw~", "rect~", "tri~", "noise~", "pink~",
@@ -455,10 +461,13 @@ def _validate_maxclass_usage(patch_dict: dict) -> list[ValidationResult]:
     not load correctly in MAX (raises "invalid attribute maxclass" errors).
 
     Skips:
-    - Structural maxclasses (inlet, outlet, patcher, bpatcher).
+    - Structural maxclasses (inlet, outlet, bpatcher).
     - Boxes with an embedded ``patcher`` key (legitimate subpatcher
       containers like ``gen~``, ``poly~``, ``rnbo~``, ``codebox`` in
       embedded mode that carry their own maxclass with an inline patcher).
+
+    A maxclass-``patcher`` box without an embedded patcher is flagged: MAX
+    saves p/patcher only as newobj (review C4).
 
     Emits ``error`` (not warning) — this is a hard correctness check.
     """
@@ -469,7 +478,7 @@ def _validate_maxclass_usage(patch_dict: dict) -> list[ValidationResult]:
         maxclass = box.get("maxclass", "")
 
         # Skip structural maxclasses
-        if maxclass in _STRUCTURAL_MAXCLASSES:
+        if maxclass in _MAXCLASS_USAGE_SKIP:
             continue
 
         # Subpatcher containers (gen~, poly~, rnbo~, codebox in embedded mode)

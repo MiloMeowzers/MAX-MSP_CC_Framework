@@ -155,3 +155,205 @@ class TestPatcherConsistency:
         d = box.to_dict()["box"]
         assert d["maxclass"] == "newobj"
         assert d["text"].split()[0] == "cycle~"
+
+
+# ---------------------------------------------------------------------------
+# Review C4 / fix-plan Q13: non-UI live.* objects and patcher are newobj
+# ---------------------------------------------------------------------------
+
+import copy  # noqa: E402
+import json  # noqa: E402
+import warnings  # noqa: E402
+
+import pytest  # noqa: E402
+
+from src.maxpat.db_lookup import ObjectDatabase  # noqa: E402
+from src.maxpat.sizing import UI_SIZES, calculate_box_size  # noqa: E402
+from src.maxpat.validation import (  # noqa: E402
+    _validate_maxclass_usage,
+    has_blocking_errors,
+    validate_patch,
+)
+
+# Max 9.2.0 saves each of these only as newobj with the name in ``text``
+# (never as its own maxclass in 3,139 bundle .maxpat/.maxhelp files).
+REMOVED_NON_UI = [
+    "live.observer", "live.thisdevice", "live.path", "live.object",
+    "live.map", "live.routing", "live.push",
+    "live.miditool.in", "live.miditool.out",
+    "live.remote~", "live.param~", "live.modulate~",
+    "live.banks", "live.colors",
+    "patcher",
+]
+REMOVED_LIVE = [n for n in REMOVED_NON_UI if n.startswith("live.")]
+
+# live.* widgets MAX does save with their own maxclass; they must stay.
+LIVE_UI_WIDGETS = [
+    "live.arrows", "live.button", "live.comment", "live.dial", "live.drop",
+    "live.gain~", "live.grid", "live.line", "live.menu", "live.meter~",
+    "live.numbox", "live.scope~", "live.slider", "live.step", "live.tab",
+    "live.text", "live.toggle",
+]
+
+
+@pytest.fixture(scope="module")
+def db():
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return ObjectDatabase()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_git_env(monkeypatch):
+    """Make sure no inherited git env var can redirect git to another repo."""
+    for var in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+        monkeypatch.delenv(var, raising=False)
+
+
+def _box_dicts(p: Patcher) -> list[dict]:
+    """Serialize through Patcher.to_dict() (never Box.to_dict())."""
+    return [entry["box"] for entry in p.to_dict()["patcher"]["boxes"]]
+
+
+def _own_maxclass_patch() -> dict:
+    """A hand-written patch carrying own-maxclass live.thisdevice / patcher boxes.
+
+    midiin -> midiout (built through the API) makes it a valid MIDI-effect
+    shape, so the M4L critic adds no blocker of its own.
+    """
+    p = Patcher()
+    mi = p.add_box("midiin", x=260, y=50)
+    mo = p.add_box("midiout", x=260, y=100)
+    p.add_connection(mi, 0, mo, 0)
+    d = p.to_dict()
+    d["patcher"]["boxes"].extend([
+        {"box": {"id": "obj-90", "maxclass": "live.thisdevice",
+                 "numinlets": 1, "numoutlets": 3,
+                 "outlettype": ["", "", ""],
+                 "patching_rect": [40.0, 50.0, 90.0, 22.0]}},
+        {"box": {"id": "obj-91", "maxclass": "patcher",
+                 "numinlets": 1, "numoutlets": 1, "outlettype": [""],
+                 "patching_rect": [40.0, 100.0, 60.0, 22.0]}},
+    ])
+    return d
+
+
+def _wrong_maxclass(results) -> list[str]:
+    return [
+        r.message for r in results
+        if r.layer == "objects" and r.level == "error"
+        and r.message.startswith("Wrong maxclass")
+    ]
+
+
+class TestNonUiNamesAreNewobj:
+    """C4: the 14 non-UI live.* objects and ``patcher`` are not UI maxclasses."""
+
+    @pytest.mark.parametrize("name", REMOVED_NON_UI)
+    def test_removed_from_ui_set_and_sizes(self, name):
+        assert name not in UI_MAXCLASSES
+        assert name not in UI_SIZES
+        assert resolve_maxclass(name) == "newobj"
+        assert is_ui_object(name) is False
+
+    def test_live_ui_widgets_kept(self):
+        for name in LIVE_UI_WIDGETS:
+            assert name in UI_MAXCLASSES, name
+
+    def test_set_sizes(self):
+        """90 -> 75 names after C4 (T1); 93 after the C5 additions (T3)."""
+        assert len(UI_MAXCLASSES) == 75
+        assert len(UI_SIZES) == 66
+
+    @pytest.mark.parametrize("name", REMOVED_LIVE)
+    def test_add_box_serializes_as_newobj_with_text(self, name, db):
+        p = Patcher(db=db)
+        p.add_box(name)
+        box = _box_dicts(p)[0]
+        assert box["maxclass"] == "newobj"
+        assert box["text"] == name
+        assert "fontname" in box and "fontsize" in box
+        assert (box["numinlets"], box["numoutlets"]) == db.compute_io_counts(name, [])
+        assert box["patching_rect"][2:] == list(calculate_box_size(name, "newobj"))
+
+    def test_live_thisdevice_io(self, db):
+        p = Patcher(db=db)
+        p.add_box("live.thisdevice")
+        box = _box_dicts(p)[0]
+        assert (box["numinlets"], box["numoutlets"]) == (1, 3)
+
+
+class TestMaxclassUsageCheck:
+    """C4, validator half: own-maxclass live.*/patcher boxes are flagged."""
+
+    def test_own_maxclass_boxes_flagged(self, db):
+        results = validate_patch(_own_maxclass_patch(), db=db)
+        wrong = _wrong_maxclass(results)
+        assert len(wrong) == 2, wrong
+        assert any("'live.thisdevice'" in m for m in wrong), wrong
+        assert any("'patcher'" in m for m in wrong), wrong
+        assert has_blocking_errors(results) is True
+
+    def test_legitimate_boxes_not_flagged(self, db):
+        d = Patcher().to_dict()
+        d["patcher"]["boxes"] = [
+            {"box": {"id": "obj-1", "maxclass": "newobj", "text": "p foo",
+                     "numinlets": 0, "numoutlets": 0,
+                     "patching_rect": [10.0, 10.0, 50.0, 22.0],
+                     "patcher": copy.deepcopy(Patcher().to_dict()["patcher"])}},
+            {"box": {"id": "obj-2", "maxclass": "bpatcher",
+                     "numinlets": 0, "numoutlets": 0,
+                     "patching_rect": [10.0, 50.0, 200.0, 100.0]}},
+            {"box": {"id": "obj-3", "maxclass": "inlet", "numinlets": 0,
+                     "numoutlets": 1, "outlettype": [""],
+                     "patching_rect": [300.0, 10.0, 30.0, 30.0]}},
+            {"box": {"id": "obj-4", "maxclass": "outlet", "numinlets": 1,
+                     "numoutlets": 0,
+                     "patching_rect": [300.0, 200.0, 30.0, 30.0]}},
+            {"box": {"id": "obj-5", "maxclass": "toggle", "numinlets": 1,
+                     "numoutlets": 1, "outlettype": ["int"],
+                     "patching_rect": [400.0, 10.0, 24.0, 24.0]}},
+        ]
+        assert _validate_maxclass_usage(d) == []
+        assert _wrong_maxclass(validate_patch(d, db=db)) == []
+
+
+class TestSaveGateEndToEnd:
+    """Tracer: generated live.thisdevice saves; own-maxclass forms are refused."""
+
+    def test_generated_live_thisdevice_saves(self, tmp_path, db):
+        from src.maxpat.hooks import save_patch_roundtrip
+
+        p = Patcher(db=db)
+        td = p.add_box("live.thisdevice", x=40, y=50)
+        pr = p.add_box("print", ["thisdevice"], x=40, y=100)
+        p.add_connection(td, 0, pr, 0)
+        mi = p.add_box("midiin", x=260, y=50)
+        mo = p.add_box("midiout", x=260, y=100)
+        p.add_connection(mi, 0, mo, 0)
+        target = tmp_path / "ok.maxpat"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            save_patch_roundtrip(p.to_dict(), target)
+        assert target.exists()
+        saved = json.loads(target.read_text(encoding="utf-8"))
+        boxes = [b["box"] for b in saved["patcher"]["boxes"]
+                 if b["box"].get("text") == "live.thisdevice"]
+        assert len(boxes) == 1
+        assert boxes[0]["maxclass"] == "newobj"
+
+    def test_own_maxclass_form_refused(self, tmp_path):
+        from src.maxpat.hooks import PatchValidationError, save_patch_roundtrip
+
+        target = tmp_path / "bad.maxpat"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            with pytest.raises(PatchValidationError) as exc:
+                save_patch_roundtrip(_own_maxclass_patch(), target)
+        texts = [
+            str(getattr(f, "message", None) or getattr(f, "finding", "") or f)
+            for f in exc.value.findings
+        ]
+        assert any("Wrong maxclass" in t and "live.thisdevice" in t
+                   for t in texts), texts
+        assert not target.exists()
