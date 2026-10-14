@@ -135,3 +135,17 @@ t f f                     (trigger: right outlet fires first, Rule #3)
   |
   +---> gen~ param message: "cutoff $1"              [left outlet]
 ```
+
+## Max 9 Theme Defaults
+
+What MAX 9 draws when a box or patcher does not set its own color. Values come from the `styledefaults` of `/Applications/Max.app/Contents/Resources/C74/interfaces/themes/default.maxtheme` (Max 9.2.0); all are grays (r = g = b, alpha 1).
+
+| Surface | `styledefaults` key(s) | Value |
+|---|---|---|
+| Text | `textcolor` | 0.85 |
+| Patcher canvas (editing and locked) | `editing_bgcolor`, `locked_bgcolor` | 0.235 |
+| Box fill | `bgfillcolor_color`, `bgfillcolor_color1`, `bgfillcolor_color2` | 0.172 |
+| Window background | `bgcolor` | 0.125 |
+
+- A box with no `textcolor` renders its text at the theme text color, 0.85 (light gray), not black.
+- The contrast critic (`layout_critic.py`) and `aesthetics.py` still assume the legacy defaults (black text when `textcolor` is missing, a 0.333 canvas) until Q26 (review E7) makes them theme-aware. So before recoloring a box that has no `textcolor` because of a "Low contrast text" warning, check the warning against these values: 0.85 text on a 0.235 canvas is readable.

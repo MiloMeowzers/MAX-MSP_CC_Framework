@@ -12,6 +12,12 @@ The installed Max is 9.2.0 and the object database was synced against it (2026-1
 - **Gen~:** 9.2's compiler fixes retire none of CLAUDE.md's gen~ rules.
 - **After a Max update:** `python3 tools/audit_db.py` (read-only drift report), then `python3 tools/sync_max_bundle.py` (dry-run), then `--apply` with explicit `--names`. Never hand-write a DB entry for a new object.
 
+## Reference Docs
+
+- **`.claude/skills/references/severity-contract.md`** — read when a validator or critic finding comes back, before deciding to fix, report or save: what each level means and which findings block `save_patch_roundtrip` / `write_gendsp`.
+- **`.claude/skills/references/troubleshooting.md`** — read when the user reports a MAX console message (No such object, doesn't understand, gen~ compile errors, FluCoMa errors): cause and fix per message.
+- **`.claude/skills/references/proven-forms.md`** — read before generating trigger / arithmetic chains, MC per-channel data, FluCoMa, poly~ voices, `waveform~` / `flonum` UI, or before moving boxes inside subpatchers: forms confirmed in MAX, with evidence tiers.
+
 ## Assistance Comments on Inlets/Outlets
 
 - When calling `add_subpatcher()`, ALWAYS provide `inlet_comments` and `outlet_comments` with descriptive labels
