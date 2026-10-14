@@ -2,7 +2,9 @@
 
 Four layers run sequentially, stopping early on structural errors:
   Layer 1 (json):        JSON structure checks (patcher, boxes, lines)
-  Layer 2 (objects):     Object existence against ObjectDatabase
+  Layer 2 (objects):     Object existence against ObjectDatabase, plus the
+                         implied RNBO/Gen restriction of rnbo/gen-only names
+                         against the patch scope (max / gen / rnbo; Q12 / C3)
   Layer 3 (connections): Connection index bounds and signal/control type checks
   Layer 4 (domain):      Domain-specific rules (gain staging, unterminated chains, feedback)
 
@@ -25,7 +27,7 @@ import re as _re
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from src.maxpat.db_lookup import ObjectDatabase
+from src.maxpat.db_lookup import DOMAIN_SCOPES, ObjectDatabase, detect_patcher_scope
 from src.maxpat.maxclass_map import is_ui_object, UI_MAXCLASSES
 
 if TYPE_CHECKING:
@@ -145,6 +147,8 @@ def validate_patch(
     patch,
     db: ObjectDatabase | None = None,
     allowed_packages: list[str] | None = None,
+    *,
+    scope: str | None = None,
 ) -> list[ValidationResult]:
     """Run the full four-layer validation pipeline on a patch.
 
@@ -156,6 +160,15 @@ def validate_patch(
             check (default), []=core only, ["BEAP"]=core+BEAP objects.
             If *patch* is a Patcher instance and *allowed_packages* is
             None, the Patcher's own allowed_packages is used.
+        scope: Keyword-only. The patcher scope of the top level: "max",
+            "gen" or "rnbo" (Q12 / C3). Resolved in this order: this
+            argument (anything outside DOMAIN_SCOPES raises ValueError);
+            else a Patcher's ``domain_context``; else
+            ``detect_patcher_scope`` on the dict (classnamespace dsp.gen /
+            jit.gen -> gen, rnbo -> rnbo; else a top-level maxclass codebox
+            -> gen; else max). Layer 2 errors on rnbo/gen-only names outside
+            their scope; Layer 4b skips explicit restrictions that include
+            the scope.
 
     Returns:
         Combined list of ValidationResult from all layers.
@@ -167,15 +180,27 @@ def validate_patch(
     # Import here to avoid circular imports at module level
     from src.maxpat.patcher import Patcher as PatcherClass
 
+    if scope is not None and scope not in DOMAIN_SCOPES:
+        raise ValueError(
+            f"validate_patch scope must be one of {DOMAIN_SCOPES}, got {scope!r}"
+        )
+
     # Accept Patcher instance: extract db and convert to dict
     if isinstance(patch, PatcherClass):
         if db is None:
             db = patch.db
         if allowed_packages is None:
             allowed_packages = getattr(patch, "allowed_packages", None)
+        if scope is None:
+            context = getattr(patch, "domain_context", None)
+            if context in DOMAIN_SCOPES:
+                scope = context
         patch_dict = patch.to_dict()
     else:
         patch_dict = patch
+
+    if scope is None:
+        scope = detect_patcher_scope(patch_dict)
 
     if db is None:
         db = ObjectDatabase()
@@ -189,7 +214,7 @@ def validate_patch(
         return results  # Stop early -- structure is broken
 
     # Layer 2: Object existence
-    results.extend(_validate_objects_exist(patch_dict, db))
+    results.extend(_validate_objects_exist(patch_dict, db, scope))
 
     # Layer 2b: Maxclass usage (non-UI objects should use "newobj")
     results.extend(_validate_maxclass_usage(patch_dict))
@@ -207,7 +232,7 @@ def validate_patch(
     results.extend(_validate_domain_rules(patch_dict, db))
 
     # Layer 4b: Domain restriction guard (Phase 29 / VALID-02)
-    results.extend(_validate_domain_restrictions(patch_dict, db))
+    results.extend(_validate_domain_restrictions(patch_dict, db, scope))
 
     # Layer 5: Embedded GenExpr codebox walker (Phase 29 / VALID-04)
     results.extend(_validate_embedded_genexpr(patch_dict, db))
@@ -357,11 +382,24 @@ def _extract_object_name(box_dict: dict) -> str | None:
     return maxclass
 
 
+_SCOPE_PLACEMENT = {
+    "rnbo": "inside an rnbo~ patcher",
+    "gen": "inside a gen~ patcher or codebox",
+}
+
+
 def _validate_objects_exist(
     patch_dict: dict,
     db: ObjectDatabase,
+    scope: str = "max",
 ) -> list[ValidationResult]:
-    """Check every object in the patch exists in the database."""
+    """Check every object in the patch exists in the database.
+
+    A name whose DB entries all come from rnbo/ and/or gen/ (and has no
+    explicit domain_restricted key) exists only in RNBO / Gen: outside its
+    scope MAX says "No such object", so it is an error here (Q12 / C3).
+    Top-level boxes only; *scope* is the top-level patcher's scope.
+    """
     results: list[ValidationResult] = []
 
     for box_entry in patch_dict["patcher"]["boxes"]:
@@ -373,6 +411,19 @@ def _validate_objects_exist(
 
         # Check existence (resolves aliases internally)
         if db.exists(name):
+            implied = db.get_implied_restrictions(name)
+            if implied and scope not in implied:
+                where = " or ".join(
+                    _SCOPE_PLACEMENT.get(d, f"inside a {d} patcher") for d in implied
+                )
+                msg = (
+                    f"'{name}' exists only in {implied} -- No such object in a "
+                    f"{scope} patcher. Use it {where}."
+                )
+                equivalent = db.suggest_max_equivalent(name)
+                if equivalent:
+                    msg += f" MAX equivalent: {equivalent}"
+                results.append(ValidationResult("objects", "error", msg))
             continue
 
         # Check if it is a PD object with a MAX equivalent
@@ -1010,12 +1061,15 @@ def _validate_domain_rules(
 def _validate_domain_restrictions(
     patch_dict: dict,
     db: ObjectDatabase,
+    scope: str = "max",
 ) -> list[ValidationResult]:
     """Hard-block top-level boxes whose domain_restricted whitelist forbids
-    the outer (non-rnbo, non-m4l, non-gen) MSP/Max context.
+    the top-level patcher's scope (*scope*: max / gen / rnbo; Q12).
 
-    Per D-05: explicit `domain_restricted` only — no canonical-domain
-    inference. Per D-07: top-level scope only — no recursion into
+    Per D-05 (kept): explicit `domain_restricted` only — implied RNBO/Gen
+    restrictions live in Layer 2. A box whose explicit restriction includes
+    *scope* is allowed (``floor~`` in an rnbo patcher). At Max scope the
+    message is unchanged. Per D-07 (kept): top-level scope only — no recursion into
     subpatchers or rnbo~ inner patchers. Per D-08: always ERROR severity,
     auto_fixed=False (auto-removing the box would mangle the patch; emit
     error and let the caller decide).
@@ -1039,9 +1093,17 @@ def _validate_domain_restrictions(
         if name is None:
             continue
         restrictions = db.get_domain_restrictions(name)
-        if not restrictions:
+        if not restrictions or scope in restrictions:
             continue
-        # Top-level patcher is by definition NOT inside any rnbo~/m4l/gen~
+        if scope != "max":
+            results.append(ValidationResult(
+                "domain", "error",
+                f"'{name}' is restricted to {restrictions}; "
+                f"not allowed in a {scope} patcher.",
+                auto_fixed=False,
+            ))
+            continue
+        # A Max top-level patcher is NOT inside any rnbo~/m4l/gen~
         # container. Any restriction list is a violation here (D-07).
         results.append(ValidationResult(
             "domain", "error",

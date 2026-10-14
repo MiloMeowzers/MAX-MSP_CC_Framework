@@ -65,6 +65,87 @@ _DOMAIN_TO_FIELD = {
     "gen": "Gen",
 }
 
+# ---------------------------------------------------------------------------
+# Domain scope (Q12 / review C3)
+# ---------------------------------------------------------------------------
+# The patcher scopes a box can live in. "max" is any Max/MSP/Jitter/M4L
+# patcher; "gen" is a gen~/mc.gen~/jit.gen/jit.pix patcher (or a .gendsp /
+# .genjit file); "rnbo" is an rnbo~ patcher (or a .rnbopat file).
+DOMAIN_SCOPES = ("max", "gen", "rnbo")
+
+# A name whose DB entries all come from these source directories exists only
+# in RNBO and/or Gen: MAX says "No such object" for it in a Max patcher
+# (``expr~``, ``wrap~``, ``counter~``, ``history``). Such names are
+# implicitly restricted to their source domains unless an explicit
+# ``domain_restricted`` key (even ``[]``) says otherwise.
+IMPLIED_RESTRICTION_SOURCES = frozenset({"rnbo", "gen"})
+
+# patcher["classnamespace"] -> scope, as MAX writes it (Max 9.2 bundle
+# survey: gen~/gen/mcs.gen~ inner patchers carry dsp.gen; jit.gen, jit.pix
+# and jit.gl.pix carry jit.gen; rnbo~ inner patchers and .rnbopat carry rnbo).
+SCOPE_BY_CLASSNAMESPACE = {"dsp.gen": "gen", "jit.gen": "gen", "rnbo": "rnbo"}
+
+# File suffix -> scope of the file's top-level patcher.
+SCOPE_BY_SUFFIX = {".gendsp": "gen", ".genjit": "gen", ".rnbopat": "rnbo"}
+
+# Container objects whose embedded patcher is a Gen / RNBO patcher.
+GEN_CONTAINER_NAMES = frozenset({
+    "gen~", "mc.gen~", "mcs.gen~", "gen", "jit.gen", "jit.pix", "jit.gl.pix",
+})
+RNBO_CONTAINER_NAMES = frozenset({"rnbo~", "mc.rnbo~"})
+
+
+def detect_patcher_scope(patcher_dict: dict, default: str = "max") -> str:
+    """Return the scope ("max" / "gen" / "rnbo") of a patcher dict.
+
+    Accepts either a ``{"patcher": {...}}`` file dict or a bare patcher dict.
+    Resolution order:
+
+    1. ``classnamespace`` mapped through :data:`SCOPE_BY_CLASSNAMESPACE`;
+    2. ``"gen"`` when any top-level box has ``maxclass == "codebox"`` -- MAX
+       writes the code box as maxclass ``codebox`` only inside Gen/RNBO
+       patchers, and generator-written .gendsp files carry classnamespace
+       ``box`` (``generate_gendsp``), so the code box is the reliable mark;
+    3. *default*.
+    """
+    if not isinstance(patcher_dict, dict):
+        return default
+    patcher = patcher_dict.get("patcher")
+    if not isinstance(patcher, dict):
+        patcher = patcher_dict
+    scope = SCOPE_BY_CLASSNAMESPACE.get(patcher.get("classnamespace"))
+    if scope is not None:
+        return scope
+    for entry in patcher.get("boxes", []) or []:
+        box = entry.get("box") if isinstance(entry, dict) else None
+        if isinstance(box, dict) and box.get("maxclass") == "codebox":
+            return "gen"
+    return default
+
+
+def inner_patcher_scope(box_dict: dict, parent_scope: str) -> str:
+    """Return the scope of the patcher embedded in *box_dict*.
+
+    The box name is the first whitespace token of ``text`` for a newobj box,
+    else its maxclass. Gen containers (:data:`GEN_CONTAINER_NAMES` or
+    maxclass ``gen~``) give ``"gen"``; RNBO containers
+    (:data:`RNBO_CONTAINER_NAMES` or maxclass ``rnbo~``) give ``"rnbo"``;
+    anything else (``p``, ``bpatcher``, ``poly~`` ...) takes the embedded
+    patcher's own classnamespace / codebox scope, defaulting to
+    *parent_scope* (subpatchers inherit).
+    """
+    maxclass = box_dict.get("maxclass", "")
+    name = maxclass
+    if maxclass == "newobj":
+        text = box_dict.get("text")
+        tokens = text.split() if isinstance(text, str) else []
+        name = tokens[0] if tokens else ""
+    if name in GEN_CONTAINER_NAMES or maxclass == "gen~":
+        return "gen"
+    if name in RNBO_CONTAINER_NAMES or maxclass == "rnbo~":
+        return "rnbo"
+    return detect_patcher_scope(box_dict.get("patcher") or {}, default=parent_scope)
+
 # Placeholder port text written by the override generator
 # (src/maxpat/audit/overrides.py ``_build_outlet_array`` /
 # ``_build_inlet_array``). It carries no information, so the per-port merge
@@ -172,6 +253,15 @@ class ObjectDatabase:
         # Unordered, alias-canonical companion pairs from relationships.json
         # (review A1: Layer 3 never flags a known pair's type/role).
         self._known_pairs: set[frozenset[str]] = set()
+        # Q12 / C3: source labels per raw name ("rnbo", "gen", "msp",
+        # "packages/Bach", ...) -- later domain loads overwrite
+        # self._objects[name], so this is the only record of every file a
+        # name appears in. _implied_restrictions holds the derived
+        # rnbo/gen-only restriction; _equivalents the alias-canonical
+        # relationships.json "equivalent" partners (MAX-equivalent hints).
+        self._sources: dict[str, set[str]] = defaultdict(set)
+        self._implied_restrictions: dict[str, list[str]] = {}
+        self._equivalents: dict[str, list[str]] = defaultdict(list)
         self._load(db_root)
 
     def _load(self, db_root: Path) -> None:
@@ -196,6 +286,10 @@ class ObjectDatabase:
                 }
                 for a, b in itertools.combinations(sorted(names), 2):
                     self._known_pairs.add(frozenset((a, b)))
+                # Q12: "equivalent" pairs feed suggest_max_equivalent.
+                if entry.get("relationship") == "equivalent":
+                    for member in sorted(names):
+                        self._equivalents[member] = sorted(names - {member})
 
         # Parse overrides.json exactly once (quick-260421-b3a FN-02). Both
         # the variable_io_rules registry and the per-object per-port merge
@@ -236,6 +330,7 @@ class ObjectDatabase:
                                 source = f"packages/{pkg_dir.name}"
                                 for name, obj in data.items():
                                     self._objects[name] = obj
+                                    self._sources[name].add(source)
                                     self._package_objects[pkg_dir.name].append(name)
                                     if not obj.get("inlets") and not obj.get("outlets"):
                                         self._empty_io_by_source[source].append(name)
@@ -245,6 +340,7 @@ class ObjectDatabase:
                     data = json.loads(json_path.read_text())
                     for name, obj in data.items():
                         self._objects[name] = obj
+                        self._sources[name].add(domain_dir)
                         if not obj.get("inlets") and not obj.get("outlets"):
                             self._empty_io_by_source[domain_dir].append(name)
 
@@ -264,6 +360,11 @@ class ObjectDatabase:
         # existing back-compat readers see unchanged data. Runs after the
         # validator so role values are known valid (D-01, D-03).
         self._apply_signal_role_writethrough()
+
+        # Derive the rnbo/gen-only implied restrictions (Q12 / C3). Runs
+        # after the override merge so an explicit domain_restricted (even
+        # []) is visible and pre-empts the derivation.
+        self._compute_implied_restrictions()
 
         # Load package registry
         pkg_info_path = db_root / "package_info.json"
@@ -470,6 +571,32 @@ class ObjectDatabase:
                 if role is None:
                     continue
                 outlet["signal"] = (role == "audio")
+
+    def _compute_implied_restrictions(self) -> None:
+        """Derive implied domain restrictions from DB sources (Q12 / C3).
+
+        A name whose DB entries all come from ``rnbo/`` and/or ``gen/``
+        (:data:`IMPLIED_RESTRICTION_SOURCES`) exists only in RNBO / Gen:
+        MAX says "No such object" for it in a Max patcher. It is restricted
+        to ``sorted(sources)`` unless
+
+        * it is an aliases.json key (lookups never reach its own entry; the
+          alias target decides -- e.g. ``f`` -> ``float``), or
+        * its merged object carries an explicit ``domain_restricted`` key.
+          An explicit key always wins, including ``[]``: the real Max
+          objects among the RNBO-domain entries (``rnbo~``, ``list.*``,
+          ...) carry ``[]`` with bundle evidence in their overrides.json
+          ``_domain_scope`` note.
+        """
+        self._implied_restrictions = {}
+        for name, sources in self._sources.items():
+            if name in self._aliases:
+                continue
+            obj = self._objects.get(name)
+            if obj is None or "domain_restricted" in obj:
+                continue
+            if sources and sources <= IMPLIED_RESTRICTION_SOURCES:
+                self._implied_restrictions[name] = sorted(sources)
 
     def lookup(self, name: str, *, allowed_packages: list[str] | None = None) -> dict | None:
         """Look up an object by name, resolving aliases.
@@ -894,6 +1021,64 @@ class ObjectDatabase:
         """bool sugar for `bool(get_domain_restrictions(name))` (D-08)."""
         return bool(self.get_domain_restrictions(name))
 
+    def get_sources(self, name: str) -> list[str]:
+        """Sorted source labels ("rnbo", "msp", "packages/Bach", ...) of every
+        DB file that has an entry for *name* (alias-resolved; Q12 / C3).
+        Unknown names give []."""
+        canonical = self._aliases.get(name, name)
+        return sorted(self._sources.get(canonical, ()))
+
+    def get_implied_restrictions(self, name: str) -> list[str]:
+        """Domains an rnbo/gen-only name is implicitly restricted to (Q12 / C3).
+
+        Non-empty only when every DB entry for the alias-canonical name comes
+        from ``rnbo/`` and/or ``gen/`` and no explicit ``domain_restricted``
+        key is set (an explicit key, even ``[]``, wins). Returns a fresh list;
+        [] for unrestricted or unknown names. ``get_domain_restrictions``
+        stays explicit-only (D-05).
+        """
+        canonical = self._aliases.get(name, name)
+        return list(self._implied_restrictions.get(canonical, ()))
+
+    def get_effective_restrictions(self, name: str) -> list[str]:
+        """Where *name* may be used: the explicit ``domain_restricted`` list
+        when the key is set (even ``[]``), else the implied list (Q12 / C3).
+        [] means anywhere; unknown names give []. Returns a fresh list."""
+        canonical = self._aliases.get(name, name)
+        obj = self._objects.get(canonical)
+        if obj is None:
+            return []
+        if "domain_restricted" in obj:
+            return list(obj["domain_restricted"])
+        return list(self._implied_restrictions.get(canonical, ()))
+
+    def is_gen_operator(self, name: str) -> bool:
+        """True when the raw *name* has an entry in ``gen/objects.json``.
+
+        Not alias-resolved: aliases.json is the Max box namespace (``t``,
+        ``sel``, ``f`` mean nothing in GenExpr). Used by validate_genexpr to
+        check codebox calls against the gen domain only (Q12 / G3).
+        """
+        return "gen" in self._sources.get(name, ())
+
+    def suggest_max_equivalent(self, name: str) -> str | None:
+        """A MAX equivalent for a name that cannot be used here, or None.
+
+        Tried in order (Q12 / C3): the pd-blocklist ``max_equivalent`` for
+        the raw name, then for the alias-canonical name; then the first
+        relationships.json ``equivalent`` partner that exists and has no
+        effective restriction.
+        """
+        canonical = self._aliases.get(name, name)
+        for key in (name, canonical):
+            entry = self._pd_blocklist.get(key)
+            if entry and entry.get("max_equivalent"):
+                return entry["max_equivalent"]
+        for partner in self._equivalents.get(canonical, ()):
+            if self.exists(partner) and not self.get_effective_restrictions(partner):
+                return partner
+        return None
+
     def compute_io_counts(self, name: str, args: list[str] | None = None) -> tuple[int, int]:
         """Compute actual inlet/outlet counts, handling variable I/O objects.
 
@@ -1266,6 +1451,33 @@ class ObjectDatabase:
                 no_coverage.append(canonical)
         return {
             "restricted_no_coverage": sorted(no_coverage),
+        }
+
+    def audit_domain_scope(self) -> dict[str, list[str]]:
+        """Report the domain-scope picture (Q12 / C3), sorted lists:
+
+          implied: names restricted by derivation (rnbo/gen-only sources,
+            no explicit key, not an alias key).
+          explicit: names with a non-empty explicit ``domain_restricted``.
+          exempt: names with an explicit ``domain_restricted: []`` whose
+            sources are all rnbo/gen -- RNBO/Gen-domain entries that the
+            Max bundle shows are real Max objects.
+        """
+        explicit: list[str] = []
+        exempt: list[str] = []
+        for name, obj in self._objects.items():
+            if "domain_restricted" not in obj:
+                continue
+            if obj["domain_restricted"]:
+                explicit.append(name)
+            else:
+                sources = self._sources.get(name, set())
+                if sources and sources <= IMPLIED_RESTRICTION_SOURCES:
+                    exempt.append(name)
+        return {
+            "implied": sorted(self._implied_restrictions),
+            "explicit": sorted(explicit),
+            "exempt": sorted(exempt),
         }
 
     def audit_signal_role_coverage(self) -> dict[str, dict]:
