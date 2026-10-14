@@ -214,7 +214,7 @@ def add_rnbo(
     box_id = patcher._gen_id()
 
     # Create inner RNBO patcher
-    inner = PatcherClass(db=patcher.db, is_subpatcher=True)
+    inner = PatcherClass(db=patcher.db, is_subpatcher=True, domain_context="rnbo")
     inner.props["bgcolor"] = list(RNBO_PATCHER_BGCOLOR)
     inner.props["rect"] = [100.0, 100.0, 700.0, 500.0]
 

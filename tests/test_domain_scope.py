@@ -563,3 +563,261 @@ class TestBundleOracle:
             if n not in mapped and n not in mxo and n not in bundle_max_scope_names
         ]
         assert missing == []
+
+
+# ===========================================================================
+# Task 2: builder contexts (Patcher.domain_context)
+# ===========================================================================
+
+
+def _new_patcher(db, **kw):
+    from src.maxpat.patcher import Patcher
+    return Patcher(db=db, **kw)
+
+
+class TestPatcherContext:
+    def test_default_max(self, db):
+        assert _new_patcher(db).domain_context == "max"
+
+    def test_bogus_context(self, db):
+        with pytest.raises(ValueError):
+            _new_patcher(db, domain_context="bogus")
+
+    @pytest.mark.parametrize("name", ["expr~", "wrap~", "counter~", "history", "floor~"])
+    def test_add_box_refused_at_max(self, db, name):
+        p = _new_patcher(db)
+        p.add_box("cycle~", args=["440"])
+        n_boxes, next_id = len(p.boxes), p._next_id
+        with pytest.raises(ValueError) as exc:
+            p.add_box(name)
+        msg = str(exc.value)
+        assert f"'{name}'" in msg
+        assert repr(db.get_effective_restrictions(name)) in msg
+        assert "max" in msg and "Rule #1" in msg
+        if name == "wrap~":
+            assert "pong~ 1 0. 1." in msg
+        assert len(p.boxes) == n_boxes and p._next_id == next_id
+
+    @pytest.mark.parametrize("name", ["cycle~", "rnbo~", "list.len", "div~"])
+    def test_add_box_accepted_at_max(self, db, name):
+        p = _new_patcher(db)
+        assert p.add_box(name).name == name
+
+    def test_m4l_carve_out(self, tmp_path):
+        mdb = _mini_db(tmp_path, {"baz~": {"domain_restricted": ["m4l"]}})
+        p = _new_patcher(mdb)
+        assert p.add_box("baz~").name == "baz~"
+        with pytest.raises(ValueError):
+            p.add_box("onlyrnbo~")
+
+
+class TestInnerContexts:
+    def test_add_rnbo_inner(self, db):
+        from src.maxpat.rnbo import add_rnbo
+        p = _new_patcher(db)
+        _, inner = add_rnbo(p)
+        assert inner.domain_context == "rnbo"
+        inner.add_box("expr~", args=["$v1"])
+        inner.add_box("wrap~")
+        with pytest.raises(ValueError):
+            inner.add_box("history")
+
+    def test_add_gen_inner(self, db):
+        p = _new_patcher(db)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _, inner = p.add_gen("out1 = in1;")
+        assert inner.domain_context == "gen"
+        inner.add_box("history")
+        inner.add_box("phasor")
+        inner.add_box("codebox")
+        with pytest.raises(ValueError):
+            inner.add_box("expr~")
+
+    def test_subpatcher_inherits(self, db):
+        from src.maxpat.rnbo import add_rnbo
+        p = _new_patcher(db)
+        _, sub = p.add_subpatcher("sub")
+        assert sub.domain_context == "max"
+        with pytest.raises(ValueError):
+            sub.add_box("expr~")
+        _, rinner = add_rnbo(p)
+        _, rsub = rinner.add_subpatcher("rsub")
+        assert rsub.domain_context == "rnbo"
+        rsub.add_box("expr~")
+
+    def test_embedded_bpatcher_inherits(self, db):
+        from src.maxpat.rnbo import add_rnbo
+        p = _new_patcher(db)
+        _, top_bp = p.add_bpatcher(embedded=True)
+        assert top_bp.domain_context == "max"
+        _, rinner = add_rnbo(p)
+        _, bp = rinner.add_bpatcher(embedded=True)
+        assert bp.domain_context == "rnbo"
+        bp.add_box("expr~")
+
+    def test_validate_gen_inner(self, db):
+        p = _new_patcher(db)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _, inner = p.add_gen("out1 = in1;")
+        inner.add_box("history")
+        assert _errors(validate_patch(inner), "objects") == []
+
+    def test_validate_uses_domain_context(self, db):
+        # No codebox and no classnamespace: only domain_context says gen.
+        p = _new_patcher(db, domain_context="gen")
+        p.add_box("history")
+        assert _errors(validate_patch(p), "objects") == []
+        assert len(_errors(validate_patch(p, scope="max"), "objects", "history")) == 1
+
+
+def _inner(boxes, **keys) -> dict:
+    d = {"boxes": boxes, "lines": []}
+    d.update(keys)
+    return d
+
+
+def _container(box_id, text, inner, maxclass="newobj"):
+    entry = _box(box_id, text, maxclass=maxclass)
+    entry["box"]["patcher"] = inner
+    return entry
+
+
+class TestFromDict:
+    def _loaded(self, db, d, **kw):
+        from src.maxpat.patcher import Patcher
+        return Patcher.from_dict(copy.deepcopy(d), db=db, **kw)
+
+    def test_rnbo_container_and_nested_p(self, db):
+        d = _patch([
+            _container("obj-1", "rnbo~", _inner(
+                [_container("obj-2", "p inner", _inner([_box("obj-3", "expr~ $v1")]))],
+                classnamespace="rnbo",
+            )),
+            _container("obj-4", "gen~", _inner([_box("obj-5", "history")])),
+            _container("obj-6", "p top", _inner([_box("obj-7", "cycle~ 440")])),
+        ])
+        p = self._loaded(db, d)
+        assert p.domain_context == "max"
+        by_id = {b.id: b for b in p.boxes}
+        rnbo_inner = by_id["obj-1"]._inner_patcher
+        assert rnbo_inner.domain_context == "rnbo"
+        assert rnbo_inner.boxes[0]._inner_patcher.domain_context == "rnbo"
+        assert by_id["obj-4"]._inner_patcher.domain_context == "gen"
+        assert by_id["obj-6"]._inner_patcher.domain_context == "max"
+        assert p.to_dict() == d
+
+    def test_top_level_dsp_gen(self, db):
+        d = _patch([_box("obj-1", "history")], classnamespace="dsp.gen")
+        assert self._loaded(db, d).domain_context == "gen"
+
+    def test_explicit_context(self, db):
+        d = _patch([_box("obj-1", "expr~ $v1")])
+        p = self._loaded(db, d, domain_context="rnbo")
+        assert p.domain_context == "rnbo"
+        assert p.to_dict() == d
+
+
+class TestRefusedEditsLeavePatchIntact:
+    def _setup(self, db):
+        p = _new_patcher(db)
+        c = p.add_box("cycle~", args=["440"])
+        g = p.add_box("*~", args=["0.5"])
+        p.add_connection(c, 0, g, 0)
+        return p, c, g
+
+    @staticmethod
+    def _snapshot(p):
+        return (
+            [b.id for b in p.boxes],
+            [(ln.source_id, ln.source_outlet, ln.dest_id, ln.dest_inlet) for ln in p.lines],
+            p._next_id,
+        )
+
+    def test_replace_box(self, db):
+        p, c, _ = self._setup(db)
+        before = self._snapshot(p)
+        with pytest.raises(ValueError):
+            p.replace_box(c, "expr~", args=["$v1"])
+        assert self._snapshot(p) == before
+        assert c in p.boxes
+
+    def test_replace_box_safe(self, db):
+        p, c, _ = self._setup(db)
+        before = self._snapshot(p)
+        with pytest.raises(ValueError):
+            p.replace_box_safe(c, "expr~", args=["$v1"])
+        assert self._snapshot(p) == before
+
+    def test_insert_into_connection(self, db):
+        p, c, g = self._setup(db)
+        before = self._snapshot(p)
+        with pytest.raises(ValueError):
+            p.insert_into_connection(c, g, "expr~", args=["$v1"])
+        assert self._snapshot(p) == before
+
+
+def _visual_gen_dict(db) -> dict:
+    """A visual (no codebox) Gen patcher: in 1 -> history -> out 1."""
+    def box(bid, text):
+        name = text.split()[0]
+        args = text.split()[1:]
+        n_in, n_out = db.compute_io_counts(name, args)
+        return _box(bid, text, n_in=n_in, n_out=n_out)
+    return _patch(
+        [box("obj-1", "in 1"), box("obj-2", "history"), box("obj-3", "out 1")],
+        [
+            {"patchline": {"source": ["obj-1", 0], "destination": ["obj-2", 0]}},
+            {"patchline": {"source": ["obj-2", 0], "destination": ["obj-3", 0]}},
+        ],
+        classnamespace="box",
+    )
+
+
+class TestHooksScope:
+    def test_read_patch_gendsp(self, db, tmp_path):
+        from src.maxpat.hooks import read_patch
+        f = tmp_path / "v.gendsp"
+        f.write_text(json.dumps(_visual_gen_dict(db)))
+        p, _ = read_patch(f)
+        assert p.domain_context == "gen"
+        assert _errors(validate_patch(p), "objects") == []
+
+    def test_read_patch_maxpat(self, db, tmp_path):
+        from src.maxpat.hooks import read_patch
+        f = tmp_path / "v.maxpat"
+        f.write_text(json.dumps(_visual_gen_dict(db)))
+        p, _ = read_patch(f)
+        assert p.domain_context == "max"
+
+    def test_validate_file(self, db, tmp_path):
+        from src.maxpat.hooks import validate_file
+        d = _visual_gen_dict(db)
+        g = tmp_path / "v.gendsp"
+        g.write_text(json.dumps(d))
+        m = tmp_path / "v.maxpat"
+        m.write_text(json.dumps(d))
+        assert _errors(validate_file(g), "objects", "history") == []
+        assert len(_errors(validate_file(m), "objects", "history")) == 1
+
+    def test_save_gate_gendsp_saves(self, db, tmp_path):
+        from src.maxpat.hooks import save_patch_roundtrip
+        target = tmp_path / "v2.gendsp"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            save_patch_roundtrip(_visual_gen_dict(db), target)
+        assert target.exists()
+
+    def test_save_gate_maxpat_refused(self, db, tmp_path):
+        from src.maxpat.hooks import PatchValidationError, save_patch_roundtrip
+        target = tmp_path / "v.maxpat"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with pytest.raises(PatchValidationError) as exc:
+                save_patch_roundtrip(_visual_gen_dict(db), target)
+        assert any(
+            getattr(f, "layer", None) == "objects" and "'history'" in f.message
+            for f in exc.value.findings
+        )
+        assert not target.exists()

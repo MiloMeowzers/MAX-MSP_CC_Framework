@@ -41,7 +41,12 @@ from src.maxpat.maxclass_map import resolve_maxclass, is_ui_object, UI_MAXCLASSE
 from src.maxpat.graph import GraphMixin
 from src.maxpat.analysis import AnalysisMixin, SECTION_SIGNATURES, _SECTION_NAME_PRIORITY
 from src.maxpat.sizing import calculate_box_size
-from src.maxpat.db_lookup import ObjectDatabase
+from src.maxpat.db_lookup import (
+    DOMAIN_SCOPES,
+    ObjectDatabase,
+    detect_patcher_scope,
+    inner_patcher_scope,
+)
 
 
 class Patchline:
@@ -387,6 +392,8 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         db: ObjectDatabase | None = None,
         is_subpatcher: bool = False,
         allowed_packages: list[str] | None = None,
+        *,
+        domain_context: str = "max",
     ) -> None:
         """Create a new Patcher.
 
@@ -396,11 +403,23 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             allowed_packages: Package filter passed to Box creation.
                 None=allow all (default), []=core only,
                 ["BEAP"]=core+BEAP objects.
+            domain_context: Keyword-only. The scope this patcher lives in:
+                "max" (default), "gen" (gen~ / .gendsp) or "rnbo" (rnbo~ /
+                .rnbopat). ``add_box`` refuses names whose effective domain
+                restriction excludes it (Q12 / C3). Never serialized.
+
+        Raises:
+            ValueError: domain_context is not in DOMAIN_SCOPES.
         """
+        if domain_context not in DOMAIN_SCOPES:
+            raise ValueError(
+                f"domain_context must be one of {DOMAIN_SCOPES}, got {domain_context!r}"
+            )
         if db is None:
             db = ObjectDatabase()
 
         self.db = db
+        self.domain_context = domain_context
         self.allowed_packages = allowed_packages
         self.boxes: list[Box] = []
         self.lines: list[Patchline] = []
@@ -743,12 +762,18 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             EditResult with the new box and all old connections as orphaned.
 
         Raises:
-            ValueError: If old_box is not in this patcher.
+            ValueError: If old_box is not in this patcher, or if new_name's
+                domain restriction excludes this patcher's domain_context
+                (Q12 / C3). Both are raised before anything changes.
         """
         if old_box not in self.boxes:
             raise ValueError(
                 f"Box {old_box.id} not found in this patcher"
             )
+
+        # Domain check before orphan capture and remove_box: a refused
+        # replacement must leave the patch untouched (Q12 / C3).
+        self._require_domain_scope(new_name)
 
         # Capture ALL connections to/from old box as orphaned dicts
         orphaned: list[dict] = []
@@ -1276,7 +1301,13 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                 Patcher._populate_comments_recursive(inner)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], db: "ObjectDatabase | None" = None) -> "Patcher":
+    def from_dict(
+        cls,
+        data: dict[str, Any],
+        db: "ObjectDatabase | None" = None,
+        *,
+        domain_context: str | None = None,
+    ) -> "Patcher":
         """Reconstruct a Patcher from a raw .maxpat JSON dict.
 
         Takes the full {"patcher": {...}} structure and rebuilds a Patcher
@@ -1286,6 +1317,11 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         Args:
             data: A raw .maxpat dict with top-level "patcher" key.
             db: Optional ObjectDatabase instance.
+            domain_context: Keyword-only scope of the top level ("max",
+                "gen", "rnbo"). None derives it with detect_patcher_scope
+                (classnamespace, else a top-level codebox, else max). Inner
+                patchers get inner_patcher_scope: gen~/jit.gen... -> gen,
+                rnbo~ -> rnbo, anything else inherits (Q12 / C3).
 
         Returns:
             Reconstructed Patcher instance.
@@ -1304,8 +1340,16 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                 f"got {type(boxes_raw).__name__}"
             )
 
+        if domain_context is None:
+            domain_context = detect_patcher_scope(patcher_data)
+        elif domain_context not in DOMAIN_SCOPES:
+            raise ValueError(
+                f"domain_context must be one of {DOMAIN_SCOPES}, got {domain_context!r}"
+            )
+
         p = cls.__new__(cls)
         p.db = db if db is not None else ObjectDatabase()
+        p.domain_context = domain_context
         p.allowed_packages = None
         p.boxes = []
         p.lines = []
@@ -1362,7 +1406,11 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
 
             # Reconstruct inner patcher if present
             if "patcher" in box_data:
-                box._inner_patcher = Patcher.from_dict({"patcher": box_data["patcher"]}, db=p.db)
+                box._inner_patcher = Patcher.from_dict(
+                    {"patcher": box_data["patcher"]},
+                    db=p.db,
+                    domain_context=inner_patcher_scope(box_data, p.domain_context),
+                )
 
             # Extra attrs: everything not already handled
             _handled_keys = {
