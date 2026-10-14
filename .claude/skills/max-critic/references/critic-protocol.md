@@ -37,9 +37,11 @@ If blockers exist:
 ### Step 5: Handle Warnings and Notes
 
 If no blockers but warnings/notes exist:
-1. For .maxpat output: add `comment` objects near the relevant box with the finding text
-2. For code output: add inline comments (// CRITIC: finding text)
+1. List the warnings and notes (finding + suggestion) in the summary returned to the caller
+2. Do not modify the output: no `comment` boxes in the patch, no comments in the code
 3. Proceed to Step 6
+
+What each severity means for saving: `.claude/skills/references/severity-contract.md`.
 
 ### Step 6: Approve Output
 
@@ -84,7 +86,7 @@ At the pause, the critic must:
 
 4. **Options:**
    - **continue**: resume the loop normally with no further soft-limit pauses (the next stop would be the existing 5-identical-finding escalation below)
-   - **accept**: remaining blockers are downgraded to warnings, annotated inline, and output is approved
+   - **accept**: the user has accepted the remaining blockers. They are listed in the report (never written into the output) and the output is approved. Saving a new file that still holds a blocker then needs `force=True` (CLAUDE.md Rule #7: force only with the user's confirmation, and choosing "accept" is that confirmation)
 
 ### Interaction with Escalation
 
@@ -142,7 +144,7 @@ Round 3: [blocker: fan-out without trigger]
    | 2 | gain safety on *~ inlet | blocker | resolved |
    | 3 | fan-out without trigger | blocker | persists |
 -> User: "accept"
--> Fan-out finding downgraded to warning, annotated, output approved
+-> Fan-out blocker accepted by the user and listed in the report; output approved (a new-file save needs force=True)
 ```
 
 ### Escalation

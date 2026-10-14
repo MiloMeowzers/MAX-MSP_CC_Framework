@@ -105,7 +105,7 @@ After all flagged phases complete, proceed to the standard edit flow (steps 10+)
 15. **Critic loop** -- validate and review the modified patch:
     - Run `validate_patch(patcher)` for structural validation
     - Run `review_patch(patcher.to_dict())` via the max-critic skill
-    - Same quality gate as `/max-build` -- blockers require revision, warnings are annotated
+    - Same quality gate as `/max-build` -- blockers require revision; warnings and notes are listed in the summary, never written into the patch or code
 
 16. **Bump version** -- call `bump_version(project_dir, "patch", description, files_changed=[path.name])` where `description` is a short summary of the change. Use `"minor"` for significant reworks, `"major"` for breaking changes. Store the returned version string for the next step.
 

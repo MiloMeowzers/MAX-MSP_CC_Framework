@@ -79,6 +79,8 @@ Before creating any connection between objects, verify:
 
 Never connect outlet index 2 on an object that only has 2 outlets (indices 0 and 1). Always count from the database.
 
+What validator and critic findings mean, and which ones block a save: `.claude/skills/references/severity-contract.md`.
+
 ### Rule #3: Hot/Cold Inlet Ordering
 
 When sending multiple values to an object:

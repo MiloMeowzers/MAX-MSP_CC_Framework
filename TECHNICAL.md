@@ -394,7 +394,7 @@ Sub-layers:
 - **Layer 2c — package gating**: defense-in-depth check that package objects used are within the project's `allowed_packages`
 - **Layer 2d — community-extracted check**: flags objects backed only by community-extracted stub metadata (not `verified_installed`)
 
-**Severity**: error
+**Severity**: error for a Pure Data name and for an RNBO- or Gen-only name outside its scope; **warning** for a name not in the database (`Unknown object`). An unknown object does not block, but Rule #1 still forbids it.
 
 ### Layer 3: Connection Validation
 
@@ -403,7 +403,7 @@ Validates all patchlines:
 - **Inlet bounds**: destination inlet index < destination object's inlet count
 - **Signal compatibility**: signal-type checks now consult the curated `signal_role` metadata — signal outlets only connect to signal-accepting inlets (exception: `signal/float` inlets accept both)
 
-**Severity**: error with **auto-fix** — invalid connections are removed in-place
+**Severity**: error with a **proposed removal** — the cord's `(src_id, src_outlet, dst_id, dst_inlet)` is set on `ValidationResult.proposed_removal`. `validate_patch` never mutates its input; only an explicit `apply_fixes(patch, results)` removes the cords. `signal_role` mismatches are warnings and keep the cord.
 
 ### Layer 4: Domain-Specific Rules
 
@@ -427,11 +427,11 @@ Walks embedded `gen~` codebox contents inside the patch and applies GenExpr chec
 
 ### Blocking Behavior
 
-Only **unfixed errors** block output. Auto-fixed errors (Layer 3 connection removal) and all warnings/info are non-blocking. The `has_blocking_errors()` function determines whether a patch can be written to disk.
+`has_blocking_errors(results, is_new=True)` counts only `error` results; warnings and info never block. An error carrying a `proposed_removal` blocks when `is_new` is True (a new patch must not ship a cord the validator would drop) and is reported but not blocking with `is_new=False`. Every other error blocks. `auto_fixed` is a legacy flag `validate_patch` never sets, and the `"fixed"` level is never emitted. Saves are decided by the save gate (see Write Hooks), which blocks on errors and critic blockers the save introduces. Full contract: `.claude/skills/references/severity-contract.md`.
 
 ### Code Validation
 
-Separate validators for code files (`src/maxpat/code_validation.py`). These are **report-only** — they never block output.
+Separate validators for code files (`src/maxpat/code_validation.py`). Run standalone (`validate_code_file`, `write_js`) they are **report-only** and never block; `write_gendsp` does not apply them to its own codebox either. GenExpr in a codebox of a top-level `gen~` box in a `.maxpat` goes through Layer 5, so its errors do block a save that introduces them.
 
 **GenExpr** (`validate_genexpr`):
 - Balanced braces
@@ -484,7 +484,7 @@ Critics live in `src/maxpat/critics/` and are coordinated by the `review_patch()
 | Severity | Meaning | Action |
 |----------|---------|--------|
 | **blocker** | Design defect preventing correctness | Triggers revision in critic loop |
-| **warning** | Non-optimal pattern or best-practice violation | Annotated, no revision |
+| **warning** | Non-optimal pattern or best-practice violation | Reported in the review summary; no revision |
 | **note** | Informational finding | FYI only |
 
 ### Structure Critic (`structure_critic.py`)

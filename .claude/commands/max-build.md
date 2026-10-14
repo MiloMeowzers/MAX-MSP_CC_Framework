@@ -32,7 +32,7 @@ Generate MAX/MSP patches, Gen~ code, JavaScript, or other artifacts by routing t
 5. **Critic loop** -- run the max-critic skill on generated output:
    - Invoke `review_patch(patch_dict, code_context)` from `src.maxpat.critics`
    - If blockers found: request revisions from the generator
-   - If clean or warnings-only: approve output with inline annotations
+   - If clean or warnings-only: approve the output unchanged and list the warnings and notes in the summary (never write them into the patch or code)
    - Loop continues until clean (no hard round limit)
 
 6. **Write output** -- save generated files via `save_patch_roundtrip(patcher.to_dict(), path)` to the project's `generated/` directory. No intermediary Python scripts are created at any point.
