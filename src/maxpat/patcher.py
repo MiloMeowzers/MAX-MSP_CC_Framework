@@ -762,17 +762,21 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             EditResult with the new box and all old connections as orphaned.
 
         Raises:
-            ValueError: If old_box is not in this patcher, or if new_name's
+            ValueError: If old_box is not in this patcher; if new_name is
+                ``p``/``patcher`` (use add_subpatcher) or a UI maxclass with
+                no DB entry (Rule #1; review C4/C5, Q13); or if new_name's
                 domain restriction excludes this patcher's domain_context
-                (Q12 / C3). Both are raised before anything changes.
+                (Q12 / C3). All are raised before anything changes.
         """
         if old_box not in self.boxes:
             raise ValueError(
                 f"Box {old_box.id} not found in this patcher"
             )
 
-        # Domain check before orphan capture and remove_box: a refused
-        # replacement must leave the patch untouched (Q12 / C3).
+        # Buildability and domain checks before orphan capture and
+        # remove_box: a refused replacement must leave the patch untouched
+        # (Q12 / C3, Q13).
+        self._require_buildable(new_name)
         self._require_domain_scope(new_name)
 
         # Capture ALL connections to/from old box as orphaned dicts
@@ -911,7 +915,8 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
 
         Raises:
             ValueError: If no connections exist between source and dest,
-                or source/dest not in patcher.
+                or source/dest not in patcher. add_box refusals (Rule #1,
+                p/patcher, domain scope) propagate before any cord changes.
         """
         if source not in self.boxes:
             raise ValueError(f"Box {source.id} not found in this patcher")

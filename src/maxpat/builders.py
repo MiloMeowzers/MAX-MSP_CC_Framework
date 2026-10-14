@@ -25,6 +25,7 @@ from src.maxpat.defaults import (
     FONTFACE_ITALIC,
     GEN_PATCHER_BGCOLOR,
 )
+from src.maxpat.maxclass_map import is_ui_object
 from src.maxpat.sizing import calculate_box_size
 from src.maxpat.patcher import Box, Patchline
 
@@ -61,12 +62,17 @@ class BuildersMixin:
             The created Box instance.
 
         Raises:
-            ValueError: If object not found in database (Rule #1), or if
-                its effective domain restriction excludes this patcher's
-                ``domain_context`` (an RNBO/Gen-only name such as ``expr~``
-                or ``history`` in a Max patcher; Q12 / C3). The domain
-                check runs first, so a refusal changes nothing.
+            ValueError: If object not found in database (Rule #1); if
+                *name* is ``p``/``patcher`` (use ``add_subpatcher``; review
+                C4, Q13); if *name* is a UI maxclass with no DB entry, whose
+                inlets/outlets would be guessed (Rule #1; today ``markup``
+                and ``progress``); or if its effective domain restriction
+                excludes this patcher's ``domain_context`` (an RNBO/Gen-only
+                name such as ``expr~`` or ``history`` in a Max patcher;
+                Q12 / C3). These checks run first, so a refusal changes
+                nothing.
         """
+        self._require_buildable(name)
         self._require_domain_scope(name)
         box_id = self._gen_id()
         box = Box(name=name, args=args, box_id=box_id, db=self.db, x=x, y=y,
@@ -82,6 +88,35 @@ class BuildersMixin:
 
         self.boxes.append(box)
         return box
+
+    def _require_buildable(self, name: str) -> None:
+        """Raise ValueError when add_box cannot build *name* correctly.
+
+        - ``p``/``patcher``: MAX saves a subpatcher as a newobj ``p <name>``
+          box carrying its embedded patcher (review C4, Q13); add_box would
+          write a box with no inner patcher. Use ``add_subpatcher``.
+        - A UI maxclass (C5, Q13) with no object-DB entry: Box would guess
+          its inlets/outlets (Rule #1: Never Guess Objects).
+
+        ``add_subpatcher``, ``add_comment`` and ``add_message`` build their
+        boxes directly and are unaffected.
+        """
+        canonical = self.db._aliases.get(name, name)
+        if canonical == "patcher":
+            raise ValueError(
+                f"'{name}' cannot be built with add_box: MAX saves a "
+                f"subpatcher as a newobj 'p <name>' box that carries its "
+                f"embedded patcher (review C4). Use "
+                f"add_subpatcher(name, inlets=..., outlets=...), which returns "
+                f"(box, inner_patcher)."
+            )
+        if is_ui_object(canonical) and not self.db.exists(name):
+            raise ValueError(
+                f"'{name}' is a UI maxclass (MAX saves it with its own "
+                f"maxclass), but the object DB has no entry for it, so its "
+                f"inlets/outlets would be guessed (Rule #1: Never Guess "
+                f"Objects). It cannot be built until the DB has it."
+            )
 
     def _require_domain_scope(self, name: str) -> None:
         """Raise ValueError when *name* may not live in this patcher's scope.

@@ -403,7 +403,7 @@ class TestComplexity:
         p = _make_patcher()
         sub = _quick_box(p, "patcher", ["outer"])
         inner = Patcher(db=p.db, is_subpatcher=True)
-        sub2 = inner.add_box("patcher", ["inner"])
+        sub2 = _quick_box(inner, "patcher", ["inner"])
         inner2 = Patcher(db=p.db, is_subpatcher=True)
         inner2.add_box("print")
         sub2._inner_patcher = inner2
@@ -583,7 +583,7 @@ class TestHierarchy:
         p = _make_patcher()
         sub = _quick_box(p, "patcher", ["outer"])
         inner = Patcher(db=p.db, is_subpatcher=True)
-        sub2 = inner.add_box("patcher", ["inner"])
+        sub2 = _quick_box(inner, "patcher", ["inner"])
         inner2 = Patcher(db=p.db, is_subpatcher=True)
         inner2.add_box("print")
         sub2._inner_patcher = inner2

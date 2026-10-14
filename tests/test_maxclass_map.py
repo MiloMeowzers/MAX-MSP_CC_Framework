@@ -357,3 +357,89 @@ class TestSaveGateEndToEnd:
         assert any("Wrong maxclass" in t and "live.thisdevice" in t
                    for t in texts), texts
         assert not target.exists()
+
+
+class TestBuilderGuards:
+    """C4/C5 builder half: add_box refuses p/patcher and DB-less UI maxclasses."""
+
+    @staticmethod
+    def _state(p: Patcher):
+        return (len(p.boxes), p._next_id, [
+            (ln.source_id, ln.source_outlet, ln.dest_id, ln.dest_inlet)
+            for ln in p.lines
+        ])
+
+    @pytest.mark.parametrize("name", ["p", "patcher"])
+    def test_subpatcher_names_refused(self, name, db):
+        p = Patcher(db=db)
+        p.add_box("cycle~", ["440"])
+        before = self._state(p)
+        with pytest.raises(ValueError) as exc:
+            p.add_box(name, ["foo"])
+        msg = str(exc.value)
+        assert name in msg
+        assert "add_subpatcher" in msg
+        assert self._state(p) == before
+
+    def test_add_subpatcher_unchanged(self, db):
+        p = Patcher(db=db)
+        box, inner = p.add_subpatcher("foo", inlets=2, outlets=1)
+        assert isinstance(inner, Patcher)
+        d = _box_dicts(p)[0]
+        assert d["maxclass"] == "newobj"
+        assert d["text"] == "p foo"
+        assert isinstance(d.get("patcher"), dict)
+        assert (d["numinlets"], d["numoutlets"]) == (2, 1)
+
+    def test_db_less_ui_maxclass_refused(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fresh = ObjectDatabase()
+        fresh._objects.pop("toggle")
+        p = Patcher(db=fresh)
+        with pytest.raises(ValueError) as exc:
+            p.add_box("toggle")
+        msg = str(exc.value)
+        assert "toggle" in msg
+        assert "UI maxclass" in msg
+        assert "Rule #1" in msg
+        assert p.boxes == []
+
+    def test_toggle_still_builds_with_db_entry(self, db):
+        p = Patcher(db=db)
+        box = p.add_box("toggle")
+        assert box.maxclass == "toggle"
+
+    def _chain(self, db):
+        p = Patcher(db=db)
+        osc = p.add_box("cycle~", ["440"])
+        gain = p.add_box("*~", ["0.5"])
+        dac = p.add_box("dac~")
+        p.add_connection(osc, 0, gain, 0)
+        p.add_connection(gain, 0, dac, 0)
+        p.add_connection(gain, 0, dac, 1)
+        return p, osc, gain
+
+    def test_replace_box_refusal_leaves_patch_intact(self, db):
+        p, osc, _ = self._chain(db)
+        before = self._state(p)
+        with pytest.raises(ValueError):
+            p.replace_box(osc, "p", args=["foo"])
+        assert osc in p.boxes
+        assert self._state(p) == before
+
+    def test_replace_box_safe_refusal_leaves_patch_intact(self, db):
+        p, osc, _ = self._chain(db)
+        before = self._state(p)
+        with pytest.raises(ValueError):
+            p.replace_box_safe(osc, "patcher", args=["foo"])
+        assert osc in p.boxes
+        assert self._state(p) == before
+
+    def test_insert_into_connection_refusal_leaves_cords(self, db):
+        p, osc, gain = self._chain(db)
+        before = self._state(p)
+        with pytest.raises(ValueError):
+            p.insert_into_connection(osc, gain, "p", ["foo"])
+        assert self._state(p)[0] == before[0]
+        assert self._state(p)[2] == before[2]
