@@ -764,7 +764,8 @@ class TestParameterEnableEnforcement:
         box = patch["patcher"]["boxes"][0]["box"]
         saa = box.get("saved_attribute_attributes", {})
         valueof = saa.get("valueof", {})
-        assert valueof.get("parameter_type") == 1  # ParamType.FLOAT
+        # Float is index 0 of parameter_type in parameters.maxref.xml.
+        assert valueof.get("parameter_type") == 0  # ParamType.FLOAT
         assert valueof.get("parameter_unitstyle") == 1  # UnitStyle.FLOAT
 
     def test_preserves_existing_parameter_enable(self):
@@ -858,7 +859,8 @@ class TestParameterEnableEnforcement:
         assert inner_box["parameter_enable"] == 1
         saa = inner_box.get("saved_attribute_attributes", {})
         valueof = saa.get("valueof", {})
-        assert valueof.get("parameter_type") == 1
+        # Float is index 0 of parameter_type in parameters.maxref.xml.
+        assert valueof.get("parameter_type") == 0
         assert valueof.get("parameter_unitstyle") == 1
 
 

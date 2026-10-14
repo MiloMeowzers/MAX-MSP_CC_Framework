@@ -1059,8 +1059,14 @@ class BuildersMixin:
             ``parameter_modmode = ABSOLUTE``, ``parameter_type = FLOAT``,
             ``parameter_unitstyle = FLOAT``, ``parameter_initial_enable``).
 
+        With the corrected enums these serialize as ``parameter_type`` 0,
+        ``parameter_modmode`` 4 and ``parameter_unitstyle`` 1
+        (parameters.maxref.xml order; review D1).
+
         ``gen~`` gets a stable ``varname`` matching the prefix in
-        ``param_connect``. There is NO ``gain~``/``live.gain~``/``ezdac~``
+        ``param_connect``. ``plugout~`` is bare (no channel argument) and
+        gen~ outlet 0 feeds BOTH of its inlets, so the device is stereo.
+        There is NO ``gain~``/``live.gain~``/``ezdac~``
         between ``gen~`` and ``plugout~`` (CLAUDE.md M4L rule -- Ableton's
         channel strip handles volume). Caller fills in DSP via ``gen_code``
         or by editing the gen~ inner patcher returned via ``gen_obj``.
@@ -1113,11 +1119,15 @@ class BuildersMixin:
         )
         gen_obj.extra_attrs["varname"] = gen_varname
 
-        # plugout~ is NOT in UI_MAXCLASSES (newobj with text "plugout~ 1").
-        # add_box handles maxclass resolution via DB.
-        plugout = self.add_box("plugout~", args=["1"], x=200.0, y=400.0)
+        # plugout~ is NOT in UI_MAXCLASSES (newobj with text "plugout~").
+        # A bare plugout~ is the stereo pair (2 inlets); the old channel
+        # argument "1" is obsolete (review D3). add_box resolves the maxclass.
+        plugout = self.add_box("plugout~", x=200.0, y=400.0)
         # Direct gen~ -> plugout~ wiring (D-15: NO gain~/live.gain~/ezdac~).
+        # The mono gen~ output feeds both L and R; a signal fan-out, which
+        # the hot/cold ordering rule exempts.
         self.add_connection(gen_obj, 0, plugout, 0)
+        self.add_connection(gen_obj, 0, plugout, 1)
 
         # live.dial row above gen~. live.dial is in UI_MAXCLASSES + DB.
         dials: list[Box] = []

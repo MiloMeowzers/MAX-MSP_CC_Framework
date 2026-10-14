@@ -9,11 +9,12 @@ the gen_varname literally.
 
 from __future__ import annotations
 
+import warnings
+
 import pytest
 
 from src.maxpat.patcher import Patcher, Box
 from src.maxpat.m4l_polish import ensure_parameter_enable
-from src.maxpat.m4l_constants import ParamType, UnitStyle, ModMode
 
 
 class TestM4LGenSynth:
@@ -93,19 +94,22 @@ class TestM4LGenSynth:
         p, _, dials, _, _ = self._basic_synth()
         for d in dials:
             valueof = d.extra_attrs["saved_attribute_attributes"]["valueof"]
-            assert valueof["parameter_modmode"] == int(ModMode.ABSOLUTE)
+            # Absolute is the 5th mode in parameters.maxref.xml (index 4).
+            assert valueof["parameter_modmode"] == 4
 
     def test_valueof_type_float(self):
         p, _, dials, _, _ = self._basic_synth()
         for d in dials:
             valueof = d.extra_attrs["saved_attribute_attributes"]["valueof"]
-            assert valueof["parameter_type"] == int(ParamType.FLOAT)
+            # Float is the 1st type in parameters.maxref.xml (index 0).
+            assert valueof["parameter_type"] == 0
 
     def test_valueof_unitstyle_float(self):
         p, _, dials, _, _ = self._basic_synth()
         for d in dials:
             valueof = d.extra_attrs["saved_attribute_attributes"]["valueof"]
-            assert valueof["parameter_unitstyle"] == int(UnitStyle.FLOAT)
+            # Float is the 2nd unit style in parameters.maxref.xml (index 1).
+            assert valueof["parameter_unitstyle"] == 1
 
     def test_valueof_mmin_mmax_match_params(self):
         p, _, dials, _, params = self._basic_synth()
@@ -137,6 +141,61 @@ class TestM4LGenSynth:
             line for line in gen_outgoing if line.dest_id == plugout.id
         ]
         assert len(plugout_dst) >= 1, "gen~ does not connect directly to plugout~"
+
+    def test_plugout_has_no_channel_argument(self):
+        # D3: bare plugout~ is the stereo pair; the "1" argument is obsolete.
+        _p, _gen, _dials, plugout, _ = self._basic_synth()
+        assert plugout.text == "plugout~"
+        assert plugout.args == []
+        assert plugout.numinlets == 2
+
+    def test_gen_feeds_both_plugout_inlets(self):
+        # D3: the mono gen~ output reaches both L and R.
+        p, gen, _dials, plugout, _ = self._basic_synth()
+        inlets = {
+            line.dest_inlet for line in p.lines
+            if line.source_id == gen.id and line.source_outlet == 0
+            and line.dest_id == plugout.id
+        }
+        assert inlets == {0, 1}
+
+    def test_skeleton_end_to_end_live_ready(self):
+        """Tracer: skeleton -> to_dict -> polish keeps Live-correct values."""
+        from src.maxpat.critics import review_patch
+        from src.maxpat.m4l_polish import polish_m4l_device
+
+        p = Patcher()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            gen, _dials, plugout = p.add_m4l_gen_synth(
+                [("freq", 20.0, 2000.0), ("amp", 0.0, 0.5)],
+            )
+            d = p.to_dict()
+            polish_m4l_device(d)
+
+        boxes = [b["box"] for b in d["patcher"]["boxes"]]
+        dial_dicts = [b for b in boxes if b.get("maxclass") == "live.dial"]
+        assert len(dial_dicts) == 2
+        for box in dial_dicts:
+            valueof = box["saved_attribute_attributes"]["valueof"]
+            assert valueof["parameter_type"] == 0       # Float
+            assert valueof["parameter_modmode"] == 4    # Absolute
+            assert valueof["parameter_unitstyle"] == 1  # Float
+
+        plugout_dict = next(b for b in boxes if b["id"] == plugout.id)
+        assert plugout_dict["text"] == "plugout~"
+
+        cords = [
+            (ln["patchline"]["source"], ln["patchline"]["destination"])
+            for ln in d["patcher"]["lines"]
+        ]
+        assert ([gen.id, 0], [plugout.id, 0]) in cords
+        assert ([gen.id, 0], [plugout.id, 1]) in cords
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            results = review_patch(d)
+        assert [r for r in results if r.severity == "blocker"] == []
 
     def test_no_gain_between_gen_and_plugout(self):
         # CLAUDE.md M4L rule: NO gain~/live.gain~/ezdac~ in the output path.

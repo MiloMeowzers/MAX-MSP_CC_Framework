@@ -3,8 +3,18 @@
 Pure data module -- IntEnum classes and named constants only.
 Imported by scaffold (Phase 21), critic (Phase 22), and export (Phase 22) code.
 
-Values verified against kicksynth-m4l.maxpat ground truth and Cycling 74 docs.
-Ground-truth verified values noted; others from official documentation.
+Evidence for the parameter enums (review D1, Q15):
+  - The list order in the bundle's ``docs/refpages/m4l-ref/parameters.maxref.xml``
+    (Max 9.2.0): Type = Float, Int, Enum, Blob; Clip Modulation Mode = None,
+    Unipolar, Bipolar, Additive, Absolute; Unit Style = Int, Float, Time,
+    Hertz, deciBel, %, Pan, Semitones, MIDI, Custom, Native. Each value is the
+    0-based position in that list. ``tests/test_m4l_constants.py``
+    (``requires_max``) parses the refpage and pins every member.
+  - kicksynth-m4l.maxpat at commit 408cdf8 (saved by MAX): its 23 float
+    live.dials store ``parameter_type`` 0 and ``parameter_modmode`` 0, and
+    its live.tab stores ``parameter_type`` 2.
+Earlier values had INT and FLOAT swapped and ModMode off by one (no None),
+so Float dials were written as Int and Absolute as Additive.
 """
 
 from enum import IntEnum
@@ -13,10 +23,12 @@ from enum import IntEnum
 class ParamType(IntEnum):
     """parameter_type values in saved_attribute_attributes.valueof.
 
-    Controls how Ableton treats the parameter value.
+    Controls how Ableton treats the parameter value. Order is the
+    parameters.maxref.xml "Type" list (Float, Int, Enum, Blob); float dials
+    in kicksynth-m4l (408cdf8) are type 0 and its live.tab is type 2.
     """
-    INT = 0        # Integer values (0-255 range default)
-    FLOAT = 1      # Floating point (no range restriction)
+    FLOAT = 0      # Floating point (Live's native representation)
+    INT = 1        # Integer values (256 values, 0-255 range default)
     ENUM = 2       # Enumerated list of items
     BLOB = 3       # Non-automatable, preset storage only
 
@@ -25,7 +37,9 @@ class UnitStyle(IntEnum):
     """parameter_unitstyle values -- controls display format in Ableton.
 
     Determines the unit label shown in automation lanes and device UI.
-    Values 0-4 ground-truth verified; 5-8 from official docs ordering.
+    Order is the parameters.maxref.xml "Unit Style" list (Int, Float, Time,
+    Hertz, deciBel, %, Pan, Semitones, MIDI, Custom, Native); Native (10) is
+    not modelled because nothing writes it.
     """
     INT = 0        # Integer display
     FLOAT = 1      # Float display
@@ -40,15 +54,18 @@ class UnitStyle(IntEnum):
 
 
 class ModMode(IntEnum):
-    """parameter_modmode values -- modulation behavior in Ableton.
+    """parameter_modmode values -- Clip Modulation Mode in Ableton.
 
-    Controls how modulators (LFO, Envelope Follower) affect the parameter.
-    Only UNIPOLAR (0) ground-truth verified; others from docs.
+    Controls how clip envelopes modulate the parameter. Order is the
+    parameters.maxref.xml "Clip Modulation Mode" list (None, Unipolar,
+    Bipolar, Additive, Absolute); kicksynth-m4l (408cdf8) dials store 0.
+    ``parameter_modrange`` is used only with ABSOLUTE.
     """
-    UNIPOLAR = 0   # Modulation between min and current value
-    BIPOLAR = 1    # Modulation range = 2x distance to nearest boundary
-    ADDITIVE = 2   # +/- half of total range
-    ABSOLUTE = 3   # Current value as upper/lower bound
+    NONE = 0       # No clip modulation
+    UNIPOLAR = 1   # Modulation between min and current value
+    BIPOLAR = 2    # Modulation range = 2x distance to nearest boundary
+    ADDITIVE = 3   # +/- half of total range
+    ABSOLUTE = 4   # Current value as upper/lower bound (uses modrange)
 
 
 class ParamVisibility(IntEnum):
