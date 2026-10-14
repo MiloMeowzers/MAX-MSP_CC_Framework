@@ -1,0 +1,4038 @@
+{
+  "_comment": "Inherited group messages/attributes (review C8 / Q14). Written only by tools/sync_max_bundle.py --apply groups. Merged at call time by ObjectDatabase.messages/attributes/selectors; never copied into domain files.",
+  "attribute_definitions": {
+    "adapt": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-mop.maxref.xml"
+    },
+    "alpha_mode": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "anchor": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "anim": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "animmode": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "antialias": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "auto_material": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "automatic": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "aux_color": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "axes": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "blend": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "blend_enable": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "blend_mode": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "busymapname": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/msp-ref/mcwrapper-group.maxref.xml"
+    },
+    "capture": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "chans": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/msp-ref/mcwrapper-group.maxref.xml"
+    },
+    "color": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "cull_face": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "depth_clear": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "depth_enable": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "depth_write": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "drawto": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "enable": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "filterclass": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "fog": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "fog_params": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "initialvalues": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "list"
+      },
+      "source": "docs/refpages/msp-ref/mcwrapper-group.maxref.xml"
+    },
+    "layer": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "lighting_enable": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "line_width": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "mat_ambient": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "mat_diffuse": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "mat_emission": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "mat_specular": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "matfile": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "matrixoutput": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "op": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/msp-ref/mcwrapper-group.maxref.xml"
+    },
+    "ortho": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "outputmode": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-mop.maxref.xml"
+    },
+    "point_mode": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "point_size": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "poly_mode": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "position": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "quat": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "replicate": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/msp-ref/mcwrapper-group.maxref.xml"
+    },
+    "rotate": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "rotatexyz": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "scale": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "shader": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "shadow_caster": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "shininess": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "smooth_shading": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "target": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/msp-ref/mcwrapper-group.maxref.xml"
+    },
+    "tex_map": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "tex_plane_s": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "tex_plane_t": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "texture": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "symbol"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "transform_reset": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "type": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-mop.maxref.xml"
+    },
+    "usebusymap": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/msp-ref/mcwrapper-group.maxref.xml"
+    },
+    "values": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "list"
+      },
+      "source": "docs/refpages/msp-ref/mcwrapper-group.maxref.xml"
+    },
+    "viewalign": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/jit-ref/jit.group-gl.maxref.xml"
+    },
+    "voiceprob": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "float"
+      },
+      "source": "docs/refpages/msp-ref/mcwrapper-group.maxref.xml"
+    },
+    "zero": {
+      "definition": {
+        "get": true,
+        "set": true,
+        "type": "int"
+      },
+      "source": "docs/refpages/msp-ref/mcwrapper-group.maxref.xml"
+    }
+  },
+  "max_version": "9.2.0",
+  "members": {
+    "jit.3m": [
+      "jit-89f4d052"
+    ],
+    "jit.alphablend": [
+      "jit-de9b5943"
+    ],
+    "jit.altern": [
+      "jit-88882a86"
+    ],
+    "jit.ameba": [
+      "jit-88882a86"
+    ],
+    "jit.anim.drive": [
+      "jit-65713044"
+    ],
+    "jit.anim.node": [
+      "jit-65713044"
+    ],
+    "jit.anim.path": [
+      "jit-b02482a5"
+    ],
+    "jit.argb2ayuv": [
+      "jit-3ab14440"
+    ],
+    "jit.argb2grgb": [
+      "jit-3ab14440"
+    ],
+    "jit.argb2uyvy": [
+      "jit-3ab14440"
+    ],
+    "jit.avc": [
+      "jit-65713044"
+    ],
+    "jit.avg4": [
+      "jit-88882a86"
+    ],
+    "jit.axis2quat": [
+      "jit-65713044"
+    ],
+    "jit.ayuv2argb": [
+      "jit-3ab14440"
+    ],
+    "jit.ayuv2luma": [
+      "jit-3ab14440"
+    ],
+    "jit.ayuv2uyvy": [
+      "jit-3ab14440"
+    ],
+    "jit.bfg": [
+      "jit-88882a86"
+    ],
+    "jit.brass": [
+      "jit-88882a86"
+    ],
+    "jit.brcosa": [
+      "jit-88882a86"
+    ],
+    "jit.bsort": [
+      "jit-88882a86"
+    ],
+    "jit.buffer~": [
+      "jit-b02482a5"
+    ],
+    "jit.catch~": [
+      "jit-65713044"
+    ],
+    "jit.change": [
+      "jit-fa0eb1ba"
+    ],
+    "jit.charmap": [
+      "jit-3ab14440"
+    ],
+    "jit.chromakey": [
+      "jit-de9b5943"
+    ],
+    "jit.clip": [
+      "jit-88882a86"
+    ],
+    "jit.coerce": [
+      "jit-faebef3c"
+    ],
+    "jit.colorspace": [
+      "jit-88882a86"
+    ],
+    "jit.concat": [
+      "jit-de9b5943"
+    ],
+    "jit.convolve": [
+      "jit-de9b5943"
+    ],
+    "jit.conway": [
+      "jit-88882a86"
+    ],
+    "jit.cycle": [
+      "jit-65713044"
+    ],
+    "jit.demultiplex": [
+      "jit-97e9338f"
+    ],
+    "jit.desktop": [
+      "jit-bfb2ef33"
+    ],
+    "jit.dimmap": [
+      "jit-88882a86"
+    ],
+    "jit.dimop": [
+      "jit-88882a86"
+    ],
+    "jit.displays": [
+      "jit-65713044"
+    ],
+    "jit.dx.grab": [
+      "jit-dfa14e70"
+    ],
+    "jit.dx.videoout": [
+      "jit-3ab14440"
+    ],
+    "jit.eclipse": [
+      "jit-de9b5943"
+    ],
+    "jit.euler2quat": [
+      "jit-65713044"
+    ],
+    "jit.expr": [
+      "jit-88882a86"
+    ],
+    "jit.fastblur": [
+      "jit-88882a86"
+    ],
+    "jit.fft": [
+      "jit-88882a86"
+    ],
+    "jit.fill": [
+      "jit-65713044"
+    ],
+    "jit.findbounds": [
+      "jit-fcbbb624"
+    ],
+    "jit.fluoride": [
+      "jit-88882a86"
+    ],
+    "jit.fprint": [
+      "jit-1f5cf389"
+    ],
+    "jit.freeframe": [
+      "jit-de9b5943"
+    ],
+    "jit.fx.alphaglue": [
+      "jit-260c921a"
+    ],
+    "jit.fx.altern": [
+      "jit-260c921a"
+    ],
+    "jit.fx.ameba": [
+      "jit-260c921a"
+    ],
+    "jit.fx.bitcrush": [
+      "jit-260c921a"
+    ],
+    "jit.fx.brcosa": [
+      "jit-260c921a"
+    ],
+    "jit.fx.cf.bilateral": [
+      "jit-260c921a"
+    ],
+    "jit.fx.cf.sharpen": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.accum": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.additive": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.alphablend": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.average": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.brightlight": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.burn": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.chromakey": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.darken": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.difference": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.dodge": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.exclude": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.freeze": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.glow": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.hardlight": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.heat": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.inverse": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.lighten": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.lumakey": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.multiply": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.negate": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.normal": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.overlay": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.reflect": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.screen": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.softlight": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.stamp": [
+      "jit-260c921a"
+    ],
+    "jit.fx.co.subtractive": [
+      "jit-260c921a"
+    ],
+    "jit.fx.crt": [
+      "jit-260c921a"
+    ],
+    "jit.fx.eclipse": [
+      "jit-260c921a"
+    ],
+    "jit.fx.grain": [
+      "jit-260c921a"
+    ],
+    "jit.fx.hue": [
+      "jit-260c921a"
+    ],
+    "jit.fx.lin2srgb": [
+      "jit-260c921a"
+    ],
+    "jit.fx.repos": [
+      "jit-260c921a"
+    ],
+    "jit.fx.rgb2luma": [
+      "jit-260c921a"
+    ],
+    "jit.fx.sobel": [
+      "jit-260c921a"
+    ],
+    "jit.fx.srgb2lin": [
+      "jit-260c921a"
+    ],
+    "jit.fx.threshold": [
+      "jit-260c921a"
+    ],
+    "jit.fx.tr.dissolve": [
+      "jit-260c921a"
+    ],
+    "jit.fx.tr.gridwipe": [
+      "jit-260c921a"
+    ],
+    "jit.fx.tr.shrinkwipe": [
+      "jit-260c921a"
+    ],
+    "jit.fx.tr.vignettes": [
+      "jit-260c921a"
+    ],
+    "jit.fx.tr.xfade": [
+      "jit-260c921a"
+    ],
+    "jit.fx.vhs": [
+      "jit-260c921a"
+    ],
+    "jit.gen": [
+      "jit-88882a86"
+    ],
+    "jit.gencoord": [
+      "jit-88882a86"
+    ],
+    "jit.geometry": [
+      "jit-65713044"
+    ],
+    "jit.gl.asyncread": [
+      "jit-b6d139f9"
+    ],
+    "jit.gl.bfg": [
+      "jit-2f8187bc"
+    ],
+    "jit.gl.buffer": [
+      "jit-b02482a5"
+    ],
+    "jit.gl.camera": [
+      "jit-31f5dc9c"
+    ],
+    "jit.gl.cornerpin": [
+      "jit-0a654394"
+    ],
+    "jit.gl.cubemap": [
+      "jit-0c886281"
+    ],
+    "jit.gl.environment": [
+      "jit-b02482a5"
+    ],
+    "jit.gl.graph": [
+      "jit-d94a055c"
+    ],
+    "jit.gl.gridshape": [
+      "jit-6ff4b50d"
+    ],
+    "jit.gl.handle": [
+      "jit-34a306f0"
+    ],
+    "jit.gl.isosurf": [
+      "jit-d94a055c"
+    ],
+    "jit.gl.light": [
+      "jit-b8865801"
+    ],
+    "jit.gl.lua": [
+      "jit-c5f9e1d1"
+    ],
+    "jit.gl.material": [
+      "jit-f2c1cbae"
+    ],
+    "jit.gl.mesh": [
+      "jit-e335338b"
+    ],
+    "jit.gl.model": [
+      "jit-6ff4b50d"
+    ],
+    "jit.gl.multiple": [
+      "jit-1f587ed5"
+    ],
+    "jit.gl.node": [
+      "jit-697f51dd"
+    ],
+    "jit.gl.nurbs": [
+      "jit-6ff4b50d"
+    ],
+    "jit.gl.pass": [
+      "jit-3f3229a8"
+    ],
+    "jit.gl.path": [
+      "jit-a242b717"
+    ],
+    "jit.gl.pbr": [
+      "jit-881a5ee8"
+    ],
+    "jit.gl.physdraw": [
+      "jit-5cadad18"
+    ],
+    "jit.gl.picker": [
+      "jit-a701fde6"
+    ],
+    "jit.gl.pix": [
+      "jit-2f8187bc"
+    ],
+    "jit.gl.plato": [
+      "jit-c5f9e1d1"
+    ],
+    "jit.gl.render": [
+      "jit-589fc6ef"
+    ],
+    "jit.gl.shader": [
+      "jit-53f567b8"
+    ],
+    "jit.gl.sketch": [
+      "jit-b9f20846"
+    ],
+    "jit.gl.skybox": [
+      "jit-d2eb7870"
+    ],
+    "jit.gl.slab": [
+      "jit-2f8187bc"
+    ],
+    "jit.gl.text": [
+      "jit-d94a055c"
+    ],
+    "jit.gl.textmult": [
+      "jit-e8f72b57"
+    ],
+    "jit.gl.texture": [
+      "jit-0c886281"
+    ],
+    "jit.gl.tf": [
+      "jit-65713044"
+    ],
+    "jit.gl.videoplane": [
+      "jit-d94a055c"
+    ],
+    "jit.gl.volume": [
+      "jit-8f05daac"
+    ],
+    "jit.glop": [
+      "jit-88882a86"
+    ],
+    "jit.glue": [
+      "jit-88882a86"
+    ],
+    "jit.grab": [
+      "jit-35987987"
+    ],
+    "jit.gradient": [
+      "jit-bfb2ef33"
+    ],
+    "jit.graph": [
+      "jit-88882a86"
+    ],
+    "jit.grgb2argb": [
+      "jit-3ab14440"
+    ],
+    "jit.hatch": [
+      "jit-88882a86"
+    ],
+    "jit.hello": [
+      "jit-65713044"
+    ],
+    "jit.histogram": [
+      "jit-88882a86"
+    ],
+    "jit.hsl2rgb": [
+      "jit-3ab14440"
+    ],
+    "jit.hue": [
+      "jit-88882a86"
+    ],
+    "jit.iter": [
+      "jit-b02482a5"
+    ],
+    "jit.keyscreen": [
+      "jit-ab7e6d8b"
+    ],
+    "jit.la.determinant": [
+      "jit-fcbbb624"
+    ],
+    "jit.la.diagproduct": [
+      "jit-fcbbb624"
+    ],
+    "jit.la.inverse": [
+      "jit-88882a86"
+    ],
+    "jit.la.mult": [
+      "jit-3ab14440"
+    ],
+    "jit.la.trace": [
+      "jit-fcbbb624"
+    ],
+    "jit.la.uppertri": [
+      "jit-88882a86"
+    ],
+    "jit.lcd": [
+      "jit-3ab14440"
+    ],
+    "jit.linden": [
+      "jit-88882a86"
+    ],
+    "jit.luma2ayuv": [
+      "jit-3ab14440"
+    ],
+    "jit.luma2uyvy": [
+      "jit-3ab14440"
+    ],
+    "jit.lumakey": [
+      "jit-de9b5943"
+    ],
+    "jit.map": [
+      "jit-88882a86"
+    ],
+    "jit.matrix": [
+      "jit-d339d7a1"
+    ],
+    "jit.matrixinfo": [
+      "jit-b02482a5"
+    ],
+    "jit.matrixset": [
+      "jit-72c76de5"
+    ],
+    "jit.mgraphics": [
+      "jit-8aed6b34"
+    ],
+    "jit.movie": [
+      "jit-7cf487bd"
+    ],
+    "jit.movie~": [
+      "jit-7cf487bd"
+    ],
+    "jit.multiplex": [
+      "jit-de9b5943"
+    ],
+    "jit.mxform2d": [
+      "jit-88882a86"
+    ],
+    "jit.net.recv": [
+      "jit-fa0eb1ba"
+    ],
+    "jit.net.send": [
+      "jit-8e6036c3"
+    ],
+    "jit.noise": [
+      "jit-bfb2ef33"
+    ],
+    "jit.normalize": [
+      "jit-88882a86"
+    ],
+    "jit.op": [
+      "jit-de9b5943"
+    ],
+    "jit.openexr": [
+      "jit-88882a86"
+    ],
+    "jit.p.bounds": [
+      "jit-1f5cf389"
+    ],
+    "jit.p.shiva": [
+      "jit-1f5cf389"
+    ],
+    "jit.p.vishnu": [
+      "jit-1f5cf389"
+    ],
+    "jit.pack": [
+      "jit-88882a86"
+    ],
+    "jit.path": [
+      "jit-b02482a5"
+    ],
+    "jit.path.ui": [
+      "jit-7c426ee9"
+    ],
+    "jit.peek~": [
+      "jit-65713044"
+    ],
+    "jit.phys.6dof": [
+      "jit-65713044"
+    ],
+    "jit.phys.barslide": [
+      "jit-65713044"
+    ],
+    "jit.phys.body": [
+      "jit-b02482a5"
+    ],
+    "jit.phys.conetwist": [
+      "jit-65713044"
+    ],
+    "jit.phys.ghost": [
+      "jit-b02482a5"
+    ],
+    "jit.phys.hinge": [
+      "jit-65713044"
+    ],
+    "jit.phys.multiple": [
+      "jit-b02482a5"
+    ],
+    "jit.phys.picker": [
+      "jit-65713044"
+    ],
+    "jit.phys.point2point": [
+      "jit-65713044"
+    ],
+    "jit.phys.world": [
+      "jit-65713044"
+    ],
+    "jit.pix": [
+      "jit-88882a86"
+    ],
+    "jit.planeop": [
+      "jit-88882a86"
+    ],
+    "jit.plot": [
+      "jit-88882a86"
+    ],
+    "jit.plume": [
+      "jit-de9b5943"
+    ],
+    "jit.plur": [
+      "jit-88882a86"
+    ],
+    "jit.poke~": [
+      "jit-65713044"
+    ],
+    "jit.print": [
+      "jit-b02482a5"
+    ],
+    "jit.proxy": [
+      "jit-65713044"
+    ],
+    "jit.qball": [
+      "jit-4e55699e"
+    ],
+    "jit.qfaker": [
+      "jit-4e55699e"
+    ],
+    "jit.qt.videoout": [
+      "jit-88882a86"
+    ],
+    "jit.quat": [
+      "jit-65713044"
+    ],
+    "jit.quat2axis": [
+      "jit-65713044"
+    ],
+    "jit.quat2euler": [
+      "jit-65713044"
+    ],
+    "jit.record": [
+      "jit-13872d52"
+    ],
+    "jit.release~": [
+      "jit-b02482a5"
+    ],
+    "jit.repos": [
+      "jit-de9b5943"
+    ],
+    "jit.resamp": [
+      "jit-88882a86"
+    ],
+    "jit.reverse": [
+      "jit-4e55699e"
+    ],
+    "jit.rgb2hsl": [
+      "jit-88882a86"
+    ],
+    "jit.rgb2luma": [
+      "jit-299294d9"
+    ],
+    "jit.robcross": [
+      "jit-88882a86"
+    ],
+    "jit.rota": [
+      "jit-88882a86"
+    ],
+    "jit.roy": [
+      "jit-de9b5943"
+    ],
+    "jit.rubix": [
+      "jit-88882a86"
+    ],
+    "jit.scalebias": [
+      "jit-88882a86"
+    ],
+    "jit.scanoffset": [
+      "jit-de9b5943"
+    ],
+    "jit.scanslide": [
+      "jit-88882a86"
+    ],
+    "jit.scanwrap": [
+      "jit-88882a86"
+    ],
+    "jit.scissors": [
+      "jit-fcbbb624"
+    ],
+    "jit.shade": [
+      "jit-ab7e6d8b"
+    ],
+    "jit.slide": [
+      "jit-88882a86"
+    ],
+    "jit.sobel": [
+      "jit-88882a86"
+    ],
+    "jit.spill": [
+      "jit-89f4d052"
+    ],
+    "jit.split": [
+      "jit-97e9338f"
+    ],
+    "jit.sprinkle": [
+      "jit-88882a86"
+    ],
+    "jit.str.fromsymbol": [
+      "jit-9079d923"
+    ],
+    "jit.str.op": [
+      "jit-de9b5943"
+    ],
+    "jit.str.regexp": [
+      "jit-02ba646b"
+    ],
+    "jit.str.tosymbol": [
+      "jit-b757f09d"
+    ],
+    "jit.streak": [
+      "jit-88882a86"
+    ],
+    "jit.submatrix": [
+      "jit-b1c93e07"
+    ],
+    "jit.textfile": [
+      "jit-97e9338f"
+    ],
+    "jit.thin": [
+      "jit-3ab14440"
+    ],
+    "jit.tiffany": [
+      "jit-88882a86"
+    ],
+    "jit.traffic": [
+      "jit-3ab14440"
+    ],
+    "jit.transpose": [
+      "jit-3ab14440"
+    ],
+    "jit.turtle": [
+      "jit-65713044"
+    ],
+    "jit.uldl": [
+      "jit-1f5cf389"
+    ],
+    "jit.unpack": [
+      "jit-f73a89ee"
+    ],
+    "jit.uyvy2argb": [
+      "jit-88882a86"
+    ],
+    "jit.uyvy2ayuv": [
+      "jit-88882a86"
+    ],
+    "jit.uyvy2luma": [
+      "jit-3ab14440"
+    ],
+    "jit.vcr": [
+      "jit-65630b85"
+    ],
+    "jit.wake": [
+      "jit-88882a86"
+    ],
+    "jit.web": [
+      "jit-6d98129a"
+    ],
+    "jit.web~": [
+      "jit-6d98129a"
+    ],
+    "jit.window": [
+      "jit-b02482a5"
+    ],
+    "jit.world": [
+      "jit-b02482a5"
+    ],
+    "jit.xfade": [
+      "jit-de9b5943"
+    ],
+    "mc.!-~": [
+      "mc-e6a80395"
+    ],
+    "mc.!/~": [
+      "mc-e6a80395"
+    ],
+    "mc.!=~": [
+      "mc-e6a80395"
+    ],
+    "mc.%~": [
+      "mc-e6a80395"
+    ],
+    "mc.*~": [
+      "mc-e6a80395"
+    ],
+    "mc.+=~": [
+      "mc-e6a80395"
+    ],
+    "mc.+~": [
+      "mc-e6a80395"
+    ],
+    "mc.-~": [
+      "mc-e6a80395"
+    ],
+    "mc./~": [
+      "mc-e6a80395"
+    ],
+    "mc.2d.wave~": [
+      "mc-e6a80395"
+    ],
+    "mc.<=~": [
+      "mc-e6a80395"
+    ],
+    "mc.<~": [
+      "mc-e6a80395"
+    ],
+    "mc.==~": [
+      "mc-e6a80395"
+    ],
+    "mc.>=~": [
+      "mc-e6a80395"
+    ],
+    "mc.>~": [
+      "mc-e6a80395"
+    ],
+    "mc.abs~": [
+      "mc-e4325cd0"
+    ],
+    "mc.acosh~": [
+      "mc-e4325cd0"
+    ],
+    "mc.acos~": [
+      "mc-e4325cd0"
+    ],
+    "mc.adsr~": [
+      "mc-e6a80395"
+    ],
+    "mc.allpass~": [
+      "mc-e6a80395"
+    ],
+    "mc.amxd~": [
+      "mc-dc1b31b3"
+    ],
+    "mc.asinh~": [
+      "mc-e4325cd0"
+    ],
+    "mc.asin~": [
+      "mc-e4325cd0"
+    ],
+    "mc.atan2~": [
+      "mc-e6a80395"
+    ],
+    "mc.atanh~": [
+      "mc-e4325cd0"
+    ],
+    "mc.atan~": [
+      "mc-e4325cd0"
+    ],
+    "mc.atodb~": [
+      "mc-e4325cd0"
+    ],
+    "mc.average~": [
+      "mc-e4325cd0"
+    ],
+    "mc.avg~": [
+      "mc-e4325cd0"
+    ],
+    "mc.biquad~": [
+      "mc-e6a80395"
+    ],
+    "mc.bitand~": [
+      "mc-e6a80395"
+    ],
+    "mc.bitnot~": [
+      "mc-e4325cd0"
+    ],
+    "mc.bitor~": [
+      "mc-e6a80395"
+    ],
+    "mc.bitsafe~": [
+      "mc-e4325cd0"
+    ],
+    "mc.bitshift~": [
+      "mc-e4325cd0"
+    ],
+    "mc.bitxor~": [
+      "mc-e6a80395"
+    ],
+    "mc.buffir~": [
+      "mc-e6a80395"
+    ],
+    "mc.cartopol~": [
+      "mc-e6a80395"
+    ],
+    "mc.cascade~": [
+      "mc-e6a80395"
+    ],
+    "mc.change~": [
+      "mc-e4325cd0"
+    ],
+    "mc.click~": [
+      "mc-e4325cd0"
+    ],
+    "mc.clip~": [
+      "mc-e6a80395"
+    ],
+    "mc.comb~": [
+      "mc-e6a80395"
+    ],
+    "mc.cosh~": [
+      "mc-e4325cd0"
+    ],
+    "mc.cosx~": [
+      "mc-e4325cd0"
+    ],
+    "mc.cos~": [
+      "mc-e4325cd0"
+    ],
+    "mc.count~": [
+      "mc-e4325cd0"
+    ],
+    "mc.cross~": [
+      "mc-e6a80395"
+    ],
+    "mc.curve~": [
+      "mc-e6a80395"
+    ],
+    "mc.cycle~": [
+      "mc-e6a80395"
+    ],
+    "mc.dbtoa~": [
+      "mc-e4325cd0"
+    ],
+    "mc.degrade~": [
+      "mc-e6a80395"
+    ],
+    "mc.delay~": [
+      "mc-e6a80395"
+    ],
+    "mc.deltaclip~": [
+      "mc-e4325cd0"
+    ],
+    "mc.delta~": [
+      "mc-e4325cd0"
+    ],
+    "mc.downsamp~": [
+      "mc-e6a80395"
+    ],
+    "mc.edge~": [
+      "mc-e4325cd0"
+    ],
+    "mc.fffb~": [
+      "mc-e4325cd0"
+    ],
+    "mc.fft~": [
+      "mc-e6a80395"
+    ],
+    "mc.filtercoeff~": [
+      "mc-e6a80395"
+    ],
+    "mc.frameaccum~": [
+      "mc-e4325cd0"
+    ],
+    "mc.frameaverage~": [
+      "mc-e4325cd0"
+    ],
+    "mc.framedelta~": [
+      "mc-e4325cd0"
+    ],
+    "mc.framesmooth~": [
+      "mc-e4325cd0"
+    ],
+    "mc.freqshift~": [
+      "mc-e6a80395"
+    ],
+    "mc.ftom~": [
+      "mc-e4325cd0"
+    ],
+    "mc.fzero~": [
+      "mc-e4325cd0"
+    ],
+    "mc.gate~": [
+      "mc-e6a80395"
+    ],
+    "mc.gen": [
+      "mc-e4325cd0"
+    ],
+    "mc.gen~": [
+      "mc-e6a80395"
+    ],
+    "mc.getattr": [
+      "mc-e4325cd0"
+    ],
+    "mc.groove~": [
+      "mc-e6a80395"
+    ],
+    "mc.hilbert~": [
+      "mc-e4325cd0"
+    ],
+    "mc.ifft~": [
+      "mc-e6a80395"
+    ],
+    "mc.index~": [
+      "mc-e6a80395"
+    ],
+    "mc.jit.peek~": [
+      "jit-65713044",
+      "mc-e6a80395"
+    ],
+    "mc.kink~": [
+      "mc-e6a80395"
+    ],
+    "mc.limi~": [
+      "mc-e4325cd0"
+    ],
+    "mc.line": [
+      "mc-e4325cd0"
+    ],
+    "mc.line~": [
+      "mc-e6a80395"
+    ],
+    "mc.log~": [
+      "mc-e6a80395"
+    ],
+    "mc.lookup~": [
+      "mc-e6a80395"
+    ],
+    "mc.lores~": [
+      "mc-e6a80395"
+    ],
+    "mc.loudness~": [
+      "mc-e4325cd0"
+    ],
+    "mc.matrix~": [
+      "mc-e6a80395"
+    ],
+    "mc.maximum~": [
+      "mc-e6a80395"
+    ],
+    "mc.minimum~": [
+      "mc-e6a80395"
+    ],
+    "mc.minmax~": [
+      "mc-e6a80395"
+    ],
+    "mc.mstosamps~": [
+      "mc-e4325cd0"
+    ],
+    "mc.mtof~": [
+      "mc-e4325cd0"
+    ],
+    "mc.noise~": [
+      "mc-e4325cd0"
+    ],
+    "mc.normalize~": [
+      "mc-e6a80395"
+    ],
+    "mc.omx.4band~": [
+      "mc-e6a80395"
+    ],
+    "mc.omx.5band~": [
+      "mc-e6a80395"
+    ],
+    "mc.omx.comp~": [
+      "mc-e6a80395"
+    ],
+    "mc.omx.peaklim~": [
+      "mc-e6a80395"
+    ],
+    "mc.onepole~": [
+      "mc-e6a80395"
+    ],
+    "mc.overdrive~": [
+      "mc-e6a80395"
+    ],
+    "mc.peakamp~": [
+      "mc-e4325cd0"
+    ],
+    "mc.peek~": [
+      "mc-e4325cd0"
+    ],
+    "mc.pfft~": [
+      "mc-e4325cd0"
+    ],
+    "mc.phasegroove~": [
+      "mc-e4325cd0"
+    ],
+    "mc.phaseshift~": [
+      "mc-e6a80395"
+    ],
+    "mc.phasewrap~": [
+      "mc-e4325cd0"
+    ],
+    "mc.phasor~": [
+      "mc-e6a80395"
+    ],
+    "mc.pink~": [
+      "mc-e4325cd0"
+    ],
+    "mc.pitchshift~": [
+      "mc-e6a80395"
+    ],
+    "mc.play~": [
+      "mc-e4325cd0"
+    ],
+    "mc.poltocar~": [
+      "mc-e6a80395"
+    ],
+    "mc.pong~": [
+      "mc-e6a80395"
+    ],
+    "mc.pow~": [
+      "mc-e6a80395"
+    ],
+    "mc.rampsmooth~": [
+      "mc-e6a80395"
+    ],
+    "mc.ramp~": [
+      "mc-e6a80395"
+    ],
+    "mc.rand~": [
+      "mc-e4325cd0"
+    ],
+    "mc.rate~": [
+      "mc-e6a80395"
+    ],
+    "mc.rect~": [
+      "mc-e6a80395"
+    ],
+    "mc.reson~": [
+      "mc-e6a80395"
+    ],
+    "mc.retune~": [
+      "mc-e6a80395"
+    ],
+    "mc.round~": [
+      "mc-e6a80395"
+    ],
+    "mc.sah~": [
+      "mc-e6a80395"
+    ],
+    "mc.sampstoms~": [
+      "mc-e4325cd0"
+    ],
+    "mc.sash~": [
+      "mc-4adb2ca4"
+    ],
+    "mc.saw~": [
+      "mc-e6a80395"
+    ],
+    "mc.scale~": [
+      "mc-e6a80395"
+    ],
+    "mc.selector~": [
+      "mc-e6a80395"
+    ],
+    "mc.seq~": [
+      "mc-e4325cd0"
+    ],
+    "mc.sfizz~": [
+      "mc-e6a80395"
+    ],
+    "mc.shape~": [
+      "mc-e4325cd0"
+    ],
+    "mc.sig~": [
+      "mc-e4325cd0"
+    ],
+    "mc.sinh~": [
+      "mc-e4325cd0"
+    ],
+    "mc.sinx~": [
+      "mc-e4325cd0"
+    ],
+    "mc.slide~": [
+      "mc-e6a80395"
+    ],
+    "mc.snapshot~": [
+      "mc-e6a80395"
+    ],
+    "mc.snowfall~": [
+      "mc-e4325cd0"
+    ],
+    "mc.spike~": [
+      "mc-e4325cd0"
+    ],
+    "mc.sqrt~": [
+      "mc-e4325cd0"
+    ],
+    "mc.stash~": [
+      "mc-e6a80395"
+    ],
+    "mc.stepdiv~": [
+      "mc-e4325cd0"
+    ],
+    "mc.stepfun~": [
+      "mc-e6a80395"
+    ],
+    "mc.stutter~": [
+      "mc-e6a80395"
+    ],
+    "mc.subdiv~": [
+      "mc-e4325cd0"
+    ],
+    "mc.svf~": [
+      "mc-e6a80395"
+    ],
+    "mc.swing~": [
+      "mc-e4325cd0"
+    ],
+    "mc.sync~": [
+      "mc-e4325cd0"
+    ],
+    "mc.table~": [
+      "mc-e4325cd0"
+    ],
+    "mc.tanh~": [
+      "mc-e4325cd0"
+    ],
+    "mc.tanx~": [
+      "mc-e4325cd0"
+    ],
+    "mc.teeth~": [
+      "mc-e6a80395"
+    ],
+    "mc.thresh~": [
+      "mc-e6a80395"
+    ],
+    "mc.train~": [
+      "mc-e6a80395"
+    ],
+    "mc.trapezoid~": [
+      "mc-e6a80395"
+    ],
+    "mc.triangle~": [
+      "mc-e6a80395"
+    ],
+    "mc.tri~": [
+      "mc-e6a80395"
+    ],
+    "mc.trunc~": [
+      "mc-e4325cd0"
+    ],
+    "mc.twist~": [
+      "mc-e6a80395"
+    ],
+    "mc.updown~": [
+      "mc-e4325cd0"
+    ],
+    "mc.vectral~": [
+      "mc-e6a80395"
+    ],
+    "mc.vst~": [
+      "mc-dc1b31b3"
+    ],
+    "mc.wave~": [
+      "mc-e6a80395"
+    ],
+    "mc.what~": [
+      "mc-e4325cd0"
+    ],
+    "mc.where~": [
+      "mc-e4325cd0"
+    ],
+    "mc.zerox~": [
+      "mc-e4325cd0"
+    ],
+    "mc.zigzag~": [
+      "mc-e6a80395"
+    ],
+    "thispatcher": [
+      "thispatcher-help"
+    ]
+  },
+  "profiles": {
+    "jit-02ba646b": {
+      "attributes": [
+        "adapt",
+        "dim",
+        "out2_dim",
+        "out2_name",
+        "out2_planecount",
+        "out2_type",
+        "out3_dim",
+        "out3_name",
+        "out3_planecount",
+        "out3_type",
+        "out4_dim",
+        "out4_name",
+        "out4_planecount",
+        "out4_type",
+        "out_name",
+        "outputmode",
+        "planecount",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-0a654394": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "anim",
+        "animmode",
+        "automatic",
+        "aux_color",
+        "axes",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "capture",
+        "cull_face",
+        "drawto",
+        "enable",
+        "filterclass",
+        "gl_color",
+        "layer",
+        "line_width",
+        "name",
+        "point_mode",
+        "point_size",
+        "poly_mode",
+        "position",
+        "smooth_shading",
+        "tex_map",
+        "tex_plane_s",
+        "tex_plane_t",
+        "texanchor",
+        "texrotate",
+        "texture",
+        "texzoom"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_gl_texture",
+        "jit_matrix",
+        "rebuild_geometry",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-0c886281": {
+      "attributes": [
+        "automatic",
+        "drawto",
+        "enable",
+        "layer",
+        "name"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_gl_texture",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-13872d52": {
+      "attributes": [
+        "dim",
+        "outputmode"
+      ],
+      "family": "jit",
+      "messages": [
+        "clear",
+        "exportattrs",
+        "importattrs",
+        "outputmatrix"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-1f587ed5": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "anim",
+        "animmode",
+        "antialias",
+        "auto_material",
+        "automatic",
+        "aux_color",
+        "axes",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "boundcalc",
+        "bounds",
+        "capture",
+        "cull_face",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "drawbounds",
+        "drawto",
+        "enable",
+        "filterclass",
+        "fog",
+        "fog_color",
+        "fog_density",
+        "fog_params",
+        "fog_range",
+        "gl_color",
+        "layer",
+        "lighting_enable",
+        "line_width",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "material",
+        "matfile",
+        "matrixoutput",
+        "name",
+        "point_mode",
+        "point_size",
+        "poly_mode",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "shader",
+        "shadow_caster",
+        "shininess",
+        "smooth_shading",
+        "tex_map",
+        "tex_plane_s",
+        "tex_plane_t",
+        "texanchor",
+        "texrotate",
+        "texzoom",
+        "transform_reset",
+        "two_sided",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "export_geometry",
+        "export_material",
+        "exportattrs",
+        "exportsummary",
+        "get_shader",
+        "getattributes",
+        "getstate",
+        "import_material",
+        "importattrs",
+        "jit_gl_texture",
+        "jit_matrix",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-1f5cf389": {
+      "attributes": [
+        "dim",
+        "out_name",
+        "outputmode",
+        "planecount",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-260c921a": {
+      "attributes": [
+        "drawto",
+        "enable"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_gl_texture",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-299294d9": {
+      "attributes": [
+        "adapt",
+        "dim",
+        "out_name",
+        "outputmode"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-2f8187bc": {
+      "attributes": [
+        "alpha_mode",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "drawto",
+        "enable",
+        "gl_color",
+        "layer",
+        "name",
+        "texture"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_gl_texture",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-31f5dc9c": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "anim",
+        "animmode",
+        "antialias",
+        "auto_material",
+        "axes",
+        "blend_enable",
+        "blend_mode",
+        "color",
+        "cull_face",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "enable",
+        "filterclass",
+        "fog_color",
+        "fog_density",
+        "fog_params",
+        "fog_range",
+        "lighting_enable",
+        "line_width",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "name",
+        "point_size",
+        "poly_mode",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "shininess",
+        "smooth_shading",
+        "transform_reset",
+        "two_sided",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-34a306f0": {
+      "attributes": [
+        "anchor",
+        "anim",
+        "animmode",
+        "antialias",
+        "aux_color",
+        "axes",
+        "cull_face",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "drawto",
+        "enable",
+        "gl_color",
+        "layer",
+        "line_width",
+        "name",
+        "point_mode",
+        "point_size",
+        "poly_mode",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "smooth_shading",
+        "transform_reset",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-35987987": {
+      "attributes": [
+        "dim",
+        "out_name",
+        "outputmode",
+        "planecount",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "clear",
+        "exportattrs",
+        "importattrs",
+        "outputmatrix"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-3ab14440": {
+      "attributes": [],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-3f3229a8": {
+      "attributes": [
+        "automatic",
+        "drawto",
+        "enable",
+        "layer",
+        "name",
+        "texture"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_gl_texture",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-4e55699e": {
+      "attributes": [],
+      "family": "jit",
+      "messages": [
+        "getattributes"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-53f567b8": {
+      "attributes": [
+        "automatic",
+        "drawto",
+        "enable",
+        "layer",
+        "name"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-589fc6ef": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "antialias",
+        "auto_material",
+        "automatic",
+        "aux_color",
+        "axes",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "cull_face",
+        "depth_enable",
+        "depth_write",
+        "enable",
+        "fog",
+        "fog_color",
+        "fog_density",
+        "fog_params",
+        "fog_range",
+        "gl_color",
+        "lighting_enable",
+        "line_width",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "material",
+        "matfile",
+        "name",
+        "ortho",
+        "point_mode",
+        "point_size",
+        "poly_mode",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "shader",
+        "shadow_caster",
+        "shininess",
+        "smooth_shading",
+        "transform_reset",
+        "two_sided",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "export_material",
+        "exportattrs",
+        "exportsummary",
+        "get_shader",
+        "getattributes",
+        "getstate",
+        "import_material",
+        "importattrs",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-5cadad18": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "anim",
+        "animmode",
+        "antialias",
+        "aux_color",
+        "axes",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "cull_face",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "drawto",
+        "enable",
+        "filterclass",
+        "gl_color",
+        "layer",
+        "line_width",
+        "name",
+        "point_mode",
+        "point_size",
+        "poly_mode",
+        "position",
+        "smooth_shading"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-65630b85": {
+      "attributes": [
+        "adapt",
+        "dim",
+        "outputmode"
+      ],
+      "family": "jit",
+      "messages": [
+        "clear",
+        "exportattrs",
+        "importattrs",
+        "jit_matrix"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-65713044": {
+      "attributes": [],
+      "family": "jit",
+      "messages": [
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-697f51dd": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "anim",
+        "animmode",
+        "antialias",
+        "auto_material",
+        "automatic",
+        "aux_color",
+        "axes",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "color",
+        "cull_face",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "drawto",
+        "enable",
+        "filterclass",
+        "fog",
+        "fog_color",
+        "fog_density",
+        "fog_params",
+        "fog_range",
+        "gl_color",
+        "layer",
+        "lighting_enable",
+        "line_width",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "material",
+        "matfile",
+        "name",
+        "point_mode",
+        "point_size",
+        "poly_mode",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "shader",
+        "shadow_caster",
+        "shininess",
+        "smooth_shading",
+        "texture",
+        "transform_reset",
+        "two_sided",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "drawimmediate",
+        "drawraw",
+        "export_material",
+        "exportattrs",
+        "exportsummary",
+        "get_shader",
+        "getattributes",
+        "getstate",
+        "import_material",
+        "importattrs",
+        "jit_gl_texture",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-6d98129a": {
+      "attributes": [],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-6ff4b50d": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "anim",
+        "animmode",
+        "antialias",
+        "auto_material",
+        "automatic",
+        "aux_color",
+        "axes",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "boundcalc",
+        "bounds",
+        "capture",
+        "cull_face",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "drawbounds",
+        "drawto",
+        "enable",
+        "filterclass",
+        "fog",
+        "fog_color",
+        "fog_density",
+        "fog_params",
+        "fog_range",
+        "gl_color",
+        "layer",
+        "lighting_enable",
+        "line_width",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "material",
+        "matfile",
+        "matrixoutput",
+        "name",
+        "point_mode",
+        "point_size",
+        "poly_mode",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "shader",
+        "shadow_caster",
+        "shininess",
+        "smooth_shading",
+        "tex_map",
+        "tex_plane_s",
+        "tex_plane_t",
+        "texanchor",
+        "texrotate",
+        "texture",
+        "texzoom",
+        "transform_reset",
+        "two_sided",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "export_geometry",
+        "export_material",
+        "exportattrs",
+        "exportsummary",
+        "get_shader",
+        "getattributes",
+        "getstate",
+        "import_material",
+        "importattrs",
+        "jit_gl_texture",
+        "rebuild_geometry",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-72c76de5": {
+      "attributes": [],
+      "family": "jit",
+      "messages": [
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-7c426ee9": {
+      "attributes": [
+        "drawto",
+        "enable"
+      ],
+      "family": "jit",
+      "messages": [
+        "exportattrs",
+        "exportsummary",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-7cf487bd": {
+      "attributes": [
+        "dim",
+        "out_name",
+        "outputmode"
+      ],
+      "family": "jit",
+      "messages": [
+        "clear",
+        "exportattrs",
+        "importattrs",
+        "outputmatrix"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-881a5ee8": {
+      "attributes": [
+        "enable",
+        "gl_color",
+        "layer",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "shininess"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_gl_texture",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-88882a86": {
+      "attributes": [
+        "adapt",
+        "dim",
+        "out_name",
+        "outputmode",
+        "planecount",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-89f4d052": {
+      "attributes": [
+        "adapt",
+        "outputmode"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-8aed6b34": {
+      "attributes": [
+        "adapt",
+        "out_name",
+        "outputmode",
+        "planecount",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-8e6036c3": {
+      "attributes": [
+        "adapt",
+        "outputmode"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-8f05daac": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "anim",
+        "animmode",
+        "automatic",
+        "aux_color",
+        "axes",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "drawto",
+        "enable",
+        "filterclass",
+        "gl_color",
+        "layer",
+        "name",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "smooth_shading",
+        "transform_reset",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-9079d923": {
+      "attributes": [],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-97e9338f": {
+      "attributes": [
+        "adapt",
+        "dim",
+        "out2_dim",
+        "out2_name",
+        "out2_planecount",
+        "out2_type",
+        "out_name",
+        "outputmode",
+        "planecount",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-a242b717": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "anim",
+        "animmode",
+        "antialias",
+        "auto_material",
+        "automatic",
+        "aux_color",
+        "axes",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "boundcalc",
+        "bounds",
+        "capture",
+        "cull_face",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "drawbounds",
+        "drawto",
+        "enable",
+        "filterclass",
+        "fog",
+        "fog_color",
+        "fog_density",
+        "fog_params",
+        "fog_range",
+        "gl_color",
+        "layer",
+        "lighting_enable",
+        "line_width",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "material",
+        "matfile",
+        "name",
+        "point_mode",
+        "point_size",
+        "poly_mode",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "shader",
+        "shadow_caster",
+        "shininess",
+        "smooth_shading",
+        "tex_map",
+        "tex_plane_s",
+        "tex_plane_t",
+        "texanchor",
+        "texrotate",
+        "texture",
+        "texzoom",
+        "transform_reset",
+        "two_sided",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "export_material",
+        "exportattrs",
+        "exportsummary",
+        "get_shader",
+        "getattributes",
+        "getstate",
+        "import_material",
+        "importattrs",
+        "jit_gl_texture",
+        "jit_matrix",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-a701fde6": {
+      "attributes": [
+        "drawto",
+        "enable",
+        "layer",
+        "name"
+      ],
+      "family": "jit",
+      "messages": [
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-ab7e6d8b": {
+      "attributes": [
+        "adapt",
+        "dim",
+        "in2_dim",
+        "in2_name",
+        "in2_planecount",
+        "in2_type",
+        "in3_dim",
+        "in3_name",
+        "in3_planecount",
+        "in3_type",
+        "out_name",
+        "outputmode",
+        "planecount",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-b02482a5": {
+      "attributes": [],
+      "family": "jit",
+      "messages": [
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-b1c93e07": {
+      "attributes": [
+        "dim"
+      ],
+      "family": "jit",
+      "messages": [
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-b6d139f9": {
+      "attributes": [
+        "automatic",
+        "drawto",
+        "enable",
+        "layer",
+        "name"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_gl_texture",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-b757f09d": {
+      "attributes": [
+        "adapt",
+        "dim",
+        "outputmode"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-b8865801": {
+      "attributes": [
+        "anchor",
+        "anim",
+        "animmode",
+        "axes",
+        "boundcalc",
+        "bounds",
+        "drawbounds",
+        "drawto",
+        "enable",
+        "filterclass",
+        "name",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "transform_reset",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-b9f20846": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "anim",
+        "animmode",
+        "antialias",
+        "auto_material",
+        "automatic",
+        "aux_color",
+        "axes",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "capture",
+        "cull_face",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "drawto",
+        "enable",
+        "filterclass",
+        "fog",
+        "fog_color",
+        "fog_density",
+        "fog_params",
+        "fog_range",
+        "gl_color",
+        "layer",
+        "lighting_enable",
+        "line_width",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "material",
+        "matfile",
+        "name",
+        "point_mode",
+        "point_size",
+        "poly_mode",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "shader",
+        "shadow_caster",
+        "shininess",
+        "smooth_shading",
+        "tex_map",
+        "tex_plane_s",
+        "tex_plane_t",
+        "texanchor",
+        "texrotate",
+        "texture",
+        "texzoom",
+        "transform_reset",
+        "two_sided",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "export_material",
+        "exportattrs",
+        "exportsummary",
+        "get_shader",
+        "getattributes",
+        "getstate",
+        "import_material",
+        "importattrs",
+        "jit_gl_texture",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-bfb2ef33": {
+      "attributes": [
+        "adapt",
+        "dim",
+        "out_name",
+        "outputmode",
+        "planecount",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-c5f9e1d1": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "anim",
+        "animmode",
+        "antialias",
+        "auto_material",
+        "automatic",
+        "aux_color",
+        "axes",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "boundcalc",
+        "bounds",
+        "capture",
+        "cull_face",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "drawbounds",
+        "drawto",
+        "enable",
+        "filterclass",
+        "fog",
+        "fog_color",
+        "fog_density",
+        "fog_params",
+        "fog_range",
+        "gl_color",
+        "layer",
+        "lighting_enable",
+        "line_width",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "material",
+        "matfile",
+        "matrixoutput",
+        "name",
+        "point_mode",
+        "point_size",
+        "poly_mode",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "shader",
+        "shadow_caster",
+        "shininess",
+        "smooth_shading",
+        "tex_map",
+        "tex_plane_s",
+        "tex_plane_t",
+        "texanchor",
+        "texrotate",
+        "texture",
+        "texzoom",
+        "transform_reset",
+        "two_sided",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "export_geometry",
+        "export_material",
+        "exportattrs",
+        "exportsummary",
+        "get_shader",
+        "getattributes",
+        "getstate",
+        "import_material",
+        "importattrs",
+        "jit_gl_texture",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-d2eb7870": {
+      "attributes": [
+        "drawto",
+        "enable",
+        "name",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "texture"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_gl_texture",
+        "rebuild_geometry",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-d339d7a1": {
+      "attributes": [],
+      "family": "jit",
+      "messages": [
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "register",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-d94a055c": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "anim",
+        "animmode",
+        "antialias",
+        "auto_material",
+        "automatic",
+        "aux_color",
+        "axes",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "boundcalc",
+        "bounds",
+        "capture",
+        "cull_face",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "drawbounds",
+        "drawto",
+        "enable",
+        "filterclass",
+        "fog",
+        "fog_color",
+        "fog_density",
+        "fog_params",
+        "fog_range",
+        "gl_color",
+        "layer",
+        "lighting_enable",
+        "line_width",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "material",
+        "matfile",
+        "matrixoutput",
+        "name",
+        "point_mode",
+        "point_size",
+        "poly_mode",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "shader",
+        "shadow_caster",
+        "shininess",
+        "smooth_shading",
+        "tex_map",
+        "tex_plane_s",
+        "tex_plane_t",
+        "texanchor",
+        "texrotate",
+        "texture",
+        "texzoom",
+        "transform_reset",
+        "two_sided",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "export_geometry",
+        "export_material",
+        "exportattrs",
+        "exportsummary",
+        "get_shader",
+        "getattributes",
+        "getstate",
+        "import_material",
+        "importattrs",
+        "jit_gl_texture",
+        "jit_matrix",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-de9b5943": {
+      "attributes": [
+        "adapt",
+        "dim",
+        "in2_dim",
+        "in2_name",
+        "in2_planecount",
+        "in2_type",
+        "out_name",
+        "outputmode",
+        "planecount",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-dfa14e70": {
+      "attributes": [
+        "dim",
+        "out_name",
+        "outputmode",
+        "planecount",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-e335338b": {
+      "attributes": [
+        "alpha_mode",
+        "anchor",
+        "anim",
+        "animmode",
+        "antialias",
+        "auto_material",
+        "automatic",
+        "aux_color",
+        "axes",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "boundcalc",
+        "bounds",
+        "capture",
+        "cull_face",
+        "depth_clear",
+        "depth_enable",
+        "depth_write",
+        "drawbounds",
+        "drawto",
+        "enable",
+        "filterclass",
+        "fog",
+        "fog_color",
+        "fog_density",
+        "fog_params",
+        "fog_range",
+        "gl_color",
+        "layer",
+        "lighting_enable",
+        "line_width",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "material",
+        "matfile",
+        "name",
+        "point_mode",
+        "point_size",
+        "poly_mode",
+        "position",
+        "quat",
+        "rotate",
+        "rotatexyz",
+        "scale",
+        "shader",
+        "shadow_caster",
+        "shininess",
+        "smooth_shading",
+        "tex_map",
+        "tex_plane_s",
+        "tex_plane_t",
+        "texanchor",
+        "texrotate",
+        "texture",
+        "texzoom",
+        "transform_reset",
+        "two_sided",
+        "viewalign"
+      ],
+      "family": "jit",
+      "messages": [
+        "anim_grow",
+        "anim_move",
+        "anim_reset",
+        "anim_turn",
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "export_geometry",
+        "export_material",
+        "exportattrs",
+        "exportsummary",
+        "get_shader",
+        "getattributes",
+        "getstate",
+        "import_material",
+        "importattrs",
+        "jit_gl_texture",
+        "jit_matrix",
+        "summary",
+        "update_node"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-e8f72b57": {
+      "attributes": [
+        "automatic",
+        "blend",
+        "blend_enable",
+        "blend_mode",
+        "depth_enable",
+        "drawto",
+        "enable",
+        "layer",
+        "lighting_enable",
+        "line_width",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "poly_mode",
+        "rotatexyz",
+        "scale"
+      ],
+      "family": "jit",
+      "messages": [
+        "draw"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-f2c1cbae": {
+      "attributes": [
+        "automatic",
+        "aux_color",
+        "enable",
+        "fog_color",
+        "fog_density",
+        "fog_params",
+        "fog_range",
+        "gl_color",
+        "layer",
+        "mat_ambient",
+        "mat_diffuse",
+        "mat_emission",
+        "mat_specular",
+        "matfile",
+        "name",
+        "shininess",
+        "smooth_shading"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "draw",
+        "drawimmediate",
+        "drawraw",
+        "export_material",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "import_material",
+        "importattrs",
+        "jit_gl_texture",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-f73a89ee": {
+      "attributes": [
+        "adapt",
+        "dim",
+        "outputmode",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "outputmatrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-fa0eb1ba": {
+      "attributes": [
+        "adapt",
+        "dim",
+        "out_name",
+        "outputmode",
+        "planecount",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "bang",
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-faebef3c": {
+      "attributes": [
+        "planecount",
+        "type"
+      ],
+      "family": "jit",
+      "messages": [
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "jit-fcbbb624": {
+      "attributes": [
+        "adapt",
+        "outputmode"
+      ],
+      "family": "jit",
+      "messages": [
+        "clear",
+        "exportattrs",
+        "exportsummary",
+        "getattributes",
+        "getstate",
+        "importattrs",
+        "jit_matrix",
+        "summary"
+      ],
+      "source": "refpage <jittermethodlist>/<jitterattributelist>"
+    },
+    "mc-4adb2ca4": {
+      "attributes": [
+        "busymapname",
+        "bz",
+        "bzname",
+        "chans",
+        "initialvalues",
+        "replicate",
+        "target",
+        "usebusymap",
+        "values",
+        "voiceprob",
+        "zero"
+      ],
+      "family": "mc",
+      "messages": [
+        "applynvalues",
+        "applyvalues",
+        "decide",
+        "deviate",
+        "exponential",
+        "harmonic",
+        "increment",
+        "randomrange",
+        "replicatenvalues",
+        "replicatevalues",
+        "scaledexponential",
+        "setvalue",
+        "setvaluerange",
+        "spread",
+        "spreadexclusive",
+        "spreadincludefirst",
+        "spreadincludesecond",
+        "spreadinclusive",
+        "subharmonic"
+      ],
+      "source": "refpage <mcwrapper>"
+    },
+    "mc-dc1b31b3": {
+      "attributes": [
+        "busymapname",
+        "bz",
+        "bzname",
+        "chans",
+        "displaychan",
+        "fun",
+        "initialvalues",
+        "op",
+        "replicate",
+        "target",
+        "usebusymap",
+        "values",
+        "voiceprob",
+        "zero"
+      ],
+      "family": "mc",
+      "messages": [
+        "applymessages",
+        "applynvalues",
+        "applyvalues",
+        "decide",
+        "deviate",
+        "ease.in_back",
+        "ease.in_bounce",
+        "ease.in_circular",
+        "ease.in_cubic",
+        "ease.in_elastic",
+        "ease.in_exponential",
+        "ease.in_out_back",
+        "ease.in_out_bounce",
+        "ease.in_out_circular",
+        "ease.in_out_cubic",
+        "ease.in_out_elastic",
+        "ease.in_out_exponential",
+        "ease.in_out_quadratic",
+        "ease.in_out_quartic",
+        "ease.in_out_quintic",
+        "ease.in_out_sine",
+        "ease.in_quadratic",
+        "ease.in_quartic",
+        "ease.in_quintic",
+        "ease.in_sine",
+        "ease.linear",
+        "ease.out_back",
+        "ease.out_bounce",
+        "ease.out_circular",
+        "ease.out_cubic",
+        "ease.out_elastic",
+        "ease.out_exponential",
+        "ease.out_quadratic",
+        "ease.out_quartic",
+        "ease.out_quintic",
+        "ease.out_sine",
+        "exponential",
+        "generate",
+        "harmonic",
+        "increment",
+        "randomrange",
+        "replicatenvalues",
+        "replicatevalues",
+        "scaledexponential",
+        "setvalue",
+        "setvaluerange",
+        "smoothstep",
+        "spread",
+        "spreadexclusive",
+        "spreadincludefirst",
+        "spreadincludesecond",
+        "spreadinclusive",
+        "subharmonic"
+      ],
+      "source": "refpage <mcwrapper>"
+    },
+    "mc-e4325cd0": {
+      "attributes": [
+        "busymapname",
+        "bz",
+        "bzname",
+        "chans",
+        "fun",
+        "initialvalues",
+        "op",
+        "target",
+        "usebusymap",
+        "values",
+        "voiceprob",
+        "zero"
+      ],
+      "family": "mc",
+      "messages": [
+        "applymessages",
+        "applynvalues",
+        "applyvalues",
+        "decide",
+        "deviate",
+        "ease.in_back",
+        "ease.in_bounce",
+        "ease.in_circular",
+        "ease.in_cubic",
+        "ease.in_elastic",
+        "ease.in_exponential",
+        "ease.in_out_back",
+        "ease.in_out_bounce",
+        "ease.in_out_circular",
+        "ease.in_out_cubic",
+        "ease.in_out_elastic",
+        "ease.in_out_exponential",
+        "ease.in_out_quadratic",
+        "ease.in_out_quartic",
+        "ease.in_out_quintic",
+        "ease.in_out_sine",
+        "ease.in_quadratic",
+        "ease.in_quartic",
+        "ease.in_quintic",
+        "ease.in_sine",
+        "ease.linear",
+        "ease.out_back",
+        "ease.out_bounce",
+        "ease.out_circular",
+        "ease.out_cubic",
+        "ease.out_elastic",
+        "ease.out_exponential",
+        "ease.out_quadratic",
+        "ease.out_quartic",
+        "ease.out_quintic",
+        "ease.out_sine",
+        "exponential",
+        "generate",
+        "harmonic",
+        "increment",
+        "randomrange",
+        "replicatenvalues",
+        "replicatevalues",
+        "scaledexponential",
+        "setvalue",
+        "setvaluerange",
+        "smoothstep",
+        "spread",
+        "spreadexclusive",
+        "spreadincludefirst",
+        "spreadincludesecond",
+        "spreadinclusive",
+        "subharmonic"
+      ],
+      "source": "refpage <mcwrapper>"
+    },
+    "mc-e6a80395": {
+      "attributes": [
+        "busymapname",
+        "bz",
+        "bzname",
+        "chans",
+        "fun",
+        "initialvalues",
+        "op",
+        "replicate",
+        "target",
+        "usebusymap",
+        "values",
+        "voiceprob",
+        "zero"
+      ],
+      "family": "mc",
+      "messages": [
+        "applymessages",
+        "applynvalues",
+        "applyvalues",
+        "decide",
+        "deviate",
+        "ease.in_back",
+        "ease.in_bounce",
+        "ease.in_circular",
+        "ease.in_cubic",
+        "ease.in_elastic",
+        "ease.in_exponential",
+        "ease.in_out_back",
+        "ease.in_out_bounce",
+        "ease.in_out_circular",
+        "ease.in_out_cubic",
+        "ease.in_out_elastic",
+        "ease.in_out_exponential",
+        "ease.in_out_quadratic",
+        "ease.in_out_quartic",
+        "ease.in_out_quintic",
+        "ease.in_out_sine",
+        "ease.in_quadratic",
+        "ease.in_quartic",
+        "ease.in_quintic",
+        "ease.in_sine",
+        "ease.linear",
+        "ease.out_back",
+        "ease.out_bounce",
+        "ease.out_circular",
+        "ease.out_cubic",
+        "ease.out_elastic",
+        "ease.out_exponential",
+        "ease.out_quadratic",
+        "ease.out_quartic",
+        "ease.out_quintic",
+        "ease.out_sine",
+        "exponential",
+        "generate",
+        "harmonic",
+        "increment",
+        "randomrange",
+        "replicatenvalues",
+        "replicatevalues",
+        "scaledexponential",
+        "setvalue",
+        "setvaluerange",
+        "smoothstep",
+        "spread",
+        "spreadexclusive",
+        "spreadincludefirst",
+        "spreadincludesecond",
+        "spreadinclusive",
+        "subharmonic"
+      ],
+      "source": "refpage <mcwrapper>"
+    },
+    "thispatcher-help": {
+      "attributes": [],
+      "family": "thispatcher",
+      "messages": [
+        "clean",
+        "dirty",
+        "dispose",
+        "front",
+        "fullscreen",
+        "loadbang",
+        "path",
+        "savewindow",
+        "script",
+        "setactivetab",
+        "title",
+        "wclose",
+        "window",
+        "write"
+      ],
+      "source": "help/max/thispatcher.maxhelp"
+    }
+  }
+}

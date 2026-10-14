@@ -27,6 +27,7 @@ Each domain file is a JSON object keyed by object name. Every object entry conta
 - **`relationships.json`** -- Common object pairings and companions (e.g., `tapin~`/`tapout~`, `notein`/`stripnote`).
 - **`pd-blocklist.json`** -- Pure Data objects that do NOT exist in MAX, with their MAX equivalents.
 - **`extraction-log.json`** -- Extraction metadata and statistics.
+- **`groups.json`** -- Inherited group names: MC wrapper methods/attributes (refpage `<mcwrapper>`), shared Jitter methods and OB3D/MOP/geometry attributes (refpage `<jittermethodlist>`/`<jitterattributelist>`, typed from the group pages), and thispatcher's help-patch selectors. Written only by `tools/sync_max_bundle.py --apply groups`, merged at call time by `ObjectDatabase`, never copied into domain files.
 
 ### How to Use the Database
 
@@ -44,6 +45,8 @@ db.compute_io_counts("trigger", ["b", "i", "f"])   # (1, 3)
 db.get_outlet_types("cycle~")                      # ["signal"]
 ```
 
+`lookup()` returns only an object's own messages/attributes. For message or attribute questions use `db.messages(name)`, `db.attributes(name)` (typed; own definitions win) or `db.selectors(name)` (every accepted selector, including untyped inherited attribute names) -- these add the inherited group names from `groups.json` (e.g. `applyvalues`/`setvalue` on mc.* wrappers).
+
 **Browse by domain:** The raw JSON files at `.claude/max-objects/{domain}/objects.json` are still available for browsing all objects in a domain or bulk operations, but for individual lookups always use `ObjectDatabase`.
 
 **Check common companions:** Look up the object name in `relationships.json` to find commonly paired objects.
@@ -56,7 +59,7 @@ db.get_outlet_types("cycle~")                      # ["signal"]
 
 **Refpages are authoritative for I/O counts far more than for types, and must never overwrite expert overrides.** 640 of 1175 core refpages (54.5%) carry unfilled Cycling '74 template placeholders — `TEXT_HERE`, `INLET_TYPE`, `OUTLET_TYPE`, `undefined`, `Dummy` — with `max-ref` worst at 429/473. `spectroscope~`'s maxref declares 1 outlet typed `OUTLET_TYPE`: the count is right (MAX saves `spectroscope~` as 2 inlets / 1 outlet in every bundle help box) and only the type is a placeholder. `in`'s declares 1 inlet described `Dummy`, which is wrong and is corrected in `overrides.json`. Max 9.2's `jit.web~` refpage types all four outlets `signal`; the help-patch box Max itself serialized says `signal, signal, jit_matrix, ""` — when a refpage and a shipped help box disagree on types, the help box wins. A re-extraction that trusts refpage types would silently revert 36 curated outlets.
 
-**After a Max update, re-sync the DB from the installed bundle:** run `python3 tools/audit_db.py` (read-only drift report), then `python3 tools/sync_max_bundle.py` (dry-run: new objects, define aliases, message/attribute deltas), then `--apply new|define --names <explicit names>` and `--apply deltas`, and finally `--refresh-log` so `extraction-log.json` records the sync (the audit's DB-age/drift line reads it). `--min-version N` sets the tag for objects older than the current release; `--apply inherited --attributes <names>` copies named shared Jitter OB3D attributes (defined only in the `jit.group-gl` group page) onto the objects whose refpages list them — only `alpha_mode` has been landed this way. The sync tool is additive and idempotent, never changes existing I/O, and cannot write `overrides.json`. Last synced against Max 9.2.0.
+**After a Max update, re-sync the DB from the installed bundle:** run `python3 tools/audit_db.py` (read-only drift report), then `python3 tools/sync_max_bundle.py` (dry-run: new objects, define aliases, message/attribute deltas), then `--apply new|define --names <explicit names>` and `--apply deltas`, then `--apply groups` (rewrites only `groups.json`), and finally `--refresh-log` so `extraction-log.json` records the sync (the audit's DB-age/drift line reads it). `--min-version N` sets the tag for objects older than the current release; `--apply inherited --attributes <names>` copies named shared Jitter OB3D attributes (defined only in the `jit.group-gl` group page) onto the objects whose refpages list them — only `alpha_mode` has been landed this way. The sync tool is additive and idempotent, never changes existing I/O, and cannot write `overrides.json`. Last synced against Max 9.2.0.
 
 ## Rules
 

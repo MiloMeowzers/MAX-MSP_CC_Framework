@@ -1281,3 +1281,306 @@ class TestUiMaxclassSurvey:
 
     def test_section_key_is_last(self) -> None:
         assert sync.SECTION_KEYS[-1] == "ui_maxclasses"
+
+
+# ── Inherited group profiles (review C8 / Q14) ────────────────────
+
+
+def _mcwrapper_refpage(name: str, methods: list[str] | None, attrs: list[str] | None) -> str:
+    """An MC refpage with one signal inlet / outlet and `bang`.
+
+    `methods` None omits the <mcwrapper> element; [] with attrs [] writes an
+    empty one (the mc.record~ shape).
+    """
+    page = _refpage(
+        name, module="msp", inlets=[("signal", "in")], outlets=[("signal", "out")], methods=["bang"]
+    )
+    if methods is None:
+        return page
+    block = ["  <mcwrapper>\n"]
+    block.extend(f'    <mcwrappermethod name="{m}" />\n' for m in methods)
+    block.extend(f'    <mcwrapperattr name="{a}" />\n' for a in attrs or [])
+    block.append("  </mcwrapper>\n</c74object>\n")
+    return page.replace("</c74object>\n", "".join(block))
+
+
+def _add_groups_fixtures(world: dict) -> None:
+    """MC wrapper refpages plus an mc/objects.json holding their entries."""
+    msp_ref = world["app"] / "Contents" / "Resources" / "C74" / "docs" / "refpages" / "msp-ref"
+    # applyvalues listed twice: the profile dedupes it.
+    (msp_ref / "mc.fake~.maxref.xml").write_text(
+        _mcwrapper_refpage(
+            "mc.fake~", ["applyvalues", "setvalue", "ease.linear", "applyvalues"], ["chans", "fun"]
+        )
+    )
+    (msp_ref / "mc.native~.maxref.xml").write_text(_mcwrapper_refpage("mc.native~", None, None))
+    (msp_ref / "mc.empty~.maxref.xml").write_text(_mcwrapper_refpage("mc.empty~", [], []))
+    mc_dir = world["db_root"] / "mc"
+    mc_dir.mkdir(parents=True, exist_ok=True)
+    entries = {n: _entry(n, "MC", "msp") for n in ("mc.fake~", "mc.native~", "mc.empty~")}
+    (mc_dir / "objects.json").write_text(
+        json.dumps(entries, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+
+
+def _canonical(data: dict) -> bytes:
+    return (json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+class TestGroups:
+    """C8 / Q14: inherited group names land in groups.json, merged at call time."""
+
+    def test_mc_wrapper_messages_end_to_end(self, world: dict) -> None:
+        """Tracer: refpage <mcwrapper> -> --apply groups -> groups.json -> messages().
+
+        pending_names is, summed over members, the member's effective names
+        (profile messages + attributes) minus those groups.json already
+        records: here mc.fake~'s applyvalues, ease.linear, setvalue, chans and
+        fun, none recorded yet.
+        """
+        from src.maxpat.db_lookup import ObjectDatabase
+
+        _add_groups_fixtures(world)
+        db_root = world["db_root"]
+        before = _tree_bytes(db_root)
+        assert _run(world) == 0
+        assert _tree_bytes(db_root) == before
+
+        section = _report(world)["groups"]
+        assert section["available"] is True
+        assert section["members"] == 1
+        assert section["by_family"] == {"mc": 1}
+        assert section["pending_members"] == 1
+        assert section["pending_names"] == 5
+
+        assert _run(world, "--apply", "groups") == 0
+        after = _tree_bytes(db_root)
+        assert set(after) - set(before) == {"groups.json"}
+        assert all(after[k] == before[k] for k in before)
+        raw = (db_root / "groups.json").read_bytes()
+        data = json.loads(raw)
+        assert raw == _canonical(data)
+        assert list(data["members"]) == ["mc.fake~"]
+        (profile_id,) = data["members"]["mc.fake~"]
+        assert profile_id.startswith("mc-") and len(profile_id) == len("mc-") + 8
+
+        db = ObjectDatabase(db_root)
+        assert db.messages("mc.fake~") == ["bang", "applyvalues", "ease.linear", "setvalue"]
+        assert db.messages("mc.native~") == ["bang"]
+        assert db.messages("mc.empty~") == ["bang"]
+        assert db.lookup("mc.fake~")["messages"] == ["bang"]
+
+        assert _run(world, "--apply", "groups") == 0
+        assert _tree_bytes(db_root) == after
+        assert _report(world)["groups"]["pending_names"] == 0
+
+    def test_section_order_keeps_ui_maxclasses_last(self) -> None:
+        keys = sync.SECTION_KEYS
+        assert "groups" in keys
+        assert keys[keys.index("inherited_attributes") + 1] == "groups"
+        assert keys[-1] == "ui_maxclasses"
+
+    def test_jitter_profile_and_attribute_definitions(self, world: dict) -> None:
+        from src.maxpat.db_lookup import ObjectDatabase
+
+        _add_group_fixtures(world)
+        jit_old = (
+            world["app"] / "Contents" / "Resources" / "C74" / "docs" / "refpages" / "jit-ref"
+            / "jit.old.maxref.xml"
+        )
+        methods = (
+            "  <jittermethodlist>\n"
+            '    <jittermethod name="bang" />\n'
+            '    <jittermethod name="getattributes" />\n'
+            '    <jittermethod name="exportsummary" />\n'
+            "  </jittermethodlist>\n</c74object>\n"
+        )
+        jit_old.write_text(jit_old.read_text().replace("</c74object>\n", methods))
+
+        section = _report(world)["groups"]
+        assert section["undefined_attributes"] == ["nowhere"]
+        assert section["ambiguous_attributes"] == ["blend"]
+        assert section["by_family"] == {"jit": 1}
+
+        assert _run(world, "--apply", "groups") == 0
+        data = _load(world, "groups.json")
+        (pid,) = data["members"]["jit.old"]
+        assert pid.startswith("jit-")
+        profile = data["profiles"][pid]
+        assert profile["family"] == "jit"
+        assert profile["messages"] == ["bang", "exportsummary", "getattributes"]
+        assert profile["attributes"] == ["alpha_mode", "blend", "nowhere"]
+        assert data["attribute_definitions"] == {
+            "alpha_mode": {
+                "definition": {"type": "int", "get": True, "set": True},
+                "source": "docs/refpages/jit-ref/jit.group-fake.maxref.xml",
+            }
+        }
+
+        db = ObjectDatabase(world["db_root"])
+        attributes = db.attributes("jit.old")
+        assert attributes == {"alpha_mode": {"type": "int", "get": True, "set": True}}
+        assert {"bang", "exportsummary", "getattributes", "alpha_mode", "blend", "nowhere"} <= (
+            db.selectors("jit.old")
+        )
+
+    def test_thispatcher_profile_from_help_patch(self, world: dict) -> None:
+        from src.maxpat.db_lookup import ObjectDatabase
+
+        path = world["db_root"] / "max" / "objects.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["thispatcher"] = _entry("thispatcher", "Max", "max", messages=["anything"])
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+        def box(bid: str, maxclass: str, text: str, patcher: dict | None = None) -> dict:
+            inner = {"box": {"id": bid, "maxclass": maxclass, "text": text, "numinlets": 1, "numoutlets": 1}}
+            if patcher is not None:
+                inner["box"]["patcher"] = patcher
+            return inner
+
+        def line(src: str, dst: str) -> dict:
+            return {"patchline": {"source": [src, 0], "destination": [dst, 0]}}
+
+        sub = {
+            "boxes": [box("obj-1", "newobj", "thispatcher"), box("obj-2", "message", "dirty")],
+            "lines": [line("obj-2", "obj-1")],
+        }
+        help_patch = {
+            "patcher": {
+                "boxes": [
+                    box("obj-1", "newobj", "thispatcher"),
+                    box("obj-2", "message", "script newobject toggle, script hide foo"),
+                    box("obj-3", "message", "wclose"),
+                    box("obj-4", "newobj", "prepend write"),
+                    box("obj-5", "message", "; pd dsp 1"),
+                    box("obj-6", "message", "$1 2"),
+                    box("obj-7", "message", "front"),
+                    box("obj-8", "newobj", "t l"),
+                    box("obj-9", "newobj", "t l"),
+                    box("obj-10", "newobj", "t l"),
+                    box("obj-11", "newobj", "p sub", patcher=sub),
+                ],
+                "lines": [
+                    line("obj-2", "obj-1"),
+                    line("obj-3", "obj-1"),
+                    line("obj-4", "obj-1"),
+                    line("obj-5", "obj-1"),
+                    line("obj-6", "obj-1"),
+                    line("obj-7", "obj-8"),
+                    line("obj-8", "obj-9"),
+                    line("obj-9", "obj-10"),
+                    line("obj-10", "obj-1"),
+                ],
+            }
+        }
+        help_max = world["app"] / "Contents" / "Resources" / "C74" / "help" / "max"
+        help_max.mkdir(parents=True)
+        (help_max / "thispatcher.maxhelp").write_text(json.dumps(help_patch))
+
+        section = _report(world)["groups"]
+        assert section["thispatcher_source"] == "help/max/thispatcher.maxhelp"
+        assert _run(world, "--apply", "groups") == 0
+        groups = _load(world, "groups.json")
+        assert groups["members"]["thispatcher"] == ["thispatcher-help"]
+        profile = groups["profiles"]["thispatcher-help"]
+        assert profile["messages"] == ["dirty", "script", "wclose", "write"]
+        assert profile["attributes"] == []
+        assert profile["source"] == "help/max/thispatcher.maxhelp"
+        assert ObjectDatabase(world["db_root"]).messages("thispatcher") == [
+            "anything", "dirty", "script", "wclose", "write",
+        ]
+
+    def _applied(self, world: dict) -> tuple[Path, bytes, dict]:
+        _add_groups_fixtures(world)
+        _add_group_fixtures(world)
+        assert _run(world, "--apply", "groups") == 0
+        path = world["db_root"] / "groups.json"
+        raw = path.read_bytes()
+        return path, raw, json.loads(raw)
+
+    def test_groups_writer_refuses_member_removal(self, world: dict) -> None:
+        path, raw, data = self._applied(world)
+        del data["members"]["mc.fake~"]
+        with pytest.raises(sync.AdditiveViolation, match="removed"):
+            sync.write_groups_file(path, data, world["db_root"])
+        assert path.read_bytes() == raw
+
+    def test_groups_writer_refuses_name_loss(self, world: dict) -> None:
+        path, raw, data = self._applied(world)
+        (pid,) = data["members"]["mc.fake~"]
+        shrunk = dict(data["profiles"][pid])
+        shrunk["messages"] = [m for m in shrunk["messages"] if m != "setvalue"]
+        data["profiles"]["mc-shrunk00"] = shrunk
+        data["members"]["mc.fake~"] = ["mc-shrunk00"]
+        with pytest.raises(sync.AdditiveViolation, match="setvalue"):
+            sync.write_groups_file(path, data, world["db_root"])
+        assert path.read_bytes() == raw
+
+    def test_groups_writer_refuses_definition_change(self, world: dict) -> None:
+        path, raw, data = self._applied(world)
+        data["attribute_definitions"]["alpha_mode"]["definition"]["type"] = "float"
+        with pytest.raises(sync.AdditiveViolation, match="alpha_mode"):
+            sync.write_groups_file(path, data, world["db_root"])
+        assert path.read_bytes() == raw
+
+    def test_groups_writer_refuses_other_paths(self, world: dict, tmp_path: Path) -> None:
+        db_root = world["db_root"]
+        overrides = db_root / "overrides.json"
+        before = overrides.read_bytes()
+        with pytest.raises(sync.WriteRefused):
+            sync.write_groups_file(overrides, {"profiles": {}, "members": {}}, db_root)
+        assert overrides.read_bytes() == before
+        outside = tmp_path / "elsewhere" / "groups.json"
+        with pytest.raises(sync.WriteRefused):
+            sync.write_groups_file(outside, {"profiles": {}, "members": {}}, db_root)
+        assert not outside.exists()
+        with pytest.raises(sync.WriteRefused):
+            sync.write_db_file(db_root / "groups.json", {}, db_root)
+        assert not (db_root / "groups.json").exists()
+
+    def test_bundle_shrink_keeps_recorded_names(self, world: dict) -> None:
+        from src.maxpat.db_lookup import ObjectDatabase
+
+        _add_groups_fixtures(world)
+        assert _run(world, "--apply", "groups") == 0
+        msp_ref = world["app"] / "Contents" / "Resources" / "C74" / "docs" / "refpages" / "msp-ref"
+        (msp_ref / "mc.fake~.maxref.xml").write_text(
+            _mcwrapper_refpage("mc.fake~", ["applyvalues", "ease.linear"], ["chans", "fun"])
+        )
+        assert _run(world, "--apply", "groups") == 0
+        assert "setvalue" in ObjectDatabase(world["db_root"]).messages("mc.fake~")
+
+    def test_inherited_report_counts_groups_json_as_recorded(self, world: dict) -> None:
+        _add_group_fixtures(world)
+        assert _report(world)["inherited_attributes"]["by_attribute"] == {"alpha_mode": 1}
+        assert _run(world, "--apply", "groups") == 0
+        section = _report(world)["inherited_attributes"]
+        assert section["by_attribute"] == {}
+        assert section["undefined"] == {}
+        before = _tree_bytes(world["db_root"])
+        assert _run(world, "--apply", "inherited", "--attributes", "alpha_mode") == 0
+        assert _tree_bytes(world["db_root"]) == before
+
+    def test_doc_shaped_refpage_of_a_real_object_is_a_member(self, world: dict) -> None:
+        """jit.graph / jit.plot shape: no inlet/outlet/method lists, but a DB object."""
+        _add_group_fixtures(world)
+        jit_ref = world["app"] / "Contents" / "Resources" / "C74" / "docs" / "refpages" / "jit-ref"
+        listing = (
+            "  <jitterattributelist>\n"
+            '    <jitterattribute name="alpha_mode" />\n'
+            "  </jitterattributelist>\n</c74object>\n"
+        )
+        (jit_ref / "jit.old.maxref.xml").write_text(
+            _refpage("jit.old", module="jit").replace("</c74object>\n", listing)
+        )
+        assert _run(world, "--apply", "groups") == 0
+        groups = _load(world, "groups.json")
+        assert list(groups["members"]) == ["jit.old"]
+        assert _report(world)["groups"]["unresolved"] == []
+
+    def test_refresh_log_records_group_fields(self, world: dict) -> None:
+        _add_groups_fixtures(world)
+        assert _run(world, "--apply", "groups", "--refresh-log") == 0
+        log = _load(world, "extraction-log.json")
+        assert log["sync"]["group_members"] == _report(world)["groups"]["members"] == 1
+        assert log["sync"]["pending_group_names"] == 0

@@ -5,6 +5,7 @@ computing variable I/O counts, and checking PD blocklist. This is the single
 source of truth for object existence and metadata during patch generation.
 """
 
+import copy
 import itertools
 import json
 import warnings
@@ -262,6 +263,12 @@ class ObjectDatabase:
         self._sources: dict[str, set[str]] = defaultdict(set)
         self._implied_restrictions: dict[str, list[str]] = {}
         self._equivalents: dict[str, list[str]] = defaultdict(list)
+        # Review C8 / Q14: inherited group names from groups.json, keyed by
+        # canonical name -> profile ids. Merged at call time by messages();
+        # never written into self._objects, so lookup() is unchanged.
+        self._group_members: dict[str, list[str]] = {}
+        self._group_profiles: dict[str, dict] = {}
+        self._group_attribute_definitions: dict[str, dict] = {}
         self._load(db_root)
 
     def _load(self, db_root: Path) -> None:
@@ -350,6 +357,12 @@ class ObjectDatabase:
         self._overridden_objects: set[str] = set()
         self._apply_object_overrides(overrides_data)
 
+        # Inherited group profiles (review C8 / Q14). Optional file, written
+        # only by tools/sync_max_bundle.py --apply groups.
+        groups_path = db_root / "groups.json"
+        if groups_path.exists():
+            self._load_groups(json.loads(groups_path.read_text(encoding="utf-8")))
+
         # Fail-fast on the v5.0 schema-extension fields (signal_role,
         # domain_restricted, verified_installed). Runs AFTER the merge so
         # the validator sees the final merged shape, BEFORE package_info
@@ -429,6 +442,117 @@ class ObjectDatabase:
                 else:
                     obj[field] = value
             self._overridden_objects.add(canonical)
+
+    def _load_groups(self, data: dict) -> None:
+        """Index groups.json members / profiles; never touches ``_objects``.
+
+        Member keys canonicalise through aliases.json (two keys that meet
+        merge their profile lists). A member with no domain entry, or one
+        that references a missing profile, raises ValueError (fail fast, the
+        overrides.json policy).
+        """
+        if not isinstance(data, dict):
+            raise ValueError("groups.json must be a JSON object")
+        profiles = data.get("profiles") or {}
+        members = data.get("members") or {}
+        definitions = data.get("attribute_definitions") or {}
+        if not isinstance(profiles, dict) or not isinstance(members, dict) or not isinstance(
+            definitions, dict
+        ):
+            raise ValueError(
+                "groups.json profiles / members / attribute_definitions must be objects"
+            )
+        for key, ids in members.items():
+            canonical = self._aliases.get(key, key)
+            if canonical not in self._objects:
+                via = f" (alias of {canonical!r})" if canonical != key else ""
+                raise ValueError(
+                    f"groups.json member {key!r}{via} has no domain entry; "
+                    "re-run tools/sync_max_bundle.py --apply groups."
+                )
+            if not isinstance(ids, list):
+                raise ValueError(f"groups.json member {key!r} must list profile ids")
+            for pid in ids:
+                if pid not in profiles:
+                    raise ValueError(
+                        f"groups.json member {key!r} references missing profile {pid!r}"
+                    )
+            merged = self._group_members.setdefault(canonical, [])
+            for pid in ids:
+                if pid not in merged:
+                    merged.append(pid)
+        self._group_profiles = profiles
+        self._group_attribute_definitions = definitions
+
+    def _group_names(self, canonical: str, field: str) -> list[str]:
+        """A member's inherited `messages` or `attributes`, profile order, deduped."""
+        out: list[str] = []
+        for pid in self._group_members.get(canonical, []):
+            for item in self._group_profiles[pid].get(field) or []:
+                if item not in out:
+                    out.append(item)
+        return out
+
+    def messages(self, name: str) -> list[str] | None:
+        """Every message an object accepts: own list, then inherited group names.
+
+        ``lookup()`` returns only the object's own ``messages`` (the
+        overrides.json list where one exists); this adds the names its
+        groups.json profiles give it (MC wrapper methods, shared Jitter
+        methods, thispatcher help selectors), deduplicated in order. Returns
+        a fresh list, or None for an unknown name.
+        """
+        canonical = self._aliases.get(name, name)
+        obj = self._objects.get(canonical)
+        if obj is None:
+            return None
+        own = obj.get("messages")
+        out = list(own) if isinstance(own, list) else []
+        for item in self._group_names(canonical, "messages"):
+            if item not in out:
+                out.append(item)
+        return out
+
+    def attributes(self, name: str) -> dict | None:
+        """Typed attributes: own definitions, plus inherited group-page ones.
+
+        ``lookup()`` returns only the object's own ``attributes``; this adds
+        each groups.json inherited attribute that has a group-page definition
+        (OB3D ``position`` -> float, MC ``chans`` -> int, ...). Own definitions
+        always win. Inherited names no group page types (``dim``, ``fun``,
+        ...) are left out -- see :meth:`selectors`. Returns a deep copy, or
+        None for an unknown name.
+        """
+        canonical = self._aliases.get(name, name)
+        obj = self._objects.get(canonical)
+        if obj is None:
+            return None
+        own = obj.get("attributes")
+        out = copy.deepcopy(own) if isinstance(own, dict) else {}
+        for attr in self._group_names(canonical, "attributes"):
+            definition = self._group_attribute_definitions.get(attr)
+            if isinstance(definition, dict) and "definition" in definition:
+                out.setdefault(attr, copy.deepcopy(definition["definition"]))
+        return out
+
+    def selectors(self, name: str) -> set[str] | None:
+        """Every selector an object accepts: messages, own and inherited attributes.
+
+        The union of :meth:`messages`, the object's own attribute names, and
+        EVERY inherited attribute name (typed or not), since MAX accepts an
+        attribute name as a message. Use this for "is this message legal"
+        checks. Returns a fresh set, or None for an unknown name.
+        """
+        canonical = self._aliases.get(name, name)
+        obj = self._objects.get(canonical)
+        if obj is None:
+            return None
+        out = set(self.messages(canonical) or [])
+        own = obj.get("attributes")
+        if isinstance(own, dict):
+            out.update(own)
+        out.update(self._group_names(canonical, "attributes"))
+        return out
 
     def _validate_variable_io_rules(self) -> None:
         """Assert every loaded rule uses a supported formula.
@@ -608,6 +732,11 @@ class ObjectDatabase:
 
         Returns:
             Object dict from the database, or None if not found or filtered.
+            Its ``messages`` / ``attributes`` are the object's OWN lists only:
+            names inherited from a group (MC wrapper, Jitter OB3D/MOP,
+            thispatcher help selectors; groups.json) are excluded. Use
+            :meth:`messages`, :meth:`attributes` or :meth:`selectors` for
+            message / attribute questions.
 
         Note:
             When an outlet has both `signal_role` and `signal` set in the
