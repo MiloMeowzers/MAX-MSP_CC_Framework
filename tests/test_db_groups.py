@@ -163,3 +163,90 @@ def test_unknown_name_returns_none(tmp_path: Path) -> None:
     assert db.messages("nosuch") is None
     assert db.attributes("nosuch") is None
     assert db.selectors("nosuch") is None
+
+
+# ---------------------------------------------------------------------------
+# Real repo DB (the committed groups.json; no Max needed except where marked)
+# ---------------------------------------------------------------------------
+
+_REPO_DB = Path(__file__).resolve().parents[1] / ".claude" / "max-objects"
+
+
+@pytest.fixture(scope="module")
+def real_db() -> ObjectDatabase:
+    return _db(_REPO_DB)
+
+
+def _own(db: ObjectDatabase, name: str) -> dict:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return db.lookup(name)
+
+
+_MC_CYCLE_OWN = ["float", "(mouse)", "reset", "set", "setall", "signal"]
+_THISPATCHER_OWN = ["anything", "end", "savewindow", "setactivetab", "showparameterwindow"]
+
+
+def test_mc_cycle_messages_include_applyvalues_and_setvalue(real_db: ObjectDatabase) -> None:
+    messages = real_db.messages("mc.cycle~")
+    assert messages[: len(_MC_CYCLE_OWN)] == _MC_CYCLE_OWN
+    assert {"applyvalues", "setvalue"} <= set(messages)
+
+
+def test_jit_gl_mesh_has_ob3d_attributes(real_db: ObjectDatabase) -> None:
+    attributes = real_db.attributes("jit.gl.mesh")
+    ob3d = {
+        "position", "rotatexyz", "scale", "blend_enable",
+        "depth_enable", "lighting_enable", "drawto", "enable",
+    }
+    assert ob3d <= set(attributes)
+    assert attributes["position"] == {"type": "float", "get": True, "set": True}
+    assert attributes["alpha_mode"] == _own(real_db, "jit.gl.mesh")["attributes"]["alpha_mode"]
+
+
+def test_thispatcher_has_script_write_wclose(real_db: ObjectDatabase) -> None:
+    assert {"script", "write", "wclose"} <= set(real_db.messages("thispatcher"))
+
+
+def test_lookup_dict_is_not_mutated(real_db: ObjectDatabase) -> None:
+    real_db.messages("mc.cycle~")
+    real_db.selectors("thispatcher")
+    assert _own(real_db, "mc.cycle~")["messages"] == _MC_CYCLE_OWN
+    assert _own(real_db, "thispatcher")["messages"] == _THISPATCHER_OWN
+
+
+def test_override_message_list_still_gains_group_names(real_db: ObjectDatabase) -> None:
+    overrides = json.loads((_REPO_DB / "overrides.json").read_text())["objects"]
+    assert _own(real_db, "mc.sig~")["messages"] == overrides["mc.sig~"]["messages"]
+    messages = real_db.messages("mc.sig~")
+    assert messages[: len(overrides["mc.sig~"]["messages"])] == overrides["mc.sig~"]["messages"]
+    assert {"applymessages", "decide"} <= set(messages)
+
+
+@pytest.mark.parametrize("name", ["mc.pack~", "mc.record~"])
+def test_native_mc_object_is_not_a_member(real_db: ObjectDatabase, name: str) -> None:
+    assert real_db.messages(name) == _own(real_db, name)["messages"]
+    assert "applyvalues" not in real_db.messages(name)
+
+
+def test_undefined_inherited_attr_is_selector_not_attribute(real_db: ObjectDatabase) -> None:
+    assert "fun" in real_db.selectors("mc.cycle~")
+    attributes = real_db.attributes("mc.cycle~")
+    assert "fun" not in attributes
+    assert attributes["chans"]["type"] == "int"
+
+
+def test_groups_file_is_canonical() -> None:
+    raw = (_REPO_DB / "groups.json").read_bytes()
+    data = json.loads(raw)
+    assert raw == (json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode(
+        "utf-8"
+    )
+
+
+@pytest.mark.requires_max
+def test_bundle_has_no_pending_group_names() -> None:
+    import tools.sync_max_bundle as sync
+
+    report = sync.run_report(sync.DEFAULT_DB_ROOT, sync.DEFAULT_MAX_APP)
+    assert report["sections"]["groups"]["pending_names"] == 0

@@ -17,7 +17,7 @@
   "variable_io_count": 30,
   "empty_inlets_count": 270,
   "empty_outlets_count": 294,
-  "extraction_timestamp": "2026-10-02T20:24:00.005153+00:00",
+  "extraction_timestamp": "2026-10-14T05:49:41.016060+00:00",
   "max_installation_path": ".claude/max-objects",
   "max_version": "9.2.0",
   "max_build": "e9c80e453de",
@@ -31,7 +31,9 @@
       "jit.gl.movie~"
     ],
     "pending_messages": 0,
-    "pending_attributes": 0
+    "pending_attributes": 0,
+    "group_members": 419,
+    "pending_group_names": 0
   },
   "history": [
     {
@@ -48,6 +50,23 @@
         "rnbo": 560,
         "packages": 1489
       }
+    },
+    {
+      "extraction_timestamp": "2026-10-02T20:24:00.005153+00:00",
+      "total_files_found": 36,
+      "total_objects": 3445,
+      "domain_counts": {
+        "max": 473,
+        "msp": 247,
+        "jitter": 222,
+        "mc": 222,
+        "gen": 189,
+        "m4l": 35,
+        "rnbo": 560,
+        "packages": 1497
+      },
+      "max_version": "9.2.0",
+      "max_build": "e9c80e453de"
     }
   ]
 }
