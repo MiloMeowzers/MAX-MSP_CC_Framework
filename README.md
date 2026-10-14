@@ -13,12 +13,12 @@ An AI-assisted MAX/MSP/Jitter/RNBO development system that enables conversationa
 - **3,445-object knowledge base** — verified database covering MAX, MSP, Jitter, MC, Gen~, Max for Live, RNBO, and 29 packages (BEAP, Vizzie, FluCoMa, CNMAT, Bach, and more) with full inlet/outlet schemas and typed per-outlet signal metadata (`signal_role`) backing the connection validator
 - **Package-aware generation** — project-level package selection, DB-driven bpatcher sizing, allowed_packages gating, and community package stubs with extraction CLI for installed packages
 - **9 specialist agents** — router, patch, DSP/Gen~, RNBO, JavaScript, UI layout, C++ externals, critic, and lifecycle management with package-specific domain guidance
-- **5-layer validation pipeline** — structure checks, `signal_role`-aware connection verification, domain-restriction guards, six domain-specific critics (DSP signal flow, structure, layout, RNBO compatibility, C++ review, package conventions), and iterative revision
+- **5-layer validation pipeline** — structure checks, `signal_role`-aware connection verification, domain-restriction guards, seven domain-specific critics (DSP signal flow, structure, layout, RNBO compatibility, C++ review, package conventions, Max for Live device conventions), and iterative revision
 - **Codified layout/UX builders** — one-call helpers for labeled parameter banks, overlay readouts, safe box replacement with auto-rewiring, and Max for Live gen-synth skeletons
 - **Offline DSP pre-flight simulation** — a numerical waveguide-stability harness (`dsp_sim`) that classifies specific reed/bore topologies before you open the patch in MAX (not a general audio preview)
 - **Gen~ / GenExpr code generation** — sample-rate DSP code with proper declaration ordering, feedback loops, and parameter mapping
 - **RNBO export support** — generate export-ready patches for VST3/AU plugins, Web Audio, and C++ embedded targets
-- **Node for Max & js scripting** — generate JavaScript for both V8 `js` objects and Node.js `node.script`
+- **Node for Max & js scripting** — generate JavaScript for `js` objects (Legacy Engine, ES5), `v8` objects (Modern Engine), and Node for Max `node.script`
 - **C++ external development** — scaffold, generate, and build Min-DevKit externals with help patches
 - **Help patch audit pipeline** — offline tool that parses 973 .maxhelp files to extract ground truth object metadata and automatically correct database entries
 - **Professional patch aesthetics** — styled section comments, background panels, contrast-aware text colors, obstacle-avoiding cord routing, grid-snapped layout, inlet-aligned cables, and intelligent subpatcher grouping suggestions for polished output
@@ -146,22 +146,35 @@ The `patches/` directory contains example and user-created projects:
 
 | Project | Description | Files |
 |---------|-------------|-------|
+| **amplitude-follower** | Smoothed RMS amplitude follower in gen~ with a single smoothing-time parameter, outputting a 0–1 signal usable as a modulation source | `.maxpat` |
+| **barnett-dbap** | 8-channel Distance-Based Amplitude Panning (DBAP) spatializer for the Roy Barnett Recital Hall speaker rig, ported from the O-Octagon VST | `.maxpat`, `.js` |
 | **bassoon-model** | Physical model of a bassoon with conical waveguide and reed nonlinearity for high-accuracy microtonal pitch | `.maxpat`, `.gendsp` |
+| **disintegrate** | One-knob stereo "disintegration" effect in a single gen~ codebox — filtering, saturation, and detuning sweep the sound from bypass to silence | `.maxpat` |
 | **FDNVerb** | Feedback delay network reverb with 8 delay lines, Hadamard matrix, decay/diffusion/damping/freeze controls | `.maxpat`, `.gendsp` |
 | **gen-eq** | 5-band parametric EQ with TPT SVF filters in gen~, Neve-warm asymmetric saturation, and SSL-style horizontal UI | `.maxpat`, `.gendsp` |
 | **gong-model** | Physical model of a gong using gen~ modal synthesis with pitch/timbre control, MIDI and audio excitation, drift engine | `.maxpat`, `.gendsp`, `.js` |
 | **granularsynthtest** | Granular synthesizer with Gen~ DSP engine and MC multichannel output for flexible speaker arrays | `.maxpat`, `.gendsp` |
 | **intelligent-corpus-remixer** | Corpus-based concatenative synthesis using FluCoMa (MFCC + UMAP + k-means), EARS, and Odot; 2D plotter-triggered playback | `.maxpat`, `.js` |
+| **ji-harmonizer** | Wavetable pad synth where one MIDI note triggers a full chord, every pitch tuned by a microtonal engine (temperaments, Scala .scl/.kbm, scale generators), ported from the O-IntonationPad VST | `.maxpat`, `.js` |
 | **kicksynth** | Kick drum synthesizer with Gen~ pitch envelopes, click/sub/noise layers, and drive/saturation | `.maxpat`, `.js` |
-| **minitaur** | Digital recreation of the Moog Minitaur bass synthesizer with dual VCOs, Moog ladder filter, and LFO modulation | `.maxpat` |
+| **knock** | Deep knocking-sound generator — a gen~ kick-style voice triggered by velocity, with randomness and bassiness controls that vary each hit | `.maxpat` |
+| **looper** | Pedal-style audio looper with one-button record/play/overdub cycling, overdub feedback, and a waveform display | `.maxpat`, `.gendsp` |
+| **minitaur** | Digital recreation of the Moog Minitaur bass synthesizer with dual VCOs, Moog ladder filter, and LFO modulation | `.maxpat`, `.js` |
 | **mixer** | Virtual mixing console with channel strips, aux buses, master section, and per-track sends | `.maxpat`, `.js` |
 | **performancepatchtest** | Live performance cue system with multiband compression, feedback delay, distortion, and soundfile playback | `.maxpat`, `.gendsp` |
 | **physics-composition** | Audiovisual instrument where a 2D bouncing-ball simulation (dada.bounce) drives microtonal note generation with bach.roll score display | `.maxpat` |
+| **reverse-delay** | gen~ granular reverse delay ported from the O-ReverseDelay VST, with tempo sync, factory presets, and mono or stereo input | `.maxpat` |
 | **rhythmic-corpus-chopper** | Sample-accurate beat slicer and re-sequencer using FluCoMa onset detection and the Rhythmic Time Toolkit for signal-rate sequencing | `.maxpat`, `.js` |
 | **rhythmic-sampler** | 8-slot sampler with slice-based sequencing, time-stretching, and per-slot FX | `.maxpat`, `.js` |
+| **sample-layers** | Long-grain sample layer player — six buffers each play randomized 3–20 s grains with a Tukey window, random per-grain pan, and global attack/release | `.maxpat` |
 | **scala-synth** | 16-voice polyphonic additive synthesizer with Scala (.scl) file support for microtonal playback | `.maxpat`, `.js` |
-| **stutter** | Glitchy stutter effect with rhythmic and chaotic modes, built around a Gen~ stutter engine | `.maxpat` |
+| **simple-fm** | Teaching patch that demonstrates the essentials of FM synthesis so learners can hear and see what each parameter does | `.maxpat` |
+| **spectraldetector** | Detects whether an audio input is mostly a sustained pitch or noise | `.maxpat` |
+| **stereo-feedback-delay** | Mono-in, stereo-out feedback delay with a gen~ engine — damping, tape-warble modulation, and soft-clip saturation in the feedback path | `.maxpat` |
+| **stutter** | Glitchy stutter effect with rhythmic and chaotic modes, built around a Gen~ stutter engine | `.maxpat`, `.gendsp` |
+| **subtractive-synth** | Monophonic subtractive synth built from native MSP objects — two oscillators, a filter with its own ADSR, an amp ADSR, and a routable LFO | `.maxpat` |
 | **tape-wobble** | Stereo tape wobble effect with wow/flutter, saturation, and degradation controls | `.maxpat` |
+| **terrain-synth** | Wave-terrain / geometry-derived wavetable synthesizer with two oscillator engines behind a MIDI/poly~ front end and a Jitter view of the terrain and orbit | `.maxpat`, `.js` |
 | **timestretch** | Granular time-stretching instrument in gen~ with real-time and offline modes, WSOLA-enhanced overlap-add engine | `.maxpat` |
 | **wormhole** | Spectral effects processor with warp, pitch/frequency shifting, dual reverb, and stereo delay | `.maxpat` |
 
@@ -175,7 +188,7 @@ The framework has four core layers:
 
 **Agent System** — A router analyzes your task description and dispatches to one or more specialist agents (DSP, patch, RNBO, js, UI, externals). Agents read existing patches, analyze their structure, make surgical edits or build new ones, and write the result directly.
 
-**Validation Pipeline** — Every patch passes through structure validation, `signal_role`-aware connection bounds and signal-type checking, package gating, domain-restriction guards, and an embedded GenExpr codebox walker, followed by six domain-specific critics (DSP signal flow, structure, layout, RNBO compatibility, C++ code review, and package conventions — BEAP signal standards, Bach llll type checking, community package extraction verification). Blockers trigger automatic revision before output is written. As a backstop, `save_patch_roundtrip` and `write_gendsp` re-run validation and the critics before writing: they refuse any blocker the save would introduce (blockers already in the file being edited are allowed) and any change to a subpatcher's port order, and warn about removed cords; `force=True` overrides. Aesthetic styling (panels, comments, patcher colors) is applied automatically during generation.
+**Validation Pipeline** — Every patch passes through structure validation, `signal_role`-aware connection bounds and signal-type checking, package gating, domain-restriction guards, and an embedded GenExpr codebox walker, followed by seven domain-specific critics (DSP signal flow, structure, layout, RNBO compatibility, C++ code review, package conventions — BEAP signal standards, Bach llll type checking, community package extraction verification — and Max for Live device conventions). Blockers trigger automatic revision before output is written. As a backstop, `save_patch_roundtrip` and `write_gendsp` re-run validation and the critics before writing: they refuse any blocker the save would introduce (blockers already in the file being edited are allowed) and any change to a subpatcher's port order, and warn about removed cords; `force=True` overrides. Aesthetic styling (panels, comments, patcher colors) is applied automatically during generation.
 
 For full technical documentation — agent internals, validation details, object database schema, memory system, and architecture — see [TECHNICAL.md](TECHNICAL.md).
 
@@ -187,8 +200,8 @@ MAX-MSP_CC_Framework/
 │   ├── max-objects/        # Object database (3,445 objects across 7 core domains + 29 packages)
 │   ├── skills/             # Agent definitions (9 specialist agents)
 │   └── commands/           # Slash command definitions
-├── src/maxpat/             # Python editing, validation, and analysis engine (~18,600 LOC)
-├── tests/                  # Test suite (2,309 tests)
+├── src/maxpat/             # Python editing, validation, and analysis engine (~22,200 LOC)
+├── tests/                  # Test suite (3,345 tests)
 ├── patches/                # Your projects live here
 │   ├── .active-project.json
 │   └── {project-name}/
@@ -227,10 +240,10 @@ Planning artifacts live in `.planning/`:
 | **v1.1 Patch Quality** | 2026-03-14 | 5 | 13 | Help patch audit, aesthetic styling, layout refinements |
 | **v2.0 Direct Editing** | 2026-03-17 | 7 | 19 | Lossless round-trip, search/mutation API, patch analysis, agent migration, v1.x cleanup |
 | **v2.1 Iteration & Polish** | 2026-03-20 | — | — | Interactive iterate modes, version tracking, project lifecycle improvements |
-| **v2.2 Gen~ Patterns & Hooks** | 2026-03-22 | ��� | — | Gen~ pattern library (19 .gendsp), finalize_patch hook, fsync reliability, gen-eq project |
+| **v2.2 Gen~ Patterns & Hooks** | 2026-03-22 | — | — | Gen~ pattern library (19 .gendsp), finalize_patch hook, fsync reliability, gen-eq project |
 | **v2.3 Reliability & Validation** | 2026-03-31 | — | — | Z-order API, auto-commit safety hooks, MSP outlet type verification (202 objects), patcher decomposition (GraphMixin/AnalysisMixin), integration tests on real patches, trigger enforcement hardening, round-trip text bug fix, external .gendsp validation, maxclass validation |
 | **v2.3.1 DB Cleanup & Patches** | 2026-04-01 | — | — | Object DB cleanup (21 missing objects added, alias normalization, overrides cleanup), tape-wobble patch, rhythmic-sampler iteration, scala-synth v1.0 |
-| **v2.4.0 Visual Organization** | 2026-04-05 | — | �� | Obstacle-aware cord routing (dog-leg around intermediate objects), 21 live.* objects added to UI system, contrast-adaptive text colors, subpatcher grouping heuristic |
+| **v2.4.0 Visual Organization** | 2026-04-05 | — | — | Obstacle-aware cord routing (dog-leg around intermediate objects), 21 live.* objects added to UI system, contrast-adaptive text colors, subpatcher grouping heuristic |
 | **v3.0.0 Milestone Archive** | 2026-04-09 | 7 | 15 | v2.0 milestone archived — 26/26 requirements verified, full PROJECT.md evolution, retrospective |
 | **v4.0 Package Integration** | 2026-04-15 | 6 | 17 | Package-aware DB (2,450 objects), bundled extraction (BEAP/Vizzie/Jitter), generation gating, agent intelligence, community stubs (10 packages), package critics |
 | **v5.0 DB Schema Hardening + Validator Depth** | 2026-05-01 | 5 | 24 | `signal_role`/`domain_restricted`/`verified_installed` schema fields, deepened validation pipeline (Layers 1-5 with sub-layers), MSP outlet coverage sweep, Phase 31 layout/UX builders (labeled param banks, overlay readouts, safe box replacement, M4L gen-synth), dsp_sim pre-flight simulation |

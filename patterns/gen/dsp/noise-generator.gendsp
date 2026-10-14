@@ -50,7 +50,7 @@
         "box": {
           "maxclass": "codebox",
           "id": "obj-1",
-          "code": "// === PARAMETERS ===\nParam type(0, min=0, max=2);\n\n// === STATE ===\nHistory b0(0);\nHistory b1(0);\nHistory b2(0);\nHistory brown(0);\n\n// === DSP ===\nwhite = noise();\n\n// Pink noise: Paul Kellet's 3-stage approximation\nb0 = 0.99886 * b0 + white * 0.0555179;\nb1 = 0.99332 * b1 + white * 0.0750759;\nb2 = 0.96900 * b2 + white * 0.1538520;\npink = (b0 + b1 + b2 + white * 0.5362) * 0.11;\n\n// Brown noise: integrated white with leaky integrator\nbrown = (brown + white * 0.02) * 0.999;\nbrown_out = brown * 3.5;\n\n// Select by type: 0=white, 1=pink, 2=brown\nif (type < 0.5) {\n    out1 = white;\n} else if (type < 1.5) {\n    out1 = pink;\n} else {\n    out1 = brown_out;\n}\n",
+          "code": "// === PARAMETERS ===\nParam type(0, min=0, max=2);\n\n// === STATE ===\nHistory b0(0);\nHistory b1(0);\nHistory b2(0);\nHistory brown(0);\n\n// === DSP ===\nwhite = noise();\n\n// Pink noise: Paul Kellet's 3-stage approximation\nb0 = 0.99886 * b0 + white * 0.0555179;\nb1 = 0.99332 * b1 + white * 0.0750759;\nb2 = 0.96900 * b2 + white * 0.1538520;\npink = (b0 + b1 + b2 + white * 0.5362) * 0.11;\n\n// Brown noise: integrated white with leaky integrator\nbrown = (brown + white * 0.02) * 0.999;\nbrown_out = brown * 3.5;\n\n// Select by type: 0=white, 1=pink, 2=brown\nif (type < 0.5) {\n    out1 = white;\n} else {\n    if (type < 1.5) {\n        out1 = pink;\n    } else {\n        out1 = brown_out;\n    }\n}\n",
           "numinlets": 0,
           "numoutlets": 1,
           "outlettype": [

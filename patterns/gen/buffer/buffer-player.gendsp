@@ -50,7 +50,7 @@
         "box": {
           "maxclass": "codebox",
           "id": "obj-1",
-          "code": "// === PARAMETERS ===\nParam speed(1, min=-4, max=4);\nParam start(0, min=0, max=1);\nParam end(1, min=0, max=1);\nParam loop(1, min=0, max=1);\n\n// === STATE ===\nBuffer buf(\"bufname\");\nHistory phase(0);\n\n// === DSP ===\nbuf_len = dim(buf);\nrange = abs(end - start);\nlo = min(start, end);\n\n// Phasor-driven playback\nrate = speed / max(buf_len, 1);\nphase = phase + rate;\n\nif (loop > 0.5) {\n    phase = wrap(phase, 0, range);\n} else {\n    phase = clamp(phase, 0, range);\n}\n\n// Read from buffer with interpolation\nread_pos = (lo + phase) * buf_len;\nout1 = peek(buf, read_pos);\n",
+          "code": "// === PARAMETERS ===\nParam speed(1, min=-4, max=4);\nParam start(0, min=0, max=1);\nParam end(1, min=0, max=1);\nParam loop(1, min=0, max=1);\n\n// === STATE ===\nBuffer buf(\"bufname\");\nHistory phase(0);\n\n// === DSP ===\nbuf_len = dim(buf);\nrange = abs(end - start);\nlo = min(start, end);\n\n// Phasor-driven playback\nrate = speed / max(buf_len, 1);\nphase = phase + rate;\n\nif (loop > 0.5) {\n    phase = wrap(phase, 0, range);\n} else {\n    phase = clamp(phase, 0, range);\n}\n\n// Read from buffer with interpolation\nread_pos = (lo + phase) * buf_len;\nout1 = peek(buf, read_pos, 0);\n",
           "numinlets": 0,
           "numoutlets": 1,
           "outlettype": [

@@ -70,7 +70,7 @@
         "box": {
           "maxclass": "codebox",
           "id": "obj-2",
-          "code": "// === PARAMETERS ===\nParam time(10, min=0.1, max=1000);\n\n// === STATE ===\nHistory current(0);\n\n// === DSP ===\ntarget = in1;\nsr = samplerate;\ntime_samps = max(time * sr * 0.001, 1);\nstep = (target - current) / time_samps;\n\n// Ramp toward target\nif (abs(target - current) > abs(step)) {\n    current = current + step;\n} else {\n    current = target;\n}\n\nout1 = current;\n",
+          "code": "// === PARAMETERS ===\nParam time(10, min=0.1, max=1000);\n\n// === STATE ===\nHistory current(0);\n\n// === DSP ===\ntarget = in1;\ntime_samps = max(time * samplerate * 0.001, 1);\nstep = (target - current) / time_samps;\n\n// Ramp toward target\nif (abs(target - current) > abs(step)) {\n    current = current + step;\n} else {\n    current = target;\n}\n\nout1 = current;\n",
           "numinlets": 1,
           "numoutlets": 1,
           "outlettype": [

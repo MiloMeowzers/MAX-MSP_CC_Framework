@@ -666,3 +666,128 @@ def test_spectroscope_claim_matches_db(db) -> None:
     assert hits, "no spectroscope~ I/O claim found"
     wrong = [h for h in hits if h[2] != tuple(expected)]
     assert wrong == []
+
+
+# ── Q16 guards (Task 3): gen~ pattern library, README / TECHNICAL ──
+
+GEN_PATTERNS = sorted((REPO_ROOT / "patterns" / "gen").rglob("*.gendsp"))
+
+
+def _codebox_codes(node) -> list[str]:
+    out: list[str] = []
+    if isinstance(node, dict):
+        box = node.get("box")
+        if isinstance(box, dict) and box.get("maxclass") == "codebox" and "code" in box:
+            out.append(box["code"])
+        for v in node.values():
+            out.extend(_codebox_codes(v))
+    elif isinstance(node, list):
+        for v in node:
+            out.extend(_codebox_codes(v))
+    return out
+
+
+def _call_args(code: str, fname: str) -> list[list[str]]:
+    calls = []
+    for m in re.finditer(rf"\b{fname}\s*\(", code):
+        inner = _balanced(code, m.end() - 1)
+        if inner is not None:
+            calls.append(_split_top_level(inner))
+    return calls
+
+
+@pytest.mark.parametrize(
+    "path", GEN_PATTERNS, ids=[str(p.relative_to(REPO_ROOT)) for p in GEN_PATTERNS]
+)
+def test_gen_patterns_use_safe_constructs(path: Path) -> None:
+    """J12: the pattern library uses only the CLAUDE.md proven-safe codebox set."""
+    import json
+
+    codes = _codebox_codes(json.loads(path.read_text(encoding="utf-8")))
+    assert codes, f"{path.name}: no codebox"
+    problems = []
+    for code in codes:
+        if "\t" in code:
+            problems.append("tab character")
+        if re.search(r"else\s+if", code):
+            problems.append("else-if chain")
+        for m in re.finditer(r"\bif\s*\(", code):
+            cond = _balanced(code, m.end() - 1) or ""
+            if "==" in cond or "!=" in cond:
+                problems.append(f"== / != in if ({cond.strip()})")
+        if re.search(r"^\s*[A-Za-z_]\w*\s*=\s*samplerate\s*;", code, re.M):
+            problems.append("local alias of samplerate")
+        for args in _call_args(code, "peek"):
+            if len(args) < 3:
+                problems.append(f"peek without channel ({', '.join(args)})")
+        for args in _call_args(code, "poke"):
+            if len(args) < 4:
+                problems.append(f"poke without channel ({', '.join(args)})")
+    assert problems == [], f"{path.name}: " + "; ".join(problems)
+
+
+def test_readme_patch_table_lists_every_project() -> None:
+    """J13: README's Patches table lists exactly the project directories."""
+    section = _section(_read(Path("README.md")), "## Patches")
+    listed = set(re.findall(r"^\|\s*\*\*([^*]+)\*\*", section, re.M))
+    projects = {
+        p.name for p in (REPO_ROOT / "patches").iterdir()
+        if p.is_dir() and not p.name.startswith(".")
+    }
+    assert listed == projects, (
+        f"missing: {sorted(projects - listed)}; extra: {sorted(listed - projects)}"
+    )
+
+
+def test_docs_have_no_replacement_characters() -> None:
+    """J13: no doc carries U+FFFD (garbled characters)."""
+    bad = [str(p) for p in DOC_FILES if "�" in _read(p)]
+    assert bad == []
+
+
+def test_readme_js_engine_wording() -> None:
+    """J13: js objects are the Legacy Engine, not V8."""
+    readme = _read(Path("README.md"))
+    assert "V8 `js`" not in readme
+    assert "Legacy Engine" in readme
+
+
+def test_technical_spacing_table_matches_code() -> None:
+    """J13: TECHNICAL's Spacing Constants table equals defaults.py / layout.py."""
+    from src.maxpat import defaults, layout
+
+    values = {
+        "V_SPACING": defaults.V_SPACING,
+        "H_GUTTER": defaults.H_GUTTER,
+        "COMPONENT_GAP": layout._COMPONENT_GAP,
+        "START_X": layout._START_X,
+        "START_Y": layout._START_Y,
+        "PATCHER_PADDING": defaults.PATCHER_PADDING,
+    }
+    section = _section(_read(Path("TECHNICAL.md")), "### Spacing Constants")
+    seen = set()
+    for line in section.split("\n"):
+        if not line.startswith("|") or set(line.strip()) <= set("|-: "):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        names = re.findall(r"`([^`]+)`", cells[0])
+        if not names:
+            continue  # header row
+        m = re.search(r"([\d.]+)\s*px", cells[1])
+        assert m, f"no px value in row: {line}"
+        for name in names:
+            assert name in values, f"unknown spacing constant {name}"
+            assert float(m.group(1)) == float(values[name]), f"{name}: {line}"
+            seen.add(name)
+    assert {"V_SPACING", "H_GUTTER", "COMPONENT_GAP"} <= seen
+
+
+def test_technical_documents_every_critic_module() -> None:
+    """J13: every critic module has a TECHNICAL section heading."""
+    lines = _read(Path("TECHNICAL.md")).split("\n")
+    missing = []
+    for mod in sorted((REPO_ROOT / "src" / "maxpat" / "critics").glob("*_critic.py")):
+        token = f"(`{mod.name}`)"
+        if not any(line.startswith("### ") and token in line for line in lines):
+            missing.append(mod.name)
+    assert missing == []

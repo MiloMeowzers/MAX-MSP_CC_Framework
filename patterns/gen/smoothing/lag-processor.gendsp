@@ -70,7 +70,7 @@
         "box": {
           "maxclass": "codebox",
           "id": "obj-2",
-          "code": "// === PARAMETERS ===\nParam rise_ms(10, min=0.1, max=5000);\nParam fall_ms(50, min=0.1, max=5000);\n\n// === STATE ===\nHistory y(0);\n\n// === DSP ===\nsr = samplerate;\nrise_coeff = exp(-1.0 / max(rise_ms * sr * 0.001, 1));\nfall_coeff = exp(-1.0 / max(fall_ms * sr * 0.001, 1));\n\nif (in1 > y) {\n    y = in1 + rise_coeff * (y - in1);\n} else {\n    y = in1 + fall_coeff * (y - in1);\n}\n\nout1 = y;\n",
+          "code": "// === PARAMETERS ===\nParam rise_ms(10, min=0.1, max=5000);\nParam fall_ms(50, min=0.1, max=5000);\n\n// === STATE ===\nHistory y(0);\n\n// === DSP ===\nrise_coeff = exp(-1.0 / max(rise_ms * samplerate * 0.001, 1));\nfall_coeff = exp(-1.0 / max(fall_ms * samplerate * 0.001, 1));\n\nif (in1 > y) {\n    y = in1 + rise_coeff * (y - in1);\n} else {\n    y = in1 + fall_coeff * (y - in1);\n}\n\nout1 = y;\n",
           "numinlets": 1,
           "numoutlets": 1,
           "outlettype": [

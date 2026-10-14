@@ -70,7 +70,7 @@
         "box": {
           "maxclass": "codebox",
           "id": "obj-2",
-          "code": "// === PARAMETERS ===\nParam attack(10, min=0.1, max=5000);\nParam release(100, min=0.1, max=10000);\n\n// === STATE ===\nHistory env(0);\n\n// === DSP ===\ngate = in1;\nsr = samplerate;\n\natt_coeff = exp(-1.0 / max(attack * sr * 0.001, 1));\nrel_coeff = exp(-1.0 / max(release * sr * 0.001, 1));\n\nif (gate > 0) {\n    env = 1.0 + att_coeff * (env - 1.0);\n} else {\n    env = rel_coeff * env;\n}\n\nout1 = env;\n",
+          "code": "// === PARAMETERS ===\nParam attack(10, min=0.1, max=5000);\nParam release(100, min=0.1, max=10000);\n\n// === STATE ===\nHistory env(0);\n\n// === DSP ===\ngate = in1;\n\natt_coeff = exp(-1.0 / max(attack * samplerate * 0.001, 1));\nrel_coeff = exp(-1.0 / max(release * samplerate * 0.001, 1));\n\nif (gate > 0) {\n    env = 1.0 + att_coeff * (env - 1.0);\n} else {\n    env = rel_coeff * env;\n}\n\nout1 = env;\n",
           "numinlets": 1,
           "numoutlets": 1,
           "outlettype": [

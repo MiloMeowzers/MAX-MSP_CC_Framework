@@ -54,7 +54,7 @@ User Request (build new or iterate on existing)
          │
          ▼
 ┌─────────────────┐
-│   Critic Loop    │  Semantic review (DSP, structure, layout, RNBO, C++, package)
+│   Critic Loop    │  Semantic review (DSP, structure, layout, RNBO, M4L, C++, package)
 │                  │  Blockers → revision → re-review until clean
 └────────┬────────┘
          │
@@ -293,7 +293,7 @@ After generation, the router passes output through the critic loop before writin
 
 ## Python Engine
 
-`src/maxpat/` contains the core Python library (~18,600 LOC).
+`src/maxpat/` contains the core Python library (~22,200 LOC).
 
 ### Core Classes (`patcher.py`)
 
@@ -493,8 +493,8 @@ Reviews patch architecture and connection patterns.
 
 | Check | Detects | Severity |
 |-------|---------|----------|
-| Fan-out without trigger | Outlet connected to 2+ destinations without explicit `trigger` object | warning |
-| Hot/cold inlet ordering | Multiple sources feeding one object without trigger-based ordering | warning |
+| Fan-out without trigger | Control outlet connected to 2+ destinations without an explicit `trigger`; signal outlets, display-only sinks and `preset` membership outlets are exempt | blocker when the branches reconverge on one box at different inlets, otherwise warning |
+| Hot/cold inlet ordering | Multiple sources feeding one object's hot and cold inlets without trigger-based ordering | warning |
 | Redundant connections | Duplicate patchlines (same source outlet → same destination inlet) | warning |
 
 ### DSP Critic (`dsp_critic.py`)
@@ -503,9 +503,8 @@ Reviews signal flow semantics.
 
 | Check | Detects | Severity |
 |-------|---------|----------|
-| gen~ I/O mismatch | GenExpr code declares different I/O count than gen~ box | blocker |
-| Gain staging | Oscillator reaching `dac~` without gain control | warning |
-| Audio rate consistency | Control-rate object feeding signal inlet | warning |
+| gen~ I/O mismatch | GenExpr code declares different I/O count than the `gen~` / `mc.gen~` box | blocker |
+| Gain staging | Oscillator reaching `dac~` / `ezdac~` without a `*~` / `gain~` stage | blocker |
 | MIDI-range gain values | Raw 0-127 control sources reaching inlet 1 of `*~` / `mc.*~`, directly or through `line~`, without a normalizer | blocker |
 
 ### RNBO Critic (`rnbo_critic.py`)
@@ -537,9 +536,13 @@ Reviews visual/spatial design and adherence to the codified layout recipes.
 
 | Check | Detects | Severity |
 |-------|---------|----------|
-| Overlapping boxes | Non-overlay boxes sharing screen space | warning |
-| Off-canvas objects | Boxes positioned outside the visible patch area | warning |
-| Companion misalignment | Readouts/labels not aligned with their target controls | warning |
+| Overlapping boxes | Boxes sharing screen space (with 5px collision padding; comments and panels excluded) | warning |
+| Missing midpoints | Horizontally offset or upward-flowing cables without midpoints | warning |
+| Out-of-bounds placement | Boxes at negative x or y | warning |
+| Low contrast text | Text below the WCAG AA 4.5:1 minimum against its effective background | warning (note when the background is assumed, or for a presentation/patching trade-off) |
+| Presentation coverage | Interactive control missing from presentation mode in a patch that uses presentation | warning |
+
+Only the top-level patcher is checked.
 
 ### Package Critic (`package_critic.py`)
 
@@ -547,13 +550,31 @@ Reviews package-object conventions across the enabled packages.
 
 | Check | Detects | Severity |
 |-------|---------|----------|
-| BEAP signal standards | BEAP objects wired outside their expected signal conventions | warning |
-| Bach llll typing | `bach.*` objects fed plain-MAX types without `@out t` | warning |
-| Community extraction | Use of community-extracted objects not verified against an install | warning |
+| BEAP missing output | A BEAP source chain that never reaches an output module (`bp.Stereo`, `bp.Mono`, ...) | warning |
+| BEAP missing VCA | A BEAP source reaching an output without a VCA / Level module | warning |
+| Bach llll typing | A non-bach, non-command source feeding a `bach.*` llll inlet | note |
+| Community extraction | Objects from a community package that has not been extracted to the DB | warning |
+| Object not installed | An object marked `verified_installed: false` in the DB | blocker |
+
+### M4L Critic (`m4l_critic.py`)
+
+Reviews Max for Live devices. Only invoked when `detect_m4l_device_type` finds `plugin~`, `plugout~` or `live.thisdevice` at the top level.
+
+| Check | Detects | Severity |
+|-------|---------|----------|
+| Gain stage before `plugout~` | `gain~` / `live.gain~` on a signal path to `plugout~` (Live's channel strip handles volume) | blocker |
+| `ezdac~` in a device | Any top-level `ezdac~` | blocker |
+| Missing required objects | Audio effects and instruments need `plugout~`; MIDI effects need `midiin` + `midiout` | blocker |
+| Duplicate parameter names | Two boxes with the same `parameter_longname` (subpatchers included) | blocker |
+| Empty parameter name | `parameter_enable` set without a `parameter_longname` | warning |
+| Device presentation | Missing `openinpresentation=1` or `devicewidth` | warning |
+| Parameter enable | Parameter-capable `live.*` control without `parameter_enable=1` | warning |
+| Info text | Parameter control without info text (annotation) | warning |
+| Push banks | Parameter controls but no `live.banks` | warning |
 
 ### Critic Loop
 
-`review_patch()` in `critics/__init__.py` wires **six** critics into the review pass: DSP, structure, layout, RNBO, external, and package. (An `m4l_critic.py` module exists but is **not** called by `review_patch()`.)
+`review_patch()` in `critics/__init__.py` wires **seven** critics into the review pass. DSP, structure and layout always run; RNBO, M4L, package and external run only when their trigger is present (`rnbo~` boxes, an M4L device object, package objects, or `ext_code`).
 
 The `max-critic` agent orchestrates the generate-review-revise cycle:
 
@@ -668,10 +689,11 @@ Generates ES5 JavaScript for `js` objects (Legacy Engine; `v8` is the separate M
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `V_SPACING` | 100px | Vertical gap between rows |
-| `H_GUTTER` | 70px | Horizontal gap between columns |
-| `COMPONENT_GAP` | 120px | Gap between independent signal chains |
-| `START_X` / `START_Y` | 30px | Top-left margin |
+| `V_SPACING` | 20px | Vertical gap between rows (`defaults.py`) |
+| `H_GUTTER` | 15px | Horizontal gap between objects in a row (`defaults.py`) |
+| `COMPONENT_GAP` | 40px | Gap between independent signal chains (`layout.py`) |
+| `START_X` / `START_Y` | 30px | Top-left margin (`layout.py`) |
+| `PATCHER_PADDING` | 40px | Padding around content for the auto-sized patcher rect (`defaults.py`) |
 
 ### Presentation Mode
 
@@ -778,7 +800,7 @@ Results are saved to `test-results/` for tracking.
 
 ## Test Suite
 
-The project includes 2,309 tests across 55 test files covering all modules. Run with:
+The project includes 3,345 tests across 77 test files covering all modules. Run with:
 
 ```bash
 python3 -m pytest tests/ -v
@@ -793,7 +815,7 @@ Key test areas:
 - Layout engine (topological ordering, component detection, midpoints)
 - All validation layers (structure, object existence + sub-layers, signal-role-aware connections, domain rules + restriction guard, embedded GenExpr)
 - Code validation (GenExpr, js, N4M)
-- All six wired critics (structure, DSP, layout, RNBO, external, package)
+- All seven wired critics (structure, DSP, layout, RNBO, M4L, external, package)
 - DSP pre-flight simulation (topologies, classifier verdicts, CLI exit codes)
 - Object database schema and lookup, including v5.0 schema-hardening fields and audit accessors
 - RNBO database and validation
