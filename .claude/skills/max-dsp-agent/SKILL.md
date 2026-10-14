@@ -363,7 +363,7 @@ auditable in git history; there is no `--skip-dsp-sim` flag.
 
 ### Verdict & Fix Reference
 
-| Verdict | Threshold | Suggested fix (lifted from `feedback_waveguide_loop_phase_comp.md`) |
+| Verdict | Threshold | Suggested fix (from CLAUDE.md Gen~ rule "Waveguide loop filters") |
 |---------|-----------|----------------------------------------------------------------------|
 | `phase_drift` | range > 5 cents across sweep | Use phase delay (atan2-based) compensation, not group delay |
 | `mode_competition` | any step > 50 cents jump | Move the high-Q (Q > ~1) filter post-loop |

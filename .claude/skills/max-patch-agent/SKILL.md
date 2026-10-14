@@ -121,7 +121,7 @@ CLAUDE.md §"Multislider as Labeled Parameter Bank" — bakes in
 
 Returns `(multislider, [comment, ...])`. **Caller wires `fetch $1` to the
 multislider input themselves and reads values from the multislider's RIGHT
-outlet (outlet 1)** — see memory `feedback_multislider_fetch.md`.
+outlet (outlet 1)** — see CLAUDE.md Rule #4, "Reading values by index".
 
 **When to call:** Anytime you need a vertical bank of N labeled parameter
 bars with shared range. For widely-varying ranges, prefer individual
@@ -129,6 +129,8 @@ bars with shared range. For widely-varying ranges, prefer individual
 enforce per-bar limits).
 
 ### `Patcher.add_m4l_gen_synth(params, *, gen_varname='synth', gen_code=None) -> tuple[Box, list[Box], Box]`
+
+`add_m4l_gen_synth` and `polish_m4l_device`: **Experimental:** not yet confirmed in MAX or Live.
 
 Build a Live-ready M4L gen synth skeleton: `gen~` (with stable `varname`),
 one `live.dial` per param (bound via `param_connect`), and `plugout~`

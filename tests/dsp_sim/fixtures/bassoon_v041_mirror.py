@@ -9,9 +9,11 @@ the fundamental onto the biquad peak when bell_bright sweeps the biquad
 cutoff close to the played fundamental -> 50+ cent jumps -> mode_competition.
 
 Per CONTEXT.md D-06: asserts verdict in {mode_competition, phase_drift}
-when bell_bright sweeps [0, 1] with bell_q=2.5. Per memory
-feedback_waveguide_loop_phase_comp.md: "Resonant (Q>1) filters must go
-POST-LOOP in waveguides" -- this mirror demonstrates the failure mode.
+when bell_bright sweeps [0, 1] with bell_q=2.5. Per the archived memory
+note "Resonant filters belong OUT of a waveguide loop" (.planning/quick/260703-i0t-de-duplicate-claude-md-against-the-30-fe/260703-i0t-archived-memories.md;
+shipped as CLAUDE.md Gen~ rule "Waveguide loop filters"): "Resonant (Q>1)
+filters must go POST-LOOP in waveguides" -- this mirror demonstrates the
+failure mode.
 """
 
 from __future__ import annotations

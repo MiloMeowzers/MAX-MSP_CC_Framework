@@ -64,7 +64,7 @@ class SimulationReport:
             (length == sweep_steps unless an early-exit runaway shortened it).
         worst_step: Index of the step that triggered the failure; None on pass.
         reason: Human-readable diagnostic string.
-        suggested_fix: Lifted from feedback_waveguide_loop_phase_comp.md;
+        suggested_fix: Lifted from the CLAUDE.md Gen~ rule "Waveguide loop filters";
             None on pass.
         sweep_param: The parameter that was swept.
         sweep_range: (lo, hi, n) triple driving the sweep.

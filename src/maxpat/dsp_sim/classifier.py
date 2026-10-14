@@ -7,8 +7,8 @@ Verdict priority (D-09): runaway > no_oscillation > mode_competition >
 phase_drift > pass. Single verdict per run; the full per-step measurement
 table remains available on the SimulationReport for debugging.
 
-Suggested-fix strings (D-03) are lifted from
-feedback_waveguide_loop_phase_comp.md so the agent's failure message
+Suggested-fix strings (D-03) are lifted from the CLAUDE.md Gen~ rule
+"Waveguide loop filters" so the agent's failure message
 matches the user's existing mental model. Match the wording verbatim --
 unit tests assert specific substrings.
 """
@@ -38,7 +38,7 @@ Verdict = Literal[
 
 # ===========================================================================
 # Suggested-fix table (D-03)
-# Wording lifted from feedback_waveguide_loop_phase_comp.md
+# Wording lifted from the CLAUDE.md Gen~ rule "Waveguide loop filters"
 # ===========================================================================
 
 _SUGGESTED_FIX: dict[str, str] = {

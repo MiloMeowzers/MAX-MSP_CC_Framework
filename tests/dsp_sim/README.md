@@ -44,7 +44,7 @@ Verdict priority (D-09 — exclusive, single verdict per run):
 | `mode_competition` | `mode_competition_jump` | 50 cents | Move the high-Q (Q > ~1) filter post-loop. In-loop resonant filters compete with the bore's self-excited mode and detune the fundamental. |
 | `phase_drift` | `cents_drift_limit` | 5 cents | Use phase delay (atan2-based) compensation, not group delay. Onepole: pd = atan(b*sin(w)/(1-b*cos(w))) / w. Biquad: evaluate B(e^jw)/A(e^jw) phase, subtract. |
 
-(Suggested-fix wording lifted from `feedback_waveguide_loop_phase_comp.md`.)
+(Suggested-fix wording lifted from the archived memory note "Resonant filters belong OUT of a waveguide loop" in `.planning/quick/260703-i0t-de-duplicate-claude-md-against-the-30-fe/260703-i0t-archived-memories.md`; the shipped rule is CLAUDE.md Gen~ "Waveguide loop filters".)
 
 ## Threshold Defaults (D-05)
 
@@ -87,5 +87,5 @@ Opt-out: delete or `pytest.skip(...)` the test. There is no
 
 - `src/maxpat/dsp_sim/` — module source
 - `.claude/skills/max-dsp-agent/SKILL.md` "DSP Pre-Flight Simulation" — agent integration
-- `feedback_waveguide_loop_phase_comp.md` (memory) — canonical phase-delay analysis
+- `.planning/quick/260703-i0t-de-duplicate-claude-md-against-the-30-fe/260703-i0t-archived-memories.md`, section "Resonant filters belong OUT of a waveguide loop" — canonical phase-delay analysis (archived memory note; the shipped rule is CLAUDE.md Gen~ "Waveguide loop filters")
 - `patches/bassoon-model/versions.json` — historical regressions reproduced as fixtures

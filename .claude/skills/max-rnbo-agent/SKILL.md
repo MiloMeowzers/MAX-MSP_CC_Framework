@@ -15,6 +15,8 @@ preconditions:
 
 Generate RNBO patches for VST3/AU plugin, Web Audio, and C++ embedded export targets. Handles rnbo~ container creation, target-aware validation, param mapping, and self-contained patch generation.
 
+`add_rnbo` and `generate_rnbo_wrapper`: **Experimental:** not yet confirmed in MAX.
+
 ## Capabilities
 
 - **RNBO patch generation**: Create rnbo~ containers with inner patchers via `add_rnbo` or full wrapper patches via `generate_rnbo_wrapper`

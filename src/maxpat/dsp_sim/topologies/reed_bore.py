@@ -95,7 +95,7 @@ class ReedBore:
         self._ap_y_prev = ap_y
 
         # Bore onepole damping (low-Q in-loop -- phase delay compensation
-        # appropriate per memory feedback_waveguide_loop_phase_comp.md).
+        # appropriate per the CLAUDE.md Gen~ rule "Waveguide loop filters").
         b = max(0.0, min(0.999, 1.0 - bore_damp))
         self._bore_lp = b * self._bore_lp + (1.0 - b) * ap_y
         cone_return = -cone_loss * self._bore_lp

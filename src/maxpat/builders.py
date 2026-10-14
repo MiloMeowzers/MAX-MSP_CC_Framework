@@ -499,8 +499,8 @@ class BuildersMixin:
         max(maxes)]`` envelope across all params (D-10). Returns
         ``(multislider, [comment, ...])``; caller wires ``fetch $1`` -> the
         multislider input themselves and reads values from the multislider's
-        RIGHT outlet (outlet 1) per D-09 and memory note
-        ``feedback_multislider_fetch.md`` (``fetch`` not ``fetchindex``;
+        RIGHT outlet (outlet 1) per D-09 and CLAUDE.md Rule #4
+        "Reading values by index" (``fetch`` not ``fetchindex``;
         outlet 1 not 0; do NOT insert ``split`` between multislider and
         consumer).
 

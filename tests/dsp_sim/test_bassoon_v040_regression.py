@@ -37,6 +37,8 @@ def test_v040_phase_drift_is_caught():
         f"v0.4.0 mirror should trip phase_drift; got {r.verdict!r}. Reason: {r.reason}"
     )
     assert r.suggested_fix is not None
-    # D-03 wording lifted from feedback_waveguide_loop_phase_comp.md
+    # D-03 wording lifted from CLAUDE.md Gen~ rule "Waveguide loop filters"
+    # (full derivation: .planning/quick/260703-i0t-de-duplicate-claude-md-against-the-30-fe/260703-i0t-archived-memories.md,
+    # section "Resonant filters belong OUT of a waveguide loop")
     assert "phase delay" in r.suggested_fix.lower() or "atan" in r.suggested_fix.lower()
     assert r.worst_step is not None

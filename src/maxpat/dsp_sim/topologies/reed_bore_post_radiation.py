@@ -15,7 +15,7 @@ This topology is the canonical PASSING shape -- the live bassoon test
 
 Per CLAUDE.md "Gen~ (GenExpr DSP Code)" Gen~ -> numpy mapping.
 Per CONTEXT.md D-01 (curated catalog), D-06 (bassoon shape covered here).
-Per memory feedback_waveguide_loop_phase_comp.md: Q > ~1 filters MUST be
+Per the CLAUDE.md Gen~ rule "Waveguide loop filters": Q > ~1 filters MUST be
 post-loop; only low-Q in-loop filters need phase-delay compensation.
 
 T-04 mitigation: all post-loop biquad coefficients computed from clamped
@@ -226,6 +226,6 @@ class ReedBorePostRadiation:
 
         # Mix reed BPF emphasis with the dry post-bell signal (typical
         # post-loop blend; reed BPF colors timbre without participating in
-        # the loop's feedback per memory feedback_waveguide_loop_phase_comp.md).
+        # the loop's feedback per the CLAUDE.md Gen~ rule "Waveguide loop filters").
         out = 0.7 * bell_out + 0.3 * reed_out
         return out * 0.25  # final attenuation matching bassoon.gendsp `out1 = rad_out * 0.25`

@@ -275,7 +275,7 @@ After generation, the router passes output through the critic loop before writin
 |-------|--------|-----------|-----------|
 | **max-patch-agent** | Control, MIDI, routing | `.maxpat` | Hot/cold inlet ordering, explicit `trigger` for fan-out |
 | **max-dsp-agent** | Audio, Gen~ | `.maxpat`, `.gendsp` | GenExpr declarations before expressions, gain staging, `dac~` termination |
-| **max-rnbo-agent** | RNBO export | `.maxpat` | Only `rnbo_compatible` objects, self-contained patches, target constraints |
+| **max-rnbo-agent** | RNBO export | `.maxpat` | Only `rnbo_compatible` objects, self-contained patches, target constraints. **Experimental:** not yet confirmed in MAX. |
 | **max-js-agent** | JavaScript | `.js` | N4M uses CommonJS (`require`), the `js` object (Legacy Engine, ES5) uses global scope |
 | **max-ui-agent** | UI layout | `.maxpat` modifications | Presentation mode attributes, spacing rules |
 | **max-ext-agent** | C++ externals | `.cpp`, `.mxo` | Min-DevKit scaffolding, cmake/make build loop, Mach-O validation |
@@ -333,7 +333,7 @@ After generation, the router passes output through the critic loop before writin
 | `add_overlay_readout(target, *, format="%.2f", type="flonum", editable=False, offset_x=0.0, offset_y=0.0) -> Box` | Overlay a readout on an interactive control (Rule #6 recipe: `bring_to_front` + `ignoreclick` click pass-through) |
 | `add_labeled_param_bank(params, x, y, *, label_side="left", extra_attrs=None) -> (multislider, [comment, ...])` | Build a labeled multislider parameter bank (size×24 height, `contdata=1`, `setstyle=1`, `orientation=0`) with aligned comment labels |
 | `replace_box_safe(old_box, new_name, *, args=None, rewire="auto") -> EditResult` | Replace a box and auto-rewire orphaned connections by index when the new I/O layout matches |
-| `add_m4l_gen_synth(params, *, gen_varname="synth", gen_code=None) -> (gen_obj, [live_dial, ...], plugout_obj)` | Build a Live-ready M4L gen-synth skeleton (`live.dial`↔`Param` via `param_connect`; no `gain~` before `plugout~`) |
+| `add_m4l_gen_synth(params, *, gen_varname="synth", gen_code=None) -> (gen_obj, [live_dial, ...], plugout_obj)` | Build a Live-ready M4L gen-synth skeleton (`live.dial`↔`Param` via `param_connect`; no `gain~` before `plugout~`). **Experimental:** not yet confirmed in MAX or Live. |
 
 Patcher internals are decomposed into mixins for maintainability: `GraphMixin` (`graph.py`) handles adjacency/traversal and `AnalysisMixin` (`analysis.py`) handles patch analysis. `utils.py` provides shared helpers like `get_box_name()`. The public API is unchanged.
 

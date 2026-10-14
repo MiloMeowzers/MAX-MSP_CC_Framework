@@ -14,10 +14,10 @@ An AI-assisted MAX/MSP/Jitter/RNBO development system that enables conversationa
 - **Package-aware generation** — project-level package selection, DB-driven bpatcher sizing, allowed_packages gating, and community package stubs with extraction CLI for installed packages
 - **9 specialist agents** — router, patch, DSP/Gen~, RNBO, JavaScript, UI layout, C++ externals, critic, and lifecycle management with package-specific domain guidance
 - **5-layer validation pipeline** — structure checks, `signal_role`-aware connection verification, domain-restriction guards, seven domain-specific critics (DSP signal flow, structure, layout, RNBO compatibility, C++ review, package conventions, Max for Live device conventions), and iterative revision
-- **Codified layout/UX builders** — one-call helpers for labeled parameter banks, overlay readouts, safe box replacement with auto-rewiring, and Max for Live gen-synth skeletons
+- **Codified layout/UX builders** — one-call helpers for labeled parameter banks, overlay readouts, safe box replacement with auto-rewiring, and Max for Live gen-synth skeletons. The Max for Live builders (`add_m4l_gen_synth`, `polish_m4l_device`): **Experimental:** not yet confirmed in MAX or Live.
 - **Offline DSP pre-flight simulation** — a numerical waveguide-stability harness (`dsp_sim`) that classifies specific reed/bore topologies before you open the patch in MAX (not a general audio preview)
 - **Gen~ / GenExpr code generation** — sample-rate DSP code with proper declaration ordering, feedback loops, and parameter mapping
-- **RNBO export support** — generate export-ready patches for VST3/AU plugins, Web Audio, and C++ embedded targets
+- **RNBO export support** — generate export-ready patches for VST3/AU plugins, Web Audio, and C++ embedded targets. The RNBO builders (`add_rnbo`, `generate_rnbo_wrapper`): **Experimental:** not yet confirmed in MAX.
 - **Node for Max & js scripting** — generate JavaScript for `js` objects (Legacy Engine, ES5), `v8` objects (Modern Engine), and Node for Max `node.script`
 - **C++ external development** — scaffold, generate, and build Min-DevKit externals with help patches
 - **Help patch audit pipeline** — offline tool that parses 973 .maxhelp files to extract ground truth object metadata and automatically correct database entries
@@ -26,10 +26,16 @@ An AI-assisted MAX/MSP/Jitter/RNBO development system that enables conversationa
 
 ## Prerequisites
 
+- **macOS only.** The framework assumes macOS throughout: it reads the Max bundle at `/Applications/Max.app` and packages under `~/Documents/Max 9/Packages`, and checks built externals as arm64 Mach-O binaries with `file` and `lipo`.
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (requires an Anthropic account)
 - [MAX 9](https://cycling74.com/products/max) (required for opening and testing generated patches)
-- Python 3.10+ (for the validation and editing engine)
+- Python 3.10+ (for the validation and editing engine), with the packages in `requirements-dev.txt`: numpy and scipy (the `dsp_sim` DSP pre-flight simulation) and pytest (the test suite, and the DSP agent's pre-flight gate, which runs the simulation tests before saving). Install them with `pip install -r requirements-dev.txt`.
+- git (every patch save is auto-committed)
 - RNBO (optional — only needed for export targets)
+- System tools needed only for some features:
+  - Node.js / `npx` — install Option A (`npx create-max-framework`)
+  - cmake (with make, through the Unix Makefiles generator) — building C++ externals
+  - `file` and `lipo` (both ship with macOS) — validating built externals
 
 ## Quick Start
 
