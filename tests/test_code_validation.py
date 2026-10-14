@@ -81,14 +81,16 @@ class TestGenExprValidator:
 
 # ---------------------------------------------------------------------------
 # TestGenExprChecks -- VALID-04 / D-14, D-15, D-16, D-19, D-20
-# Three new ERROR-level checks: delay() (Check 7), clip() (Check 8),
-# init-before-if/else (Check 9). All severity 'error', no auto-fix.
+# ERROR-level checks: delay() (Check 7) and init-before-if/else (Check 9).
+# Check 8 (clip() rejection) was retired in Q12 / G3: GenExpr has clip().
+# All severity 'error', no auto-fix.
 # ---------------------------------------------------------------------------
 
 class TestGenExprChecks:
-    """VALID-04 / D-14, D-15, D-16, D-19, D-20: Three new ERROR-level checks
-    in validate_genexpr -- delay() (Check 7), clip() (Check 8),
-    init-before-if/else (Check 9). All severity 'error', no auto-fix.
+    """VALID-04 / D-14, D-16, D-19, D-20: ERROR-level checks in
+    validate_genexpr -- delay() (Check 7) and init-before-if/else (Check 9).
+    All severity 'error', no auto-fix. Check 8 (clip() rejection, D-15) was
+    retired in Q12 / G3: GenExpr has clip(x, lo, hi).
     """
 
     def test_check7_delay_rejection(self):
@@ -116,16 +118,13 @@ class TestGenExprChecks:
             f"matched: {delay_errors}"
         )
 
-    def test_check8_clip_rejection(self):
+    def test_check8_retired_clip_accepted(self):
+        """Q12 / G3: GenExpr has clip(); the old Check 8 rejection is gone."""
         from src.maxpat.code_validation import validate_genexpr
         code = "out1 = clip(in1, 0., 1.);"
         results = validate_genexpr(code)
-        clip_errors = [
-            r for r in results
-            if r.level == "error" and "clip()" in r.message
-        ]
-        assert len(clip_errors) >= 1
-        assert "min(max(x, lo), hi)" in clip_errors[0].message
+        assert [r for r in results if r.level == "error"] == []
+        assert [r for r in results if "clip" in r.message] == []
 
     def test_check9_init_before_if(self):
         from src.maxpat.code_validation import validate_genexpr
@@ -295,6 +294,72 @@ class TestGenExprChecks:
                     f"D-19 violated: check emitted level='{r.level}' "
                     f"instead of 'error': {r.message}"
                 )
+
+
+# ---------------------------------------------------------------------------
+# TestGenExprNamespace -- Q12 / G3: Check 6 is gen-domain only
+# ---------------------------------------------------------------------------
+
+class TestGenExprNamespace:
+    """Q12 / G3: codebox calls resolve against gen/objects.json only, plus
+    functions the codebox defines and every name a declaration introduces.
+    Max-only names are errors; names that may come from require() warn."""
+
+    @pytest.mark.parametrize("name", ["metro", "coll", "route"])
+    def test_max_only_names_error(self, name):
+        from src.maxpat.code_validation import validate_genexpr
+        results = validate_genexpr(f"out1 = {name}(in1);")
+        errors = [r for r in results if r.level == "error"]
+        assert len(errors) == 1, [r.message for r in results]
+        assert f"'{name}'" in errors[0].message
+        assert "Max object" in errors[0].message
+        assert errors[0].message.startswith("Unknown GenExpr operator")
+
+    def test_unknown_message_prefix(self):
+        from src.maxpat.code_validation import validate_genexpr
+        errors = [
+            r for r in validate_genexpr("out1 = foobar(in1);")
+            if r.level == "error"
+        ]
+        assert len(errors) == 1
+        assert errors[0].message.startswith("Unknown GenExpr operator")
+
+    def test_user_defined_function(self):
+        from src.maxpat.code_validation import validate_genexpr
+        code = "scale2(x, a) {\n  return x * a;\n}\nout1 = scale2(in1, 0.5);"
+        errors = [r for r in validate_genexpr(code) if r.level == "error"]
+        assert errors == [], [r.message for r in errors]
+
+    def test_multi_name_declarations(self):
+        from src.maxpat.code_validation import validate_genexpr
+        code = (
+            "History z0(0.), z1(0.);\n"
+            "Param k(0.), A(0.);\n"
+            "out1 = A * (z0 + z1 + k * in1);"
+        )
+        errors = [r for r in validate_genexpr(code) if r.level == "error"]
+        assert errors == [], [r.message for r in errors]
+
+    def test_method_calls(self):
+        from src.maxpat.code_validation import validate_genexpr
+        code = "Delay d(100);\nd.write(in1);\nout1 = d.read(10);"
+        errors = [r for r in validate_genexpr(code) if r.level == "error"]
+        assert errors == [], [r.message for r in errors]
+
+    def test_block_comments(self):
+        from src.maxpat.code_validation import validate_genexpr
+        code = "/* metro(1) coll(2) */\nout1 = in1;"
+        errors = [r for r in validate_genexpr(code) if r.level == "error"]
+        assert errors == [], [r.message for r in errors]
+
+    def test_require_names_warn(self):
+        from src.maxpat.code_validation import validate_genexpr
+        code = 'require("mylib");\nout1 = mylibfn(in1);'
+        results = validate_genexpr(code)
+        assert [r for r in results if r.level == "error"] == []
+        warns = [r for r in results if r.level == "warning" and "mylibfn" in r.message]
+        assert len(warns) == 1
+        assert "require" in warns[0].message
 
 
 # ---------------------------------------------------------------------------
@@ -512,3 +577,70 @@ class TestValidateCodeFile:
             f"hooks.validate_code_file did not pipe Check 7 through. "
             f"Got: {[r.message for r in results]}"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestGenExprBundleOracle -- Q12 / G3: Max's own Gen codeboxes validate clean
+# ---------------------------------------------------------------------------
+
+_RNBO_CONTAINERS = frozenset({"rnbo~", "mc.rnbo~"})
+
+
+def _collect_codebox_code(patcher, out):
+    """Append every maxclass codebox ``code`` under *patcher* (any depth),
+    skipping subtrees under an rnbo~/mc.rnbo~ box or maxclass rnbo~."""
+    for entry in patcher.get("boxes", []) or []:
+        box = entry.get("box") if isinstance(entry, dict) else None
+        if not isinstance(box, dict):
+            continue
+        maxclass = box.get("maxclass", "")
+        text = box.get("text") if isinstance(box.get("text"), str) else ""
+        name = text.split()[0] if maxclass == "newobj" and text.split() else maxclass
+        if name in _RNBO_CONTAINERS or maxclass == "rnbo~":
+            continue
+        if maxclass == "codebox" and isinstance(box.get("code"), str):
+            out.append(box["code"])
+        inner = box.get("patcher")
+        if isinstance(inner, dict):
+            _collect_codebox_code(inner, out)
+
+
+@pytest.mark.requires_max
+class TestGenExprBundleOracle:
+    def test_bundle_gen_codeboxes_have_no_unknown_operator_errors(self):
+        import json
+        import warnings
+        from tests.conftest import MAX_APP_PATH
+        from src.maxpat.code_validation import validate_genexpr
+        from src.maxpat.db_lookup import ObjectDatabase
+
+        root = MAX_APP_PATH / "Contents" / "Resources" / "C74"
+        codes = []
+        for suffix in ("*.maxpat", "*.maxhelp", "*.gendsp", "*.genjit", "*.genexpr"):
+            for f in sorted(root.rglob(suffix)):
+                if "/packages/RNBO/" in str(f):
+                    continue
+                text = f.read_text(encoding="utf-8", errors="replace")
+                if f.suffix == ".genexpr":
+                    codes.append((str(f), text))
+                    continue
+                try:
+                    d = json.loads(text)
+                except ValueError:
+                    continue
+                if not isinstance(d, dict) or not isinstance(d.get("patcher"), dict):
+                    continue
+                found = []
+                _collect_codebox_code(d["patcher"], found)
+                codes.extend((str(f), c) for c in found)
+        assert len(codes) >= 60, len(codes)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            db = ObjectDatabase()
+        bad = []
+        for where, code in codes:
+            for r in validate_genexpr(code, db=db):
+                if r.level == "error" and r.message.startswith("Unknown GenExpr operator"):
+                    bad.append((where, r.message))
+        assert bad == []

@@ -4,7 +4,7 @@ Report-only validators that catch common errors before opening MAX.
 No auto-fix -- all results are informational or diagnostic.
 
 Exports:
-- validate_genexpr: Validate GenExpr DSP code (operators, syntax, Params)
+- validate_genexpr: Validate GenExpr DSP code (gen-domain operators, syntax, Params)
 - validate_js: Validate js object (Legacy Engine, ES5) JavaScript (inlets/outlets, handlers, bounds)
 - validate_n4m: Validate Node for Max JavaScript (require, handlers, outlet)
 - detect_js_type: Detect whether JavaScript code is N4M or js object
@@ -34,6 +34,7 @@ _GENEXPR_KEYWORDS = frozenset({
     "fixdenorm", "isnan", "isinf",
     "selector", "gate", "switch",
     "sample", "nearest", "interp",
+    "require",
 })
 
 
@@ -44,15 +45,35 @@ _DECL_PREFIXES = ("Param ", "History ", "Delay ", "Buffer ", "Data ")
 
 
 def _strip_line_comments(code: str) -> str:
-    """Remove `//` line comments so regex checks (Checks 7, 8) can scan
+    """Remove `//` line comments so regex checks (Checks 6, 7) can scan
     code text without false-positive matches inside commented-out
-    examples. Block comments (`/* ... */`) are not used in GenExpr and
-    are not handled. Single pass; preserves line count for error
-    line-number reporting in Check 9.
+    examples. Block comments (`/* ... */`) are handled separately by
+    _strip_block_comments (Check 6). Single pass; preserves line count for
+    error line-number reporting in Check 9.
     """
     return "\n".join(
         re.sub(r"//.*$", "", line) for line in code.split("\n")
     )
+
+
+def _strip_block_comments(code: str) -> str:
+    """Replace each ``/* ... */`` block comment with as many newlines as it
+    spans, so names inside it are never tokenized (Q12 / G3) and line
+    numbers stay put."""
+    return re.sub(
+        r"/\*.*?\*/",
+        lambda m: "\n" * m.group(0).count("\n"),
+        code,
+        flags=re.DOTALL,
+    )
+
+
+# Check 6 patterns (Q12 / G3).
+_DECL_STATEMENT = re.compile(r"\b(?:Param|History|Delay|Buffer|Data)\s+([^;]*);")
+_CALL_NAME = re.compile(r"([A-Za-z_]\w*)\s*\(")
+_FUNC_DEF = re.compile(r"(?m)^[ \t]*([A-Za-z_]\w*)[ \t]*\(([^()]*)\)\s*\{")
+_CALLED = re.compile(r"(?<![.\w])([A-Za-z_]\w*)\s*\(")
+_CONTROL_WORDS = frozenset({"if", "else", "for", "while"})
 
 
 def validate_genexpr(
@@ -67,9 +88,16 @@ def validate_genexpr(
     3. in/out declarations (info)
     4. Param syntax min/max (warning)
     5. Declaration ordering (error)
-    6. Operator existence against gen/objects.json (error)
+    6. Called names against the gen domain only (Q12 / G3): every
+       ``name(`` call must be a gen/objects.json operator, a function the
+       codebox defines, or a name a declaration introduces (every name of a
+       comma-separated ``History a(0), b(0);``). ``.method(`` calls and
+       ``/* */`` comments are skipped. A Max-only name (``metro``) is an
+       error saying so; an unknown name is an error, or a warning when the
+       code calls ``require(...)`` (the name may come from the library).
     7. delay() rejection -- not supported in codebox (error, D-14)
-    8. clip() rejection -- not supported in expr/GenExpr (error, D-15)
+    8. Retired in Q12: GenExpr has clip(x, lo, hi). The clip() ban applies
+       to the expr/vexpr/if objects and is a CLAUDE.md rule.
     9. Init-before-if/else flow analysis (error, D-16)
 
     All results use layer="code". Report-only, no auto-fix.
@@ -83,7 +111,7 @@ def validate_genexpr(
     """
     results: list[ValidationResult] = []
 
-    # Strip // line comments once so Checks 7/8 don't false-positive on
+    # Strip // line comments once so Checks 6/7 don't false-positive on
     # commented examples. Preserves line count for Check 9 line-number
     # reporting (Check 9 walks `lines` directly and uses its own //
     # skipping, so it does NOT use code_stripped).
@@ -181,34 +209,54 @@ def validate_genexpr(
         from src.maxpat.db_lookup import ObjectDatabase
         db = ObjectDatabase()
 
-    # Extract names declared by Param/History/Buffer/Data so we can skip them
-    # as operators. These are variable names, not function calls. Scan the
-    # comment-stripped source so an ALL-CAPS banner like
-    # `// === SATURATION (Pade tanh) ===` is not tokenized -- the word before
-    # `(` inside a // comment must never be treated as an operator call
+    # Scan the comment-stripped source (// and /* */) so an ALL-CAPS banner
+    # like `// === SATURATION (Pade tanh) ===` is never tokenized
     # (tape-wobble false positive: DRIFT/EQ/LFO/ROLLOFF/SATURATION/SIGNAL).
-    declared_names = set()
-    decl_pattern = re.compile(r"(?:Param|History|Delay|Buffer|Data)\s+(\w+)\s*\(")
-    for match in decl_pattern.finditer(code_stripped):
-        declared_names.add(match.group(1))
+    scan = _strip_block_comments(code_stripped)
 
-    # Extract function-call-style tokens: word followed by (
-    func_pattern = re.compile(r"\b(\w+)\s*\(")
-    used_funcs = set()
-    for match in func_pattern.finditer(code_stripped):
-        func_name = match.group(1)
-        if func_name not in _GENEXPR_KEYWORDS and func_name not in declared_names:
-            used_funcs.add(func_name)
+    # Names introduced by declarations: every `name(` inside a declaration
+    # statement, so `History z0(0.), z1(0.);` declares both z0 and z1.
+    declared_names: set[str] = set()
+    for stmt in _DECL_STATEMENT.finditer(scan):
+        declared_names.update(_CALL_NAME.findall(stmt.group(1)))
 
-    # Check each function against gen/objects.json
+    # Functions the codebox defines: `name(args) {` at line start.
+    defined_names = {
+        m.group(1) for m in _FUNC_DEF.finditer(scan)
+        if m.group(1) not in _CONTROL_WORDS
+    }
+
+    # Called names: `name(` not preceded by `.` (method calls) or a word char.
+    used_funcs = {
+        name for name in _CALLED.findall(scan)
+        if name not in _GENEXPR_KEYWORDS
+        and name not in declared_names
+        and name not in defined_names
+    }
+
+    uses_require = re.search(r"(?<![.\w])require\s*\(", scan) is not None
     for func_name in sorted(used_funcs):
-        # Look up in gen domain
-        obj = db.lookup(func_name)
-        if obj is None:
+        if db.is_gen_operator(func_name):
+            continue
+        if uses_require:
+            results.append(ValidationResult(
+                "code", "warning",
+                f"GenExpr name '{func_name}' is neither a Gen operator nor a "
+                f"function defined in this codebox; it may come from "
+                f"require(...) -- verify",
+            ))
+        elif db.exists(func_name):
             results.append(ValidationResult(
                 "code", "error",
-                f"Unknown GenExpr operator: '{func_name}' "
-                f"(not found in gen/objects.json)",
+                f"Unknown GenExpr operator: '{func_name}' is a Max object, not "
+                f"a Gen operator; codebox code can only call Gen operators and "
+                f"functions it defines",
+            ))
+        else:
+            results.append(ValidationResult(
+                "code", "error",
+                f"Unknown GenExpr operator: '{func_name}' (not a Gen operator "
+                f"in gen/objects.json and not defined in this codebox)",
             ))
 
     # Check 7: delay() rejection (D-14, VALID-04). Compile-fatal in MAX,
@@ -221,14 +269,7 @@ def validate_genexpr(
             "use Delay.read/write (declare Delay myDelay(max_samples) first)",
         ))
 
-    # Check 8: clip() rejection (D-15, VALID-04). expr/GenExpr have no
-    # clip(). Compile-fatal, so ERROR. Word-boundary on \bclip\s*\(.
-    if re.search(r"\bclip\s*\(", code_stripped):
-        results.append(ValidationResult(
-            "code", "error",
-            "clip() does not exist in expr/GenExpr; "
-            "use min(max(x, lo), hi)",
-        ))
+    # Check 8 (clip() rejection) retired in Q12 / G3: GenExpr has clip().
 
     # Check 9: init-before-if/else (D-16, D-20, VALID-04). Light flow
     # analysis. The genuine GenExpr "not defined" error is a READ of a name

@@ -18,7 +18,6 @@
     "vline~": {"max_equivalent": "line~", "reason": "PD virtual line"},
     "netsend": {"max_equivalent": "udpsend or mxj net.tcp.send", "reason": "PD network send"},
     "netreceive": {"max_equivalent": "udpreceive or mxj net.tcp.recv", "reason": "PD network receive"},
-    "wrap~": {"max_equivalent": "wrap~ exists in MAX too -- verify context", "reason": "Both PD and MAX have wrap~ (MAX wrap~ is signal range wrap with 3 inlets / 1 outlet; PD wrap~ is phase wrap). Review-260420-j15 DQ-01."},
-    "clip~": {"max_equivalent": "clip~ exists in MAX too -- verify context", "reason": "Both PD and MAX have clip~"}
+    "wrap~": {"max_equivalent": "pong~ 1 0. 1.", "reason": "PD phase wrap (fractional part). MAX/MSP has no wrap~ -- only RNBO has one (review C11, Q12). Use pong~ in wrap mode: first argument 1, range 0. 1. (pong~.maxref.xml: mode 0 fold, 1 wrap, 2 clip)."}
   }
 }

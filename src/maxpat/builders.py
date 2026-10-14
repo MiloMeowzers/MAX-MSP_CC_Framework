@@ -61,8 +61,13 @@ class BuildersMixin:
             The created Box instance.
 
         Raises:
-            ValueError: If object not found in database (Rule #1).
+            ValueError: If object not found in database (Rule #1), or if
+                its effective domain restriction excludes this patcher's
+                ``domain_context`` (an RNBO/Gen-only name such as ``expr~``
+                or ``history`` in a Max patcher; Q12 / C3). The domain
+                check runs first, so a refusal changes nothing.
         """
+        self._require_domain_scope(name)
         box_id = self._gen_id()
         box = Box(name=name, args=args, box_id=box_id, db=self.db, x=x, y=y,
                   allowed_packages=self.allowed_packages)
@@ -77,6 +82,34 @@ class BuildersMixin:
 
         self.boxes.append(box)
         return box
+
+    def _require_domain_scope(self, name: str) -> None:
+        """Raise ValueError when *name* may not live in this patcher's scope.
+
+        Uses ``db.get_effective_restrictions`` (explicit ``domain_restricted``
+        else the implied rnbo/gen-only restriction; Q12 / C3) against
+        ``self.domain_context`` (default "max"). An ``m4l`` restriction
+        allows a Max patcher: an M4L device is a Max patcher (Layer 4b
+        still reports explicit m4l tags as before).
+        """
+        restr = self.db.get_effective_restrictions(name)
+        if not restr:
+            return
+        ctx = getattr(self, "domain_context", "max")
+        allowed = set(restr)
+        if "m4l" in allowed:
+            allowed.add("max")
+        if ctx in allowed:
+            return
+        msg = (
+            f"'{name}' is restricted to {restr} and cannot be added to a "
+            f"{ctx} patcher (Rule #1: MAX says \"No such object\" for it here). "
+            f"Add it inside an add_rnbo/add_gen inner patcher, or use a MAX object."
+        )
+        equivalent = self.db.suggest_max_equivalent(name)
+        if equivalent:
+            msg += f" MAX equivalent: {equivalent}"
+        raise ValueError(msg)
 
     def add_comment(
         self, text: str, x: float = 0.0, y: float = 0.0, target: Box | None = None,
@@ -636,7 +669,8 @@ class BuildersMixin:
         # Create inner patcher
         from src.maxpat.patcher import Patcher
         inner = Patcher(db=self.db, is_subpatcher=True,
-                        allowed_packages=self.allowed_packages)
+                        allowed_packages=self.allowed_packages,
+                        domain_context=getattr(self, "domain_context", "max"))
 
         # Add inlet objects inside the subpatcher
         inlet_spacing = 80.0
@@ -791,7 +825,8 @@ class BuildersMixin:
         if embedded:
             from src.maxpat.patcher import Patcher
             inner = Patcher(db=self.db, is_subpatcher=True,
-                            allowed_packages=self.allowed_packages)
+                            allowed_packages=self.allowed_packages,
+                            domain_context=getattr(self, "domain_context", "max"))
             inner.props["rect"] = [0.0, 0.0, width, height]
             bpatch_box._inner_patcher = inner
             self.boxes.append(bpatch_box)
@@ -850,7 +885,8 @@ class BuildersMixin:
         # Create inner Gen patcher
         from src.maxpat.patcher import Patcher
         inner = Patcher(db=self.db, is_subpatcher=True,
-                        allowed_packages=self.allowed_packages)
+                        allowed_packages=self.allowed_packages,
+                        domain_context="gen")
         inner.props["bgcolor"] = list(GEN_PATCHER_BGCOLOR)
         inner.props["rect"] = [100.0, 100.0, 600.0, 450.0]
 

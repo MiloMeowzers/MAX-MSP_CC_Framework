@@ -6000,6 +6000,13 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "io_count_finding"
+      },
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.group zl zl.group; Max-scope box in C74/help/max/zl.group.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
       }
     },
     "_domain_packages": "--- Package Objects ---",
@@ -7682,6 +7689,15 @@
         "source": "rnbo_docs",
         "confidence": "HIGH",
         "date": "2026-04-19"
+      },
+      "domain_restricted": [
+        "gen",
+        "rnbo"
+      ],
+      "_domain_scope": {
+        "finding": "Q12 / C3: the code box is a Gen and an RNBO object; the DB holds only the RNBO entry, so the implied restriction would be ['rnbo'] and reject every gen~ codebox",
+        "evidence": "maxclass codebox at the top of all 12 committed patches/*/generated/*.gendsp and inside every add_gen patcher; 66 Gen codeboxes in the Max 9.2 bundle outside packages/RNBO",
+        "confidence": "HIGH"
       }
     },
     "codebox~": {
@@ -16613,6 +16629,310 @@
         "source": "max_docs vexpr.maxref.xml",
         "confidence": "HIGH",
         "date": "2026-09-27"
+      }
+    },
+    "div~": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max external (the bundle ships it under this filename and mc.wrapper~ instantiates it by name); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "C74/externals/msp/div~.mxo; C74/init/audio-objectmappings.txt:12 max objectfile /~ div~; :72 max objectfile mc.div~ mc.wrapper~ div~;",
+        "confidence": "MEDIUM",
+        "confirm": "the documented name is /~; confirm in MAX that typing div~ creates the object"
+      }
+    },
+    "list.change": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.change zl zl.change; Max-scope box in C74/help/max/zl.change.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.compare": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.compare zl zl.compare; Max-scope box in C74/help/max/zl.compare.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.delace": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.delace zl zl.delace; Max-scope box in C74/help/max/zl.delace.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.ecils": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.ecils zl zl.ecils; Max-scope box in C74/help/max/zl.ecils.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.filter": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.filter zl zl.filter; Max-scope box in C74/help/max/zl.filter.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.indexmap": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.indexmap zl zl.indexmap; Max-scope box in C74/help/max/zl.indexmap.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.join": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.join zl zl.join; Max-scope box in C74/help/max/zl.join.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.lace": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.lace zl zl.lace; Max-scope box in C74/help/max/zl.lace.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.len": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.len zl zl.len; Max-scope box in C74/help/max/zl.len.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.lookup": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.lookup zl zl.lookup; Max-scope box in C74/help/max/zl.lookup.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.median": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.median zl zl.median; Max-scope box in C74/help/max/zl.median.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.mth": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.mth zl zl.mth; Max-scope box in C74/help/max/zl.mth.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.nth": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.nth zl zl.nth; Max-scope box in C74/help/max/zl.nth.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.queue": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.queue zl zl.queue; Max-scope box in C74/help/max/zl.queue.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.reg": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.reg zl zl.reg; Max-scope box in C74/help/max/zl.reg.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.rev": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.rev zl zl.rev; Max-scope box in C74/help/max/zl.rev.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.rot": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.rot zl zl.rot; Max-scope box in C74/help/max/zl.rot.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.scramble": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.scramble zl zl.scramble; Max-scope box in C74/help/max/zl.scramble.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.sect": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.sect zl zl.sect; Max-scope box in C74/help/max/zl.sect.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.slice": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.slice zl zl.slice; Max-scope box in C74/help/max/zl.slice.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.sort": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.sort zl zl.sort; Max-scope box in C74/help/max/zl.sort.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.stack": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.stack zl zl.stack; Max-scope box in C74/help/max/zl.stack.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.stream": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.stream zl zl.stream; Max-scope box in C74/help/max/zl.stream.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.sub": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.sub zl zl.sub; Max-scope box in C74/help/max/zl.sub.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.sum": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.sum zl zl.sum; Max-scope box in C74/help/max/zl.sum.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.swap": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.swap zl zl.swap; Max-scope box in C74/help/max/zl.swap.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.thin": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.thin zl zl.thin; Max-scope box in C74/help/max/zl.thin.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.union": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.union zl zl.union; Max-scope box in C74/help/max/zl.union.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "list.unique": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (the bundle maps it to zl); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "Max 9.2.0 C74/init/max-objectmappings.txt: max objectfile list.unique zl zl.unique; Max-scope box in C74/help/max/zl.unique.maxhelp",
+        "confidence": "HIGH",
+        "follow_up": "Q38 aliases list.* to zl.*: delete this entry then"
+      }
+    },
+    "rdiv": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max external (the bundle ships it under this filename and mc.wrapper~ instantiates it by name); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "C74/externals/max/rdiv.mxo; C74/init/max-objectmappings.txt:1 max objectfile !/ rdiv;",
+        "confidence": "MEDIUM",
+        "confirm": "the documented name is !/; confirm in MAX that typing rdiv creates the object"
+      }
+    },
+    "rdiv~": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max external (the bundle ships it under this filename and mc.wrapper~ instantiates it by name); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "C74/externals/msp/rdiv~.mxo; C74/init/audio-objectmappings.txt:14 max objectfile !/~ rdiv~; :182 max objectfile mc.rdiv~ mc.wrapper~ rdiv~;",
+        "confidence": "MEDIUM",
+        "confirm": "the documented name is !/~; confirm in MAX that typing rdiv~ creates the object"
+      }
+    },
+    "rnbo.remote": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: real Max object (an RNBO package external); its only DB entry is RNBO, so without this it would be restricted to rnbo",
+        "evidence": "C74/packages/RNBO/externals/rnbo.remote.mxo; Max-scope box in C74/packages/RNBO/help/rnbo.remote.maxhelp",
+        "confidence": "HIGH"
+      }
+    },
+    "rnbo~": {
+      "domain_restricted": [],
+      "_domain_scope": {
+        "finding": "Q12 / C3: the RNBO container is itself a Max object",
+        "evidence": "C74/packages/RNBO/externals/rnbo~.mxo; Max-scope box in 564 bundle patches (e.g. packages/RNBO/extras/RNBO Intro.maxpat)",
+        "confidence": "HIGH"
       }
     }
   },

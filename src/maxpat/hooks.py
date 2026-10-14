@@ -11,7 +11,9 @@ blocker refuses. Cords removed compared with HEAD (and original_text) emit
 one SaveGateWarning. A changed x-rank of a subpatcher or abstraction
 inlet/outlet raises PatchValidationError. ``force=True`` saves anyway with a
 SaveGateWarning listing what was bypassed. write_js validation stays
-report-only; validate_file runs on demand.
+report-only; validate_file runs on demand. The gate validates .gendsp /
+.genjit files in gen scope and .rnbopat files in rnbo scope
+(SCOPE_BY_SUFFIX; Q12 / C3), so RNBO/Gen-only names are legal there.
 
 Provides:
 - finalize_patch: Single-call layout cleanup hook for new and edited patches.
@@ -47,6 +49,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
 from src.maxpat.validation import validate_patch, has_blocking_errors, ValidationResult
+from src.maxpat.db_lookup import SCOPE_BY_SUFFIX
 
 if TYPE_CHECKING:
     from src.maxpat.patcher import Patcher
@@ -340,6 +343,10 @@ def read_patch(path: "str | Path") -> tuple["Patcher", str]:
     disk in between). Re-read after each save before saving the same file
     again -- the old original_text no longer matches the file.
 
+    The Patcher's ``domain_context`` comes from the file suffix (.gendsp /
+    .genjit -> gen, .rnbopat -> rnbo; SCOPE_BY_SUFFIX), else from the
+    patcher's classnamespace / top-level codebox (Q12 / C3).
+
     Args:
         path: Path to the .maxpat file (str or pathlib.Path).
 
@@ -358,7 +365,7 @@ def read_patch(path: "str | Path") -> tuple["Patcher", str]:
     original_text = path.read_text()
     data = json.loads(original_text)
     from src.maxpat.patcher import Patcher
-    patcher = Patcher.from_dict(data)
+    patcher = Patcher.from_dict(data, domain_context=SCOPE_BY_SUFFIX.get(path.suffix))
     return (patcher, original_text)
 
 
@@ -515,7 +522,7 @@ def _finding_key(result) -> tuple:
     return (origin, template, tuple(sorted(ids)), removal)
 
 
-def _blocking_findings(patch_dict: dict) -> list:
+def _blocking_findings(patch_dict: dict, scope: "str | None" = None) -> list:
     """Blocking validation errors and critic blockers of *patch_dict*.
 
     Runs validate_patch and review_patch on deepcopies with the cached gate
@@ -523,13 +530,13 @@ def _blocking_findings(patch_dict: dict) -> list:
     ``has_blocking_errors(..., is_new=True)``: every error blocks, including
     proposed removals, except a legacy ``auto_fixed`` one without a
     proposal. Pre-existing findings are exempted by the baseline diff, not
-    here.
+    here. *scope* is passed to validate_patch (None auto-detects; Q12).
     """
     from src.maxpat.critics import review_patch
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        v_results = validate_patch(copy.deepcopy(patch_dict), db=_gate_db())
+        v_results = validate_patch(copy.deepcopy(patch_dict), db=_gate_db(), scope=scope)
         c_results = review_patch(copy.deepcopy(patch_dict), db=_gate_db())
 
     found = [
@@ -677,18 +684,23 @@ def _path_label(path: tuple) -> str:
     return " > ".join(f"{text} ({box_id})" for box_id, text in path)
 
 
-def _gate_report(new_dict: dict, baseline_dict: "dict | None", ref_dicts: list) -> GateReport:
+def _gate_report(
+    new_dict: dict,
+    baseline_dict: "dict | None",
+    ref_dicts: list,
+    scope: "str | None" = None,
+) -> GateReport:
     """Compare *new_dict* with its blocker baseline and cord/port references.
 
     Pure (no I/O). ``baseline_dict`` None means a new file: every blocking
     finding is new. Otherwise a finding is new when its key's count in the
     new patch exceeds its count in the baseline (multiset match).
     """
-    new_findings = _blocking_findings(new_dict)
+    new_findings = _blocking_findings(new_dict, scope=scope)
     if baseline_dict is None:
         new_blockers = list(new_findings)
     else:
-        base_counts = Counter(_finding_key(r) for r in _blocking_findings(baseline_dict))
+        base_counts = Counter(_finding_key(r) for r in _blocking_findings(baseline_dict, scope=scope))
         seen: Counter = Counter()
         new_blockers = []
         for r in new_findings:
@@ -764,7 +776,10 @@ def _run_save_gate(
         if parsed is not None:
             refs.append(("the file on disk", parsed))
 
-    report = _gate_report(patch_dict, baseline, [d for _, d in refs])
+    report = _gate_report(
+        patch_dict, baseline, [d for _, d in refs],
+        scope=SCOPE_BY_SUFFIX.get(path.suffix),
+    )
 
     # 1. Removed cords: one warning, whatever force is (review §4.1 class 9).
     if report.removed_cords:
@@ -875,6 +890,9 @@ def write_gendsp(
 def validate_file(path: str | Path) -> list[ValidationResult]:
     """Load and validate an existing .maxpat file from disk.
 
+    .gendsp / .genjit files validate in gen scope and .rnbopat in rnbo
+    scope (SCOPE_BY_SUFFIX); other suffixes auto-detect (Q12 / C3).
+
     Args:
         path: Path to the .maxpat file.
 
@@ -899,7 +917,7 @@ def validate_file(path: str | Path) -> list[ValidationResult]:
         )]
 
     # Run the validation pipeline on the loaded dict
-    return validate_patch(data)
+    return validate_patch(data, scope=SCOPE_BY_SUFFIX.get(path.suffix))
 
 
 def validate_code_file(path: str | Path) -> list[ValidationResult]:
