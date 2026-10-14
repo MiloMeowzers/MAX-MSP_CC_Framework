@@ -1281,3 +1281,101 @@ class TestUiMaxclassSurvey:
 
     def test_section_key_is_last(self) -> None:
         assert sync.SECTION_KEYS[-1] == "ui_maxclasses"
+
+
+# ── Inherited group profiles (review C8 / Q14) ────────────────────
+
+
+def _mcwrapper_refpage(name: str, methods: list[str] | None, attrs: list[str] | None) -> str:
+    """An MC refpage with one signal inlet / outlet and `bang`.
+
+    `methods` None omits the <mcwrapper> element; [] with attrs [] writes an
+    empty one (the mc.record~ shape).
+    """
+    page = _refpage(
+        name, module="msp", inlets=[("signal", "in")], outlets=[("signal", "out")], methods=["bang"]
+    )
+    if methods is None:
+        return page
+    block = ["  <mcwrapper>\n"]
+    block.extend(f'    <mcwrappermethod name="{m}" />\n' for m in methods)
+    block.extend(f'    <mcwrapperattr name="{a}" />\n' for a in attrs or [])
+    block.append("  </mcwrapper>\n</c74object>\n")
+    return page.replace("</c74object>\n", "".join(block))
+
+
+def _add_groups_fixtures(world: dict) -> None:
+    """MC wrapper refpages plus an mc/objects.json holding their entries."""
+    msp_ref = world["app"] / "Contents" / "Resources" / "C74" / "docs" / "refpages" / "msp-ref"
+    # applyvalues listed twice: the profile dedupes it.
+    (msp_ref / "mc.fake~.maxref.xml").write_text(
+        _mcwrapper_refpage(
+            "mc.fake~", ["applyvalues", "setvalue", "ease.linear", "applyvalues"], ["chans", "fun"]
+        )
+    )
+    (msp_ref / "mc.native~.maxref.xml").write_text(_mcwrapper_refpage("mc.native~", None, None))
+    (msp_ref / "mc.empty~.maxref.xml").write_text(_mcwrapper_refpage("mc.empty~", [], []))
+    mc_dir = world["db_root"] / "mc"
+    mc_dir.mkdir(parents=True, exist_ok=True)
+    entries = {n: _entry(n, "MC", "msp") for n in ("mc.fake~", "mc.native~", "mc.empty~")}
+    (mc_dir / "objects.json").write_text(
+        json.dumps(entries, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+
+
+def _canonical(data: dict) -> bytes:
+    return (json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+class TestGroups:
+    """C8 / Q14: inherited group names land in groups.json, merged at call time."""
+
+    def test_mc_wrapper_messages_end_to_end(self, world: dict) -> None:
+        """Tracer: refpage <mcwrapper> -> --apply groups -> groups.json -> messages().
+
+        pending_names is, summed over members, the member's effective names
+        (profile messages + attributes) minus those groups.json already
+        records: here mc.fake~'s applyvalues, ease.linear, setvalue, chans and
+        fun, none recorded yet.
+        """
+        from src.maxpat.db_lookup import ObjectDatabase
+
+        _add_groups_fixtures(world)
+        db_root = world["db_root"]
+        before = _tree_bytes(db_root)
+        assert _run(world) == 0
+        assert _tree_bytes(db_root) == before
+
+        section = _report(world)["groups"]
+        assert section["available"] is True
+        assert section["members"] == 1
+        assert section["by_family"] == {"mc": 1}
+        assert section["pending_members"] == 1
+        assert section["pending_names"] == 5
+
+        assert _run(world, "--apply", "groups") == 0
+        after = _tree_bytes(db_root)
+        assert set(after) - set(before) == {"groups.json"}
+        assert all(after[k] == before[k] for k in before)
+        raw = (db_root / "groups.json").read_bytes()
+        data = json.loads(raw)
+        assert raw == _canonical(data)
+        assert list(data["members"]) == ["mc.fake~"]
+        (profile_id,) = data["members"]["mc.fake~"]
+        assert profile_id.startswith("mc-") and len(profile_id) == len("mc-") + 8
+
+        db = ObjectDatabase(db_root)
+        assert db.messages("mc.fake~") == ["bang", "applyvalues", "ease.linear", "setvalue"]
+        assert db.messages("mc.native~") == ["bang"]
+        assert db.messages("mc.empty~") == ["bang"]
+        assert db.lookup("mc.fake~")["messages"] == ["bang"]
+
+        assert _run(world, "--apply", "groups") == 0
+        assert _tree_bytes(db_root) == after
+        assert _report(world)["groups"]["pending_names"] == 0
+
+    def test_section_order_keeps_ui_maxclasses_last(self) -> None:
+        keys = sync.SECTION_KEYS
+        assert "groups" in keys
+        assert keys[keys.index("inherited_attributes") + 1] == "groups"
+        assert keys[-1] == "ui_maxclasses"

@@ -19,7 +19,9 @@ What this is, and is not
 * ``overrides.json`` is read only through ``ObjectDatabase``. The tool has no
   write path to it: :func:`write_db_file` -- the single function that writes
   into the DB tree -- accepts only the core domain object files, the
-  per-package object files and ``package_info.json``. The other write sites
+  per-package object files and ``package_info.json``. The only other writer
+  into the DB tree is :func:`write_groups_file` (``--apply groups``), which
+  can only write ``<db-root>/groups.json``. The other write sites
   are :func:`write_report` (``--json`` / ``--snapshot-io`` targets), which
   refuses any path inside ``patches/`` or the DB tree, and
   :func:`write_extraction_log` (``--refresh-log``), which can only replace
@@ -43,6 +45,13 @@ Sources of shape
   page with no DB entry. The DB does not record inherited attributes as a
   rule, so these are report-only and land only for attribute names given
   explicitly to ``--apply inherited --attributes``.
+* Inherited group membership (review C8 / Q14): the per-object refpage
+  lists -- ``<mcwrapper>`` for MC wrappers, ``<jittermethodlist>`` /
+  ``<jitterattributelist>`` for Jitter objects -- never a name prefix (51
+  ``mc.*`` objects are native, not wrappers). thispatcher's selectors come
+  from its help patch. ``--apply groups`` records them in ``groups.json``
+  (each group once, merged at call time by ``ObjectDatabase``); attribute
+  types come only from non-ambiguous group-page definitions.
 * UI maxclasses: every box maxclass the bundle's .maxpat/.maxhelp files carry
   (section ``ui_maxclasses``, review C5 / Q13), diffed against UI_MAXCLASSES;
   report-only.
@@ -59,6 +68,7 @@ Usage
     python3 tools/sync_max_bundle.py --apply define --names OLD.ALIAS --min-version 8
     python3 tools/sync_max_bundle.py --apply deltas
     python3 tools/sync_max_bundle.py --apply inherited --attributes alpha_mode
+    python3 tools/sync_max_bundle.py --apply groups
     python3 tools/sync_max_bundle.py --refresh-log           # after an apply
     python3 tools/sync_max_bundle.py --snapshot-io /tmp/io.json
     python3 tools/sync_max_bundle.py --compare-io /tmp/io.json
@@ -75,6 +85,7 @@ from __future__ import annotations
 import argparse
 import copy
 import datetime as _dt
+import hashlib
 import importlib.util
 import json
 import os
@@ -139,7 +150,7 @@ _WHOLE_VALUE_TOKENS = ("undefined", "Dummy")
 # Bound on recursion into nested patchers when walking help patches (T-hwb-06).
 MAX_PATCHER_DEPTH = 32
 
-APPLY_MODES = ("new", "define", "deltas", "inherited")
+APPLY_MODES = ("new", "define", "deltas", "inherited", "groups")
 
 SECTION_KEYS = [
     "install",
@@ -147,6 +158,7 @@ SECTION_KEYS = [
     "define_missing",
     "deltas",
     "inherited_attributes",
+    "groups",
     "collisions",
     "alias_docs",
     "shadowed_by_override",
@@ -281,6 +293,23 @@ def _scan_refpage_file(path: Path, root_kind: str, package: str | None, hints) -
             a.get("name", "")
             for a in element.findall("jitterattributelist/jitterattribute")
             if a.get("name")
+        ],
+        # Names-only references to inherited group messages / attributes
+        # (review C8 / Q14): the MC wrapper and shared Jitter method lists.
+        "mcwrapper_methods": [
+            m.get("name", "")
+            for m in element.findall("mcwrapper/mcwrappermethod")
+            if m.get("name")
+        ],
+        "mcwrapper_attributes": [
+            a.get("name", "")
+            for a in element.findall("mcwrapper/mcwrapperattr")
+            if a.get("name")
+        ],
+        "jitter_methods": [
+            m.get("name", "")
+            for m in element.findall("jittermethodlist/jittermethod")
+            if m.get("name")
         ],
         "class": "normal",
     }
@@ -1233,6 +1262,200 @@ def compute_inherited(index: dict, classified: dict, db: ObjectDatabase, raw_db:
     }
 
 
+# ---------------------------------------------------------------------------
+# Inherited group profiles (review C8 / Q14) -- groups.json
+# ---------------------------------------------------------------------------
+
+GROUPS_FILE = "groups.json"
+
+GROUPS_COMMENT = (
+    "Inherited group messages/attributes (review C8 / Q14). Written only by "
+    "tools/sync_max_bundle.py --apply groups. Merged at call time by "
+    "ObjectDatabase.messages/attributes/selectors; never copied into domain files."
+)
+
+# Profile `source` per refpage-list family.
+GROUP_SOURCES = {
+    "mc": "refpage <mcwrapper>",
+}
+
+
+def canonical_groups_bytes(data: dict) -> bytes:
+    """The one serialization groups.json is ever written in."""
+    return (json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def load_groups(db_root: str | Path) -> dict | None:
+    """The groups.json on disk, or None when there is none."""
+    path = Path(db_root) / GROUPS_FILE
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if (
+        not isinstance(data, dict)
+        or not isinstance(data.get("profiles"), dict)
+        or not isinstance(data.get("members"), dict)
+    ):
+        raise ValueError(f"{path}: not a groups file (object with dict profiles / members)")
+    return data
+
+
+def _effective_names(groups: dict | None, key: str) -> set[str]:
+    """Every message and attribute name a member's profiles give it."""
+    if not groups:
+        return set()
+    profiles = groups.get("profiles") or {}
+    names: set[str] = set()
+    for pid in (groups.get("members") or {}).get(key, []):
+        profile = profiles.get(pid)
+        if isinstance(profile, dict):
+            names.update(profile.get("messages") or [])
+            names.update(profile.get("attributes") or [])
+    return names
+
+
+def _profile_id(family: str, messages, attributes) -> str:
+    """family + first 8 hex of the sha256 of the sorted name lists."""
+    body = json.dumps({"attributes": sorted(attributes), "messages": sorted(messages)}, sort_keys=True)
+    return f"{family}-{hashlib.sha256(body.encode('utf-8')).hexdigest()[:8]}"
+
+
+def _ref_group_lists(ref: dict) -> dict[str, tuple[list[str], list[str]]]:
+    """{family: (messages, attributes)} a refpage lists by name, non-empty only."""
+    lists = {
+        "mc": (ref.get("mcwrapper_methods") or [], ref.get("mcwrapper_attributes") or []),
+    }
+    return {family: pair for family, pair in lists.items() if pair[0] or pair[1]}
+
+
+def compute_groups(
+    index: dict, classified: dict, db: ObjectDatabase, raw_db: dict, existing: dict | None
+) -> dict:
+    """The groups.json target plus its dry-run report.
+
+    Membership comes only from the per-object refpage lists (``<mcwrapper>``),
+    never from a name prefix; members are keyed by the DB key
+    :func:`locate_base_entry` returns. Names an existing groups.json already
+    records are unioned in (a bundle update never shrinks a member). The
+    target is in ``_target``.
+    """
+    wanted: dict[str, dict[str, dict]] = {}
+    unresolved: list[str] = []
+    for name in sorted(classified["authoritative"]):
+        ref = classified["authoritative"][name]
+        if _is_doc_page(ref):
+            continue
+        lists = _ref_group_lists(ref)
+        if not lists:
+            continue
+        resolved = _muted_lookup(db, name)
+        located = locate_base_entry(resolved, name, raw_db) if resolved is not None else None
+        if located is None:
+            unresolved.append(name)
+            continue
+        key = located[1]
+        for family, (messages, attributes) in lists.items():
+            slot = wanted.setdefault(key, {}).setdefault(
+                family, {"messages": set(), "attributes": set(), "source": GROUP_SOURCES[family]}
+            )
+            slot["messages"].update(messages)
+            slot["attributes"].update(attributes)
+
+    existing_members = (existing or {}).get("members") or {}
+    existing_profiles = (existing or {}).get("profiles") or {}
+    for key, pids in existing_members.items():
+        for pid in pids:
+            profile = existing_profiles.get(pid)
+            if not isinstance(profile, dict):
+                continue
+            slot = wanted.setdefault(key, {}).setdefault(
+                profile.get("family"),
+                {"messages": set(), "attributes": set(), "source": profile.get("source")},
+            )
+            slot["messages"].update(profile.get("messages") or [])
+            slot["attributes"].update(profile.get("attributes") or [])
+
+    profiles: dict[str, dict] = {}
+    members: dict[str, list[str]] = {}
+    for key in sorted(wanted):
+        ids: list[str] = []
+        for family in sorted(wanted[key], key=str):
+            slot = wanted[key][family]
+            messages = sorted(slot["messages"])
+            attributes = sorted(slot["attributes"])
+            if not messages and not attributes:
+                continue
+            pid = _profile_id(family, messages, attributes)
+            body = {
+                "family": family,
+                "messages": messages,
+                "attributes": attributes,
+                "source": slot["source"],
+            }
+            known = profiles.get(pid)
+            if known is not None and not _same(known, body):
+                raise RuntimeError(f"groups.json profile id collision: {pid}")
+            profiles[pid] = body
+            ids.append(pid)
+        if ids:
+            members[key] = sorted(ids)
+
+    definitions, ambiguous = group_attribute_definitions(index)
+    referenced: set[str] = set()
+    for profile in profiles.values():
+        referenced.update(profile["attributes"])
+    attribute_definitions = copy.deepcopy((existing or {}).get("attribute_definitions") or {})
+    c74 = Path(index["c74"])
+    for attr in sorted(referenced):
+        if attr in attribute_definitions or attr not in definitions:
+            continue
+        source = Path(definitions[attr]["source"])
+        try:
+            source_rel = source.relative_to(c74).as_posix()
+        except ValueError:
+            source_rel = source.as_posix()
+        attribute_definitions[attr] = {
+            "definition": copy.deepcopy(definitions[attr]["definition"]),
+            "source": source_rel,
+        }
+
+    target = {
+        "_comment": GROUPS_COMMENT,
+        "max_version": index["install"].get("short_version"),
+        "attribute_definitions": attribute_definitions,
+        "profiles": profiles,
+        "members": members,
+    }
+    by_family: dict[str, int] = {}
+    for pids in members.values():
+        for pid in pids:
+            family = profiles[pid]["family"]
+            by_family[family] = by_family.get(family, 0) + 1
+    return {
+        "available": True,
+        "note": (
+            "inherited group names (MC wrapper / Jitter refpage lists, thispatcher "
+            "help selectors) live in groups.json, merged at call time by "
+            "ObjectDatabase.messages/attributes/selectors; --apply groups writes it"
+        ),
+        "members": len(members),
+        "by_family": dict(sorted(by_family.items())),
+        "profiles": len(profiles),
+        "attribute_definitions": len(attribute_definitions),
+        "pending_members": sum(1 for key in members if key not in existing_members),
+        "pending_names": sum(
+            len(_effective_names(target, key) - _effective_names(existing, key)) for key in members
+        ),
+        "undefined_attributes": sorted(
+            a for a in referenced if a not in attribute_definitions and a not in ambiguous
+        ),
+        "ambiguous_attributes": sorted(a for a in referenced if a in ambiguous),
+        "unresolved": unresolved,
+        "thispatcher_source": None,
+        "_target": target,
+    }
+
+
 def _unavailable(reason: str) -> dict:
     return {"available": False, "reason": reason}
 
@@ -1259,6 +1482,9 @@ def run_report(db_root: str | Path, max_app: str | Path, index: dict | None = No
     inherited = compute_inherited(index, classified, db, raw_db)
     inherited.pop("_pending")
     sections["inherited_attributes"] = inherited
+    groups = compute_groups(index, classified, db, raw_db, load_groups(db_root))
+    groups.pop("_target")
+    sections["groups"] = groups
     sections["collisions"] = {
         "available": True,
         "count": len(classified["collisions"]),
@@ -1417,6 +1643,62 @@ def write_db_file(path: str | Path, new_data: dict, db_root: str | Path) -> bool
     if payload == raw:
         return False
 
+    handle, tmp_name = tempfile.mkstemp(prefix=".sync-", suffix=".tmp", dir=str(target.parent))
+    try:
+        with os.fdopen(handle, "wb") as fh:
+            fh.write(payload)
+        os.replace(tmp_name, target)
+    finally:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+    return True
+
+
+def check_groups_additive(old: dict, new: dict) -> None:
+    """Raise AdditiveViolation unless groups.json `new` only adds to `old`.
+
+    No member is removed, no member's effective name set (the union of its
+    profiles' messages and attributes) shrinks, and no existing
+    attribute_definitions entry changes. `max_version` / `_comment` may
+    change and orphan profiles may be dropped.
+    """
+    new_members = new.get("members") or {}
+    for key in old.get("members") or {}:
+        if key not in new_members:
+            raise AdditiveViolation(f"{GROUPS_FILE}: member {key!r} would be removed")
+        lost = _effective_names(old, key) - _effective_names(new, key)
+        if lost:
+            raise AdditiveViolation(
+                f"{GROUPS_FILE}: member {key!r} would lose names {sorted(lost)}"
+            )
+    new_definitions = new.get("attribute_definitions") or {}
+    for attr, value in (old.get("attribute_definitions") or {}).items():
+        if attr not in new_definitions or not _same(new_definitions[attr], value):
+            raise AdditiveViolation(
+                f"{GROUPS_FILE}: attribute definition {attr!r} would be removed or changed"
+            )
+
+
+def write_groups_file(path: str | Path, data: dict, db_root: str | Path) -> bool:
+    """Write <db_root>/groups.json -- the only other DB-tree writer.
+
+    Refuses any other path, refuses an existing file that is not in the
+    canonical serialization, runs :func:`check_groups_additive`, and replaces
+    the file atomically. Returns False (writes nothing) on identical bytes.
+    """
+    root = Path(db_root).resolve()
+    target = Path(path).resolve()
+    if target != root / GROUPS_FILE:
+        raise WriteRefused(f"refusing to write {target}: the groups writer only writes {root / GROUPS_FILE}")
+    payload = canonical_groups_bytes(data)
+    if target.exists():
+        raw = target.read_bytes()
+        old = json.loads(raw)
+        if not isinstance(old, dict) or raw != canonical_groups_bytes(old):
+            raise StyleUnreproducible(f"{target} is not in the canonical groups.json serialization")
+        check_groups_additive(old, data)
+        if payload == raw:
+            return False
     handle, tmp_name = tempfile.mkstemp(prefix=".sync-", suffix=".tmp", dir=str(target.parent))
     try:
         with os.fdopen(handle, "wb") as fh:
@@ -1819,6 +2101,22 @@ def apply_inherited(
     return applied
 
 
+def apply_groups(index: dict, db_root: Path) -> dict:
+    """--apply groups: (re)write groups.json from the bundle's group lists."""
+    db = load_db(db_root)
+    raw_db = load_raw_db(db_root)
+    classified = classify_refs(index, db, db_root)
+    report = compute_groups(index, classified, db, raw_db, load_groups(db_root))
+    written = write_groups_file(Path(db_root) / GROUPS_FILE, report["_target"], db_root)
+    return {
+        "written": written,
+        "members": report["members"],
+        "profiles": report["profiles"],
+        "names_added": report["pending_names"],
+        "file": GROUPS_FILE,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Extraction log
 # ---------------------------------------------------------------------------
@@ -2008,6 +2306,14 @@ def format_summary(report: dict) -> str:
         f"unrecorded on {inherited['object_count']} objects (report-only; "
         "--apply inherited --attributes NAME)"
     )
+    groups = s["groups"]
+    by_family = groups["by_family"]
+    lines.append(
+        f"  groups          : {groups['members']} members (mc {by_family.get('mc', 0)} / "
+        f"jit {by_family.get('jit', 0)} / thispatcher {by_family.get('thispatcher', 0)}), "
+        f"{groups['profiles']} profiles, +{groups['pending_names']} names pending "
+        "(--apply groups)"
+    )
     lines.append(f"  collisions      : {s['collisions']['count']} (reported, ignored)")
     lines.append(f"  alias documents : {s['alias_docs']['count']}")
     shadow = s["shadowed_by_override"]
@@ -2055,7 +2361,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         choices=APPLY_MODES,
         default=[],
-        help="Apply mode; repeatable. new / define require --names; inherited requires --attributes.",
+        help=(
+            "Apply mode; repeatable. new / define require --names; inherited requires "
+            "--attributes; groups takes no allow-list and writes only groups.json."
+        ),
     )
     parser.add_argument(
         "--names",
@@ -2153,6 +2462,8 @@ def main(argv: list[str] | None = None) -> int:
                     applied["inherited"] = apply_inherited(
                         index, db_root, args.attributes, args.names if not object_modes else None
                     )
+                if "groups" in modes:
+                    applied["groups"] = apply_groups(index, db_root)
             except (WriteRefused, AdditiveViolation, StyleUnreproducible) as exc:
                 print(f"error: {type(exc).__name__}: {exc}", file=sys.stderr)
                 return 2
@@ -2180,6 +2491,16 @@ def main(argv: list[str] | None = None) -> int:
             f"objects in {len(a['files'])} files"
             + (f"; no refpage offers: {', '.join(a['not_offered'])}" if a["not_offered"] else "")
         )
+
+    if "groups" in applied:
+        a = applied["groups"]
+        if a["written"]:
+            print(
+                f"  applied groups  : {a['file']} -- {a['members']} members, "
+                f"{a['profiles']} profiles, +{a['names_added']} names"
+            )
+        else:
+            print(f"  applied groups  : {a['file']} unchanged")
 
     if args.refresh_log:
         if not index["available"]:
