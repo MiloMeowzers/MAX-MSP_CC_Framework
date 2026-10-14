@@ -129,7 +129,9 @@ dial (40x40, presentation 55x55, varname "cutoff_dial")
   |
 scale 0 127 20. 20000.
   |
-  +---> number (50x22, presentation 100x22)
+t f f                     (trigger: right outlet fires first, Rule #3)
+  |   \
+  |    +---> number (50x22, presentation 100x22)      [right outlet]
   |
-  +---> gen~ param message: "cutoff $1"
+  +---> gen~ param message: "cutoff $1"              [left outlet]
 ```

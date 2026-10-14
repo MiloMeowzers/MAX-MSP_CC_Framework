@@ -193,7 +193,8 @@ Set the patcher-level **`bgcolor`** key, not just `editing_bgcolor`/`locked_bgco
 
 - Always terminate signal chains with `dac~` or `*~ 0.` (multiply by zero to mute)
 - Use `*~ 0.5` or `*~` with `line~` for gain control -- never connect raw oscillators to `dac~` at full volume
-- Gain safety: values feeding `*~` or `gain~` for volume control MUST be in the 0.0-1.0 range. Raw MIDI (0-127), slider, or number values must be normalized first (use `scale 0 127 0. 1.` or `/ 127.`). The validation pipeline and DSP critic will block output that violates this rule.
+- Gain safety: values feeding the gain input of the `*~` multiplier (including `line~` ramps into it) MUST be in the 0.0-1.0 range. Normalize raw MIDI ints with `scale 0 127 0. 1.` or `/ 127.`; normalize float sources (flonum, float-output dial/slider/live.dial) with `scale 0. 127. 0. 1.`, because all-int input arguments make `scale` truncate float input. The validation pipeline and DSP critic will block raw 0-127 sources reaching the gain inlet of `*~` / `mc.*~`.
+- `gain~` is different: its left inlet takes int slider positions, 0 to size-1 (default size 158, so 0-157). Floats are converted to int, so a 0.-1. value leaves it at or near silence. Drive `gain~` with slider position values, never 0-1 gains.
 - Signal objects (names ending in `~`) process at audio rate -- they are always "on" once connected
 - Use `snapshot~` to convert signal values to control rate for display
 - Use `meter~` or `levelmeter~` for audio level monitoring
@@ -277,7 +278,7 @@ inner.add_connection(some_box, 0, inlets[2], 0)
 - `js` object runs JavaScript inline in MAX on the **Legacy Engine (ECMAScript 5)** -- it is NOT V8. `v8` is the separate Modern Engine object (ECMAScript 6+). `js` is the default: `Patcher.add_js()` and `generate_js_script()` target it, and every confirmed-working script in `patches/` is ES5 in a `js` box.
 - **Write ES5 only for `js` / `jsui`:** `var` and `function` declarations. No `const`/`let`, arrow functions, template literals, classes, destructuring, default parameters, or `async`/`await`. Reach for `v8` / `v8ui` / `v8.codebox` only when the task needs modern syntax or a Max 9.2 API; there is no `add_v8()` builder (use the generic box API), and a first use is untested until confirmed in MAX.
 - `inlets = N` and `outlets = N` to configure I/O count
-- Handler functions: `bang()`, `msg_int(v)`, `msg_float(v)`, `list()`, `anything(msg, args)`
+- Handler functions: `bang()`, `msg_int(v)`, `msg_float(v)`, `list()` (read its values with `arrayfromargs(arguments)`) and `anything()`. For `anything()`, MAX passes the selector in `messagename` and the arguments in `arguments`, never as named parameters: `function anything() { var a = arrayfromargs(arguments); if (messagename == "foo") { ... } }` (ES5)
 - `outlet(outlet_index, value)` to send data
 - `post('message')` for console output
 - Access patcher: `this.patcher.getnamed('object_name')`
@@ -353,7 +354,7 @@ This applies equally to newobj boxes and message boxes (`set #1`, `setbuffer #1`
 
 ## Variable I/O Objects
 
-Some objects change inlet/outlet count based on arguments. Check `variable_io` and `io_rule` fields:
+Some objects change inlet/outlet count based on arguments (`variable_io: true` in the domain files). The counts come from `overrides.json` → `variable_io_rules` (one formula entry per object) and from the text-aware resolvers in `src/maxpat/io_resolvers.py` (`IO_RESOLVERS`: select, route, expr, ...). Always get counts from `db.compute_io_counts(name, args)`:
 - `trigger b i f` has 3 outlets (not the default 2)
 - `pack 0 0 0 0` has 4 inlets (not the default 2)
 - `route foo bar baz` has 4 outlets (3 match + 1 unmatched)

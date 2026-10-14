@@ -21,7 +21,7 @@ Before dispatching:
 1. Read `patches/.active-project.json` to identify the active project
 2. Read the active project's `context.md` for project vision
 3. Read the active project's `config.json` via `load_project_config()` from `src.maxpat.project`
-   - If `config.json` does not exist (returns None): **STOP and tell the user** "Run `/max-new` or `/max-config` to set packages before building." Do NOT dispatch to any agent.
+   - If it returns None (no config file), the project is core-only: pass `allowed_packages=[]` to the specialists and continue -- do not stop. Tell the user once that package objects stay disabled until a `patches/<project>/config.json` lists packages.
    - If `config.json` exists: extract `packages` list and pass to specialist agents as `allowed_packages`
 4. Do NOT load object database JSON files -- specialists handle their own context loading.
 

@@ -53,7 +53,7 @@ from src.maxpat.testing import generate_test_checklist, save_test_results
 - Write selection with `save_project_config(project_dir, {"packages": [selected_names]})`
 - Package names must exactly match keys in package_info.json (e.g., "BEAP", "Vizzie", "ableton-dsp")
 - If user selects no packages, write `{"packages": []}` (core-only, per D-08)
-- Users can change packages later via `/max-config` (same bundled/community split)
+- Users change packages later by editing `patches/<project>/config.json` or calling `save_project_config(project_dir, {"packages": [...]})`; a project without config.json is core-only (`allowed_packages=[]`)
 
 ### Community Package Extraction Gate
 
@@ -113,8 +113,6 @@ This is informational guidance only -- do not auto-scaffold template code into p
 - `/max-status` -- Show project overview and progress
 - `/max-switch` -- Change active project
 - `/max-test` -- Generate test checklist from generated patches
-- `/max-version` -- Show current version or bump version
-- `/max-config` -- View or change project package configuration
 - Any command that needs to read/update project state
 
 ## When NOT to Use

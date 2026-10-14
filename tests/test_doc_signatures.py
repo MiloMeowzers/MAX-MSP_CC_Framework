@@ -514,3 +514,155 @@ def test_replace_box_docs_point_to_safe_variant() -> None:
             if re.search(r"remap|preserves all positions and connections", line, re.I):
                 bad.append(f"{rel}:{n}: {line.strip()}")
     assert bad == [], "replace_box documented as keeping connections:\n" + "\n".join(bad)
+
+
+# ── Q16 doc regression guards (Task 2) ─────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def db():
+    from src.maxpat.db_lookup import ObjectDatabase
+
+    return ObjectDatabase()
+
+
+def _doc_lines():
+    for rel in DOC_FILES:
+        for n, line in enumerate(_read(rel).split("\n"), start=1):
+            yield rel, n, line
+
+
+def test_js_anything_handler_uses_messagename() -> None:
+    """J1: MAX passes the selector in ``messagename``, never as a parameter."""
+    bad = []
+    for rel, n, line in _doc_lines():
+        if "msg_int(" in line and not (
+            "messagename" in line and "arrayfromargs(arguments)" in line
+        ):
+            bad.append(f"{rel}:{n}: handler list lacks messagename/arrayfromargs")
+        if re.search(r"anything\(\s*[A-Za-z_]", line):
+            bad.append(f"{rel}:{n}: anything() documented with a named parameter")
+    assert bad == [], "\n".join(bad)
+
+
+def test_gain_rule_scoped_to_multiply_tilde() -> None:
+    """J2/J6: the 0-1 rule is for the ``*~`` multiplier; gain~ takes slider positions."""
+    lines = [line for _, _, line in _doc_lines()]
+    assert not any("feeding `*~` or `gain~`" in line for line in lines)
+    assert any("`scale 0. 127. 0. 1.`" in line for line in lines)
+    assert any("`gain~`" in line and "slider position" in line for line in lines)
+
+
+_TILDE_OBJ_RE = re.compile(r"(?<![\w.~/$#-])((?:[a-z]\w*\.)*[A-Za-z]\w*~)(?![\w*])")
+_PKG_OBJ_RE = re.compile(r"(?<![\w/-])((?:fluid|bp)\.[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*~?)(?![\w*])")
+_TEMPLATE_FILES = [
+    Path(".claude/skills/max-dsp-agent/SKILL.md"),
+    Path(".claude/skills/max-patch-agent/BOUNDARIES.md"),
+]
+
+
+@pytest.mark.parametrize("rel", _TEMPLATE_FILES, ids=[str(p) for p in _TEMPLATE_FILES])
+def test_dsp_templates_use_db_objects(rel: Path, db) -> None:
+    """J8: every object the DSP templates name resolves in ObjectDatabase."""
+    text = _read(rel)
+    missing = set()
+    for rx in (_TILDE_OBJ_RE, _PKG_OBJ_RE):
+        for m in rx.finditer(text):
+            tok = m.group(1)
+            if tok == "Gen~" or tok.endswith((".maxpat", ".gendsp")):
+                continue
+            if db.is_pd_object(tok):
+                continue
+            if not db.exists(tok):
+                missing.add(tok)
+    assert not missing, f"{rel}: objects not in DB: {sorted(missing)}"
+
+
+def test_flucoma_templates_use_fit_predict() -> None:
+    """J8: FluCoMa models train with ``fit`` and query with ``predict``/``predictpoint``."""
+    text = _read(Path(".claude/skills/max-dsp-agent/SKILL.md"))
+    assert not re.search(r"[\"`]train[\"`]", text)
+    assert re.search(r"[\"`]fit[\"`]", text)
+    assert re.search(r"[\"`]predict(point)?[\"`]", text)
+
+
+def test_ui_presets_dial_chain_uses_trigger() -> None:
+    """J9: the dial example fans out through ``t f f`` (Rule #3/#4)."""
+    text = _read(Path(".claude/skills/references/ui-presets.md"))
+    start = text.index("## Complete Dial Chain Example")
+    nxt = text.find("\n## ", start + 3)
+    section = text[start : nxt if nxt != -1 else len(text)]
+    assert re.search(r"^\s*(t|trigger) f f\b", section, re.M), section
+
+
+def test_no_references_to_missing_commands() -> None:
+    """J10: every /max-* command a doc names has a .claude/commands file."""
+    commands = REPO_ROOT / ".claude" / "commands"
+    bad = []
+    for rel, n, line in _doc_lines():
+        for m in re.finditer(r"(?<![\w./-])/(max-[a-z][a-z0-9-]*)", line):
+            if not (commands / f"{m.group(1)}.md").is_file():
+                bad.append(f"{rel}:{n}: /{m.group(1)}")
+    assert bad == [], "\n".join(bad)
+
+
+_SPECIALIST_SKILLS = ["max-patch-agent", "max-dsp-agent", "max-ui-agent", "max-rnbo-agent"]
+
+
+def test_missing_config_is_core_only() -> None:
+    """J10: a missing config.json means core-only (allowed_packages=[]), never STOP."""
+    router = _read(Path(".claude/skills/max-router/SKILL.md"))
+    assert "`allowed_packages=[]`" in router
+    assert not [
+        line for line in router.split("\n") if "config.json" in line and "STOP" in line
+    ]
+    assert "core-only" in _read(Path(".claude/skills/max-lifecycle/references/project-structure.md"))
+    for skill in _SPECIALIST_SKILLS:
+        text = _read(Path(f".claude/skills/{skill}/SKILL.md"))
+        lines = [line for line in text.split("\n") if "load_project_config()" in line]
+        assert lines, f"{skill}: no load_project_config() step"
+        for line in lines:
+            assert "core-only" in line, f"{skill}: {line.strip()}"
+
+
+def test_variable_io_docs_point_to_overrides() -> None:
+    """J11: no per-object io_rule field exists; rules live in variable_io_rules."""
+    bad = [f"{rel}:{n}" for rel, n, line in _doc_lines() if re.search(r"\bio_rule\b", line)]
+    assert bad == [], "docs mention a nonexistent io_rule field: " + ", ".join(bad)
+    claude = _read(Path("CLAUDE.md"))
+    assert "variable_io_rules" in claude
+    assert "compute_io_counts" in claude
+
+
+def _section(text: str, heading: str) -> str:
+    start = text.index(heading)
+    m = re.search(r"^#{1,6} ", text[start + len(heading):], re.M)
+    end = start + len(heading) + m.start() if m else len(text)
+    return text[start:end]
+
+
+def test_technical_io_formula_table_matches_code() -> None:
+    """J11: TECHNICAL's formula table lists exactly the supported formulas."""
+    from src.maxpat.db_lookup import SUPPORTED_IO_FORMULAS
+
+    section = _section(_read(Path("TECHNICAL.md")), "### Variable I/O Rules")
+    documented = set()
+    for line in section.split("\n"):
+        if not line.startswith("|") or set(line.strip()) <= set("|-: "):
+            continue
+        first = line.strip().strip("|").split("|")[0]
+        documented.update(re.findall(r"`([^`]+)`", first))
+    expected = (set(SUPPORTED_IO_FORMULAS) - {""}) | {"fixed:N"}
+    assert documented == expected
+
+
+def test_spectroscope_claim_matches_db(db) -> None:
+    """J4 lock (fixed by Q11 d6a4393a): doc I/O claims match the DB."""
+    expected = db.compute_io_counts("spectroscope~", [])
+    hits = []
+    for rel, n, line in _doc_lines():
+        for m in re.finditer(r"spectroscope~[^\n]*?(\d+) inlets? / (\d+) outlets?", line):
+            hits.append((rel, n, (int(m.group(1)), int(m.group(2)))))
+    assert hits, "no spectroscope~ I/O claim found"
+    wrong = [h for h in hits if h[2] != tuple(expected)]
+    assert wrong == []

@@ -122,19 +122,13 @@ Each object is keyed by name in its domain file. Full schema:
   "min_version": 8,
   "verified": true,
   "variable_io": true,
-  "io_rule": {
-    "inlet_count": "fixed:1",
-    "outlet_count": "arg_count",
-    "default_outlets": 2,
-    "description": "Number of arguments determines outlets. Default: 2."
-  },
   "rnbo_compatible": true
 }
 ```
 
 Key fields:
 - **`inlets`/`outlets`**: Arrays with `id`, `type`, `signal` (bool), `hot` (inlets only)
-- **`variable_io`**: If `true`, actual I/O count depends on arguments — use `io_rule` formulas
+- **`variable_io`**: If `true`, actual I/O count depends on arguments — compute it with `db.compute_io_counts(name, args)` (rules live in `overrides.json` → `variable_io_rules` and `src/maxpat/io_resolvers.py`; see Variable I/O Rules below)
 - **`rnbo_compatible`**: Whether the object can be used in RNBO export patches
 - **`min_version`**: Minimum MAX version required (all patches target MAX 9)
 
@@ -148,15 +142,23 @@ The v5.0 schema delta added three curated fields, validated fail-fast at load by
 
 ### Variable I/O Rules
 
-Objects with `variable_io: true` change inlet/outlet count based on arguments. The `io_rule` field contains formulas:
+Objects with `variable_io: true` change inlet/outlet count based on arguments. The domain files carry only that flag; the counts come from two places, both applied by `db.compute_io_counts(name, args)`:
 
-| Formula | Meaning | Example |
+- **`overrides.json` → `variable_io_rules`**, keyed by object name. Each entry has `inlet_count` / `outlet_count` formulas, optional `default_inlets` / `default_outlets` for the no-argument case, and a `description` (plus `trailing_outlets` where the last outlets keep their own types). `_validate_variable_io_rules` rejects any formula outside `SUPPORTED_IO_FORMULAS` (or `fixed:N`) at load.
+- **`IO_RESOLVERS`** in `src/maxpat/io_resolvers.py`: text-aware resolvers for objects whose counts depend on parsing the box text (`select`, `route`, `routepass`, `expr`, `vexpr`, `if`, `sprintf`, `pipe`, `receive`, `ctlin`, `notein`).
+
+| Formula | Meaning | Example (`compute_io_counts`) |
 |---------|---------|---------|
-| `arg_count` | One I/O per argument | `trigger b i f` → 3 outlets |
-| `arg_count+1` | Arguments plus one extra | `route foo bar` → 3 outlets (2 match + 1 unmatched) |
-| `fixed:N` | Always N regardless of args | `pack` always has 1 outlet |
+| `arg_count` | One I/O per argument | `mc.separate~ 2 2 1` → 3 outlets |
+| `arg_count+1` | Arguments plus one extra | — (no rule uses it) |
+| `arg_count_or_default` | One I/O per argument, `default_*` when there are none | `trigger b i f` → 3 outlets; bare `trigger` → 2 |
 | `first_arg` | First argument is the count | `gate 3` → 3 outlets |
-| `second_arg` | Second argument is the count | `matrix~ 4 2` → 2 outlets |
+| `first_arg+1` | First argument plus one | `switch 3` → 4 inlets |
+| `second_arg` | Second argument is the count | `router 4 2` → 2 outlets |
+| `second_arg+1` | Second argument plus one | `matrix~ 4 2` → 3 outlets (2 signal + 1 dump) |
+| `second_arg+2` | Second argument plus two | `record~ buf 2` → 4 inlets |
+| `inherited_from_subpatch` | Counts follow the inlet/outlet boxes of the loaded subpatcher | `bpatcher` |
+| `fixed:N` | Always N regardless of args | `pack 0 0 0 0` → 1 outlet (`fixed:1`) |
 
 ### Supplementary Files
 
@@ -504,7 +506,7 @@ Reviews signal flow semantics.
 | gen~ I/O mismatch | GenExpr code declares different I/O count than gen~ box | blocker |
 | Gain staging | Oscillator reaching `dac~` without gain control | warning |
 | Audio rate consistency | Control-rate object feeding signal inlet | warning |
-| MIDI-range gain values | Raw 0-127 values feeding `*~` or `gain~` without normalization | blocker |
+| MIDI-range gain values | Raw 0-127 control sources reaching inlet 1 of `*~` / `mc.*~`, directly or through `line~`, without a normalizer | blocker |
 
 ### RNBO Critic (`rnbo_critic.py`)
 
@@ -640,7 +642,7 @@ Generates Node.js scripts for `node.script`:
 
 Generates ES5 JavaScript for `js` objects (Legacy Engine; `v8` is the separate Modern Engine object):
 - Declares `inlets = N` and `outlets = N`
-- Creates handler functions: `bang()`, `msg_int(v)`, `msg_float(v)`, `list()`, `anything(msg)`
+- Creates handler functions: `bang()`, `msg_int(v)`, `msg_float(v)`, `list()`, `anything`. Handler bodies must read the selector from `messagename` and the values via `arrayfromargs(arguments)` -- MAX passes neither as a named parameter
 - Default handlers output to outlet 0
 
 ---

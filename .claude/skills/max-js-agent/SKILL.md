@@ -38,7 +38,7 @@ Before any generation:
 - **Write ES5 only for `js` / `jsui`:** `var` and `function` declarations. No `const`/`let`, arrow functions, template literals, classes, destructuring, default parameters, or `async`/`await` -- those need a `v8` / `v8ui` / `v8.codebox` object. `Patcher.add_js()` and `generate_js_script()` both target `js`; every confirmed-working script in `patches/` is ES5 in a `js` box.
 - `generate_js_script(num_inlets=1, num_outlets=1, handlers=None)` -- generate a complete js object script
 - I/O configuration: `inlets = N`, `outlets = N`
-- Handler functions: `bang()`, `msg_int(v)`, `msg_float(v)`, `list()`, `anything(msg, args)`
+- Handler functions: `bang()`, `msg_int(v)`, `msg_float(v)`, `list()` (read its values with `arrayfromargs(arguments)`) and `anything()`. For `anything()`, MAX passes the selector in `messagename` and the arguments in `arguments`, never as named parameters: `function anything() { var a = arrayfromargs(arguments); if (messagename == "foo") { ... } }` (ES5)
 - Output: `outlet(outlet_index, value)` to send data
 - Console: `post('message')` for MAX console output
 - Patcher access: `this.patcher.getnamed('object_name')`

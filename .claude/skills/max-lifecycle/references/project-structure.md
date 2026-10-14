@@ -31,13 +31,13 @@ patches/
 ```
 
 ### config.json
-Package configuration for the project. Created during `/max-new` after the user selects packages. Can be edited directly or via `/max-config`.
+Package configuration for the project. Created during `/max-new` after the user selects packages, and edited directly afterwards.
 ```json
 {
   "packages": ["BEAP", "Vizzie"]
 }
 ```
-Package names match keys in `.claude/max-objects/package_info.json`. An empty list means core objects only. If this file does not exist, the project has not been configured for packages yet -- `/max-build` will block until packages are configured.
+Package names match keys in `.claude/max-objects/package_info.json`. An empty list means core objects only. If this file does not exist, the project is core-only: builds proceed with package objects disabled (`allowed_packages=[]`).
 
 ### versions.json
 Semver version history, auto-created at `0.0.0` when a project is created. Each entry records the version number, a description of what changed, and an ISO timestamp.

@@ -13,7 +13,7 @@
 ## This Agent Does NOT
 
 - **Generate Gen~ code or GenExpr** -- that is the DSP agent's domain. If a task needs gen~, request dispatch to max-dsp-agent.
-- **Construct MSP signal chains** -- audio signal processing (cycle~, filter~, delay~, etc.) belongs to the DSP agent.
+- **Construct MSP signal chains** -- audio signal processing (cycle~, biquad~, delay~, etc.) belongs to the DSP agent.
 - **Handle presentation mode layout** -- positioning controls for a user interface is the UI agent's domain. This agent creates boxes; the UI agent positions them.
 - **Write JavaScript code** -- js object scripts and Node for Max scripts are the js agent's domain.
 - **Generate RNBO-specific patches** -- RNBO export and compatibility is the RNBO agent's domain.

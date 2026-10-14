@@ -22,7 +22,7 @@ Before any generation:
 1. Read `CLAUDE.md` at project root -- follow MSP and Gen~ domain-specific rules
 2. Use `ObjectDatabase` from `src.maxpat.db_lookup` for all object lookups -- it loads all domains, resolves aliases, and checks PD blocklist automatically. No need to read individual domain JSON files.
 3. Check `.claude/max-objects/pd-blocklist.json` if you need to browse PD equivalents in bulk
-4. Read project `config.json` via `load_project_config()` from `src.maxpat.project` for allowed packages. Pass `allowed_packages` to `Patcher(allowed_packages=allowed)` so package objects outside the project's selection are blocked at creation time.
+4. Read project `config.json` via `load_project_config()` from `src.maxpat.project` for allowed packages. Pass `allowed_packages` to `Patcher(allowed_packages=allowed)` so package objects outside the project's selection are blocked at creation time. If `load_project_config()` returns None (no config.json), use `allowed = []` (core-only), never None -- None allows every package.
 
 **Domain focus:** MSP (signal processing) and Gen~ (DSP operators). Other domains are handled by their respective agents.
 
@@ -80,7 +80,7 @@ gen_box.outlettype = ["signal"]  # Use ["signal", "signal"] for stereo
 - Filters: biquad~, onepole~, reson~, svf~, cascade~, lores~, cross~
 - Delays: tapin~/tapout~, delay~ (gen~), allpass~, comb~
 - Dynamics: limi~ (peak limiter), gate~, deltaclip~ (slew limiter), gen~ (custom compressor/limiter via GenExpr)
-- Effects: reverb~, chorus~, flanger~, phaser~
+- Effects: cverb~ (MSP reverb), allpass~ / comb~ networks, or build them in gen~ from `patterns/gen` (`simple-reverb`, `multi-tap-delay`) or with tapin~/tapout~ modulated by cycle~ (chorus/flanger)
 - Gain: *~ for level control, line~ for smooth transitions, dbtoa/atodb for dB conversion
 - Monitoring: meter~, levelmeter~, scope~, spectroscope~, snapshot~
 
@@ -117,7 +117,7 @@ When generating patches with package objects (BEAP, Vizzie, etc.), read `.claude
 
 Before generating with community package objects, verify `get_package_info(name)["extracted"]` is `true`.
 
-- **FluCoMa** (`fluid.*`): Real-time audio analysis (`fluid.mfcc`, `fluid.pitch`, `fluid.loudness`), decomposition (`fluid.hpss~`, `fluid.sines~`), ML (`fluid.mlpclassifier`, `fluid.kdtree`). Signal objects follow standard MSP gain conventions.
+- **FluCoMa** (`fluid.*`): Real-time audio analysis (`fluid.mfcc~`, `fluid.pitch~`, `fluid.loudness~`), decomposition (`fluid.hpss~`, `fluid.sines~`), ML (`fluid.mlpclassifier~`, `fluid.kdtree~`). Signal objects follow standard MSP gain conventions.
 - **CNMAT** (`resonators~`, `peqbank~`, `oscillators~`, `harmonics~`): Spectral/resonance modeling. `resonators~` is the key DSP object -- takes partials data via messages.
 - **Bach** (`bach.*`): Algorithmic composition, not signal processing. `bach.score`/`bach.roll` output MIDI-like data for driving synths.
 - **IRCAM Spat** (`spat5.*`): Spatial audio -- `spat5.panning~`, `spat5.binaural~`, `spat5.reverb~`. Multi-channel signal I/O.
@@ -139,128 +139,131 @@ Structured signal chain blueprints for generating working package patches. Each 
 ### FluCoMa: Real-Time Audio Analysis Chain
 
 **Use case:** Extract spectral features from live audio for visualization or ML input
-**Chain:** audio source -> fluid.melbands~ (or fluid.mfcc~ or fluid.pitch~) -> fluid.stats -> fluid.normalize -> downstream
+**Chain:** audio source -> fluid.melbands~ (or fluid.mfcc~ / fluid.pitch~ / fluid.loudness~) -> fluid.stats -> downstream; optional normalization through fluid.normalize~ via the fluid.list2buf / fluid.buf2list bridge
 
 | # | Source | Outlet | Destination | Inlet | Type |
 |---|--------|--------|-------------|-------|------|
 | 1 | (audio source) | 0 | fluid.melbands~ | 0 (audio in) | signal |
-| 2 | fluid.melbands~ | 0 (features list) | fluid.stats | 0 (input) | list |
-| 3 | fluid.stats | 0 (stats) | fluid.normalize | 0 (input) | list |
-| 4 | fluid.normalize | 0 (normalized) | (downstream) | 0 | list |
+| 2 | fluid.melbands~ | 0 (band magnitudes list) | fluid.stats | 0 (input list) | list |
+| 3 | fluid.stats | 0 (rolling mean list; outlet 1 = standard deviation list) | (downstream) or fluid.list2buf | 0 | list |
+| 4 | fluid.list2buf | 0 (`buffer <name>` reply) | message `transformpoint $2 <normbuf>` -> fluid.normalize~ | 0 | message |
+| 5 | fluid.normalize~ | 0 (reply) | fluid.buf2list `@source <normbuf>` (send `bang`) | 0 | bang |
 
-**Parameter ranges:**
-- fluid.melbands~: `@numbands` default 40 (range 2-128), `@minfreq` 20, `@maxfreq` 20000
-- fluid.stats: `@numderivs` default 0 (0-2), controls derivative statistics
-- fluid.normalize: call `fit` with training data before `transform`
+**Parameter ranges (from the installed refpages):**
+- fluid.melbands~: the box argument is shorthand for `@numbands` (min 2, max `@maxnumbands`); `@minfreq` default 20 Hz, `@maxfreq` default 20000 Hz
+- fluid.stats: the box argument is the input list size; `@history` sets the window (min 2); it computes the rolling mean and sample standard deviation
+- fluid.normalize~: `fit <dataset>` learns the extrema from a fluid.dataset~; `transformpoint <srcbuf> <dstbuf>` normalizes one point held in a buffer~
 
 **Gotchas:**
-- fluid.melbands~ outputs a list of band energies (NOT signal) from outlet 0
-- fluid.stats accumulates over time -- send "reset" message to clear
-- fluid.normalize needs training data first -- send "fit" before "transform"
-- Real-time FluCoMa objects follow standard MSP gain conventions (+/-1 signal range)
+- fluid.melbands~ outputs a list of band magnitudes (NOT signal) from outlet 0
+- fluid.stats keeps a rolling window -- send `clear` to reset its internal state
+- fluid.normalize~ works on datasets and buffers, never raw lists: send `fit` with training data first, then bridge each live list with fluid.list2buf (outlet 0 replies `buffer <name>`, used as `$2`, the same shape the fluid.kdtree~ and fluid.mlpclassifier~ help patches use) and read the result back with fluid.buf2list (`bang`, or `buffer <name>`, outputs the buffer as a list). Rows 4-5 follow the refpage; the exact reply that should trigger fluid.buf2list is (role unverified -- confirm in MAX)
+- fluid.list2buf: pre-size the destination buffer~ and set `@autosize 0` -- autosize only works on the main thread (refpage) and fails from the scheduler thread
 - Feature lists have variable length depending on analysis settings -- downstream objects must handle this
 
 ### FluCoMa: Offline Buffer Processing Pipeline
 
-**Use case:** Analyze/decompose pre-recorded audio (corpus analysis, NMF decomposition)
-**Chain:** buffer~ (source) -> fluid.bufnmf (or fluid.bufstats, fluid.bufmelbands) -> [bang on completion] -> fluid.dataset -> fluid.kdtree
+**Use case:** Analyze pre-recorded audio into a corpus and query it by nearest neighbour
+**Chain:** buffer~ (source) -> fluid.bufmfcc~ (or fluid.bufmelbands~) -> fluid.bufstats~ -> `addpoint` into fluid.dataset~ -> `fit` fluid.kdtree~ -> `knearest` queries
 
 | # | Source | Outlet | Destination | Inlet | Type |
 |---|--------|--------|-------------|-------|------|
-| 1 | buffer~ | (reference) | fluid.bufnmf | @source attribute | bang/message |
-| 2 | fluid.bufnmf | 0 (bang on done) | trigger | 0 | bang |
-| 3 | trigger | 0 | fluid.dataset | 0 (addpoint msg) | message |
-| 4 | fluid.dataset | (query) | fluid.kdtree | 0 (input) | message |
-| 5 | fluid.kdtree | 0 (nearest result) | (downstream) | 0 | list |
+| 1 | button | 0 | fluid.bufmfcc~ `@source <src> @features <feat>` | 0 | bang (starts processing) |
+| 2 | fluid.bufmfcc~ | 0 (done) | fluid.bufstats~ `@stats <statsbuf>` | 0 | message (as in the fluid.buf2list help) |
+| 3 | fluid.bufstats~ | 0 (done) | `t b` -> message `addpoint <id> <statsbuf>` -> fluid.dataset~ | 0 | message |
+| 4 | message `fit <dataset>` | 0 | fluid.kdtree~ | 0 | message |
+| 5 | (query list) -> fluid.list2buf | 0 (`buffer <name>`) | message `knearest $2` -> fluid.kdtree~ | 0 | message |
+| 6 | fluid.kdtree~ | 0 (reply) | `route knearest` -> (downstream) | 0 | list of identifiers |
 
-**Parameter ranges:**
-- fluid.bufnmf: `@components` 2-10 (number of decomposition components), `@iterations` 100 default
-- fluid.dataset: stores labeled feature vectors, query by ID
-- fluid.kdtree: `@numneighbours` default 1 (number of nearest neighbors to return)
+**Parameters (from the installed refpages):**
+- fluid.bufmfcc~: `@source` (input buffer~), `@features` (output buffer~), `@numcoeffs` default 13
+- fluid.bufstats~: `@source`, `@stats` (output buffer~), `@numderivs`
+- fluid.dataset~: `addpoint <identifier> <buffer>` adds a point; the first point sets the dimensionality
+- fluid.kdtree~: `fit <dataset>` builds the tree; `knearest <buffer> [k]` replies with identifiers; `@numneighbours` sets k
+- fluid.bufnmf~ (decomposition alternative): `@source`, `@resynth` / `@bases` / `@activations` (output buffer~s), `@components`, `@iterations`; `bang` starts processing and outlet 0 reports completion (help patch)
 
 **Gotchas:**
-- All fluid.buf* objects are ASYNC -- they output bang from outlet 0 when done
-- Chain multiple buf* operations using bang -> trigger -> next buf* pattern
-- fluid.bufnmf outputs to destination buffer~ (set via @resynth attribute), not via outlets
-- fluid.dataset stores feature vectors for ML queries; fluid.kdtree enables nearest-neighbor lookup
+- fluid.buf* objects start on `bang` and report completion from outlet 0 (help patches wire `button` -> object -> `button`); chain the next stage off that completion, never off the trigger that started the job
+- Identifier bookkeeping for `addpoint` (unique id per point) is up to the patch (role unverified -- confirm in MAX)
 - Source and destination buffers must be different buffer~ objects
+- fluid.dataset~ `read` runs at low priority: chain `dump` off the `read` completion reply, not off a trigger
 
 ### FluCoMa: ML Classification Pipeline
 
 **Use case:** Train a classifier on audio features, then classify new audio in real-time
-**Train phase:** fluid.buf* analysis -> fluid.dataset (store features) -> fluid.mlpclassifier (train)
-**Predict phase:** real-time fluid.*~ analysis -> fluid.mlpclassifier (predict) -> result mapping
+**Train phase:** fluid.buf* analysis -> fluid.dataset~ (features, `addpoint`) + fluid.labelset~ (labels, `addlabel`) -> `fit <dataset> <labelset>` -> fluid.mlpclassifier~
+**Predict phase:** real-time fluid.mfcc~ list -> fluid.list2buf -> `predictpoint $2` -> fluid.mlpclassifier~ -> `route predictpoint` -> result mapping
 
 | # | Phase | Source | Outlet | Destination | Inlet | Type |
 |---|-------|--------|--------|-------------|-------|------|
-| 1 | Train | fluid.bufmfcc (or bufmelbands) | 0 (bang) | trigger -> fluid.dataset addpoint | 0 | bang |
-| 2 | Train | fluid.dataset | (complete) | fluid.mlpclassifier "train" msg | 0 | message |
-| 3 | Predict | (audio source) | 0 | fluid.mfcc~ (or melbands~) | 0 | signal |
-| 4 | Predict | fluid.mfcc~ | 0 (features) | fluid.mlpclassifier "predict" msg | 0 | list |
-| 5 | Predict | fluid.mlpclassifier | 0 (prediction) | (result mapping) | 0 | list |
+| 1 | Train | fluid.bufmfcc~ (or fluid.bufmelbands~) | 0 (done) | `t b` -> `addpoint <id> <buf>` -> fluid.dataset~ | 0 | message |
+| 2 | Train | message `fit <dataset> <labelset>` | 0 | fluid.mlpclassifier~ | 0 | message |
+| 3 | Predict | (audio source) | 0 | fluid.mfcc~ | 0 | signal |
+| 4 | Predict | fluid.mfcc~ | 0 (coefficient list) | fluid.list2buf | 0 | list |
+| 5 | Predict | fluid.list2buf | 0 (`buffer <name>`) | message `predictpoint $2` -> fluid.mlpclassifier~ | 0 | message |
+| 6 | Predict | fluid.mlpclassifier~ | 0 (reply) | `route fit predictpoint` -> (result mapping) | 0 | message |
 
-**Parameter ranges:**
-- fluid.mlpclassifier: `@hiddenlayers` default [5] (list of layer sizes), `@maxiter` 1000, `@learnrate` 0.01
+**Parameters (from the installed refpage):**
+- fluid.mlpclassifier~: `fit <dataset> <labelset>` trains, `predict <dataset> <labelset>` labels a whole dataset, `predictpoint <buffer>` labels one point; `@hiddenlayers` (list of layer sizes; changing it resets the network), `@maxiter` (epochs per `fit`), `@learnrate` (0.0-1.0), `@activation`, `@batchsize`, `@momentum`, `@validation`
 - Training features and prediction features must use the same analysis (same object, same settings)
 
 **Gotchas:**
 - Training is offline (buf* objects), prediction can be real-time
-- fluid.mlpclassifier needs "train" message before "predict"
-- Send feature lists (not signals) to classifier input
+- fluid.mlpclassifier~ must receive `fit` before `predict` / `predictpoint`
+- Replies arrive at outlet 0 prefixed by the method name (help patch: `route fit predictpoint`)
 - Use identical analysis settings for training and prediction to avoid dimension mismatch
-- fluid.mlpclassifier stores model state -- use "write" message to save, "read" to reload
+- fluid.mlpclassifier~ stores model state -- `write` saves it as JSON, `read` reloads it (both run deferred at low priority)
 
 ### BEAP: FM Synthesis Chain
 
-Extends the canonical BEAP templates in PACKAGES.md with additional modular patterns.
+Extends the canonical BEAP templates in `.claude/max-objects/PACKAGES.md` (see also the BEAP section of max-patch-agent SKILL.md). Port roles below come from the installed BEAP module patchers' panel labels and the BEAP help patches.
 
-**Use case:** FM synthesis with modulator LFO controlling carrier frequency
-**Chain:** bp.LFOscillator (modulator CV) -> bp.FM (carrier) -> bp.SVF (optional filter) -> bp.VCA -> bp.Stereo
+**Use case:** FM voice with an LFO modulating FM depth, filtered and enveloped
+**Chain:** bp.Keyboard (pitch + gate) -> bp.FM (LFO on Depth) -> bp.LPF -> bp.VCA (bp.ADSR on CV) -> bp.Stereo
 
 | # | Source | Outlet | Destination | Inlet | Type |
 |---|--------|--------|-------------|-------|------|
-| 1 | bp.Keyboard | 0 (pitch CV) | bp.FM | 0 (CV1 1V/oct) | CV |
-| 2 | bp.LFOscillator | 0 (mod CV) | bp.FM | 1 (mod input) | CV |
-| 3 | bp.FM | 0 (signal) | bp.SVF | 0 (signal input) | audio |
-| 4 | bp.SVF | 0 (filtered) | bp.VCA | 0 (signal input) | audio |
-| 5 | bp.Keyboard | 1 (gate) | bp.ADSR | 0 (gate) | CV |
-| 6 | bp.ADSR | 0 (envelope) | bp.VCA | 1 (CV) | CV |
-| 7 | bp.VCA | 0 (output) | bp.Stereo | 0 | audio |
+| 1 | bp.Keyboard | 0 (1v/oct) | bp.FM | 0 (1v/oct) | CV |
+| 2 | bp.LFO | 0 (Sine) | bp.FM | 1 (Depth) | CV |
+| 3 | bp.FM | 0 (output) | bp.LPF | 0 (Signal) | audio |
+| 4 | bp.LPF | 0 (output) | bp.VCA | 0 (signal input) | audio |
+| 5 | bp.Keyboard | 1 (Gate) | bp.ADSR | 0 (Gate) | CV |
+| 6 | bp.ADSR | 0 (envelope) | bp.VCA | 1 (CV input) | CV |
+| 7 | bp.VCA | 0 (scaled output) | bp.Stereo | 0 and 1 (L and R) | audio |
 
-**Parameter ranges:**
-- bp.LFOscillator: rate typically 0.1-20 Hz for FM modulation
-- bp.SVF: cutoff controlled via 0-5V CV on inlet 1
-- bp.FM: ratio parameter sets carrier/modulator frequency relationship
+**Port reference:**
+- bp.Keyboard outlets: 0 1v/oct, 1 Gate, 2 Trig, 3 Vel
+- bp.FM inlets: 0 1v/oct pitch, 1 Depth (help patch drives it from an LFO)
+- bp.LFO outlets: 0 Sine, 1 Up, 2 Down, 3 Tri, 4 Square; sine, ramp and square are scaled to +/-5 V inside the module
+- bp.LPF (24 dB/oct) inlets: 0 Signal, 1 CV1 (1v/oct), 2 CV2, 3 CV3 (0-5v), 4 Res (0-5v); bp.MMF (12 dB/oct multimode) has the same five-inlet layout
+- bp.VCA: 0 to +5 V on the CV inlet scales the signal 0-100% (two-quadrant mode)
 
 **Gotchas:**
-- bp.FM expects modulation as 0-5V CV signal, not audio-rate modulation
-- bp.SVF cutoff controlled via 0-5V CV on inlet 1
 - Always route through bp.VCA before bp.Stereo (gain staging convention)
-- bp.LFOscillator outputs 0-5V CV range -- compatible directly with BEAP CV inlets
+- Feed both bp.Stereo inlets (the help patches wire the mono output to inlets 0 and 1)
+- bp.LFO's sine, ramp and square outputs are bipolar (+/-5 V) -- offset them before feeding a 0-5 V input (CV3 or Res on bp.LPF)
 
 ### BEAP: Sequenced Pattern
 
 **Use case:** Step sequencer driving oscillator pitch and envelope
-**Chain:** bp.Steppr (gate + CV) -> bp.ADSR (envelope from gate) AND bp.Oscillator (pitch from CV) -> bp.VCA (envelope on CV inlet) -> bp.Stereo
+**Chain:** bp.Sequencer (CV + Gate) -> bp.Oscillator (pitch from CV) AND bp.ADSR (envelope from Gate) -> bp.VCA (envelope on CV inlet) -> bp.Stereo
 
 | # | Source | Outlet | Destination | Inlet | Type |
 |---|--------|--------|-------------|-------|------|
-| 1 | bp.Steppr | 0 (gate) | bp.ADSR | 0 (gate) | CV |
-| 2 | bp.Steppr | 1 (CV pitch) | bp.Oscillator | 0 (CV1 1V/oct) | CV |
+| 1 | bp.Sequencer | 0 (CV) | bp.Oscillator | 0 (CV1 1v/oct) | CV |
+| 2 | bp.Sequencer | 1 (Gate) | bp.ADSR | 0 (Gate) | CV |
 | 3 | bp.Oscillator | 0 (signal) | bp.VCA | 0 (signal input) | audio |
-| 4 | bp.ADSR | 0 (envelope) | bp.VCA | 1 (CV) | CV |
-| 5 | bp.VCA | 0 (output) | bp.Stereo | 0 | audio |
+| 4 | bp.ADSR | 0 (envelope) | bp.VCA | 1 (CV input) | CV |
+| 5 | bp.VCA | 0 (scaled output) | bp.Stereo | 0 and 1 (L and R) | audio |
 
-**Parameter ranges:**
-- bp.Steppr: 8 or 16 steps, tempo in BPM, gate length adjustable
-- bp.ADSR: attack/decay/sustain/release in standard envelope ranges
-- bp.Oscillator: pitch follows 1V/oct from bp.Steppr CV output
+**Port reference:**
+- bp.Sequencer inlets: 0 Trigger, 1 Reset; outlets: 0 CV, 1 Gate (help patch: outlet 0 -> bp.FM pitch, outlet 1 -> envelope/trigger inputs)
+- bp.ADSR inlets: 0 Gate, 1 Trig
+- bp.Oscillator inlets: 0 CV1 (1v/oct, no attenuator), 1 CV2, 2 CV3, 3 Linear FM, 4 PWM, 5 Sync; outlets 0 and 1 are signal outputs
 
 **Gotchas:**
-- bp.Steppr gate outlet (0) triggers bp.ADSR; CV outlet (1) controls pitch
-- bp.ADSR outputs 0-5V envelope -- connect to bp.VCA CV input (inlet 1)
-- bp.Oscillator pitch inlet expects 1V/octave CV from bp.Steppr or bp.Keyboard
-- Internal clock: bp.Steppr has its own tempo control; no external metro needed
+- Internal clock: bp.Sequencer contains its own metro/transport clock, so no external metro is needed; inlet 0 accepts an external trigger
+- bp.Oscillator CV1 has no attenuator -- use it for keyboard/sequencer pitch tracking
 
 ## Editing Existing Patches (via /max-iterate)
 
