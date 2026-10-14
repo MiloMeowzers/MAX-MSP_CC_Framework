@@ -104,7 +104,7 @@ The structure critic (`src/maxpat/critics/structure_critic.py`) detects fan-out 
 
 `from src.maxpat import LayoutOptions`
 
-- `apply_layout(patcher, layout_options=LayoutOptions(...))` -- customize layout
+- `apply_layout(patcher, options=LayoutOptions(...))` -- customize layout
 - `v_spacing` (default 20.0) -- vertical gap between rows in pixels
 - `h_gutter` (default 15.0) -- horizontal gap between sibling objects
 - `patcher_padding` (default 40.0) -- padding around content for auto-sized patcher rect
@@ -120,8 +120,8 @@ The structure critic (`src/maxpat/critics/structure_critic.py`) detects fan-out 
 - `patcher.find_box(name=..., maxclass=..., text=...)` -- search for a single object
 - `patcher.find_boxes(name=..., maxclass=..., text=...)` -- search for multiple objects
 - `patcher.modify_box(box, args=..., position=..., color=...)` -- in-place attribute editing
-- `patcher.insert_into_connection(src, dst, new_box)` -- insert object between connected pair
-- `patcher.replace_box(box, new_name, new_args)` -- swap object type, remap connections
+- `patcher.insert_into_connection(src, dst, name, args)` -- insert a new object between two connected boxes (returns an EditResult)
+- `patcher.replace_box_safe(box, new_name, args=[...])` -- swap object type; auto-rewires by index only when the new object's inlet AND outlet counts match, otherwise returns `result.orphaned` for you to rewire (CLAUDE.md Rule #8). Plain `replace_box(box, new_name, args=...)` orphans every connection.
 - `patcher.remove_box(box)` -- remove object and clean up connections
 - `patcher.connected_components()` -- identify groups for section rebuild scope
 - `save_patch_roundtrip(patcher.to_dict(), path, original_text)` -- save preserving positions

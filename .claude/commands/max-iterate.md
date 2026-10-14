@@ -84,7 +84,7 @@ After all flagged phases complete, proceed to the standard edit flow (steps 10+)
 10. **Parse change request** -- interpret the user's desired modifications against the analysis context. Identify which objects, sections, or signal chains are affected.
 
 11. **Choose edit strategy** (transparent to user) -- the agent selects an approach and explains it before executing:
-    - **Surgical edit** -- for small, targeted changes: use `find_box()` to locate targets, then `modify_box()` or `replace_box()` to make changes in place. Preserves all positions and connections.
+    - **Surgical edit** -- for small, targeted changes: use `find_box()` to locate targets, then `modify_box()` or `replace_box_safe()` to make changes in place. Positions are preserved; connections survive only when `replace_box_safe()` finds a matching I/O layout -- on a mismatch, rewire `result.orphaned` (Rule #8).
     - **Section rebuild** -- for larger structural changes: use `connected_components()` to identify the affected group, `remove_box()` each object in the group, then rebuild with new objects and connections. Reconnect to the rest of the patch.
 
 12. **Preserve existing objects** -- unconditionally preserve all objects the user did not ask to change. If the requested edit would affect objects the user added manually in MAX (e.g., removing an object that user-added objects connect to), warn before proceeding.
@@ -97,8 +97,8 @@ After all flagged phases complete, proceed to the standard edit flow (steps 10+)
 14. **Execute edits** -- the specialist agent applies changes via Patcher API methods:
     - `find_box()` / `find_boxes()` for locating targets
     - `modify_box()` for in-place attribute changes
-    - `replace_box()` for swapping object types
-    - `insert_into_connection()` for inserting objects into existing signal chains
+    - `replace_box_safe()` for swapping object types (auto-rewires only on matching inlet/outlet counts; otherwise rewire `result.orphaned`, Rule #8)
+    - `insert_into_connection(src, dst, name, args)` for inserting objects into existing signal chains
     - `remove_box()` for removing objects (with automatic patchline cleanup)
     - `add_box()` / `add_connection()` for adding new objects
 

@@ -50,7 +50,7 @@ Reusable .gendsp files in `patterns/gen/` provide sample-accurate alternatives t
 Create a `gen~ pattern-name` newobj box (NOT via `add_gen()` which is for inline codebox):
 
 ```python
-gen_box = patcher.add_box(Box("gen~", ["smooth-ramp"], db))
+gen_box = patcher.add_box("gen~", ["smooth-ramp"])
 gen_box.numinlets = 1    # Must match .gendsp I/O count
 gen_box.numoutlets = 1
 gen_box.outlettype = ["signal"]  # Use ["signal", "signal"] for stereo

@@ -10,7 +10,7 @@ Create a `gen~ pattern-name` newobj box (NOT via `add_gen()` which is for inline
 
 ```python
 # Create gen~ box referencing external .gendsp
-gen_box = patcher.add_box(Box("gen~", ["smooth-ramp"], db))
+gen_box = patcher.add_box("gen~", ["smooth-ramp"])
 gen_box.numinlets = 1    # Match .gendsp I/O count
 gen_box.numoutlets = 1
 gen_box.outlettype = ["signal"]

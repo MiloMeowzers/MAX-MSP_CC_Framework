@@ -30,25 +30,24 @@ Before any generation:
 
 ### Patch Construction
 - Create `Patcher` instances with boxes and connections via `src.maxpat.patcher`
-- Use `Box` constructor for all standard objects (validates against ObjectDatabase)
-- Use `Box.__new__()` bypass for structural objects: subpatchers, bpatcher
+- Create standard objects with `patcher.add_box(name, args, x, y)` -- it looks the name up in ObjectDatabase (Rule #1) and returns the Box
+- Create structural objects with the dedicated builders: `add_subpatcher()`, `add_bpatcher()`, `add_gen()`
 - Connect boxes with `Patcher.add_connection(src_box, src_outlet, dst_box, dst_inlet)`
 
 ### Key Functions
 - `Patcher()` -- create a new patch
-- `Box(name, args, db)` -- create a validated box
-- `Patcher.add_box(box)` -- add box to patch
+- `Patcher.add_box(name, args=None, x=0.0, y=0.0)` -- create a DB-validated box and add it to the patch (returns the Box)
 - `Patcher.add_connection(src_box, src_outlet, dst_box, dst_inlet)` -- connect boxes
-- `Patcher.add_subpatcher(name, inlets, outlets, inlet_comments, outlet_comments)` -- add a subpatcher with labeled I/O
+- `Patcher.add_subpatcher(name, inlets=1, outlets=1, x=0.0, y=0.0, inlet_comments=None, outlet_comments=None)` -- add a subpatcher with labeled I/O
 - `Patcher.populate_assistance_comments()` -- auto-fill empty inlet/outlet comments from connection context
 - `finalize_patch(patcher, is_new=True)` -- single-call layout cleanup: styling, layout, comments, midpoints (new); midpoints + comments (edit)
-- `apply_layout(patcher, layout_options=None)` -- row-based topological layout positioning (accepts LayoutOptions)
+- `apply_layout(patcher, options=None)` -- row-based topological layout positioning (accepts LayoutOptions)
 - `validate_patch(patcher.to_dict(), db=patcher.db)` -- run four-layer validation pipeline
 - `save_patch_roundtrip(patcher.to_dict(), path)` -- write .maxpat to disk
 - `Patcher.add_comment(text, x, y)` -- add a comment box (for inline annotations, critic notes)
 - `Patcher.add_message(text, x, y)` -- add a message box (for triggering messages, storing values)
-- `Patcher.add_node_script(filename, code=None, num_outlets=2, x, y)` -- add a node.script box for Node for Max (returns tuple of Box and code string)
-- `Patcher.add_js(filename, code=None, num_inlets=1, num_outlets=1, x, y)` -- add a js object box (Legacy Engine, ES5 JavaScript) (returns tuple of Box and code string)
+- `Patcher.add_node_script(filename, code=None, num_outlets=2, x=0.0, y=0.0)` -- add a node.script box for Node for Max (returns tuple of Box and code string)
+- `Patcher.add_js(filename, code=None, num_inlets=1, num_outlets=1, x=0.0, y=0.0)` -- add a js object box (Legacy Engine, ES5 JavaScript) (returns tuple of Box and code string)
 
 ### Object Expertise
 - Control flow: trigger, gate, switch, select, route, if, expr

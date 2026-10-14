@@ -306,17 +306,17 @@ After generation, the router passes output through the critic loop before writin
 | `add_message(text, x, y)` | Create message box |
 | `add_connection(src, outlet, dst, inlet)` | Create patchline between boxes (with bounds checking) |
 | `add_subpatcher(name, inlets, outlets, x, y)` | Create embedded subpatcher with inlet/outlet objects |
-| `add_bpatcher(filename, args, x, y)` | Create bpatcher (file reference or embedded) |
+| `add_bpatcher(filename=None, embedded=False, args=None, x=0.0, y=0.0, ...)` | Create bpatcher (file reference or embedded) |
 | `add_gen(code, inputs, outputs, x, y)` | Create gen~ with embedded codebox |
 | `add_node_script(filename, code, outlets, x, y)` | Create node.script box |
 | `add_js(filename, code, inlets, outlets, x, y)` | Create js object box |
-| `find_box(query, by, recursive)` | Find first matching box by id, name, maxclass, or text |
-| `find_boxes(query, by, recursive)` | Find all matching boxes |
+| `find_box(*, id=None, name=None, maxclass=None, text=None, recursive=False)` | Find first matching box by id, name, maxclass, or text |
+| `find_boxes(*, id=None, name=None, maxclass=None, text=None, recursive=False)` | Find all matching boxes |
 | `remove_box(box)` | Remove box and all connected patchlines |
 | `remove_connection(src, outlet, dst, inlet)` | Remove a specific patchline |
-| `modify_box(box, **attrs)` | Modify box attributes in-place (with I/O recomputation) |
-| `insert_into_connection(patchline, name, args)` | Insert new object into an existing connection |
-| `replace_box(old_box, name, args)` | Replace object, remap compatible connections |
+| `modify_box(box, *, args=None, position=None, color=None, extra_attrs=None)` | Modify box attributes in-place (with I/O recomputation) |
+| `insert_into_connection(source, dest, name, args=None)` | Insert a new object between two connected boxes |
+| `replace_box(old_box, new_name, *, args=None)` | Replace object; every old connection comes back in `EditResult.orphaned` and must be rewired (Rule #8) -- prefer `replace_box_safe` |
 | `downstream(box)` / `upstream(box)` | Graph traversal from a box |
 | `signal_path(box)` | Trace signal-only path from a box |
 | `connected_components()` | Find independent subgraphs |
@@ -352,11 +352,11 @@ Patcher internals are decomposed into mixins for maintainability: `GraphMixin` (
 | Function | Purpose |
 |----------|---------|
 | `read_patch(path)` | Load a `.maxpat` file from disk into a Patcher (returns Patcher + raw JSON string) |
-| `save_patch_roundtrip(patcher, path)` | Write back with lossless preservation (key order, numeric precision, trailing newline) |
+| `save_patch_roundtrip(patch_dict, path, original_text=None, *, force=False)` | Write back with lossless preservation (key order, numeric precision, trailing newline); pass `patcher.to_dict()` |
 
 ### Patch Analysis (`analysis.py`)
 
-`analyze(patcher)` produces a 7-facet structured summary:
+`patcher.analyze()` produces a 7-facet structured summary:
 - **Inventory** — object counts by domain (MAX, MSP, Jitter, MC, Gen~, etc.)
 - **Sections** — functional groups detected by connected components and spatial proximity
 - **Signal chains** — audio paths from sources to `dac~`
