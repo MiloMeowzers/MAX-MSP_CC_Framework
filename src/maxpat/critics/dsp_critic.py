@@ -13,6 +13,12 @@ The former control-rate-to-signal-rate check was removed by Q3 / E2 (quick
 261012-di7): it was ~100% noise (399 corpus hits, including the mandated
 `param $1` -> gen~ form and number -> sig~) and its advice was harmful.
 
+Every non-gen scope of the shared :class:`src.maxpat.graph.PatchGraph` is
+reviewed on its own boxes and cords (Q20); nested findings carry
+``CriticResult.path`` and a ``[p synth] `` prefix. Gen scopes are skipped
+(GenExpr operators are not MSP objects). ``code_context["gen~_code"]`` is
+keyed by top-level box id and applies to the top scope only.
+
 NOTE: Does NOT duplicate validation.py Layer 4 checks (unterminated chains,
 feedback loops). Focus is on semantic issues validation misses.
 """
@@ -22,9 +28,10 @@ from __future__ import annotations
 import re
 from collections import deque
 
-from src.maxpat.critics.base import CriticResult
+from src.maxpat import walk
+from src.maxpat.critics.base import CriticResult, tag_results
 from src.maxpat.codegen import parse_genexpr_io
-from src.maxpat.utils import get_box_name
+from src.maxpat.graph import SIGNAL_OUTLET_TYPES, PatchGraph
 
 
 # Oscillator objects that need gain staging before dac~/ezdac~
@@ -52,10 +59,10 @@ _NORMALIZER_NAMES = frozenset({"scale", "zmap", "clip", "clip~"})
 # Outlet type strings that carry audio: MAX writes "multichannelsignal" for
 # mc.* outlets (and DB-derived saves mirror that), so a bare == "signal"
 # check misclassifies every mc lane as control-rate.
-_SIGNAL_OUTLET_TYPES = frozenset({"signal", "multichannelsignal"})
+_SIGNAL_OUTLET_TYPES = SIGNAL_OUTLET_TYPES
 
 # Box names whose embedded gen patcher is checked against the box's I/O
-# (Q4 / E3). Matched with get_box_name, so newobj `gen~ ...` / `mc.gen~ ...`
+# (Q4 / E3). Matched with walk.box_name, so newobj `gen~ ...` / `mc.gen~ ...`
 # and maxclass-gen~ fixtures are all covered.
 _GEN_BOX_NAMES = frozenset({"gen~", "mc.gen~"})
 
@@ -63,6 +70,8 @@ _GEN_BOX_NAMES = frozenset({"gen~", "mc.gen~"})
 def review_dsp(
     patch_dict: dict,
     code_context: dict | None = None,
+    *,
+    graph: "PatchGraph | None" = None,
 ) -> list[CriticResult]:
     """Review DSP aspects of a patch.
 
@@ -75,31 +84,28 @@ def review_dsp(
 
     Args:
         patch_dict: A .maxpat-format dict.
-        code_context: Optional dict with gen~ code strings keyed by box id.
+        code_context: Optional dict with gen~ code strings keyed by
+            top-level box id (top scope only).
             Format: {"gen~_code": {"obj-1": "out1 = in1 * 0.5;"}}
+        graph: The shared PatchGraph of *patch_dict* (review_patch passes
+            it); built here when None.
 
     Returns:
-        List of CriticResult findings.
+        List of CriticResult findings, top level first, nested scopes in
+        pre-order.
     """
+    if graph is None:
+        graph = PatchGraph.build(patch_dict)
     results: list[CriticResult] = []
-
-    patcher = patch_dict.get("patcher", {})
-    boxes = patcher.get("boxes", [])
-    lines = patcher.get("lines", [])
-
-    # Build box lookup
-    box_lookup: dict[str, dict] = {}
-    for box_entry in boxes:
-        box = box_entry.get("box", {})
-        box_id = box.get("id")
-        if box_id:
-            box_lookup[box_id] = box
-
-    # Run checks
-    results.extend(_check_gen_io_match(box_lookup, code_context))
-    results.extend(_check_gain_staging(box_lookup, lines))
-    results.extend(_check_unsafe_gain_sources(box_lookup, lines))
-
+    for scope in graph.scopes:
+        if scope.context == "gen":
+            continue
+        ctx = code_context if scope.path == () else None
+        found: list[CriticResult] = []
+        found.extend(_check_gen_io_match(scope.boxes, ctx))
+        found.extend(_check_gain_staging(scope.boxes, scope.edges))
+        found.extend(_check_unsafe_gain_sources(scope.boxes, scope.edges))
+        results.extend(tag_results(found, scope.path))
     return results
 
 
@@ -123,21 +129,26 @@ def _check_gen_io_match(
 
     for box_id, box in box_lookup.items():
         # Only check gen~ / mc.gen~ boxes (by name, not maxclass -- Q4 / E3)
-        if get_box_name(box) not in _GEN_BOX_NAMES:
+        if walk.box_name(box) not in _GEN_BOX_NAMES:
             continue
 
         gen_numinlets = box.get("numinlets", 0)
         gen_numoutlets = box.get("numoutlets", 0)
+        if not isinstance(gen_numinlets, (int, float)) or isinstance(gen_numinlets, bool):
+            gen_numinlets = 0
+        if not isinstance(gen_numoutlets, (int, float)) or isinstance(gen_numoutlets, bool):
+            gen_numoutlets = 0
 
         # Find codebox code from embedded patcher
         code = _extract_codebox_code(box)
 
         # Also check code_context for externally-provided code
-        if code is None and code_context:
+        if code is None and isinstance(code_context, dict):
             gen_codes = code_context.get("gen~_code", {})
-            code = gen_codes.get(box_id)
+            if isinstance(gen_codes, dict):
+                code = gen_codes.get(box_id)
 
-        if code is None:
+        if not isinstance(code, str):
             continue  # No code to check
 
         # Parse I/O from GenExpr code
@@ -168,20 +179,8 @@ def _check_gen_io_match(
     return results
 
 
-def _gen_inner_patcher(box: dict) -> dict | None:
-    """Return the gen patcher embedded in a gen~ / mc.gen~ box, or None.
-
-    gen~ (and the add_gen-plus-rename mc.gen~ recipe) store it at
-    ``box["patcher"]``; MAX's mc wrapper stores mc.gen~'s at
-    ``box["data"]["patcher"]`` (Q4 / E3).
-    """
-    inner = box.get("patcher")
-    if isinstance(inner, dict):
-        return inner
-    data = box.get("data")
-    if isinstance(data, dict) and isinstance(data.get("patcher"), dict):
-        return data["patcher"]
-    return None
+# Moved to walk.inner_patcher (Q20); kept as an alias.
+_gen_inner_patcher = walk.inner_patcher
 
 
 def _extract_codebox_code(gen_box: dict) -> str | None:
@@ -193,28 +192,35 @@ def _extract_codebox_code(gen_box: dict) -> str | None:
     gen~ box's inlets (MAX's own gen~.maxhelp has one). Returns None when no
     wired codebox has code, so the caller falls back to code_context.
     """
-    inner_patcher = _gen_inner_patcher(gen_box)
+    inner_patcher = walk.inner_patcher(gen_box)
     if not inner_patcher:
         return None
 
-    wired_ids: set[str] = set()
-    for line_entry in inner_patcher.get("lines", []) or []:
+    wired_ids: set = set()
+    lines = inner_patcher.get("lines")
+    for line_entry in lines if isinstance(lines, list) else ():
         if not isinstance(line_entry, dict):
             continue
         patchline = line_entry.get("patchline", line_entry)
+        if not isinstance(patchline, dict):
+            continue
         for key in ("source", "destination"):
             end = patchline.get(key)
-            if isinstance(end, list) and end:
+            if isinstance(end, list) and end and isinstance(end[0], (str, int)):
                 wired_ids.add(end[0])
 
-    for entry in inner_patcher.get("boxes", []) or []:
-        inner_box = entry.get("box", {})
+    boxes = inner_patcher.get("boxes")
+    for entry in boxes if isinstance(boxes, list) else ():
+        inner_box = entry.get("box") if isinstance(entry, dict) else None
+        if not isinstance(inner_box, dict):
+            continue
         if inner_box.get("maxclass") != "codebox":
             continue
-        if inner_box.get("id") not in wired_ids:
+        inner_id = inner_box.get("id")
+        if not isinstance(inner_id, (str, int)) or inner_id not in wired_ids:
             continue
         code = inner_box.get("code")
-        if code:
+        if code and isinstance(code, str):
             return code
 
     return None
@@ -226,7 +232,7 @@ def _extract_codebox_code(gen_box: dict) -> str | None:
 
 def _check_gain_staging(
     box_lookup: dict[str, dict],
-    lines: list[dict],
+    edges: list,
 ) -> list[CriticResult]:
     """Detect oscillators connected to dac~/ezdac~ without gain staging.
 
@@ -237,39 +243,22 @@ def _check_gain_staging(
 
     # Build signal adjacency from patchlines
     signal_adj: dict[str, list[str]] = {}
-    for line_entry in lines:
-        patchline = line_entry.get("patchline", line_entry)
-        source = patchline.get("source", [])
-        destination = patchline.get("destination", [])
-        if len(source) < 2 or len(destination) < 2:
+    for edge in edges:
+        if edge.src not in box_lookup:
             continue
-
-        src_id, src_outlet = source[0], source[1]
-        dst_id = destination[0]
-
-        src_box = box_lookup.get(src_id)
-        if not src_box:
-            continue
-
-        # Check if this is a signal connection
-        src_outlettype = src_box.get("outlettype", [])
-        is_signal = (
-            src_outlet < len(src_outlettype)
-            and src_outlettype[src_outlet] in _SIGNAL_OUTLET_TYPES
-        )
-
-        if is_signal:
-            signal_adj.setdefault(src_id, []).append(dst_id)
+        # Signal connection: decided by the source outlettype (edge.signal)
+        if edge.signal:
+            signal_adj.setdefault(edge.src, []).append(edge.dst)
 
     # Find oscillator boxes
     osc_ids = [
         box_id for box_id, box in box_lookup.items()
-        if get_box_name(box) in _OSCILLATOR_NAMES
+        if walk.box_name(box) in _OSCILLATOR_NAMES
     ]
 
     # BFS from each oscillator
     for osc_id in osc_ids:
-        osc_name = get_box_name(box_lookup[osc_id])
+        osc_name = walk.box_name(box_lookup[osc_id])
         queue = deque([(osc_id, False)])  # (current_id, passed_through_gain)
         visited: set[tuple[str, bool]] = set()
 
@@ -284,7 +273,7 @@ def _check_gain_staging(
                 next_box = box_lookup.get(next_id)
                 if not next_box:
                     continue
-                next_name = get_box_name(next_box)
+                next_name = walk.box_name(next_box)
 
                 next_has_gain = has_gain or (next_name in _GAIN_NAMES)
 
@@ -311,11 +300,11 @@ def _check_gain_staging(
 
 def _is_normalizer(box: dict) -> bool:
     """Check if a box is a normalizer/scaler that constrains values to safe range."""
-    name = get_box_name(box)
+    name = walk.box_name(box)
     if name in _NORMALIZER_NAMES:
         return True
 
-    text = box.get("text", "")
+    text = walk.box_text(box)
     # Division by 127 normalizes MIDI range: "/ 127." or "!/ 127."
     if text.startswith("/ 127") or text.startswith("!/ 127"):
         return True
@@ -352,7 +341,7 @@ def _parse_line_tilde_targets(text: str) -> list[float]:
 
 def _check_unsafe_gain_sources(
     box_lookup: dict[str, dict],
-    lines: list[dict],
+    edges: list,
 ) -> list[CriticResult]:
     """Detect MIDI-range control sources feeding *~ gain inlet without normalization.
 
@@ -372,57 +361,18 @@ def _check_unsafe_gain_sources(
     # Build signal adjacency: for each (dst_id, dst_inlet) -> list of src_ids
     sig_predecessors: dict[tuple[str, int], list[str]] = {}
 
-    for line_entry in lines:
-        patchline = line_entry.get("patchline", line_entry)
-        source = patchline.get("source", [])
-        destination = patchline.get("destination", [])
-        if len(source) < 2 or len(destination) < 2:
-            continue
-
-        src_id, src_outlet = source[0], source[1]
-        dst_id, dst_inlet = destination[0], destination[1]
-
-        src_box = box_lookup.get(src_id)
-        if not src_box:
-            continue
-
-        src_outlettype = src_box.get("outlettype", [])
-        is_signal = (
-            src_outlet < len(src_outlettype)
-            and src_outlettype[src_outlet] in _SIGNAL_OUTLET_TYPES
-        )
-
-        key = (dst_id, dst_inlet)
-        if is_signal:
-            sig_predecessors.setdefault(key, []).append(src_id)
-        else:
-            ctrl_predecessors.setdefault(key, []).append(src_id)
-
     # Also build general control backward adjacency (any inlet) for tracing
     ctrl_backward: dict[str, list[str]] = {}
-    for line_entry in lines:
-        patchline = line_entry.get("patchline", line_entry)
-        source = patchline.get("source", [])
-        destination = patchline.get("destination", [])
-        if len(source) < 2 or len(destination) < 2:
+
+    for edge in edges:
+        if edge.src not in box_lookup:
             continue
-
-        src_id, src_outlet = source[0], source[1]
-        dst_id = destination[0]
-
-        src_box = box_lookup.get(src_id)
-        if not src_box:
-            continue
-
-        src_outlettype = src_box.get("outlettype", [])
-        is_signal = (
-            src_outlet < len(src_outlettype)
-            and src_outlettype[src_outlet] in _SIGNAL_OUTLET_TYPES
-        )
-        if is_signal:
-            continue
-
-        ctrl_backward.setdefault(dst_id, []).append(src_id)
+        key = (edge.dst, edge.inlet)
+        if edge.signal:
+            sig_predecessors.setdefault(key, []).append(edge.src)
+        else:
+            ctrl_predecessors.setdefault(key, []).append(edge.src)
+            ctrl_backward.setdefault(edge.dst, []).append(edge.src)
 
     # Names with a gain inlet at index 1 (mc.gain~ excluded: only 1 inlet)
     _GAIN_INLET_1_NAMES = frozenset({"*~", "mc.*~"})
@@ -443,7 +393,7 @@ def _check_unsafe_gain_sources(
                 if not current_box:
                     continue
 
-                current_name = get_box_name(current_box)
+                current_name = walk.box_name(current_box)
 
                 # If we hit a normalizer, this path is safe -- stop tracing
                 if _is_normalizer(current_box):
@@ -452,12 +402,12 @@ def _check_unsafe_gain_sources(
                 # Check message boxes for >1.0 target values (line~ path)
                 if current_box.get("maxclass") == "message":
                     targets = _parse_line_tilde_targets(
-                        current_box.get("text", ""),
+                        walk.box_text(current_box),
                     )
                     if any(abs(t) > 1.0 for t in targets):
                         results.append(CriticResult(
                             "blocker",
-                            f"Unsafe gain source: message '{current_box.get('text', '')}' "
+                            f"Unsafe gain source: message '{walk.box_text(current_box)}' "
                             f"({current_id}) feeds '{gain_name}' ({gain_id}) "
                             f"inlet 1 via line~ with value >1.0 "
                             f"-- will cause dangerous audio levels",
@@ -485,7 +435,7 @@ def _check_unsafe_gain_sources(
 
     # Find all *~/mc.*~ boxes and check what feeds inlet 1
     for box_id, box in box_lookup.items():
-        name = get_box_name(box)
+        name = walk.box_name(box)
         if name not in _GAIN_INLET_1_NAMES:
             continue
 
@@ -497,7 +447,7 @@ def _check_unsafe_gain_sources(
         line_tilde_ctrl_sources: list[str] = []
         for sig_src_id in inlet_1_sig:
             sig_src_box = box_lookup.get(sig_src_id)
-            if sig_src_box and get_box_name(sig_src_box) == "line~":
+            if sig_src_box and walk.box_name(sig_src_box) == "line~":
                 # Trace backward from line~'s control inputs
                 line_ctrl = ctrl_backward.get(sig_src_id, [])
                 line_tilde_ctrl_sources.extend(line_ctrl)

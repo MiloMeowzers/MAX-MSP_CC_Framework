@@ -2,8 +2,8 @@
 
 Catches M4L-specific issues that the mechanical validation pipeline
 does not detect:
-  - gain~ / live.gain~ on any signal path to plugout~, and any top-level
-    ezdac~ (Live's channel strip handles output and volume)
+  - gain~ / live.gain~ on any signal path to plugout~, and any ezdac~
+    (Live's channel strip handles output and volume)
   - Missing required objects per device type (audio_effect / instrument
     need plugout~; midi_effect needs midiin + midiout; live.thisdevice is
     not required)
@@ -13,18 +13,27 @@ does not detect:
   - Missing info text (annotation) on parameter controls
   - Missing live.banks for Push controller bank organization
 
-review_patch invokes this critic via detect_m4l_device_type when the top
-level contains plugin~, plugout~ or live.thisdevice (Q4 / D4, quick
-261012-egf).
+review_patch invokes this critic via detect_m4l_device_type when any
+non-gen scope contains plugin~, plugout~ or live.thisdevice (Q4 / D4, quick
+261012-egf; Q20).
+
+Scopes (Q20): device-level checks (completeness, openinpresentation /
+devicewidth on the top patcher, parameter_longname uniqueness across all
+scopes, live.banks against parameter controls in any scope) run once and are
+reported at the top level. Per-scope checks (gain stage on a scope-local
+signal path to plugout~, ezdac~, parameter_enable, empty longname, missing
+info text) run on every non-gen scope of the shared
+:class:`src.maxpat.graph.PatchGraph`; nested findings carry
+``CriticResult.path`` and a ``[p synth] `` prefix.
 """
 
 from __future__ import annotations
 
 from collections import deque
 
-from src.maxpat.critics.base import CriticResult
-from src.maxpat.critics.structure_critic import _outlet_is_signal
-from src.maxpat.utils import get_box_name
+from src.maxpat import walk
+from src.maxpat.critics.base import CriticResult, tag_results
+from src.maxpat.graph import PatchGraph, outlet_is_signal
 
 
 # Required objects per M4L device type (Q4 / D4). Instruments take MIDI from
@@ -57,20 +66,36 @@ LIVE_PARAMETER_OBJECTS = frozenset({
 })
 
 
-def detect_m4l_device_type(patch_dict: dict) -> str | None:
-    """Infer the M4L device type from a patch's top-level boxes (Q4 / D4).
+def _scope_boxes(scope) -> list:
+    """Box dicts of a scope's raw boxes array (bare boxes accepted)."""
+    raw = scope.patcher.get("boxes")
+    out = []
+    for entry in raw if isinstance(raw, list) else ():
+        if not isinstance(entry, dict):
+            continue
+        box = entry.get("box", entry)
+        if isinstance(box, dict):
+            out.append(box)
+    return out
 
-    Returns None unless the top level contains plugin~, plugout~ or
+
+def _device_scopes(graph: PatchGraph) -> list:
+    """Every non-gen scope (GenExpr operators are not Max objects)."""
+    return [s for s in graph.scopes if s.context != "gen"]
+
+
+def detect_m4l_device_type(
+    patch_dict: dict, *, graph: "PatchGraph | None" = None
+) -> str | None:
+    """Infer the M4L device type from a patch's boxes (Q4 / D4; Q20).
+
+    Returns None unless some non-gen scope contains plugin~, plugout~ or
     live.thisdevice (newobj or maxclass). Then plugin~ -> "audio_effect",
     else plugout~ -> "instrument", else "midi_effect".
     """
-    patcher = patch_dict.get("patcher", {})
-    names: set[str] = set()
-    for box_entry in patcher.get("boxes", []):
-        box = box_entry.get("box", box_entry)
-        name = get_box_name(box)
-        if name:
-            names.add(name)
+    if graph is None:
+        graph = PatchGraph.build(patch_dict)
+    names = _present_names(graph)
 
     if not names & _M4L_MARKER_NAMES:
         return None
@@ -81,9 +106,22 @@ def detect_m4l_device_type(patch_dict: dict) -> str | None:
     return "midi_effect"
 
 
+def _present_names(graph: PatchGraph) -> set:
+    """Object names in every non-gen scope."""
+    names: set[str] = set()
+    for scope in _device_scopes(graph):
+        for box in _scope_boxes(scope):
+            name = walk.box_name(box)
+            if name:
+                names.add(name)
+    return names
+
+
 def review_m4l(
     patch_dict: dict,
     device_type: str | None = None,
+    *,
+    graph: "PatchGraph | None" = None,
 ) -> list[CriticResult]:
     """Review M4L aspects of a patch.
 
@@ -91,25 +129,46 @@ def review_m4l(
         patch_dict: A .maxpat-format dict.
         device_type: One of "audio_effect", "instrument", "midi_effect".
             If None, returns empty list (caller should detect type).
+        graph: The shared PatchGraph of *patch_dict* (review_patch passes
+            it); built here when None.
 
     Returns:
-        List of CriticResult findings.
+        List of CriticResult findings: the top level (gain/ezdac,
+        completeness, uniqueness, quality, info text, live.banks) first,
+        then nested per-scope findings in pre-order.
     """
     if device_type is None:
         return []
+    if graph is None:
+        graph = PatchGraph.build(patch_dict)
 
     results: list[CriticResult] = []
+    top = graph.top
+    scopes = _device_scopes(graph)
+    top_is_device = top.context != "gen"
+    all_params = _collect_parameter_longnames(graph)
 
-    patcher = patch_dict.get("patcher", {})
-    boxes = patcher.get("boxes", [])
-    lines = patcher.get("lines", [])
+    if top_is_device:
+        results.extend(_check_gain_plugout(top))
+    results.extend(_check_device_completeness(_present_names(graph), device_type))
+    if top_is_device:
+        results.extend(_check_empty_longnames(top))
+    results.extend(_check_parameter_uniqueness(all_params))
+    results.extend(_check_device_quality(top.patcher, _scope_boxes(top) if top_is_device else []))
+    if top_is_device:
+        results.extend(_check_missing_info_text(_scope_boxes(top)))
+    results.extend(_check_missing_live_banks([b for s in scopes for b in _scope_boxes(s)]))
 
-    results.extend(_check_gain_plugout(boxes, lines))
-    results.extend(_check_device_completeness(boxes, device_type))
-    results.extend(_check_parameter_uniqueness(boxes))
-    results.extend(_check_device_quality(patcher, boxes))
-    results.extend(_check_missing_info_text(boxes))
-    results.extend(_check_missing_live_banks(boxes))
+    for scope in scopes:
+        if scope is top:
+            continue
+        boxes = _scope_boxes(scope)
+        found: list[CriticResult] = []
+        found.extend(_check_gain_plugout(scope))
+        found.extend(_check_empty_longnames(scope))
+        found.extend(_check_parameter_enable(boxes))
+        found.extend(_check_missing_info_text(boxes))
+        results.extend(tag_results(found, scope.path))
 
     return results
 
@@ -118,56 +177,38 @@ def review_m4l(
 # Check 1: gain stages on a signal path to plugout~, and ezdac~
 # ---------------------------------------------------------------------------
 
-def _check_gain_plugout(
-    boxes: list[dict],
-    lines: list[dict],
-) -> list[CriticResult]:
-    """Flag gain stages upstream of plugout~ and any top-level ezdac~.
+def _check_gain_plugout(scope) -> list[CriticResult]:
+    """Flag gain stages upstream of plugout~ and any ezdac~ in *scope*.
 
     In M4L devices, Ableton's channel strip handles volume, so a gain~ or
     live.gain~ before plugout~ is redundant and (gain~ defaults to 0) can
     silence the device. Q4 / D4: every gain stage on *any* signal path to a
     plugout~ (direct or through other boxes) is exactly one blocker per
     (stage, plugout~) pair. Only cords whose source outlet carries audio
-    (structure_critic._outlet_is_signal) count as a path, so control cords
-    do not. ezdac~ has no outlets, so it can never be upstream of plugout~;
-    any top-level ezdac~ in a device is a blocker instead (OQ3-A).
+    (graph.outlet_is_signal, via ``edge.signal``) count as a path, so control
+    cords do not. ezdac~ has no outlets, so it can never be upstream of
+    plugout~; any ezdac~ in a device is a blocker instead (OQ3-A).
 
-    Scope is the top level only: send~/receive~ pairs are not followed.
+    The path is scope-local: subpatcher ports and send~/receive~ pairs are
+    not followed (Q20 keeps critic checks scope-local).
     """
     results: list[CriticResult] = []
 
-    box_lookup: dict[str, dict] = {}
-    order: list[str] = []
-    for box_entry in boxes:
-        box = box_entry.get("box", box_entry)
-        box_id = box.get("id")
-        if box_id:
-            box_lookup[box_id] = box
-            order.append(box_id)
+    box_lookup = scope.boxes
+    order = [b.get("id") for b in scope.box_list]
 
     # Reverse signal graph: destination id -> source ids
     rev: dict[str, list[str]] = {}
-    for line_entry in lines:
-        patchline = line_entry.get("patchline", line_entry)
-        source = patchline.get("source", [])
-        destination = patchline.get("destination", [])
-        if len(source) < 2 or len(destination) < 2:
+    for edge in scope.edges:
+        if edge.src not in box_lookup or edge.dst not in box_lookup:
             continue
-        src_box = box_lookup.get(source[0])
-        if src_box is None or destination[0] not in box_lookup:
+        if not edge.signal:
             continue
-        try:
-            src_outlet = int(source[1])
-        except (TypeError, ValueError):
-            continue
-        if not _outlet_is_signal(src_box, src_outlet):
-            continue
-        rev.setdefault(destination[0], []).append(source[0])
+        rev.setdefault(edge.dst, []).append(edge.src)
 
     pairs: set[tuple[str, str]] = set()
     for plugout_id in order:
-        if get_box_name(box_lookup[plugout_id]) != "plugout~":
+        if walk.box_name(box_lookup[plugout_id]) != "plugout~":
             continue
         visited = {plugout_id}
         queue = deque([plugout_id])
@@ -178,11 +219,11 @@ def _check_gain_plugout(
                     continue
                 visited.add(src_id)
                 queue.append(src_id)
-                if get_box_name(box_lookup[src_id]) in _M4L_GAIN_STAGE_NAMES:
+                if walk.box_name(box_lookup[src_id]) in _M4L_GAIN_STAGE_NAMES:
                     pairs.add((plugout_id, src_id))
 
     for plugout_id, stage_id in sorted(pairs):
-        name = get_box_name(box_lookup[stage_id])
+        name = walk.box_name(box_lookup[stage_id])
         results.append(CriticResult(
             "blocker",
             f"{name} ({stage_id}) is on the signal path to plugout~ "
@@ -194,7 +235,7 @@ def _check_gain_plugout(
         ))
 
     for box_id in order:
-        if get_box_name(box_lookup[box_id]) == "ezdac~":
+        if walk.box_name(box_lookup[box_id]) == "ezdac~":
             results.append(CriticResult(
                 "blocker",
                 f"ezdac~ ({box_id}) in an M4L device -- Live's channel strip "
@@ -212,27 +253,18 @@ def _check_gain_plugout(
 # ---------------------------------------------------------------------------
 
 def _check_device_completeness(
-    boxes: list[dict],
+    present_names: set,
     device_type: str,
 ) -> list[CriticResult]:
-    """Check that all required objects are present for the device type."""
+    """Check that all required objects are present for the device type.
+
+    *present_names* is every object name in any non-gen scope (Q20).
+    """
     results: list[CriticResult] = []
 
     required = _REQUIRED_OBJECTS.get(device_type)
     if not required:
         return results
-
-    # Collect all object names present in the patch
-    present_names: set[str] = set()
-    for box_entry in boxes:
-        box = box_entry.get("box", box_entry)
-        name = get_box_name(box)
-        if name:
-            present_names.add(name)
-        # Also check maxclass for live.thisdevice
-        maxclass = box.get("maxclass", "")
-        if maxclass == "live.thisdevice":
-            present_names.add("live.thisdevice")
 
     for obj_name in sorted(required):
         if obj_name not in present_names:
@@ -249,50 +281,51 @@ def _check_device_completeness(
 # Check 3: Parameter longname uniqueness
 # ---------------------------------------------------------------------------
 
-def _collect_parameter_longnames(
-    boxes: list[dict],
-) -> list[tuple[str, str, str]]:
-    """Recursively collect (longname, box_id, status) from all boxes.
+def _box_longname(box: dict):
+    """``parameter_longname`` from saved_attribute_attributes.valueof, or None."""
+    saa = box.get("saved_attribute_attributes")
+    if not isinstance(saa, dict):
+        return None
+    valueof = saa.get("valueof")
+    if not isinstance(valueof, dict):
+        return None
+    longname = valueof.get("parameter_longname")
+    return longname if isinstance(longname, str) else None
 
-    status is "ok" for non-empty longnames, "empty" for empty/missing.
-    Recurses into subpatcher boxes.
+
+def _scope_longnames(scope) -> list:
+    """``(longname, box_id, status)`` for one scope's boxes.
+
+    status is "ok" for non-empty longnames, "empty" for empty/blank.
     """
-    results: list[tuple[str, str, str]] = []
-
-    for box_entry in boxes:
-        box = box_entry.get("box", box_entry)
+    found = []
+    for box in _scope_boxes(scope):
+        longname = _box_longname(box)
+        if longname is None:
+            continue
         box_id = box.get("id", "?")
+        found.append((longname, box_id, "empty" if not longname.strip() else "ok"))
+    return found
 
-        # Check for parameter_longname in saved_attribute_attributes
-        saa = box.get("saved_attribute_attributes", {})
-        valueof = saa.get("valueof", {})
-        longname = valueof.get("parameter_longname")
 
-        if longname is not None:
-            if longname == "" or longname.strip() == "":
-                results.append((longname, box_id, "empty"))
-            else:
-                results.append((longname, box_id, "ok"))
+def _collect_parameter_longnames(graph: PatchGraph) -> list:
+    """``(longname, ref, status)`` across every non-gen scope, pre-order.
 
-        # Recurse into subpatcher
-        inner_patcher = box.get("patcher")
-        if inner_patcher:
-            inner_boxes = inner_patcher.get("boxes", [])
-            results.extend(_collect_parameter_longnames(inner_boxes))
-
+    *ref* is the plain box id at the top level, ``<scope key>/<id>`` in a
+    nested scope (Q20).
+    """
+    results = []
+    for scope in _device_scopes(graph):
+        for longname, box_id, status in _scope_longnames(scope):
+            ref = f"{scope.key}/{box_id}" if scope.key else box_id
+            results.append((longname, ref, status))
     return results
 
 
-def _check_parameter_uniqueness(
-    boxes: list[dict],
-) -> list[CriticResult]:
-    """Check for duplicate parameter_longname across the entire device."""
+def _check_empty_longnames(scope) -> list[CriticResult]:
+    """Warn about parameters with an empty longname in *scope*."""
     results: list[CriticResult] = []
-
-    all_params = _collect_parameter_longnames(boxes)
-
-    # Warn about empty longnames
-    for longname, box_id, status in all_params:
+    for _longname, box_id, status in _scope_longnames(scope):
         if status == "empty":
             results.append(CriticResult(
                 "warning",
@@ -300,9 +333,17 @@ def _check_parameter_uniqueness(
                 f"parameter_enable is set but no explicit parameter_longname",
                 "Set a descriptive parameter_longname for the control",
             ))
+    return results
+
+
+def _check_parameter_uniqueness(
+    all_params: list,
+) -> list[CriticResult]:
+    """Check for duplicate parameter_longname across the entire device."""
+    results: list[CriticResult] = []
 
     # Check for duplicates among non-empty longnames
-    seen: dict[str, str] = {}  # longname -> first box_id
+    seen: dict[str, str] = {}  # longname -> first box ref
     for longname, box_id, status in all_params:
         if status != "ok":
             continue
@@ -347,10 +388,15 @@ def _check_device_quality(
             "Set devicewidth to control device width in Ableton (e.g., 300.0)",
         ))
 
-    # Check live.* controls for parameter_enable
-    for box_entry in boxes:
-        box = box_entry.get("box", box_entry)
-        maxclass = box.get("maxclass", "")
+    results.extend(_check_parameter_enable(boxes))
+    return results
+
+
+def _check_parameter_enable(boxes: list) -> list[CriticResult]:
+    """Parameter-capable live.* controls without parameter_enable (one scope)."""
+    results: list[CriticResult] = []
+    for box in boxes:
+        maxclass = walk.box_maxclass(box)
 
         # Only parameter-capable live.* controls need parameter_enable
         if maxclass not in LIVE_PARAMETER_OBJECTS:
@@ -381,12 +427,12 @@ def _check_missing_info_text(
     Without annotation, Ableton's Info View shows no description when
     the user hovers over the control.  This is a polish warning (not a
     blocker) -- the device still works, but looks unprofessional.
+    *boxes* is one scope's boxes; review_m4l tags nested scopes (Q20).
     """
     results: list[CriticResult] = []
 
-    for box_entry in boxes:
-        box = box_entry.get("box", box_entry)
-        maxclass = box.get("maxclass", "")
+    for box in boxes:
+        maxclass = walk.box_maxclass(box)
 
         if maxclass in LIVE_PARAMETER_OBJECTS:
             if box.get("parameter_enable") and not box.get("annotation"):
@@ -398,12 +444,6 @@ def _check_missing_info_text(
                     "Run polish_m4l_device() or set annotation attribute "
                     "manually",
                 ))
-
-        # Recurse into subpatcher boxes
-        inner_patcher = box.get("patcher")
-        if inner_patcher:
-            inner_boxes = inner_patcher.get("boxes", [])
-            results.extend(_check_missing_info_text(inner_boxes))
 
     return results
 
@@ -418,18 +458,18 @@ def _check_missing_live_banks(
     """Warn when a device has parameter controls but no live.banks.
 
     Without live.banks, Ableton/Push uses default bank layout which
-    may not match the intended parameter grouping.
+    may not match the intended parameter grouping. *boxes* is every box of
+    every non-gen scope (Q20).
     """
     has_param_controls = False
     has_live_banks = False
 
-    for box_entry in boxes:
-        box = box_entry.get("box", box_entry)
-        maxclass = box.get("maxclass", "")
+    for box in boxes:
+        maxclass = walk.box_maxclass(box)
 
         # MAX saves live.banks as newobj text; the legacy maxclass form
-        # still counts (get_box_name covers both).
-        if get_box_name(box) == "live.banks":
+        # still counts (walk.box_name covers both).
+        if walk.box_name(box) == "live.banks":
             has_live_banks = True
 
         if (maxclass in LIVE_PARAMETER_OBJECTS

@@ -4,6 +4,12 @@ Provides review_patch() which combines DSP, structure, layout, RNBO,
 M4L, package, and external critics to catch design problems that the
 mechanical validation pipeline does not detect.
 
+Every patch critic reviews every scope (top level, ``p`` / bpatcher / poly~
+/ gen~ / rnbo~ patchers) of one shared :class:`src.maxpat.graph.PatchGraph`,
+built once per review_patch call (S1, Q20). Nested findings carry
+``CriticResult.path`` (the box-id chain, ``obj-1/obj-2``) and a
+``[p synth > gen~] `` finding prefix; top-level findings are unchanged.
+
 Usage:
     from src.maxpat.critics import review_patch, CriticResult
 
@@ -21,45 +27,38 @@ from src.maxpat.critics.layout_critic import review_layout
 from src.maxpat.critics.rnbo_critic import is_rnbo_box, review_rnbo
 from src.maxpat.critics.m4l_critic import detect_m4l_device_type, review_m4l
 from src.maxpat.critics.ext_critic import review_external
-from src.maxpat.critics.package_critic import review_packages
+from src.maxpat.critics.package_critic import collect_packages_used, review_packages
 from src.maxpat.graph import PatchGraph
-from src.maxpat.utils import get_box_name
 
 
-def _has_rnbo_boxes(patch_dict: dict) -> bool:
-    """Check if a patch contains any top-level rnbo~ boxes.
+def _has_rnbo_boxes(patch_dict: dict, graph: "PatchGraph | None" = None) -> bool:
+    """Check if any scope of a patch contains an rnbo~ box (Q20).
 
     Detected by name via is_rnbo_box (Q4 / E3): MAX writes rnbo~ as
     ``newobj``, so the former maxclass test never matched a MAX-authored box.
     """
-    patcher = patch_dict.get("patcher", {})
-    boxes = patcher.get("boxes", [])
-    for box_entry in boxes:
-        box = box_entry.get("box", {})
-        if is_rnbo_box(box):
-            return True
+    if graph is None:
+        graph = PatchGraph.build(patch_dict)
+    for scope in graph.scopes:
+        raw = scope.patcher.get("boxes")
+        for entry in raw if isinstance(raw, list) else ():
+            box = entry.get("box") if isinstance(entry, dict) else None
+            if isinstance(box, dict) and is_rnbo_box(box):
+                return True
     return False
 
 
-def _has_package_boxes(patch_dict: dict, db=None) -> bool:
-    """Check if a patch contains any package objects.
+def _has_package_boxes(patch_dict: dict, db=None, graph: "PatchGraph | None" = None) -> bool:
+    """Check if any non-gen scope of a patch contains package objects (Q20).
 
     *db* is an ObjectDatabase; one is constructed only when it is None.
     """
     if db is None:
         from src.maxpat.db_lookup import ObjectDatabase
         db = ObjectDatabase()
-    patcher = patch_dict.get("patcher", {})
-    for box_entry in patcher.get("boxes", []):
-        box = box_entry.get("box", {})
-        # Handle bpatchers (BEAP, Vizzie) via name attribute
-        if box.get("maxclass") == "bpatcher":
-            name = box.get("name", "")
-        else:
-            name = get_box_name(box)
-        if name and db.get_package(name):
-            return True
-    return False
+    if graph is None:
+        graph = PatchGraph.build(patch_dict)
+    return bool(collect_packages_used(graph, db))
 
 
 def review_patch(
@@ -80,12 +79,16 @@ def review_patch(
     package critic (BEAP conventions, Bach llll types, community extraction),
     and external critic (code structure, archetype requirements).
 
-    The RNBO critic is only invoked when rnbo~ boxes are detected
-    in the patch (by name, Q4 / E3). The M4L critic is only invoked when
-    plugin~, plugout~ or live.thisdevice is present; the device type is
-    inferred by detect_m4l_device_type (Q4 / D4). The package critic is only invoked when package
-    objects (BEAP, Bach, community) are detected. The external critic
-    is only invoked when ext_code is provided.
+    Every patch critic reviews every scope of one shared PatchGraph built
+    here (S1, Q20); nested findings are path-tagged (``CriticResult.path``
+    and a ``[p synth] `` prefix). The RNBO critic is only invoked when an
+    rnbo~ box is detected in any scope (by name, Q4 / E3). The M4L critic
+    is only invoked when plugin~, plugout~ or live.thisdevice is present
+    in any non-gen scope; the device type is inferred by
+    detect_m4l_device_type (Q4 / D4). The package critic is only invoked
+    when package objects (BEAP, Bach, community) are detected in any
+    non-gen scope. The external critic is only invoked when ext_code is
+    provided.
 
     Args:
         patch_dict: A .maxpat-format dict.
@@ -110,26 +113,26 @@ def review_patch(
     graph = PatchGraph.build(patch_dict)
 
     results: list[CriticResult] = []
-    results.extend(review_dsp(patch_dict, code_context=code_context))
+    results.extend(review_dsp(patch_dict, code_context=code_context, graph=graph))
     results.extend(review_structure(patch_dict, graph=graph))
-    results.extend(review_layout(patch_dict))
+    results.extend(review_layout(patch_dict, graph=graph))
 
-    # RNBO critic: auto-invoke when rnbo~ boxes detected
-    if _has_rnbo_boxes(patch_dict):
-        results.extend(review_rnbo(patch_dict, code_context=code_context))
+    # RNBO critic: auto-invoke when rnbo~ boxes detected (any scope)
+    if _has_rnbo_boxes(patch_dict, graph=graph):
+        results.extend(review_rnbo(patch_dict, code_context=code_context, graph=graph))
 
     # M4L critic: auto-invoke when plugin~/plugout~/live.thisdevice detected
-    m4l_device_type = detect_m4l_device_type(patch_dict)
+    m4l_device_type = detect_m4l_device_type(patch_dict, graph=graph)
     if m4l_device_type is not None:
-        results.extend(review_m4l(patch_dict, device_type=m4l_device_type))
+        results.extend(review_m4l(patch_dict, device_type=m4l_device_type, graph=graph))
 
     # External critic: invoke when ext_code provided
     if ext_code is not None:
         results.extend(review_external(ext_code, archetype=ext_archetype))
 
     # Package critic: auto-invoke when package objects detected
-    if _has_package_boxes(patch_dict, db=db):
-        results.extend(review_packages(patch_dict, db=db))
+    if _has_package_boxes(patch_dict, db=db, graph=graph):
+        results.extend(review_packages(patch_dict, db=db, graph=graph))
 
     return results
 

@@ -6,13 +6,20 @@ does not detect:
   - Missing cable midpoints on offset/upward cables
   - Out-of-bounds placement (negative coordinates)
 
-NOTE: Only checks the top-level patcher. Subpatcher layout is their
-own concern and handled recursively by their own review_patch() call.
+Every scope of the shared :class:`src.maxpat.graph.PatchGraph` is checked
+on its own boxes and cords, gen scopes included (Q20); nested findings carry
+``CriticResult.path`` and a ``[p synth] `` prefix. Text contrast resolves
+against each scope's own patcher background (``bgcolor`` /
+``editing_bgcolor`` / ``locked_bgcolor``, else the palette canvas), and
+presentation coverage is active per scope when that scope has a
+presentation box.
 """
 
 from __future__ import annotations
 
-from src.maxpat.critics.base import CriticResult
+from src.maxpat import walk
+from src.maxpat.critics.base import CriticResult, tag_results
+from src.maxpat.graph import PatchGraph
 from src.maxpat.defaults import AESTHETIC_PALETTE, HORIZONTAL_THRESHOLD, UPWARD_BUS_THRESHOLD
 
 # Collision padding from Phase 15-02 decision: 5px around all boxes
@@ -25,7 +32,7 @@ _DECORATIVE_MAXCLASSES = frozenset({"comment", "panel"})
 _IO_MARGIN = 7.0
 
 
-def review_layout(patch_dict: dict) -> list[CriticResult]:
+def review_layout(patch_dict: dict, *, graph: "PatchGraph | None" = None) -> list[CriticResult]:
     """Review physical layout of a patch for readability issues.
 
     Checks:
@@ -35,33 +42,25 @@ def review_layout(patch_dict: dict) -> list[CriticResult]:
 
     Args:
         patch_dict: A .maxpat-format dict.
+        graph: The shared PatchGraph of *patch_dict* (review_patch passes
+            it); built here when None.
 
     Returns:
-        List of CriticResult findings.
+        List of CriticResult findings, top level first, nested scopes in
+        pre-order.
     """
+    if graph is None:
+        graph = PatchGraph.build(patch_dict)
     results: list[CriticResult] = []
-
-    patcher = patch_dict.get("patcher", {})
-    boxes = patcher.get("boxes", [])
-    lines = patcher.get("lines", [])
-
-    # Extract raw box dicts
-    box_list: list[dict] = []
-    box_lookup: dict[str, dict] = {}
-    for box_entry in boxes:
-        box = box_entry.get("box", {})
-        box_id = box.get("id")
-        if box_id:
-            box_list.append(box)
-            box_lookup[box_id] = box
-
-    # Run checks
-    results.extend(_check_overlapping_boxes(box_list))
-    results.extend(_check_missing_midpoints(box_lookup, lines))
-    results.extend(_check_out_of_bounds(box_list))
-    results.extend(_check_text_contrast(box_list, patcher))
-    results.extend(_check_presentation_coverage(box_list))
-
+    for scope in graph.scopes:
+        box_list = scope.box_list
+        found: list[CriticResult] = []
+        found.extend(_check_overlapping_boxes(box_list))
+        found.extend(_check_missing_midpoints(scope.boxes, scope.edges))
+        found.extend(_check_out_of_bounds(box_list))
+        found.extend(_check_text_contrast(box_list, scope.patcher))
+        found.extend(_check_presentation_coverage(box_list))
+        results.extend(tag_results(found, scope.path))
     return results
 
 
@@ -125,11 +124,12 @@ def _inlet_x(box: dict, inlet_idx: int) -> float:
 
 
 def _box_label(box: dict) -> str:
-    """Human-readable label for a box (text or maxclass)."""
-    text = box.get("text", "")
-    if text:
-        return text.split()[0]
-    return box.get("maxclass", "unknown")
+    """Human-readable label for a box: the first text token, else the
+    maxclass, else ``unknown`` (whitespace or non-str text never raises)."""
+    tokens = walk.box_tokens(box)
+    if tokens:
+        return tokens[0]
+    return walk.box_maxclass(box) or "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +147,7 @@ def _check_overlapping_boxes(box_list: list[dict]) -> list[CriticResult]:
     # Filter to non-decorative boxes only
     check_boxes = [
         b for b in box_list
-        if b.get("maxclass", "") not in _DECORATIVE_MAXCLASSES
+        if walk.box_maxclass(b) not in _DECORATIVE_MAXCLASSES
     ]
 
     for i in range(len(check_boxes)):
@@ -185,7 +185,7 @@ def _check_overlapping_boxes(box_list: list[dict]) -> list[CriticResult]:
 
 def _check_missing_midpoints(
     box_lookup: dict[str, dict],
-    lines: list[dict],
+    edges: list,
 ) -> list[CriticResult]:
     """Detect cables that need midpoints but don't have them.
 
@@ -195,21 +195,15 @@ def _check_missing_midpoints(
     """
     results: list[CriticResult] = []
 
-    for line_entry in lines:
-        patchline = line_entry.get("patchline", line_entry)
-        source = patchline.get("source", [])
-        destination = patchline.get("destination", [])
-        midpoints = patchline.get("midpoints", [])
-
-        if len(source) < 2 or len(destination) < 2:
-            continue
+    for edge in edges:
+        midpoints = edge.line.get("midpoints", [])
 
         # Skip if midpoints already present
         if midpoints:
             continue
 
-        src_id, src_outlet = source[0], source[1]
-        dst_id, dst_inlet = destination[0], destination[1]
+        src_id, src_outlet = edge.src, edge.outlet
+        dst_id, dst_inlet = edge.dst, edge.inlet
 
         src_box = box_lookup.get(src_id)
         dst_box = box_lookup.get(dst_id)
@@ -310,7 +304,7 @@ def _check_presentation_coverage(box_list: list[dict]) -> list[CriticResult]:
 
     results: list[CriticResult] = []
     for box in box_list:
-        if box.get("maxclass") not in _INTERACTIVE_MAXCLASSES:
+        if walk.box_maxclass(box) not in _INTERACTIVE_MAXCLASSES:
             continue
         if box.get("presentation"):
             continue
@@ -381,7 +375,7 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
     for box in box_list:
         if box.get("maxclass") == "panel":
             continue
-        if not is_text_contrast_target(box.get("maxclass"), box):
+        if not is_text_contrast_target(walk.box_maxclass(box) or None, box):
             continue
 
         textcolor = box.get("textcolor")
@@ -398,7 +392,7 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
             patcher_bg,
         )
 
-        text = box.get("text") or ""
+        text = walk.box_text(box)
         label = text[:40] if text else "(empty)"
         ratio = contrast_ratio(textcolor, resolution.color)
         space = {

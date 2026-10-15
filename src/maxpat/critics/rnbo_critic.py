@@ -14,14 +14,22 @@ critic checks design quality (is it well-designed?).
 rnbo~ boxes are detected by name via is_rnbo_box (Q4 / E3, quick 261012-egf):
 MAX writes them as ``newobj`` (``rnbo~ @title ...``), so a maxclass gate
 skipped every MAX-authored rnbo~.
+
+rnbo~ boxes are found in every scope of the shared
+:class:`src.maxpat.graph.PatchGraph` (Q20). Each one's findings are reported
+at the path of the scope that holds the rnbo~ box (the Q19 Layer-5 rule).
+Params are collected across the rnbo~ box's whole subtree; a param below the
+rnbo~'s top inner patcher is referenced by its id chain from that patcher
+(``obj-7/obj-3``), a param in the top inner patcher by its plain id.
 """
 
 from __future__ import annotations
 
 import re
 
-from src.maxpat.critics.base import CriticResult
-from src.maxpat.utils import get_box_name
+from src.maxpat import walk
+from src.maxpat.critics.base import CriticResult, tag_results
+from src.maxpat.graph import PatchGraph
 
 
 # Regex to extract param @name from box text like "param @name foo @min 0 @max 1"
@@ -35,20 +43,33 @@ def is_rnbo_box(box: dict) -> bool:
     """True when ``box`` is an rnbo~ box, by name (Q4 / E3).
 
     Covers MAX's ``newobj`` shape (text ``rnbo~ ...``) and the builder's
-    maxclass ``rnbo~`` shape, since get_box_name returns the maxclass for
+    maxclass ``rnbo~`` shape, since walk.box_name returns the maxclass for
     non-newobj boxes. Shared by review_rnbo and review_patch's dispatch so
     the two agree on what counts as rnbo~.
     """
-    return get_box_name(box) == "rnbo~"
+    return walk.box_name(box) == "rnbo~"
+
+
+def _raw_boxes(patcher) -> list:
+    """Box dicts of a patcher's boxes array (entries without a box skipped)."""
+    raw = patcher.get("boxes") if isinstance(patcher, dict) else None
+    out = []
+    for entry in raw if isinstance(raw, list) else ():
+        box = entry.get("box") if isinstance(entry, dict) else None
+        if isinstance(box, dict):
+            out.append(box)
+    return out
 
 
 def review_rnbo(
     patch_dict: dict,
     code_context: dict | None = None,
+    *,
+    graph: "PatchGraph | None" = None,
 ) -> list[CriticResult]:
     """Review RNBO aspects of a patch.
 
-    Scans for rnbo~ boxes in the patch and reviews their inner patchers
+    Scans every scope for rnbo~ boxes and reviews their inner patchers
     for semantic issues: param naming, I/O completeness, duplicates,
     and target fitness.
 
@@ -56,53 +77,72 @@ def review_rnbo(
         patch_dict: A .maxpat-format dict.
         code_context: Optional dict. If it contains "rnbo_target", validates
             target-specific constraints.
+        graph: The shared PatchGraph of *patch_dict* (review_patch passes
+            it); built here when None.
 
     Returns:
         List of CriticResult findings.
     """
+    if graph is None:
+        graph = PatchGraph.build(patch_dict)
     results: list[CriticResult] = []
 
-    patcher = patch_dict.get("patcher", {})
-    boxes = patcher.get("boxes", [])
+    for scope in graph.scopes:
+        found: list[CriticResult] = []
+        for box in _raw_boxes(scope.patcher):
+            if not is_rnbo_box(box):
+                continue
 
-    # Find all rnbo~ boxes
-    for box_entry in boxes:
-        box = box_entry.get("box", {})
+            inner_patcher = box.get("patcher")
+            if not isinstance(inner_patcher, dict) or not inner_patcher:
+                found.append(CriticResult(
+                    "blocker",
+                    f"rnbo~ box '{box.get('id', '?')}' has no inner patcher",
+                    "Add an inner patcher with in~/out~ and param objects",
+                ))
+                continue
 
-        if not is_rnbo_box(box):
-            continue
+            inner_boxes = _raw_boxes(inner_patcher)
+            params = _collect_params(graph, scope, box, inner_patcher)
+            found.extend(_check_io_completeness(box, inner_boxes))
+            found.extend(_check_param_naming(params))
+            found.extend(_check_duplicate_params(params))
 
-        inner_patcher = box.get("patcher")
-        if not inner_patcher:
-            results.append(CriticResult(
-                "blocker",
-                f"rnbo~ box '{box.get('id', '?')}' has no inner patcher",
-                "Add an inner patcher with in~/out~ and param objects",
-            ))
-            continue
-
-        inner_boxes = inner_patcher.get("boxes", [])
-        results.extend(_check_io_completeness(box, inner_boxes))
-        results.extend(_check_param_naming(inner_boxes))
-        results.extend(_check_duplicate_params(inner_boxes))
-
-        # Target fitness check
-        if code_context and "rnbo_target" in code_context:
-            target = code_context["rnbo_target"]
-            results.extend(_check_target_fitness(inner_boxes, target))
+            # Target fitness check
+            if isinstance(code_context, dict) and "rnbo_target" in code_context:
+                target = code_context["rnbo_target"]
+                found.extend(_check_target_fitness(params, target))
+        results.extend(tag_results(found, scope.path))
 
     return results
 
 
-def _get_inner_object_name(box: dict) -> str:
-    """Extract the object name from an inner RNBO patcher box."""
-    maxclass = box.get("maxclass", "")
-    if maxclass == "newobj":
-        text = box.get("text", "")
-        if text:
-            return text.split()[0]
-        return ""
-    return maxclass
+def _collect_params(graph: PatchGraph, scope, rnbo_box: dict, inner_patcher: dict) -> list:
+    """``(ref, box)`` for every ``param`` box in the rnbo~ box's subtree.
+
+    Pre-order over ``graph.subtree``; *ref* is the plain id in the top
+    inner patcher, else the id chain from it (``obj-7/obj-3``).
+    """
+    box_id = rnbo_box.get("id")
+    subtree = graph.subtree(scope, box_id if box_id is not None else "?")
+    if not subtree or subtree[0].patcher is not inner_patcher:
+        layers = [("", inner_patcher)]
+    else:
+        root_key = subtree[0].key
+        layers = []
+        for s in subtree:
+            rel = s.key[len(root_key) + 1:] if s is not subtree[0] else ""
+            layers.append((rel, s.patcher))
+
+    params = []
+    for rel, patcher in layers:
+        for box in _raw_boxes(patcher):
+            if walk.box_name(box) != "param":
+                continue
+            pid = box.get("id", "?")
+            ref = f"{rel}/{pid}" if rel else pid
+            params.append((ref, box))
+    return params
 
 
 def _check_io_completeness(
@@ -115,9 +155,8 @@ def _check_io_completeness(
     has_in = False
     has_out = False
 
-    for entry in inner_boxes:
-        box = entry.get("box", {})
-        name = _get_inner_object_name(box)
+    for box in inner_boxes:
+        name = walk.box_name(box)
         if name == "in~":
             has_in = True
         elif name == "out~":
@@ -153,18 +192,16 @@ def _extract_param_name(text: str) -> str | None:
 
 
 def _check_param_naming(
-    inner_boxes: list[dict],
+    params: list,
 ) -> list[CriticResult]:
-    """Check that param names follow lowercase_with_underscores convention."""
+    """Check that param names follow lowercase_with_underscores convention.
+
+    *params* is ``(ref, box)`` pairs from :func:`_collect_params`.
+    """
     results: list[CriticResult] = []
 
-    for entry in inner_boxes:
-        box = entry.get("box", {})
-        name = _get_inner_object_name(box)
-        if name != "param":
-            continue
-
-        text = box.get("text", "")
+    for _ref, box in params:
+        text = walk.box_text(box)
         param_name = _extract_param_name(text)
         if param_name is None:
             continue
@@ -190,24 +227,21 @@ def _to_snake_case(name: str) -> str:
 
 
 def _check_duplicate_params(
-    inner_boxes: list[dict],
+    params: list,
 ) -> list[CriticResult]:
-    """Check for duplicate param names in the RNBO patcher."""
+    """Check for duplicate param names across the rnbo~ subtree.
+
+    *params* is ``(ref, box)`` pairs from :func:`_collect_params`.
+    """
     results: list[CriticResult] = []
-    seen_names: dict[str, str] = {}  # name -> first box id
+    seen_names: dict[str, str] = {}  # name -> first box ref
 
-    for entry in inner_boxes:
-        box = entry.get("box", {})
-        name = _get_inner_object_name(box)
-        if name != "param":
-            continue
-
-        text = box.get("text", "")
+    for box_id, box in params:
+        text = walk.box_text(box)
         param_name = _extract_param_name(text)
         if param_name is None:
             continue
 
-        box_id = box.get("id", "?")
         if param_name in seen_names:
             results.append(CriticResult(
                 "blocker",
@@ -223,19 +257,17 @@ def _check_duplicate_params(
 
 
 def _check_target_fitness(
-    inner_boxes: list[dict],
+    params: list,
     target: str,
 ) -> list[CriticResult]:
     """Check target-specific fitness issues.
 
     For 'cpp' target: warn if many params (>128 practical limit).
+    *params* is ``(ref, box)`` pairs across the rnbo~ subtree.
     """
     results: list[CriticResult] = []
 
-    param_count = sum(
-        1 for entry in inner_boxes
-        if _get_inner_object_name(entry.get("box", {})) == "param"
-    )
+    param_count = len(params)
 
     if target == "cpp" and param_count > 128:
         results.append(CriticResult(

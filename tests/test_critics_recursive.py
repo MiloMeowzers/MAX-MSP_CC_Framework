@@ -286,15 +286,6 @@ class TestStructureNested:
             "[p synth] Fan-out without trigger: 'button' (obj-2) outlet 0"
         )
 
-    @pytest.mark.parametrize("name", sorted(_PARITY_CONTENT))
-    def test_nested_parity_with_top_level(self, name):
-        boxes, lines = _PARITY_CONTENT[name]()
-        top = review_structure(_patch(copy.deepcopy(boxes), copy.deepcopy(lines)))
-        assert top, name
-        nested = review_structure(_wrap(boxes, lines))
-        assert [(r.severity, "[p synth] " + r.finding, r.suggestion, "obj-1") for r in top] == _sig(nested)
-        assert all(r.path == "" for r in top)
-
     def test_two_level_nest(self):
         boxes, lines = _reconverge_content()
         inner_b = _container("obj-2", "p b", _inner(boxes, lines))
@@ -544,3 +535,507 @@ class TestSaveGateNestedCritic:
         crit = [r for r in report.new_blockers if isinstance(r, CriticResult)]
         assert len(crit) == 1
         assert crit[0].path == "obj-2"
+
+
+# ===========================================================================
+# Task 2: dsp, package, rnbo, m4l and layout critics on the shared graph
+# ===========================================================================
+
+from src.maxpat.critics import (  # noqa: E402
+    _has_package_boxes,
+    _has_rnbo_boxes,
+    review_dsp,
+    review_layout,
+    review_m4l,
+    review_packages,
+    review_rnbo,
+)
+from src.maxpat.critics.m4l_critic import detect_m4l_device_type  # noqa: E402
+
+
+def _plugout(box_id="obj-90"):
+    return _box(box_id, "plugout~", 2, 0, outlettype=[])
+
+
+def _codebox_gen(n_in_code=2):
+    """gen patcher whose wired codebox uses in1..in<n>."""
+    code = "out1 = " + " + ".join(f"in{i}" for i in range(1, n_in_code + 1)) + ";"
+    boxes = [
+        _box("obj-20", None, n_in_code, 1, maxclass="codebox", code=code),
+        _box("obj-21", "out 1", 1, 0, outlettype=[]),
+    ]
+    return _gen_inner(boxes, [_line("obj-20", 0, "obj-21", 0)])
+
+
+# --- parity content: (boxes, lines, patcher_keys) ---------------------------
+
+
+def _c_dsp_gain():
+    return ([
+        _box("obj-2", "cycle~ 440", 2, 1, outlettype=["signal"]),
+        _box("obj-3", "dac~", 2, 0, outlettype=[]),
+    ], [_line("obj-2", 0, "obj-3", 0)], {})
+
+
+def _c_dsp_unsafe():
+    return ([
+        _box("obj-2", None, 1, 1, maxclass="slider", outlettype=[""]),
+        _box("obj-3", "cycle~ 440", 2, 1, outlettype=["signal"]),
+        _box("obj-4", "*~", 2, 1, outlettype=["signal"]),
+    ], [_line("obj-3", 0, "obj-4", 0), _line("obj-2", 0, "obj-4", 1)], {})
+
+
+def _c_dsp_gen_io():
+    return ([_container("obj-2", "gen~", _codebox_gen(2), 1, 1, outlettype=["signal"])], [], {})
+
+
+def _c_bach():
+    return ([
+        _box("obj-2", "pack 0 0", 2, 1, outlettype=[""]),
+        _box("obj-3", "bach.score", 1, 1, outlettype=[""]),
+    ], [_line("obj-2", 0, "obj-3", 0)], {})
+
+
+def _c_ezdac():
+    return ([_box("obj-2", "ezdac~", 2, 0, maxclass="ezdac~", outlettype=[])], [], {})
+
+
+def _c_live_dial():
+    return ([_box("obj-2", None, 1, 2, maxclass="live.dial", outlettype=["", "float"])], [], {})
+
+
+def _c_overlap():
+    return ([_box("obj-2", "print a", 1, 0, outlettype=[]),
+             _box("obj-3", "print b", 1, 0, outlettype=[])], [], {})
+
+
+def _c_midpoints():
+    a = _box("obj-2", "loadbang", 1, 1, outlettype=["bang"])
+    b = _box("obj-3", "print", 1, 0, outlettype=[])
+    b["box"]["patching_rect"] = [400.0, 100.0, 60.0, 22.0]
+    return [a, b], [_line("obj-2", 0, "obj-3", 0)], {}
+
+
+def _c_out_of_bounds():
+    a = _box("obj-2", "print", 1, 0, outlettype=[])
+    a["box"]["patching_rect"] = [-20.0, 10.0, 60.0, 22.0]
+    return [a], [], {}
+
+
+def _c_low_contrast():
+    c = _box("obj-2", "a label", 1, 0, maxclass="comment", outlettype=[],
+             textcolor=[0.9, 0.9, 0.9, 1.0])
+    c["box"]["patching_rect"] = [10.0, 200.0, 80.0, 20.0]
+    return [c], [], {"bgcolor": [1.0, 1.0, 1.0, 1.0]}
+
+
+def _c_low_contrast_fallback():
+    c = _box("obj-2", "a label", 1, 0, maxclass="comment", outlettype=[],
+             textcolor=[0.3, 0.3, 0.3, 1.0])
+    c["box"]["patching_rect"] = [10.0, 200.0, 80.0, 20.0]
+    return [c], [], {}
+
+
+def _c_presentation():
+    c = _box("obj-2", "title", 1, 0, maxclass="comment", outlettype=[],
+             presentation=1, presentation_rect=[0.0, 0.0, 50.0, 20.0])
+    c["box"]["patching_rect"] = [10.0, 200.0, 80.0, 20.0]
+    t = _box("obj-3", None, 1, 1, maxclass="toggle", outlettype=["int"])
+    t["box"]["patching_rect"] = [200.0, 200.0, 24.0, 24.0]
+    return [c, t], [], {}
+
+
+def _m(text):
+    return lambda r: text in r.finding
+
+
+def _run_structure(d, db):
+    return review_structure(d)
+
+
+def _run_dsp(d, db):
+    return review_dsp(d)
+
+
+def _run_packages(d, db):
+    return review_packages(d, db=db)
+
+
+def _run_m4l(d, db):
+    return review_m4l(d, device_type="instrument")
+
+
+def _run_layout(d, db):
+    return review_layout(d)
+
+
+def _structure_case(fn):
+    def content():
+        boxes, lines = fn()
+        return boxes, lines, {}
+    return content
+
+
+# name -> (content, run, match, top_extra boxes factory)
+_PARITY_CASES = {
+    "structure_fanout_reconverge": (_structure_case(_reconverge_content), _run_structure, _m(""), None),
+    "structure_fanout_warning": (_structure_case(_fanout_warning_content), _run_structure, _m(""), None),
+    "structure_hot_cold": (_structure_case(_hot_cold_content), _run_structure, _m(""), None),
+    "structure_duplicate": (_structure_case(_duplicate_content), _run_structure, _m(""), None),
+    "dsp_missing_gain": (_c_dsp_gain, _run_dsp, _m("Missing gain staging"), None),
+    "dsp_unsafe_gain_source": (_c_dsp_unsafe, _run_dsp, _m("Unsafe gain source"), None),
+    "dsp_gen_io_mismatch": (_c_dsp_gen_io, _run_dsp, _m("gen~ I/O"), None),
+    "package_bach_llll": (_c_bach, _run_packages, _m("Bach llll"), None),
+    "m4l_ezdac": (_c_ezdac, _run_m4l, _m("ezdac~ ("), _plugout),
+    "m4l_parameter_enable": (_c_live_dial, _run_m4l, _m("missing parameter_enable"), _plugout),
+    "layout_overlap": (_c_overlap, _run_layout, _m("Overlapping boxes"), None),
+    "layout_midpoints": (_c_midpoints, _run_layout, _m("Missing midpoints"), None),
+    "layout_out_of_bounds": (_c_out_of_bounds, _run_layout, _m("Out-of-bounds"), None),
+    "layout_low_contrast": (_c_low_contrast, _run_layout, _m("Low contrast"), None),
+    "layout_low_contrast_fallback": (_c_low_contrast_fallback, _run_layout, _m("Low contrast"), None),
+    "layout_presentation_coverage": (_c_presentation, _run_layout, _m("Presentation coverage"), None),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_PARITY_CASES))
+def test_nested_parity_with_top_level(name, db):
+    """Content wrapped in ``p synth`` gives exactly its top-level findings,
+    prefixed ``[p synth] `` with path ``obj-1`` (A7 invariant, Q20)."""
+    content, run, match, extra = _PARITY_CASES[name]
+    if name == "package_bach_llll" and db.lookup("bach.score") is None:
+        pytest.skip("bach is not in the repo DB")
+    boxes, lines, keys = content()
+    top_boxes = copy.deepcopy(boxes) + ([extra()] if extra else [])
+    top = [r for r in run(_patch(top_boxes, copy.deepcopy(lines), **keys), db) if match(r)]
+    assert top, name
+    assert all(r.path == "" for r in top)
+
+    nested_top = [extra()] if extra else []
+    nested_dict = _patch(nested_top + [_container("obj-1", "p synth", _inner(boxes, lines, **keys))])
+    nested = [r for r in run(nested_dict, db) if match(r) and r.path == "obj-1"]
+    assert _sig(nested) == [
+        (r.severity, "[p synth] " + r.finding, r.suggestion, "obj-1") for r in top
+    ]
+
+
+# ---------------------------------------------------------------------------
+# DSP
+# ---------------------------------------------------------------------------
+
+
+class TestDspNested:
+    def test_nested_gen_io_mismatch(self):
+        boxes, lines, _ = _c_dsp_gen_io()
+        results = review_dsp(_wrap(boxes, lines))
+        blockers = [r for r in results if r.severity == "blocker"]
+        assert [r.path for r in blockers] == ["obj-1"]
+        assert blockers[0].finding.startswith("[p synth] gen~ I/O input mismatch")
+
+    def test_code_context_applies_to_top_scope_only(self):
+        ctx = {"gen~_code": {"obj-2": "out1 = in1 + in2;"}}
+        top = _patch([_box("obj-2", "gen~", 1, 1, outlettype=["signal"])])
+        assert [r.path for r in review_dsp(top, code_context=ctx)] == [""]
+        nested = _wrap([_box("obj-2", "gen~", 1, 1, outlettype=["signal"])], [])
+        assert review_dsp(nested, code_context=ctx) == []
+
+    def test_no_finding_from_gen_scope(self):
+        gen = _gen_inner([
+            _box("obj-20", "cycle~ 440", 2, 1, outlettype=["signal"]),
+            _box("obj-21", "dac~", 2, 0, outlettype=[]),
+        ], [_line("obj-20", 0, "obj-21", 0)])
+        d = _patch([_container("obj-1", "gen~", gen, 1, 1, outlettype=["signal"])])
+        assert review_dsp(d) == []
+
+
+# ---------------------------------------------------------------------------
+# Package
+# ---------------------------------------------------------------------------
+
+
+def _unextract_flucoma(db, monkeypatch):
+    info = db.get_package_info("FluCoMa")
+    if not info:
+        pytest.skip("FluCoMa package info not in the repo DB")
+    patched = dict(info)
+    patched["extracted"] = False
+    monkeypatch.setitem(db._package_info, "FluCoMa", patched)
+
+
+def _fluid(box_id):
+    return _box(box_id, "fluid.mfcc~ 13", 1, 1, outlettype=[""])
+
+
+def _unextracted(results):
+    return [r for r in results if "Unextracted community package" in r.finding]
+
+
+class TestPackageNested:
+    def test_unextracted_top_and_nested_warns_once_at_top(self, db, monkeypatch):
+        _unextract_flucoma(db, monkeypatch)
+        d = _patch([_fluid("obj-2"), _container("obj-1", "p synth", _inner([_fluid("obj-3")]))])
+        hits = _unextracted(review_packages(d, db=db))
+        assert [r.path for r in hits] == [""]
+
+    def test_unextracted_nested_only_warns_once_with_path(self, db, monkeypatch):
+        _unextract_flucoma(db, monkeypatch)
+        d = _patch([
+            _container("obj-1", "p a", _inner([_fluid("obj-3")])),
+            _container("obj-2", "p b", _inner([_fluid("obj-3")])),
+        ])
+        hits = _unextracted(review_packages(d, db=db))
+        assert [r.path for r in hits] == ["obj-1"]
+        assert hits[0].finding.startswith("[p a] Unextracted community package")
+
+    def test_install_state_false_once_at_first_scope(self, db, monkeypatch):
+        monkeypatch.setattr(db, "get_install_state", lambda name: False if name == "print" else None)
+        d = _patch([
+            _container("obj-1", "p a", _inner([_box("obj-3", "print", 1, 0, outlettype=[])])),
+            _container("obj-2", "p b", _inner([_box("obj-3", "print", 1, 0, outlettype=[])])),
+        ])
+        hits = [r for r in review_packages(d, db=db) if "Object not installed" in r.finding]
+        assert [(r.severity, r.path) for r in hits] == [("blocker", "obj-1")]
+
+    def test_has_package_boxes_nested_only(self, db):
+        if not db.get_package("fluid.mfcc~"):
+            pytest.skip("fluid.mfcc~ has no package in the repo DB")
+        d = _wrap([_fluid("obj-3")], [])
+        assert _has_package_boxes(d, db=db) is True
+        assert _has_package_boxes(_patch([]), db=db) is False
+
+    def test_beap_chain_in_p_reviewed_with_path(self, db):
+        osc = {"box": {"id": "obj-2", "maxclass": "bpatcher", "name": "bp.Oscillator",
+                       "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"]}}
+        out = {"box": {"id": "obj-3", "maxclass": "bpatcher", "name": "bp.Stereo",
+                       "numinlets": 2, "numoutlets": 0, "outlettype": []}}
+        if db.get_package("bp.Oscillator") != "BEAP":
+            pytest.skip("BEAP not in the repo DB")
+        d = _wrap([osc, out], [_line("obj-2", 0, "obj-3", 0)])
+        vca = [r for r in review_packages(d, db=db) if "BEAP missing VCA" in r.finding]
+        assert [r.path for r in vca] == ["obj-1"]
+        assert vca[0].finding.startswith("[p synth] BEAP missing VCA: 'bp.Oscillator' (obj-2)")
+
+
+# ---------------------------------------------------------------------------
+# RNBO
+# ---------------------------------------------------------------------------
+
+
+def _rnbo(box_id, inner_boxes, inner_lines=None):
+    return _container(box_id, "rnbo~", _inner(inner_boxes, inner_lines, classnamespace="rnbo"), 1, 1,
+                      outlettype=["signal"])
+
+
+class TestRnboNested:
+    def test_rnbo_in_p_without_in(self):
+        r = _rnbo("obj-2", [_box("obj-10", "out~ 1", 1, 0, outlettype=[])])
+        d = _patch([_container("obj-1", "p synth", _inner([r]))])
+        results = review_rnbo(d)
+        assert [(x.severity, x.path) for x in results] == [("blocker", "obj-1")]
+        assert results[0].finding == (
+            "[p synth] rnbo~ 'obj-2' inner patcher has no in~ object -- "
+            "audio input will not work"
+        )
+
+    def test_duplicate_params_across_inner_p(self):
+        inner_p = _container("obj-11", "p voice", _inner([
+            _box("obj-10", "param @name gain", 1, 2, outlettype=["", ""]),
+            _box("obj-12", "param @name MyGain", 1, 2, outlettype=["", ""]),
+        ]))
+        r = _rnbo("obj-2", [
+            _box("obj-5", "in~ 1", 1, 1, outlettype=["signal"]),
+            _box("obj-6", "out~ 1", 1, 0, outlettype=[]),
+            _box("obj-10", "param @name gain", 1, 2, outlettype=["", ""]),
+            inner_p,
+        ])
+        results = review_rnbo(_patch([r]))
+        dups = [x for x in results if "Duplicate RNBO param" in x.finding]
+        assert [(x.severity, x.path) for x in dups] == [("blocker", "")]
+        assert "'obj-10' and 'obj-11/obj-10'" in dups[0].finding
+        naming = [x for x in results if "naming convention" in x.finding]
+        assert [x.finding.split("'")[1] for x in naming] == ["MyGain"]
+
+    def test_has_rnbo_boxes_nested(self):
+        r = _rnbo("obj-2", [])
+        assert _has_rnbo_boxes(_patch([_container("obj-1", "p synth", _inner([r]))])) is True
+        assert _has_rnbo_boxes(_patch([_box("obj-1", "print")])) is False
+
+
+# ---------------------------------------------------------------------------
+# M4L
+# ---------------------------------------------------------------------------
+
+
+def _dial(box_id, longname=None, enable=True, annotation=None):
+    extra = {}
+    if enable:
+        extra["parameter_enable"] = 1
+    if longname is not None:
+        extra["saved_attribute_attributes"] = {"valueof": {"parameter_longname": longname}}
+    if annotation is not None:
+        extra["annotation"] = annotation
+    return _box(box_id, None, 1, 2, maxclass="live.dial", outlettype=["", "float"], **extra)
+
+
+class TestM4lNested:
+    def test_plugout_only_nested_detects_instrument(self):
+        d = _wrap([_plugout("obj-2")], [])
+        assert detect_m4l_device_type(d) == "instrument"
+        results = review_m4l(d, device_type="instrument")
+        assert not [r for r in results if "missing required object" in r.finding]
+
+    def test_ezdac_in_p(self):
+        d = _patch([_plugout(), _container("obj-1", "p synth", _inner(_c_ezdac()[0]))])
+        hits = [r for r in review_m4l(d, device_type="instrument") if "ezdac~ (" in r.finding]
+        assert [(r.severity, r.path) for r in hits] == [("blocker", "obj-1")]
+
+    def test_gain_to_plugout_in_same_p(self):
+        inner = _inner([
+            _box("obj-2", "gain~", 2, 2, outlettype=["signal", ""]),
+            _plugout("obj-3"),
+        ], [_line("obj-2", 0, "obj-3", 0)])
+        d = _patch([_container("obj-1", "p out", inner)])
+        hits = [r for r in review_m4l(d, device_type="instrument") if "on the signal path to plugout~" in r.finding]
+        assert [(r.severity, r.path) for r in hits] == [("blocker", "obj-1")]
+        assert hits[0].finding.startswith("[p out] gain~ (obj-2) is on the signal path to plugout~ (obj-3)")
+
+    def test_duplicate_longname_top_and_nested(self):
+        d = _patch([
+            _plugout(),
+            _dial("obj-3", "Cutoff", annotation="x"),
+            _container("obj-1", "p synth", _inner([_dial("obj-3", "Cutoff", annotation="x")])),
+        ])
+        dups = [r for r in review_m4l(d, device_type="instrument") if "Duplicate parameter_longname" in r.finding]
+        assert [(r.severity, r.path) for r in dups] == [("blocker", "")]
+        assert "'obj-3' and 'obj-1/obj-3'" in dups[0].finding
+
+    def test_missing_info_text_nested_is_tagged(self):
+        d = _patch([_plugout(), _container("obj-1", "p synth", _inner([_dial("obj-3", "Cutoff")]))])
+        hits = [r for r in review_m4l(d, device_type="instrument") if "missing info text" in r.finding]
+        assert [r.path for r in hits] == ["obj-1"]
+        assert hits[0].finding.startswith("[p synth] live.dial (obj-3) missing info text")
+
+    def test_nested_live_banks_satisfies_check(self):
+        banks = _box("obj-4", "live.banks", 1, 1, outlettype=[""])
+        d = _patch([_plugout(), _dial("obj-3", "Cutoff", annotation="x"),
+                    _container("obj-1", "p banks", _inner([banks]))])
+        assert not [r for r in review_m4l(d, device_type="instrument") if "no live.banks" in r.finding]
+        d2 = _patch([_plugout(), _dial("obj-3", "Cutoff", annotation="x")])
+        assert [r for r in review_m4l(d2, device_type="instrument") if "no live.banks" in r.finding]
+
+
+# ---------------------------------------------------------------------------
+# Layout
+# ---------------------------------------------------------------------------
+
+
+class TestLayoutNested:
+    def test_low_contrast_against_own_bgcolor(self):
+        boxes, lines, keys = _c_low_contrast()
+        d = _patch([_container("obj-1", "p synth", _inner(boxes, lines, **keys))])
+        hits = [r for r in review_layout(d) if "Low contrast" in r.finding]
+        assert [(r.severity, r.path) for r in hits] == [("warning", "obj-1")]
+        # Without the inner bgcolor the light text sits on the dark palette canvas
+        d2 = _patch([_container("obj-1", "p synth", _inner(copy.deepcopy(boxes), lines))])
+        assert not [r for r in review_layout(d2) if "Low contrast" in r.finding and r.path]
+
+    def test_whitespace_text_never_raises(self, db):
+        inner = _inner([
+            _box("obj-2", "   ", 1, 1),
+            _box("obj-3", "", 1, 1),
+            _box("obj-4", "   ", 1, 0, maxclass="comment", outlettype=[]),
+        ])
+        d = _patch([_box("obj-9", "  ", 1, 1), _container("obj-1", "p synth", inner)])
+        assert isinstance(review_layout(d), list)
+        assert isinstance(review_patch(d, db=db), list)
+
+
+# ---------------------------------------------------------------------------
+# Shared graph, purity and robustness with every critic active
+# ---------------------------------------------------------------------------
+
+
+def _all_critics_patch(db):
+    if not db.get_package("fluid.mfcc~"):
+        pytest.skip("fluid.mfcc~ has no package in the repo DB")
+    r = _rnbo("obj-5", [_box("obj-50", "out~ 1", 1, 0, outlettype=[])])
+    return _patch([
+        _plugout("obj-2"),
+        _container("obj-1", "p synth", _inner([r, _fluid("obj-6")])),
+    ])
+
+
+class TestReviewPatchAllCritics:
+    def test_every_critic_gets_the_one_graph(self, db, monkeypatch):
+        import src.maxpat.critics as critics
+
+        calls = _count_builds(monkeypatch)
+        seen = {}
+        for name in ("review_dsp", "review_structure", "review_layout", "review_rnbo",
+                     "review_m4l", "review_packages", "detect_m4l_device_type"):
+            real = getattr(critics, name)
+
+            def spy(*a, _real=real, _name=name, **k):
+                seen[_name] = k.get("graph")
+                return _real(*a, **k)
+
+            monkeypatch.setattr(critics, name, spy)
+        results = review_patch(_all_critics_patch(db), db=db)
+        assert len(calls) == 1
+        assert set(seen) == {"review_dsp", "review_structure", "review_layout", "review_rnbo",
+                             "review_m4l", "review_packages", "detect_m4l_device_type"}
+        graphs = set(id(g) for g in seen.values())
+        assert len(graphs) == 1 and None not in seen.values()
+        assert [r for r in results if "no in~" in r.finding and r.path == "obj-1"]
+
+    def test_review_patch_pure_with_every_critic(self, db):
+        d = _all_critics_patch(db)
+        before = copy.deepcopy(d)
+        review_patch(d, db=db)
+        assert d == before
+
+
+def _junk_scope():
+    return _inner(
+        [
+            "junk",
+            None,
+            {"box": "not a dict"},
+            {"box": {"id": "obj-5", "maxclass": ["x"], "text": None}},
+            {"box": {"id": "obj-6", "maxclass": "live.dial", "parameter_enable": 1,
+                     "saved_attribute_attributes": 5}},
+            {"box": {"id": "obj-7", "maxclass": "live.dial", "parameter_enable": 1,
+                     "saved_attribute_attributes": {"valueof": 3}}},
+            {"box": {"id": "obj-8", "maxclass": "newobj", "text": "rnbo~", "outlettype": "signal",
+                     "patcher": 3}},
+            {"box": {"id": "obj-9", "maxclass": "newobj", "text": "   ", "outlettype": None}},
+            {"box": {"id": "obj-10", "maxclass": "comment", "text": 5}},
+            {"box": {"id": "obj-11", "maxclass": "newobj", "text": "gen~", "numinlets": None,
+                     "patcher": {"boxes": [{"box": {"id": "obj-1", "maxclass": "codebox",
+                                                    "code": 7}}], "lines": ["x"]}}},
+        ],
+        [
+            "junk",
+            None,
+            {"patchline": "x"},
+            {"patchline": {"source": ["obj-8", 0], "destination": ["obj-9", 0]}},
+            {"patchline": {"source": ["obj-5", 0], "destination": ["obj-6", "0"]}},
+        ],
+    )
+
+
+_CRITIC_RUNNERS = {
+    "structure": lambda d, db: review_structure(d),
+    "dsp": lambda d, db: review_dsp(d, code_context={"gen~_code": 5}),
+    "layout": lambda d, db: review_layout(d),
+    "rnbo": lambda d, db: review_rnbo(d, code_context={"rnbo_target": "cpp"}),
+    "m4l": lambda d, db: review_m4l(d, device_type="instrument"),
+    "m4l_detect": lambda d, db: [detect_m4l_device_type(d)],
+    "packages": lambda d, db: review_packages(d, db=db),
+    "review_patch": lambda d, db: review_patch(d, db=db),
+}
+
+
+@pytest.mark.parametrize("critic", sorted(_CRITIC_RUNNERS))
+def test_nested_junk_never_raises(critic, db):
+    d = _patch([_plugout(), _container("obj-1", "p junk", _junk_scope())])
+    assert isinstance(_CRITIC_RUNNERS[critic](d, db), list)

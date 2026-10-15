@@ -6,15 +6,23 @@ misses:
   - Bach: llll/list type mismatches (non-bach, non-command source feeding an
     llll inlet) -- note severity (Q3 / E4)
   - Community: unextracted community package usage warnings
+
+Every non-gen scope of the shared :class:`src.maxpat.graph.PatchGraph` is
+reviewed (Q20); nested findings carry ``CriticResult.path`` and a
+``[p synth] `` prefix. The packages used (which decide the BEAP and Bach
+dispatch) are collected once across all non-gen scopes, and the community
+and install-state findings are deduplicated per patch: each reports once,
+at the first scope (pre-order) where it appears.
 """
 
 from __future__ import annotations
 
 from collections import deque
 
-from src.maxpat.critics.base import CriticResult
+from src.maxpat import walk
+from src.maxpat.critics.base import CriticResult, tag_results
 from src.maxpat.db_lookup import ObjectDatabase
-from src.maxpat.utils import get_box_name
+from src.maxpat.graph import PatchGraph
 
 
 # BEAP output module names (signal terminators with 0 outlets)
@@ -42,16 +50,44 @@ def _get_object_name(box: dict) -> str:
     """Get object name, handling both bpatcher (name attr) and newobj (text field).
 
     BEAP/Vizzie objects have maxclass="bpatcher" with the abstraction name
-    in the "name" attribute. Standard objects use get_box_name().
+    in the "name" attribute (used only when it is a str). Standard objects
+    use walk.box_name().
     """
-    if box.get("maxclass") == "bpatcher":
-        return box.get("name", "")
-    return get_box_name(box)
+    if walk.box_maxclass(box) == "bpatcher":
+        name = box.get("name", "")
+        return name if isinstance(name, str) else ""
+    return walk.box_name(box)
+
+
+def collect_packages_used(graph: PatchGraph, db: ObjectDatabase) -> set:
+    """Packages of every box in every non-gen scope of *graph*."""
+    packages_used: set[str] = set()
+    for scope in graph.scopes:
+        if scope.context == "gen":
+            continue
+        for box in _scope_boxes(scope):
+            name = _get_object_name(box)
+            if name:
+                pkg = db.get_package(name)
+                if pkg:
+                    packages_used.add(pkg)
+    return packages_used
+
+
+def _scope_boxes(scope):
+    """Every box dict of *scope*'s raw boxes array (with or without an id)."""
+    raw = scope.patcher.get("boxes")
+    for entry in raw if isinstance(raw, list) else ():
+        box = entry.get("box") if isinstance(entry, dict) else None
+        if isinstance(box, dict):
+            yield box
 
 
 def review_packages(
     patch_dict: dict,
     db: ObjectDatabase | None = None,
+    *,
+    graph: PatchGraph | None = None,
 ) -> list[CriticResult]:
     """Review package-specific semantics.
 
@@ -61,44 +97,44 @@ def review_packages(
     Args:
         patch_dict: A .maxpat-format dict.
         db: Optional ObjectDatabase instance. Created internally if None.
+        graph: The shared PatchGraph of *patch_dict* (review_patch passes
+            it); built here when None.
 
     Returns:
-        List of CriticResult findings.
+        List of CriticResult findings, top level first, nested scopes in
+        pre-order.
     """
     results: list[CriticResult] = []
     if db is None:
         db = ObjectDatabase()
+    if graph is None:
+        graph = PatchGraph.build(patch_dict)
 
-    patcher = patch_dict.get("patcher", {})
-    boxes = patcher.get("boxes", [])
-    lines = patcher.get("lines", [])
+    packages_used = collect_packages_used(graph, db)
+    # One dedup state per call: a package / missing object reports once
+    warned_packages: set[str] = set()
+    flagged: set[str] = set()
 
-    # Build box lookup and detect which packages are used
-    packages_used: set[str] = set()
-    box_lookup: dict[str, dict] = {}
-    for box_entry in boxes:
-        box = box_entry.get("box", {})
-        box_id = box.get("id")
-        if box_id:
-            box_lookup[box_id] = box
-        name = _get_object_name(box)
-        if name:
-            pkg = db.get_package(name)
-            if pkg:
-                packages_used.add(pkg)
+    for scope in graph.scopes:
+        if scope.context == "gen":
+            continue
+        box_lookup = scope.boxes
+        found: list[CriticResult] = []
 
-    # Conditional dispatch per D-12
-    if "BEAP" in packages_used:
-        results.extend(_check_beap_conventions(box_lookup, lines, db))
+        # Conditional dispatch per D-12
+        if "BEAP" in packages_used:
+            found.extend(_check_beap_conventions(box_lookup, scope.edges, db))
 
-    if "Bach" in packages_used:
-        results.extend(_check_bach_llll_types(box_lookup, lines, db))
+        if "Bach" in packages_used:
+            found.extend(_check_bach_llll_types(box_lookup, scope.edges, db))
 
-    # Community extraction check (lightweight, always runs)
-    results.extend(_check_community_extracted(box_lookup, db))
+        # Community extraction check (lightweight, always runs)
+        found.extend(_check_community_extracted(box_lookup, db, warned_packages))
 
-    # Install-state check (lightweight, always runs) -- D-06
-    results.extend(_check_install_state(box_lookup, db))
+        # Install-state check (lightweight, always runs) -- D-06
+        found.extend(_check_install_state(box_lookup, db, flagged))
+
+        results.extend(tag_results(found, scope.path))
 
     return results
 
@@ -109,7 +145,7 @@ def review_packages(
 
 def _check_beap_conventions(
     box_lookup: dict[str, dict],
-    lines: list[dict],
+    edges: list,
     db: ObjectDatabase,
 ) -> list[CriticResult]:
     """Check BEAP signal chain conventions.
@@ -117,49 +153,32 @@ def _check_beap_conventions(
     Dispatches to output termination and VCA gain staging checks.
     """
     results: list[CriticResult] = []
-    results.extend(_check_beap_output_termination(box_lookup, lines, db))
-    results.extend(_check_beap_vca_staging(box_lookup, lines, db))
+    results.extend(_check_beap_output_termination(box_lookup, edges, db))
+    results.extend(_check_beap_vca_staging(box_lookup, edges, db))
     return results
 
 
 def _build_signal_adjacency(
     box_lookup: dict[str, dict],
-    lines: list[dict],
+    edges: list,
 ) -> dict[str, list[str]]:
-    """Build forward signal adjacency from patchlines.
+    """Build forward signal adjacency from one scope's edges.
 
     For bpatcher boxes (BEAP modules), treat all connections as potential
     signal connections since outlettype may not be present in the box dict.
+    Other sources follow ``edge.signal`` (graph.outlet_is_signal), so
+    ``multichannelsignal`` counts (S1, Q20).
     """
     signal_adj: dict[str, list[str]] = {}
-    for line_entry in lines:
-        patchline = line_entry.get("patchline", line_entry)
-        source = patchline.get("source", [])
-        destination = patchline.get("destination", [])
-        if len(source) < 2 or len(destination) < 2:
-            continue
-
-        src_id, src_outlet = source[0], source[1]
-        dst_id = destination[0]
-
-        src_box = box_lookup.get(src_id)
+    for edge in edges:
+        src_box = box_lookup.get(edge.src)
         if not src_box:
             continue
 
         # For bpatcher boxes, treat all connections as signal
         # (BEAP modules are signal processors)
-        if src_box.get("maxclass") == "bpatcher":
-            signal_adj.setdefault(src_id, []).append(dst_id)
-            continue
-
-        # For other boxes, check outlettype
-        src_outlettype = src_box.get("outlettype", [])
-        is_signal = (
-            src_outlet < len(src_outlettype)
-            and src_outlettype[src_outlet] == "signal"
-        )
-        if is_signal:
-            signal_adj.setdefault(src_id, []).append(dst_id)
+        if walk.box_maxclass(src_box) == "bpatcher" or edge.signal:
+            signal_adj.setdefault(edge.src, []).append(edge.dst)
 
     return signal_adj
 
@@ -177,7 +196,7 @@ def _get_beap_category(box: dict, db: ObjectDatabase) -> str | None:
 
 def _check_beap_output_termination(
     box_lookup: dict[str, dict],
-    lines: list[dict],
+    edges: list,
     db: ObjectDatabase,
 ) -> list[CriticResult]:
     """Check that BEAP signal chains terminate with an output module.
@@ -186,7 +205,7 @@ def _check_beap_output_termination(
     adjacency. If no path reaches an Output category object, emit warning.
     """
     results: list[CriticResult] = []
-    signal_adj = _build_signal_adjacency(box_lookup, lines)
+    signal_adj = _build_signal_adjacency(box_lookup, edges)
 
     # Find BEAP source boxes
     beap_sources: list[tuple[str, str]] = []  # (box_id, name)
@@ -233,7 +252,7 @@ def _check_beap_output_termination(
 
 def _check_beap_vca_staging(
     box_lookup: dict[str, dict],
-    lines: list[dict],
+    edges: list,
     db: ObjectDatabase,
 ) -> list[CriticResult]:
     """Check that BEAP oscillators pass through VCA before output.
@@ -242,7 +261,7 @@ def _check_beap_vca_staging(
     (bp.VCA etc.) is in the path, emit warning.
     """
     results: list[CriticResult] = []
-    signal_adj = _build_signal_adjacency(box_lookup, lines)
+    signal_adj = _build_signal_adjacency(box_lookup, edges)
 
     # Find BEAP oscillator boxes specifically
     beap_oscillators: list[tuple[str, str]] = []
@@ -314,7 +333,7 @@ def _is_llll_inlet(obj_entry: dict, inlet_id: int) -> bool:
 
 def _check_bach_llll_types(
     box_lookup: dict[str, dict],
-    lines: list[dict],
+    edges: list,
     db: ObjectDatabase,
 ) -> list[CriticResult]:
     """Detect non-bach objects connected to bach inlets expecting llll.
@@ -328,15 +347,9 @@ def _check_bach_llll_types(
     """
     results: list[CriticResult] = []
 
-    for line_entry in lines:
-        patchline = line_entry.get("patchline", line_entry)
-        source = patchline.get("source", [])
-        destination = patchline.get("destination", [])
-        if len(source) < 2 or len(destination) < 2:
-            continue
-
-        src_id = source[0]
-        dst_id, dst_inlet = destination[0], destination[1]
+    for edge in edges:
+        src_id = edge.src
+        dst_id, dst_inlet = edge.dst, edge.inlet
 
         src_box = box_lookup.get(src_id)
         dst_box = box_lookup.get(dst_id)
@@ -348,7 +361,7 @@ def _check_bach_llll_types(
 
         # Command sources send bach messages, not llll data (Q3 / E4)
         if (
-            src_box.get("maxclass") == "message"
+            walk.box_maxclass(src_box) == "message"
             or src_name in _BACH_COMMAND_SOURCES
         ):
             continue
@@ -407,15 +420,18 @@ def _match_package_by_prefix(name: str, db: ObjectDatabase) -> str | None:
 def _check_community_extracted(
     box_lookup: dict[str, dict],
     db: ObjectDatabase,
+    warned_packages: set | None = None,
 ) -> list[CriticResult]:
     """Warn on community/licensed packages that haven't been extracted.
 
     Checks each unique package used in the patch. If a community or licensed
     package has extracted=False in package_info.json, emit a warning (once
     per package). Uses prefix matching as fallback for objects not in the DB.
+    *warned_packages* is shared across the scopes of one review (Q20).
     """
     results: list[CriticResult] = []
-    warned_packages: set[str] = set()
+    if warned_packages is None:
+        warned_packages = set()
 
     for box_id, box in box_lookup.items():
         name = _get_object_name(box)
@@ -457,6 +473,7 @@ def _check_community_extracted(
 def _check_install_state(
     box_lookup: dict[str, dict],
     db: ObjectDatabase,
+    flagged: set | None = None,
 ) -> list[CriticResult]:
     """Blocker on any object the database marks as missing from this install.
 
@@ -477,10 +494,12 @@ def _check_install_state(
     remains the single validator channel), so no ValidationResult is produced here.
 
     Findings are deduped per canonical object name: the same missing object in
-    several boxes yields exactly one blocker.
+    several boxes yields exactly one blocker. *flagged* is shared across
+    the scopes of one review (Q20), so that holds across subpatchers too.
     """
     results: list[CriticResult] = []
-    flagged: set[str] = set()
+    if flagged is None:
+        flagged = set()
 
     for box in box_lookup.values():
         name = _get_object_name(box)
