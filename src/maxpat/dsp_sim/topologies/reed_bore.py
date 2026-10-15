@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 import numpy as np
 
@@ -45,6 +46,12 @@ class ReedBore:
         _ap_x_prev / _ap_y_prev: Allpass-interpolation state.
         _breath_smooth: One-pole-smoothed breath input.
     """
+
+    # Declared param surface (Q25 / H4): run_simulation(topology=...) rejects
+    # any sweep_param or params key outside this set with TopologyError.
+    PARAMS: ClassVar[frozenset[str]] = frozenset({
+        "freq", "breath", "bore_damp", "reed_stiff", "reed_aper", "cone_loss",
+    })
 
     sample_rate: float
     params: dict[str, float]
@@ -114,4 +121,4 @@ class ReedBore:
         self._buffer[self._wi] = bore_in
         self._wi = (self._wi + 1) % _BORE_BUFFER_SIZE
 
-        return reed_sig + cone_return  # bore_only-like output, no radiation
+        return reed_sig + cone_return  # loop output, no radiation

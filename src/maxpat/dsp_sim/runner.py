@@ -7,14 +7,29 @@ thresholds), D-09 (verdict priority).
 Public surface:
   - run_simulation(...) -- single entry point.
   - SimulationReport -- dataclass returned by run_simulation.
-  - TopologyError -- raised on unknown topology or mirror/topology conflict.
+  - TopologyError -- raised on unknown topology, mirror/topology conflict, or
+    (topology= path) a sweep_param / params key the topology does not declare.
+
+Q25 hardening (review H2 / H4):
+  - The runaway early exit tests the post-settle slice of the step just
+    measured -- the exact record the classifier reads -- so a startup
+    transient no longer ends the sweep, and a sweep that stops early is
+    reported as runaway, never pass.
+  - rms_amplitude is the AC RMS (mean removed), so DC cannot defeat the
+    no_oscillation floor.
+  - topology= runs validate sweep_param and every params key against the
+    class's PARAMS before rendering; a misspelled param would otherwise be
+    ignored and the sweep would pass without testing anything. mirror=
+    callables are dev-authored and declare nothing, so they are not
+    validated.
 
 Threat refs (Phase 32 32-01-PLAN <threat_model>):
   - T-01 (Elevation): mirror= callable comes from dev-authored test code,
     no string eval/exec, no third-party plugin loading.
   - T-04 (DoS): per-step buffer is bounded by `settle_samples + 0.5*sample_rate`;
-    runaway early-exit short-circuits the sweep loop on NaN/Inf or peak
-    above runaway_amplitude so divergent topologies cannot run unbounded.
+    runaway early-exit short-circuits the sweep loop on a NaN/Inf or
+    above-runaway_amplitude post-settle peak so divergent topologies cannot
+    run unbounded.
 """
 
 from __future__ import annotations
@@ -26,6 +41,9 @@ from typing import Any, Callable
 import numpy as np
 
 from src.maxpat.dsp_sim.classifier import (
+    PASS,
+    RUNAWAY,
+    _SUGGESTED_FIX,
     Verdict,
     classify,
 )
@@ -33,9 +51,9 @@ from src.maxpat.dsp_sim.measure import (
     ClassifierThresholds,
     StepMeasurement,
     cents_offset as _cents_offset,
+    measure_ac_rms,
     measure_fundamental,
     measure_peak,
-    measure_rms,
 )
 
 
@@ -45,7 +63,7 @@ from src.maxpat.dsp_sim.measure import (
 
 
 class TopologyError(Exception):
-    """Raised when topology name is unknown or mirror/topology conflict detected."""
+    """Raised on an unknown topology, a mirror/topology conflict, or an undeclared param."""
 
 
 # ===========================================================================
@@ -60,8 +78,9 @@ class SimulationReport:
     Attributes:
         verdict: One of 'pass', 'phase_drift', 'mode_competition',
             'no_oscillation', 'runaway' (D-03, D-09 priority cascade).
-        measurements: One StepMeasurement per sweep step
-            (length == sweep_steps unless an early-exit runaway shortened it).
+        measurements: One StepMeasurement per sweep step. Shorter than the
+            sweep only when a post-settle runaway stopped the sweep early
+            (Q25 / H2); the verdict is then always 'runaway'.
         worst_step: Index of the step that triggered the failure; None on pass.
         reason: Human-readable diagnostic string.
         suggested_fix: Lifted from the CLAUDE.md Gen~ rule "Waveguide loop filters";
@@ -91,12 +110,16 @@ class SimulationReport:
 def _resolve_stepper_factory(
     topology: str | None,
     mirror: Callable | None,
-) -> Callable:
-    """Return a callable (sample_rate, params) -> stepper.
+) -> tuple[Callable, frozenset[str] | None]:
+    """Return (factory, declared_params).
 
-    Stepper has either a .step(in1, in2) -> float method or is itself a
-    callable (n_samples, params) -> ndarray. Topology classes use the
-    .step(...) form per D-01.
+    factory is a callable (sample_rate, params) -> stepper. Stepper has
+    either a .step(in1, in2) -> float method or is itself a callable
+    (n_samples, params) -> ndarray. Topology classes use the .step(...)
+    form per D-01.
+
+    declared_params is the topology class's PARAMS frozenset (Q25 / H4), or
+    None for mirror= callables, which declare nothing and are not validated.
 
     Mutually exclusive with topology= per D-01.
     """
@@ -105,7 +128,7 @@ def _resolve_stepper_factory(
     if topology is None and mirror is None:
         raise TopologyError("must supply either topology= or mirror= (D-01)")
     if mirror is not None:
-        return mirror
+        return mirror, None
     # topology= path -- import topology library lazily so 32-01 can ship
     # before 32-02 lands the actual topology classes.
     try:
@@ -120,7 +143,27 @@ def _resolve_stepper_factory(
     def factory(sample_rate, params):
         return cls(sample_rate=sample_rate, params=params)
 
-    return factory
+    return factory, frozenset(getattr(cls, "PARAMS", frozenset()))
+
+
+def _validate_params(
+    topology: str | None,
+    declared: frozenset[str] | None,
+    sweep_param: str,
+    params: dict[str, float],
+) -> None:
+    """Raise TopologyError if sweep_param or a params key is undeclared (Q25 / H4)."""
+    if declared is None:
+        return
+    names = {sweep_param, *params.keys()}
+    unknown = sorted(n for n in names if n not in declared)
+    if unknown:
+        raise TopologyError(
+            f"topology '{topology}' does not declare param(s) "
+            f"{', '.join(unknown)}; the run would ignore them and pass "
+            f"without testing anything. Declared: "
+            f"{', '.join(sorted(declared))}"
+        )
 
 
 # ===========================================================================
@@ -169,7 +212,7 @@ def _measure_step(
         target_hz=target_hz,
         measured_hz=measured,
         cents_offset=_cents_offset(measured, target_hz),
-        rms_amplitude=measure_rms(tail),
+        rms_amplitude=measure_ac_rms(tail),
         peak_amplitude=measure_peak(tail),
     )
 
@@ -223,9 +266,12 @@ def run_simulation(
         suggested_fix.
 
     Raises:
-        TopologyError: Unknown topology or topology+mirror conflict.
+        TopologyError: Unknown topology, topology+mirror conflict, or (on the
+            topology= path) a sweep_param or params key outside the class's
+            PARAMS. Raised before any rendering (Q25 / H4).
     """
-    factory = _resolve_stepper_factory(topology, mirror)
+    factory, declared = _resolve_stepper_factory(topology, mirror)
+    _validate_params(topology, declared, sweep_param, params)
     lo, hi, n = sweep
     if sweep_steps is not None:
         n = sweep_steps
@@ -247,6 +293,7 @@ def run_simulation(
 
     # ---- Sweep phase ----
     measurements: list[StepMeasurement] = []
+    stopped_at: int | None = None
     for i in range(n):
         param_value = lo + i * (hi - lo) / (n - 1)
         step_params = dict(params)
@@ -254,21 +301,28 @@ def run_simulation(
         target_hz = float(step_params.get("freq", 220.0))
         stepper = factory(sample_rate=sample_rate, params=step_params)
         buf = _render_step(stepper, n_samples, step_params)
-        measurements.append(
-            _measure_step(buf, settle_samples, sample_rate, target_hz, param_value)
-        )
+        m = _measure_step(buf, settle_samples, sample_rate, target_hz, param_value)
+        measurements.append(m)
         # T-04 mitigation: early-exit on runaway so divergent topologies
-        # don't waste cycles after a NaN/Inf or peak-overshoot is already
-        # detected. The classifier still sees the runaway StepMeasurement
-        # and emits verdict='runaway' per D-09 priority 1.
-        if buf.size and (
-            not np.all(np.isfinite(buf))
-            or float(np.max(np.abs(buf))) > runaway_amplitude
-        ):
+        # don't waste cycles. Q25 / H2: test the record just appended (the
+        # post-settle peak), the exact slice the classifier reads, so a
+        # startup transient cannot end the sweep and an early exit always
+        # classifies as runaway (D-09 priority 1).
+        if (not np.isfinite(m.peak_amplitude)
+                or m.peak_amplitude > runaway_amplitude):
+            if i < n - 1:
+                stopped_at = i
             break
 
     # ---- Classify phase ----
     verdict, worst_step, reason, suggested_fix = classify(measurements, thresholds)
+    if stopped_at is not None:
+        reason = f"{reason}; sweep stopped early at step {stopped_at} of {n}"
+        if verdict == PASS:
+            # Defensive: an early exit is never pass (Q25 / H2).
+            verdict = RUNAWAY
+            worst_step = stopped_at
+            suggested_fix = _SUGGESTED_FIX[RUNAWAY]
 
     return SimulationReport(
         verdict=verdict,

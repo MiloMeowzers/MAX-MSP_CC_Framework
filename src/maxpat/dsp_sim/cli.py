@@ -91,7 +91,7 @@ def build_parser() -> argparse.ArgumentParser:
     src_group.add_argument(
         "--topology",
         type=str,
-        help="Curated topology: bore_only, reed_bore, reed_bore_post_radiation.",
+        help="Curated topology: reed_bore, reed_bore_post_radiation.",
     )
     src_group.add_argument(
         "--mirror",

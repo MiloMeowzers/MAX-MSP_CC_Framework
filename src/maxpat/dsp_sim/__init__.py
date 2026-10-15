@@ -5,10 +5,11 @@ bassoon-model patch, NOT a general-purpose DSP simulator. It exists to serve
 the CLAUDE.md Gen~ rule that any new in-loop waveguide filter must be
 pre-flighted with a numpy simulation before committing (catch pitch-lock /
 mode-competition / runaway / no-oscillation before a bassoon patch ships).
-The curated topology library ships three bassoon shapes -- `bore_only`,
-`reed_bore`, and `reed_bore_post_radiation` (the last encodes the v0.4.2+
-"resonant filters go POST-LOOP" invariant) -- each mirroring
-patches/bassoon-model/generated/bassoon.gendsp. The `mirror=` escape hatch
+The curated topology library ships two bassoon shapes -- `reed_bore` and
+`reed_bore_post_radiation` (the last encodes the v0.4.2+ "resonant filters
+go POST-LOOP" invariant) -- each mirroring
+patches/bassoon-model/generated/bassoon.gendsp (`bore_only` was removed in
+Q25). The `mirror=` escape hatch
 (run_simulation(mirror=callable)) covers off-catalogue patches without adding
 a topology. See README.md in this package for scope, topologies, and usage.
 
@@ -44,6 +45,7 @@ from src.maxpat.dsp_sim.measure import (
     ClassifierThresholds,
     StepMeasurement,
     cents_offset,
+    measure_ac_rms,
     measure_fundamental,
     measure_peak,
     measure_rms,
@@ -68,6 +70,7 @@ __all__ = [
     "MODE_COMPETITION",
     "NO_OSCILLATION",
     "RUNAWAY",
+    "measure_ac_rms",
     "measure_fundamental",
     "measure_peak",
     "measure_rms",

@@ -32,7 +32,9 @@ class StepMeasurement:
         target_hz: Expected fundamental (typically `params['freq']`).
         measured_hz: Detected fundamental from autocorrelation/FFT.
         cents_offset: 1200 * log2(measured_hz / target_hz); 0 on perfect match.
-        rms_amplitude: Post-settle RMS of the buffer (amplitude_floor check).
+        rms_amplitude: Post-settle RMS after mean removal (measure_ac_rms), which
+            is what the amplitude_floor check reads; DC cannot lift a dead
+            loop over the floor (Q25 / H4).
         peak_amplitude: Post-settle |peak|; NaN if any NaN in buffer.
     """
 

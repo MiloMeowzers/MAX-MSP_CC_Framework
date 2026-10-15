@@ -1,7 +1,8 @@
 """Tests for the curated waveguide topology library.
 
-Covers the registry (TOPOLOGIES + get_topology) and per-topology invariants
-for BoreOnly, ReedBore, and ReedBorePostRadiation. Per CONTEXT.md D-01
+Covers the registry (TOPOLOGIES + get_topology), the declared PARAMS
+contract (Q25 / H4) and per-topology invariants for ReedBore and
+ReedBorePostRadiation (bore_only was removed in Q25). Per CONTEXT.md D-01
 (curated catalog) and D-11 (v0.4.2+ shape).
 """
 
@@ -98,24 +99,28 @@ class TestRegistry:
         from src.maxpat.dsp_sim.topologies import (  # noqa: F401
             TOPOLOGIES,
             get_topology,
-            BoreOnly,
             ReedBore,
             ReedBorePostRadiation,
         )
 
     def test_registry_keys_are_exact(self):
-        """TOPOLOGIES must expose exactly the three curated names (D-01)."""
+        """TOPOLOGIES exposes exactly the two curated names (bore_only removed, Q25)."""
         from src.maxpat.dsp_sim.topologies import TOPOLOGIES
         assert set(TOPOLOGIES.keys()) == {
-            "bore_only",
             "reed_bore",
             "reed_bore_post_radiation",
         }
 
     def test_get_topology_returns_class(self):
-        """get_topology('bore_only') returns the BoreOnly class."""
-        from src.maxpat.dsp_sim.topologies import get_topology, BoreOnly
-        assert get_topology("bore_only") is BoreOnly
+        """get_topology('reed_bore') returns the ReedBore class."""
+        from src.maxpat.dsp_sim.topologies import get_topology, ReedBore
+        assert get_topology("reed_bore") is ReedBore
+
+    def test_bore_only_removed(self):
+        """Q25 / H4: bore_only settled to DC and read 4009 Hz at every setting; it is gone."""
+        from src.maxpat.dsp_sim.topologies import get_topology, TopologyError
+        with pytest.raises(TopologyError):
+            get_topology("bore_only")
 
     def test_get_topology_unknown_raises(self):
         """Unknown topology name raises TopologyError with 'unknown topology'."""
@@ -124,38 +129,25 @@ class TestRegistry:
             get_topology("nonexistent")
         assert "unknown topology" in str(excinfo.value).lower()
 
+    def test_cli_bore_only_exits_2(self):
+        """Q25 / H4: `--topology bore_only` is an unknown topology (CLI exit 2)."""
+        import subprocess
+        import sys
+        proc = subprocess.run(
+            [sys.executable, "-m", "src.maxpat.dsp_sim", "--patch", "x",
+             "--topology", "bore_only", "--param", "bore_damp",
+             "--sweep", "0,1,2", "--params", "freq=220"],
+            capture_output=True, text=True, timeout=60,
+        )
+        assert proc.returncode == 2, proc.stderr
 
-# ===========================================================================
-# BoreOnly tests
-# ===========================================================================
-
-class TestBoreOnly:
-    """Passive bore waveguide invariants."""
-
-    def _make(self, **overrides) -> "BoreOnly":  # type: ignore[name-defined]
-        from src.maxpat.dsp_sim.topologies import BoreOnly
-        params = {"freq": 220.0, "bore_damp": 0.3, "cone_loss": 0.85}
-        params.update(overrides)
-        return BoreOnly(sample_rate=_SAMPLE_RATE, params=params)
-
-    def test_step_returns_finite_float(self):
-        """Single sample step returns a finite scalar."""
-        b = self._make()
-        v = b.step(220.0, 0.5)
-        assert math.isfinite(float(v))
-
-    def test_constant_drive_produces_finite_buffer(self):
-        """4096 samples of constant drive yields fully finite output."""
-        b = self._make()
-        buf = _drive(b, 220.0, 0.5, 4096)
-        assert np.all(np.isfinite(buf))
-
-    def test_constant_drive_produces_nonzero_rms(self):
-        """Bore loop carries the input — RMS > 0 even passive."""
-        b = self._make()
-        buf = _drive(b, 220.0, 0.5, 4096)
-        rms = _post_settle_rms(buf, settle_samples=512)
-        assert rms > 0.0
+    def test_every_topology_declares_params(self):
+        """Q25 / H4: every topology declares a frozenset PARAMS holding freq and breath."""
+        from src.maxpat.dsp_sim.topologies import TOPOLOGIES
+        for name, cls in TOPOLOGIES.items():
+            params = getattr(cls, "PARAMS", None)
+            assert isinstance(params, frozenset), name
+            assert {"freq", "breath"} <= params, name
 
 
 # ===========================================================================

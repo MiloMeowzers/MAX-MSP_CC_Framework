@@ -7,6 +7,12 @@ Verdict priority (D-09): runaway > no_oscillation > mode_competition >
 phase_drift > pass. Single verdict per run; the full per-step measurement
 table remains available on the SimulationReport for debugging.
 
+Q25 / H4: a step with no detectable fundamental (measured_hz <= 0 or
+non-finite: DC-only, silent or aperiodic output) is no_oscillation -- before
+Q25 it scored cents_offset 0 and passed as "in tune". rms_amplitude is the
+AC RMS (mean removed), so a DC offset cannot lift a dead loop over the
+floor. An empty measurement list is no_oscillation, never pass.
+
 Suggested-fix strings (D-03) are lifted from the CLAUDE.md Gen~ rule
 "Waveguide loop filters" so the agent's failure message
 matches the user's existing mental model. Match the wording verbatim --
@@ -79,14 +85,19 @@ def classify(
 
     Returns:
         Tuple (verdict, worst_step, reason, suggested_fix).
-        worst_step is None on pass.
+        worst_step is None on pass (and on an empty list).
         suggested_fix is None on pass.
     """
     if thresholds is None:
         thresholds = ClassifierThresholds()
 
     if not measurements:
-        return (PASS, None, "no measurements", None)
+        return (
+            NO_OSCILLATION,
+            None,
+            "no measurements: nothing was simulated",
+            _SUGGESTED_FIX[NO_OSCILLATION],
+        )
 
     # D-09 priority 1: runaway (NaN/Inf or peak above runaway_amplitude).
     for i, m in enumerate(measurements):
@@ -99,11 +110,19 @@ def classify(
             )
             return (RUNAWAY, i, reason, _SUGGESTED_FIX[RUNAWAY])
 
-    # D-09 priority 2: no_oscillation (RMS below amplitude_floor at any step).
+    # D-09 priority 2: no_oscillation -- no detectable fundamental, or AC RMS
+    # below amplitude_floor, at any step (Q25 / H4). First such step wins.
     for i, m in enumerate(measurements):
+        if not math.isfinite(m.measured_hz) or m.measured_hz <= 0.0:
+            reason = (
+                f"no_oscillation: step {i} has no detectable fundamental "
+                f"(DC-only, silent or aperiodic output) "
+                f"at param_value={m.param_value}"
+            )
+            return (NO_OSCILLATION, i, reason, _SUGGESTED_FIX[NO_OSCILLATION])
         if m.rms_amplitude < thresholds.amplitude_floor:
             reason = (
-                f"no_oscillation: step {i} rms_amplitude={m.rms_amplitude:.2e} "
+                f"no_oscillation: step {i} AC rms_amplitude={m.rms_amplitude:.2e} "
                 f"below floor {thresholds.amplitude_floor:.2e} "
                 f"at param_value={m.param_value}"
             )

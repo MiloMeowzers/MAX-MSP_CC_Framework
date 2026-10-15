@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 import numpy as np
 
@@ -49,6 +50,13 @@ class ReedBorePostRadiation:
         Bell LPF biquad state (post-loop): _bell_x1, _bell_x2, _bell_y1, _bell_y2.
         Reed BPF state (post-loop): _reed_x1, _reed_x2, _reed_y1, _reed_y2.
     """
+
+    # Declared param surface (Q25 / H4): run_simulation(topology=...) rejects
+    # any sweep_param or params key outside this set with TopologyError.
+    PARAMS: ClassVar[frozenset[str]] = frozenset({
+        "freq", "breath", "bore_damp", "bell_bright", "reed_stiff",
+        "reed_aper", "cone_loss", "register", "reed_res_freq", "reed_res_q",
+    })
 
     sample_rate: float
     params: dict[str, float]

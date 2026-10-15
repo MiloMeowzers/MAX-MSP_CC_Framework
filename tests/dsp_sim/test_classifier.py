@@ -124,3 +124,45 @@ class TestClassifier:
         verdict, _, _, fix = classify(measurements, loose)
         assert verdict == PASS
         assert fix is None
+
+
+# ===========================================================================
+# Q25 / H4: no detectable pitch and empty sweeps are not pass
+# ===========================================================================
+
+
+class TestNoPitchIsNoOscillation:
+    """Q25 / H4: measured_hz 0 (DC-only, silent or aperiodic) is no_oscillation, not in tune."""
+
+    def test_zero_pitch_step_is_no_oscillation(self):
+        measurements = [make_step() for _ in range(8)]
+        measurements[3] = make_step(measured_hz=0.0, cents_offset=0.0)
+        verdict, worst, reason, fix = classify(measurements)
+        assert verdict == NO_OSCILLATION
+        assert worst == 3
+        assert "no detectable fundamental" in reason
+        assert "Loop dissipation" in fix
+
+    def test_non_finite_pitch_is_no_oscillation(self):
+        measurements = [make_step() for _ in range(4)]
+        measurements[2] = make_step(measured_hz=float("nan"))
+        verdict, worst, _, _ = classify(measurements)
+        assert verdict == NO_OSCILLATION
+        assert worst == 2
+
+    def test_runaway_beats_zero_pitch(self):
+        """D-09 priority: runaway at step 5 still wins over measured_hz 0 at step 1."""
+        measurements = [make_step() for _ in range(8)]
+        measurements[1] = make_step(measured_hz=0.0)
+        measurements[5] = make_step(peak_amplitude=12.0)
+        verdict, worst, _, _ = classify(measurements)
+        assert verdict == RUNAWAY
+        assert worst == 5
+
+    def test_empty_list_is_not_pass(self):
+        verdict, worst, reason, fix = classify([])
+        assert verdict != PASS
+        assert verdict == NO_OSCILLATION
+        assert worst is None
+        assert "nothing was simulated" in reason
+        assert fix is not None
