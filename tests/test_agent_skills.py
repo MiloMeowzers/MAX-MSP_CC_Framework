@@ -811,3 +811,99 @@ def test_max_dsp_agent_skill_uses_argv_subprocess_form():
     assert '"pytest", str(fixture), "-q"' in text, (
         "max-dsp-agent SKILL.md must include the argv-form subprocess snippet."
     )
+
+
+# ── Q18: single-sourced skill blocks and moved-rule loading (review S11) ──
+
+_OUTPUT_PROTOCOL_HEADING = "## Output Protocol (Edited Patches)"
+_OUTPUT_PROTOCOL_MARKER = "Make surgical edits or section rebuild"
+_BUILDER_SIGNATURE_MARKER = "### `Patcher.add_"
+
+# Strict xfail for guard cases a later Q18 task satisfies (removed by that task).
+PENDING_T2 = pytest.mark.xfail(strict=True, reason="pending-q18-t2")
+PENDING_T3 = pytest.mark.xfail(strict=True, reason="pending-q18-t3")
+
+
+def _h2_section(text: str, heading_prefix: str) -> str | None:
+    """Return the text from the first line starting with heading_prefix to the next '## '."""
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if line.startswith(heading_prefix):
+            end = len(lines)
+            for j in range(i + 1, len(lines)):
+                if lines[j].startswith("## "):
+                    end = j
+                    break
+            return "\n".join(lines[i:end])
+    return None
+
+
+@PENDING_T3
+def test_dedupe_builder_api_in_shared() -> None:
+    """Q18: the Builder API block lives once, in shared-capabilities.md."""
+    text = SHARED_CAPABILITIES.read_text()
+    heads = [line for line in text.split("\n") if line.startswith("## Builder API")]
+    assert len(heads) == 1, f"expected one '## Builder API' heading, found {len(heads)}"
+    section = _h2_section(text, "## Builder API") or ""
+    for needle in (
+        "### `Patcher.add_overlay_readout",
+        "### `Patcher.add_labeled_param_bank",
+        "### `Patcher.add_m4l_gen_synth",
+        "_ROLE_COMPANION_MAP",
+        "### Quick reference",
+    ):
+        assert needle in section, f"shared Builder API section lacks {needle!r}"
+
+
+@PENDING_T3
+@pytest.mark.parametrize("agent_name", ["max-patch-agent", "max-ui-agent"])
+def test_dedupe_skill_builder_api_is_pointer(agent_name: str) -> None:
+    """Q18: patch/ui agents carry a pointer stub, not the full Builder API body."""
+    section = _h2_section(_read_skill(agent_name), "## Builder API")
+    assert section is not None, f"{agent_name} lost its Builder API stub"
+    assert "shared-capabilities.md" in section, f"{agent_name} stub does not point to shared"
+    assert _BUILDER_SIGNATURE_MARKER not in section, (
+        f"{agent_name} still carries the full Builder API body"
+    )
+
+
+@PENDING_T3
+def test_dedupe_output_protocol_in_shared() -> None:
+    """Q18: the edited-patch output protocol lives once, in shared-capabilities.md."""
+    text = SHARED_CAPABILITIES.read_text()
+    heads = [line for line in text.split("\n") if line == _OUTPUT_PROTOCOL_HEADING]
+    assert len(heads) == 1, f"expected one {_OUTPUT_PROTOCOL_HEADING!r}, found {len(heads)}"
+    section = _h2_section(text, _OUTPUT_PROTOCOL_HEADING) or ""
+    assert _OUTPUT_PROTOCOL_MARKER in section
+    assert "finalize_patch(patcher, is_new=False)" in section
+
+
+@PENDING_T3
+@pytest.mark.parametrize("agent_name", SPECIALIST_AGENTS)
+def test_dedupe_output_protocol_pointer(agent_name: str) -> None:
+    """Q18: each specialist points to the shared output protocol instead of copying it."""
+    text = _read_skill(agent_name)
+    section = _h2_section(text, _OUTPUT_PROTOCOL_HEADING)
+    assert section is not None, f"{agent_name} lost {_OUTPUT_PROTOCOL_HEADING!r}"
+    assert "shared-capabilities.md" in section, f"{agent_name} protocol does not point to shared"
+    assert _OUTPUT_PROTOCOL_MARKER not in text, f"{agent_name} still copies the protocol steps"
+
+
+def test_dedupe_rnbo_ext_subsections_kept() -> None:
+    """Q18: agent-specific subsections under the protocol stay in place."""
+    assert "### Export Target Reference" in _read_skill("max-rnbo-agent")
+    assert "### Archetype Reference" in _read_skill("max-ext-agent")
+
+
+@PENDING_T2
+def test_dsp_agent_loads_genexpr_rules() -> None:
+    """Q18: gen~ detail moved out of CLAUDE.md is still loaded by the DSP agent."""
+    section = _h2_section(_read_skill("max-dsp-agent"), "## Domain Context Loading")
+    assert section is not None, "max-dsp-agent lost 'Domain Context Loading'"
+    assert "genexpr-rules.md" in section
+
+
+@PENDING_T2
+def test_ui_agent_points_to_uicontrast_section() -> None:
+    """Q18: the contrast algorithm moved to ui-presets.md is reachable from the UI agent."""
+    assert "Text Contrast Resolution" in _read_skill("max-ui-agent")

@@ -1,37 +1,31 @@
 # MAX Development Framework
 
-This file defines how Claude works with MAX/MSP patches and code in this project. Every rule here is mandatory. When generating patches, writing GenExpr, creating RNBO exports, or scripting with Node for Max / js objects, follow these rules exactly.
+This file defines how Claude works with MAX/MSP patches and code in this project. Every rule here is mandatory. When generating patches, writing GenExpr, creating RNBO exports, or scripting with Node for Max / js objects, follow these rules exactly. Each rule is a one-line imperative; where detail moved out, the rule names its home.
+
+Reference docs:
+- `.claude/skills/references/db-maintenance.md` -- object-DB internals: override merging, refpage authority, empty-I/O audits, re-sync after a Max update
+- `.claude/skills/references/severity-contract.md` -- what validator and critic findings mean, and which block a save
+- `.claude/skills/references/troubleshooting.md` -- MAX console error -> cause -> fix
+- `.claude/skills/references/proven-forms.md` -- forms confirmed in MAX, with evidence tiers
+- `.claude/skills/references/max-9.2-changes.md` -- Max 9.2 objects, messages, attributes and v8 APIs
+- `.claude/skills/references/shared-capabilities.md` -- capabilities every specialist agent shares (styling, layout, editing)
 
 ## Object Database
 
-The object knowledge base lives at `.claude/max-objects/` with one subdirectory per domain:
-
-```
-.claude/max-objects/
-  max/objects.json       # Control flow, data, UI (473 objects)
-  msp/objects.json       # Audio/signal processing (247 objects)
-  jitter/objects.json    # Video, matrix, OpenGL (222 objects)
-  mc/objects.json        # Multichannel wrappers (222 objects)
-  gen/objects.json       # Gen~ DSP and Jitter operators (189 objects)
-  m4l/objects.json       # Max for Live objects (35 objects)
-  rnbo/objects.json      # RNBO export-compatible objects (560 objects)
-  packages/<Package>/objects.json  # Package objects, one dir per package (29 packages, 1497 objects)
-```
-
-Each domain file is a JSON object keyed by object name. Every object entry contains: `name`, `maxclass`, `module`, `domain`, `inlets` (array with id/type/signal/hot), `outlets` (array with id/type/signal), `arguments`, `messages`, `min_version`, `verified`, `rnbo_compatible`, `variable_io`.
+The object knowledge base lives at `.claude/max-objects/`: one `objects.json` per domain (`max`, `msp`, `jitter`, `mc`, `gen`, `m4l`, `rnbo`) plus `packages/<Package>/objects.json`. Each entry is keyed by object name: `name`, `maxclass`, `module`, `domain`, `inlets` (id/type/signal/hot), `outlets` (id/type/signal), `arguments`, `messages`, `min_version`, `verified`, `rnbo_compatible`, `variable_io`.
 
 ### Supplementary Files
 
-- **`overrides.json`** -- Expert corrections that take precedence over extracted data. Merged per port: an override's `inlets`/`outlets` array sets the count, and each port replaces only the keys it sets, so base digests, `hot` flags and port types survive (generator placeholder digests and an empty `type` on a control port never replace base values; `{"id": N}` inherits the base port). Other keys replace whole; keys are canonicalized through `aliases.json`, and an unknown or duplicate key fails at load.
-- **`aliases.json`** -- Common shortcuts mapped to canonical names (e.g., `t` -> `trigger`, `b` -> `bangbang`, `sel` -> `select`).
-- **`relationships.json`** -- Common object pairings and companions (e.g., `tapin~`/`tapout~`, `notein`/`stripnote`).
+- **`overrides.json`** -- expert corrections that take precedence over extracted data (merged per port; semantics in `db-maintenance.md`).
+- **`aliases.json`** -- shortcuts mapped to canonical names (`t` -> `trigger`, `b` -> `bangbang`, `sel` -> `select`).
+- **`relationships.json`** -- common pairings and companions (`tapin~`/`tapout~`, `notein`/`stripnote`).
 - **`pd-blocklist.json`** -- Pure Data objects that do NOT exist in MAX, with their MAX equivalents.
-- **`extraction-log.json`** -- Extraction metadata and statistics.
-- **`groups.json`** -- Inherited group names: MC wrapper methods/attributes (refpage `<mcwrapper>`), shared Jitter methods and OB3D/MOP/geometry attributes (refpage `<jittermethodlist>`/`<jitterattributelist>`, typed from the group pages), and thispatcher's help-patch selectors. Written only by `tools/sync_max_bundle.py --apply groups`, merged at call time by `ObjectDatabase`, never copied into domain files.
+- **`extraction-log.json`** -- extraction metadata and statistics.
+- **`groups.json`** -- inherited group names (mc wrapper, shared Jitter, thispatcher selectors); written only by `tools/sync_max_bundle.py --apply groups`, merged at call time by `ObjectDatabase`, never copied into domain files.
 
 ### How to Use the Database
 
-**Primary method -- `ObjectDatabase`:** Use the `ObjectDatabase` class from `src.maxpat.db_lookup` for all object lookups. It loads all 8 domain files, resolves aliases, applies overrides, and checks the PD blocklist automatically.
+**Primary method -- `ObjectDatabase`:** use `ObjectDatabase` from `src.maxpat.db_lookup` for all object lookups. It loads all 8 domain files, resolves aliases, applies overrides, and checks the PD blocklist.
 
 ```python
 from src.maxpat.db_lookup import ObjectDatabase
@@ -45,21 +39,16 @@ db.compute_io_counts("trigger", ["b", "i", "f"])   # (1, 3)
 db.get_outlet_types("cycle~")                      # ["signal"]
 ```
 
-`lookup()` returns only an object's own messages/attributes. For message or attribute questions use `db.messages(name)`, `db.attributes(name)` (typed; own definitions win) or `db.selectors(name)` (every accepted selector, including untyped inherited attribute names) -- these add the inherited group names from `groups.json` (e.g. `applyvalues`/`setvalue` on mc.* wrappers).
+`lookup()` returns only an object's own messages/attributes. For message or attribute questions use `db.messages(name)`, `db.attributes(name)` (typed) or `db.selectors(name)` (every accepted selector); they add inherited `groups.json` names (e.g. `applyvalues`/`setvalue` on mc.* wrappers).
 
-**Browse by domain:** The raw JSON files at `.claude/max-objects/{domain}/objects.json` are still available for browsing all objects in a domain or bulk operations, but for individual lookups always use `ObjectDatabase`.
+**Browse by domain:** read `.claude/max-objects/{domain}/objects.json` only for bulk browsing; for companions look the name up in `relationships.json`.
 
-**Check common companions:** Look up the object name in `relationships.json` to find commonly paired objects.
-
-**Verify lookup results have non-empty I/O.** Some DB entries (especially in `packages/`) were extracted with `inlets: []` and `outlets: []`. `lookup()` returns these as real hits, but the patch builder cannot connect them — they are indistinguishable from "missing" at the connection site. Treat empty-I/O entries as missing and populate them via `overrides.json`. Use `db.audit_empty_io()` to enumerate them. When a user reports an object "missing" you've used before, check both `lookup()` returns AND inlet/outlet lengths -- not just `exists()`. The `by_source` key of `audit_empty_io()` enumerates empty-I/O gaps per domain/package file. `lookup()` warns only when BOTH sides are empty — a zero-outlet sink (`dac~`, `print`, `send~`) or zero-inlet source (`begin~`) is legitimate DB data, not a gap, and `db.audit_half_empty_io()` enumerates those one-side-empty entries as `sinks`/`sources`. Before adding an object fresh to a domain file, search the `packages/` subdirectories and `overrides.json` first — it may already exist with partial data worth merging (same-named package entries can shadow populated core entries). Before declaring an object unknown, also grep existing `.maxpat` files under `patches/` — user-confirmed objects should be added to the appropriate domain file so future lookups succeed. The `live.*` gap this advice was written for is closed: all 30 `live.*` objects documented in the installed bundle resolve, and the 5 with one empty side are label/decorative/source shapes, not gaps.
-
-**The `maxclass` field in the DB is NOT authoritative.** Most MAX objects (`gen~`, `click~`, `expr`, `pack`, `route`, etc.) use `maxclass: "newobj"` with the object name in the `text` field. Only true UI widgets (`button`, `toggle`, `dial`, `meter~`, `gain~`, `ezdac~`, `flonum`, `number`, `scope~`, `spectroscope~`, `levelmeter~`, `multislider`, etc.) use their own name as `maxclass` with no `text` field. The authoritative source is `UI_MAXCLASSES` in `src/maxpat/maxclass_map.py`, NOT the database's `maxclass` field. Setting `maxclass` to a non-UI name causes "invalid attribute maxclass" errors at load.
-
-**The authoritative object name is the refpage's `<c74object name>` attribute, never the filename.** 813 of 2156 bundled refpages disagree: `bitand.maxref.xml` documents `&`, `greaterthan.maxref.xml` documents `>`, `fswap.maxref.xml` documents `swap`, `gswitch2.maxref.xml` documents `ggate`. Any extraction or audit keyed off filenames manufactures 795 phantom "missing from DB" gaps; keyed off the `name` attribute, only 8 installed names fail to resolve (6 documentation pages plus `kbm.data` and `scl.data`; `python3 tools/audit_db.py` recomputes all three figures). **Exception — define-mapped objects:** an object created by a `max define ALIAS TARGET ...;` line in the bundle's `*objectmappings*.txt` files can ship a refpage whose `name` attribute is the implementing class or a typo. Two Max 9.2 cases: `jit.gl.tex2mat.maxref.xml` declares `v8` (the alias is `max define jit.gl.tex2mat v8 jit.gl.tex2mat.js;`) and `jit.unpack.geomat.maxref.xml` declares `jit.unpackl.gl`. For these the alias IS the object name, and the refpage must never be merged into the object its `name` attribute points at (it would write Jitter Tools documentation into core `v8`).
-
-**Refpages are authoritative for I/O counts far more than for types, and must never overwrite expert overrides.** 640 of 1175 core refpages (54.5%) carry unfilled Cycling '74 template placeholders — `TEXT_HERE`, `INLET_TYPE`, `OUTLET_TYPE`, `undefined`, `Dummy` — with `max-ref` worst at 429/473. `spectroscope~`'s maxref declares 1 outlet typed `OUTLET_TYPE`: the count is right (MAX saves `spectroscope~` as 2 inlets / 1 outlet in every bundle help box) and only the type is a placeholder. `in`'s declares 1 inlet described `Dummy`, which is wrong and is corrected in `overrides.json`. Max 9.2's `jit.web~` refpage types all four outlets `signal`; the help-patch box Max itself serialized says `signal, signal, jit_matrix, ""` — when a refpage and a shipped help box disagree on types, the help box wins. A re-extraction that trusts refpage types would silently revert 36 curated outlets.
-
-**After a Max update, re-sync the DB from the installed bundle:** run `python3 tools/audit_db.py` (read-only drift report), then `python3 tools/sync_max_bundle.py` (dry-run: new objects, define aliases, message/attribute deltas), then `--apply new|define --names <explicit names>` and `--apply deltas`, then `--apply groups` (rewrites only `groups.json`), and finally `--refresh-log` so `extraction-log.json` records the sync (the audit's DB-age/drift line reads it). `--min-version N` sets the tag for objects older than the current release; `--apply inherited --attributes <names>` copies named shared Jitter OB3D attributes (defined only in the `jit.group-gl` group page) onto the objects whose refpages list them — only `alpha_mode` has been landed this way. The sync tool is additive and idempotent, never changes existing I/O, and cannot write `overrides.json`. Last synced against Max 9.2.0.
+DB rules (detail and evidence: `db-maintenance.md`):
+- **Verify lookup results have non-empty I/O.** Treat `inlets: []` + `outlets: []` entries as missing and fill them via `overrides.json`; `db.audit_empty_io()` and `db.audit_half_empty_io()` list gaps (one-side-empty sinks/sources are legitimate). Search `packages/`, `overrides.json` and existing `patches/` before adding an object.
+- **The `maxclass` field in the DB is NOT authoritative.** `UI_MAXCLASSES` in `src/maxpat/maxclass_map.py` is; most objects are `newobj` with the name in `text`, and a non-UI `maxclass` causes "invalid attribute maxclass" at load.
+- **The authoritative object name is the refpage's `<c74object name>` attribute, never the filename** (define-mapped aliases excepted); `python3 tools/audit_db.py` recomputes the drift.
+- **Refpages are authoritative for I/O counts far more than for types, and must never overwrite expert overrides.** When a refpage and a shipped help box disagree on types, the help box wins.
+- **After a Max update, re-sync the DB from the installed bundle:** `python3 tools/audit_db.py`, then a `python3 tools/sync_max_bundle.py` dry-run, then explicit `--apply` steps.
 
 ## Rules
 
@@ -204,7 +193,7 @@ Set the patcher-level **`bgcolor`** key, not just `editing_bgcolor`/`locked_bgco
 - `line~` (signal-rate) **replaces** the active ramp on every new message. For multi-segment envelopes send a single space-delimited list (`$1 $2 0. $3` -- no comma). Comma-separated segments arrive as separate messages in the same scheduler tick and only the last takes effect (envelope never opens). Control-rate `line` queues comma-segments correctly; `line~` does not.
 - `buffer~` has no `info` query and bare attribute names (`sizeinsamps`, `samplerate`) are setters, not getters. To read buffer contents/size, bridge through `fluid.buf2list` (FluCoMa: `buffer <name>` then `bang`) or `jit.buffer~` + `jit.matrixinfo` for dimensions, or drive `peek~` with `uzi N` when an upper bound on length is known. The right outlet only emits state after operations like `read`.
 - Max 9.2 adds to `buffer~` the messages `replacechannel` / `replacechannel_samples` (copy a channel within the buffer or from a file), `trim` / `trim_samples` (strip leading/trailing silence, optional padding) and the `url` attribute. All are 9.2-only and in the DB; exact argument forms are in `.claude/skills/references/max-9.2-changes.md`. The retain-contents argument the release notes describe for `setsize` / `sizeinsamps` is NOT in the 9.2 refpage — untested, do not generate it. The rule above is unchanged.
-- If a control connection from an MSP object's non-primary outlet gets stripped by validation, the DB likely mis-marks that outlet as signal (bulk-extraction bug — many MSP right outlets are actually bangs/floats/indices). Fix the outlet types in `overrides.json` rather than rerouting the patch.
+- If validation flags a control cord from an MSP object's non-primary outlet, the DB likely mis-marks that outlet as signal: fix the outlet type in `overrides.json`, don't reroute (`db-maintenance.md`).
 - `expr`, `vexpr` and `if` do NOT have a `clip()` function. Use `min(max(x, lo), hi)` instead. `expr clip($f1, 0., 1.)` errors with "function clip not found". GenExpr (gen~ codebox) does have `clip(x, lo, hi)`. `expr~` is RNBO-only ("No such object" in MSP); use a gen~ codebox for per-sample expressions.
 - `floor~` is RNBO-only. In standard MSP use `trunc~` (equivalent for non-negative input -- covers `phasor * N` use cases). For signed input or true floor semantics, do the math in a Gen~ codebox where `floor` is native. Always check `domain` on DB lookups before using a tilde object at the top level.
 - `umenu` items in `.maxpat` JSON use a comma-as-element format: `"items": ["LP", ",", "HP", ",", "BP", ",", "Notch"]`. Plain arrays and comma-separated strings both render as a single menu entry. Alternative: populate at runtime via `loadbang -> "clear, append X, append Y, ..."`.

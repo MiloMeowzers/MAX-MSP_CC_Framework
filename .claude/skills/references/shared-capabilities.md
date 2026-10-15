@@ -10,13 +10,14 @@ The installed Max is 9.2.0 and the object database was synced against it (2026-1
 - **What changed for generation:** `.claude/skills/references/max-9.2-changes.md` — the 12 new objects (`min_version: 9.2`), 9.2-only messages and attributes on existing objects (`buffer~`, `udpsend` / `udpreceive`, `coll`, `pattrstorage`, ...), the `v8` additions, and what is still untested. Every claim there carries an evidence tier; `[notes]` items must not be relied on without a test in MAX.
 - **Compatibility:** 9.2-only messages and attributes are not version-tagged in the DB. If a patch must open on an older 9.x build, avoid them and the 12 new objects.
 - **Gen~:** 9.2's compiler fixes retire none of CLAUDE.md's gen~ rules.
-- **After a Max update:** `python3 tools/audit_db.py` (read-only drift report), then `python3 tools/sync_max_bundle.py` (dry-run), then `--apply` with explicit `--names`. Never hand-write a DB entry for a new object.
+- **After a Max update:** `python3 tools/audit_db.py` (read-only drift report), then `python3 tools/sync_max_bundle.py` (dry-run), then `--apply` with explicit `--names`. Never hand-write a DB entry for a new object. Full procedure: `.claude/skills/references/db-maintenance.md`.
 
 ## Reference Docs
 
 - **`.claude/skills/references/severity-contract.md`** — read when a validator or critic finding comes back, before deciding to fix, report or save: what each level means and which findings block `save_patch_roundtrip` / `write_gendsp`.
 - **`.claude/skills/references/troubleshooting.md`** — read when the user reports a MAX console message (No such object, doesn't understand, gen~ compile errors, FluCoMa errors): cause and fix per message.
 - **`.claude/skills/references/proven-forms.md`** — read before generating trigger / arithmetic chains, MC per-channel data, FluCoMa, poly~ voices, `waveform~` / `flonum` UI, or before moving boxes inside subpatchers: forms confirmed in MAX, with evidence tiers.
+- **`.claude/skills/references/db-maintenance.md`** — read before editing `.claude/max-objects/` data or re-syncing after a Max update: override merge semantics, refpage authority, empty-I/O audits, the sync procedure.
 
 ## Assistance Comments on Inlets/Outlets
 
