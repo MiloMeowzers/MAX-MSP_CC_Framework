@@ -230,6 +230,19 @@ def _extract_codebox_code(gen_box: dict) -> str | None:
 # Check 2: Gain staging
 # ---------------------------------------------------------------------------
 
+def _outlettype(box: dict) -> list:
+    """The box's ``outlettype`` as a list of str entries (non-str -> "").
+
+    The dsp checks decide signal-ness from the source box's outlettype
+    alone (no ``~``-name fallback), exactly as before Q20; the read sites
+    are pinned by tests/test_signal_role_migration.py.
+    """
+    outlettype = box.get("outlettype")
+    if not isinstance(outlettype, list):
+        return []
+    return [t if isinstance(t, str) else "" for t in outlettype]
+
+
 def _check_gain_staging(
     box_lookup: dict[str, dict],
     edges: list,
@@ -241,13 +254,21 @@ def _check_gain_staging(
     """
     results: list[CriticResult] = []
 
-    # Build signal adjacency from patchlines
+    # Build signal adjacency from the scope's edges
     signal_adj: dict[str, list[str]] = {}
     for edge in edges:
-        if edge.src not in box_lookup:
+        src_box = box_lookup.get(edge.src)
+        if not src_box:
             continue
-        # Signal connection: decided by the source outlettype (edge.signal)
-        if edge.signal:
+
+        # Check if this is a signal connection (source outlettype only)
+        src_outlettype = _outlettype(src_box)
+        is_signal = (
+            edge.outlet < len(src_outlettype)
+            and src_outlettype[edge.outlet] in _SIGNAL_OUTLET_TYPES
+        )
+
+        if is_signal:
             signal_adj.setdefault(edge.src, []).append(edge.dst)
 
     # Find oscillator boxes
@@ -361,18 +382,39 @@ def _check_unsafe_gain_sources(
     # Build signal adjacency: for each (dst_id, dst_inlet) -> list of src_ids
     sig_predecessors: dict[tuple[str, int], list[str]] = {}
 
-    # Also build general control backward adjacency (any inlet) for tracing
-    ctrl_backward: dict[str, list[str]] = {}
-
     for edge in edges:
-        if edge.src not in box_lookup:
+        src_box = box_lookup.get(edge.src)
+        if not src_box:
             continue
+
+        src_outlettype = _outlettype(src_box)
+        is_signal = (
+            edge.outlet < len(src_outlettype)
+            and src_outlettype[edge.outlet] in _SIGNAL_OUTLET_TYPES
+        )
+
         key = (edge.dst, edge.inlet)
-        if edge.signal:
+        if is_signal:
             sig_predecessors.setdefault(key, []).append(edge.src)
         else:
             ctrl_predecessors.setdefault(key, []).append(edge.src)
-            ctrl_backward.setdefault(edge.dst, []).append(edge.src)
+
+    # Also build general control backward adjacency (any inlet) for tracing
+    ctrl_backward: dict[str, list[str]] = {}
+    for edge in edges:
+        src_box = box_lookup.get(edge.src)
+        if not src_box:
+            continue
+
+        src_outlettype = _outlettype(src_box)
+        is_signal = (
+            edge.outlet < len(src_outlettype)
+            and src_outlettype[edge.outlet] in _SIGNAL_OUTLET_TYPES
+        )
+        if is_signal:
+            continue
+
+        ctrl_backward.setdefault(edge.dst, []).append(edge.src)
 
     # Names with a gain inlet at index 1 (mc.gain~ excluded: only 1 inlet)
     _GAIN_INLET_1_NAMES = frozenset({"*~", "mc.*~"})
