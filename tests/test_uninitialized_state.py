@@ -1085,3 +1085,113 @@ class TestPurity:
         res = review_patch(d, db=db, is_new=True)
         assert _q24(res)
         assert d == before
+
+
+# ===========================================================================
+# Committed corpus: every Q24 finding is a pinned, reasoned warning
+# ===========================================================================
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_ALLOWLIST_PATH = Path(__file__).resolve().parent / "uninitialized_state_allowlist.json"
+_CORPUS = sorted(
+    {p.relative_to(_REPO_ROOT).as_posix()
+     for pattern in ("*.maxpat", "*.maxhelp")
+     for p in (_REPO_ROOT / "patches").rglob(pattern)}
+)
+_LATENT_CASES = (
+    ("patches/FDNVerb/generated/FDNVerb.maxhelp", "obj-29"),
+    ("patches/disintegrate/generated/disintegrate-helper.maxpat", "obj-10"),
+    ("patches/granularsynthtest/generated/granularsynthtest.maxpat", "obj-26"),
+    ("patches/spectraldetector/generated/spectraldetector.maxpat", "obj-8"),
+)
+
+
+def _allowlist() -> dict:
+    with open(_ALLOWLIST_PATH) as f:
+        return json.load(f)
+
+
+def _load_rel(rel: str) -> dict:
+    with open(_REPO_ROOT / rel) as f:
+        return json.load(f)
+
+
+_CORPUS_CACHE: dict = {}
+
+
+def _corpus_q24(rel: str, db) -> list:
+    """``(path, box_id, severity)`` of every Q24 finding of *rel*, from
+    ``review_patch(d, db=db)`` (the default edit severity); cached."""
+    if rel not in _CORPUS_CACHE:
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            res = review_patch(_load_rel(rel), db=db)
+        out = []
+        for r in _q24(res):
+            m = _ID_RE.search(_strip_prefix(r.finding))
+            out.append((r.path, m.group(1) if m else None, r.severity))
+        _CORPUS_CACHE[rel] = out
+    return _CORPUS_CACHE[rel]
+
+
+def _box_at(d: dict, path: str, box_id: str):
+    patcher = d.get("patcher", {})
+    for step in [s for s in path.split("/") if s]:
+        nxt = None
+        for entry in patcher.get("boxes", []):
+            box = entry.get("box", {})
+            if box.get("id") == step and isinstance(box.get("patcher"), dict):
+                nxt = box["patcher"]
+        if nxt is None:
+            return None
+        patcher = nxt
+    for entry in patcher.get("boxes", []):
+        box = entry.get("box", {})
+        if box.get("id") == box_id:
+            return box
+    return None
+
+
+class TestCommittedCorpus:
+    def test_corpus_found(self):
+        assert len(_CORPUS) >= 50
+
+    @pytest.mark.parametrize("rel", _CORPUS)
+    def test_committed_q24_findings_match_allowlist(self, rel, db):
+        found = _corpus_q24(rel, db)
+        entries = _allowlist()["patches"].get(rel, [])
+        assert {(p, b) for p, b, _s in found} == {(e["path"], e["box_id"]) for e in entries}
+        assert len(found) == len(entries)
+        assert all(s == "warning" for _p, _b, s in found), found
+
+    def test_allowlist_entries_are_valid(self):
+        data = _allowlist()
+        assert data.get("_doc", "").strip()
+        assert data["patches"]
+        for rel, entries in data["patches"].items():
+            assert (_REPO_ROOT / rel).is_file(), rel
+            assert entries, f"{rel} is listed with no entries"
+            d = _load_rel(rel)
+            for e in entries:
+                assert e.get("reason", "").strip(), (rel, e)
+                assert e.get("severity") == "warning", (rel, e)
+                assert e.get("kind") == "uninitialized_state", (rel, e)
+                box = _box_at(d, e.get("path", ""), e.get("box_id"))
+                assert box is not None, (rel, e)
+                assert box.get("maxclass") == e.get("maxclass"), (rel, e, box.get("maxclass"))
+
+    @pytest.mark.parametrize("rel,box_id", _LATENT_CASES)
+    def test_spec_latent_cases_are_warnings(self, rel, box_id, db):
+        entries = _allowlist()["patches"].get(rel, [])
+        assert any(e["box_id"] == box_id and e["path"] == "" for e in entries)
+        hits = [s for p, b, s in _corpus_q24(rel, db) if p == "" and b == box_id]
+        assert hits == ["warning"]
+
+    def test_corpus_has_no_q24_blocker(self, db):
+        blockers = [
+            (rel, p, b) for rel in _CORPUS
+            for p, b, s in _corpus_q24(rel, db) if s == "blocker"
+        ]
+        assert blockers == []
