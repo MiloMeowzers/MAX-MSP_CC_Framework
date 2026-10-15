@@ -23,9 +23,11 @@ No registry, no marker — filename presence IS the gate.
 
 | Topology | Physical model | Param surface |
 |----------|---------------|---------------|
-| `bore_only` | Passive bore + onepole damping; no active reed | `freq`, `bore_damp`, `cone_loss` |
-| `reed_bore` | Bore + rectified McIntyre-Woodhouse reed; no radiation | `freq`, `breath`, `bore_damp`, `reed_stiff`, `reed_aper`, `cone_loss` |
-| `reed_bore_post_radiation` | v0.4.2+ bassoon: bore loop + post-loop body formant + post-loop bell LPF + post-loop reed BPF | full bassoon Param surface |
+| `reed_bore` | Bore + rectified McIntyre-Woodhouse reed; no radiation | `ReedBore.PARAMS`: `freq`, `breath`, `bore_damp`, `reed_stiff`, `reed_aper`, `cone_loss` |
+| `reed_bore_post_radiation` | The genrun-parity-tested port of the shipped `bassoon.gendsp` loop + post-loop reed BPF, body formant and bell LPF | `ReedBorePostRadiation.PARAMS`: the codebox Params (minus the off vibrato/noise/chiff/tongue layers) + `freq`, `breath`, `cone_loss` |
+
+On the `topology=` path an undeclared `sweep_param` or `params` key raises `TopologyError`
+before rendering (`mirror=` runs are not validated).
 
 Off-catalogue patches use `mirror=callable` instead of `topology=name`
 (D-01 escape hatch). The mirror's contract: a callable returning either
@@ -82,6 +84,8 @@ def test_<your_patch_stable>():
 
 Opt-out: delete or `pytest.skip(...)` the test. There is no
 `--skip-dsp-sim` flag (D-10) — opt-outs live in git history.
+The bassoon gate (`test_bassoon-model.py`) carries strict xfails for the sweeps the shipped loop
+fails, with the measured verdict as the reason; the gate file's docstring has the table.
 
 ## See Also
 

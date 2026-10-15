@@ -15,20 +15,23 @@ It exists to serve the CLAUDE.md Gen~ rule:
 > the output fundamental. If pitch moves more than a few cents across the sweep, the architecture
 > is wrong.
 
-The three curated topologies encode the canonical bassoon signal path. If you need to broaden
+The two curated topologies encode the canonical bassoon signal path. If you need to broaden
 this into a general DSP simulator (arbitrary gain chains, filter cascades, etc.), that is a
 deferred v6.0 roadmap item — see [Scope & Future Work](#scope--future-work) below.
 
-## The Three Topologies
+## The Two Topologies
 
-All three mirror `patches/bassoon-model/generated/bassoon.gendsp` and are registered in
+Both mirror `patches/bassoon-model/generated/bassoon.gendsp` and are registered in
 `topologies/__init__.py` (`TOPOLOGIES`, `get_topology(name)`):
 
 | Name | Class | What it is |
 |------|-------|------------|
-| `bore_only` | `BoreOnly` | Passive bore + onepole damping. Sanity-check structure — no reed, just the loop + damping so structural regressions surface cleanly. |
 | `reed_bore` | `ReedBore` | Bore + McIntyre-Woodhouse reed. The **v0.3.x ancestor** shape. |
-| `reed_bore_post_radiation` | `ReedBorePostRadiation` | The **v0.4.2+** shape: post-loop bell biquad + post-loop reed BPF. Encodes the CLAUDE.md "resonant filters go POST-LOOP" invariant — the resonant sections sit in the radiation/output path, never inside the feedback loop. |
+| `reed_bore_post_radiation` | `ReedBorePostRadiation` | The genrun-parity-tested port of the **shipped** `bassoon.gendsp` loop (v0.18 DSP): phase-delay compensation, Bernoulli reed, DC-blocked cone reflection, then the post-loop reed BPF, body formant and bell LPF. Encodes the CLAUDE.md "resonant filters go POST-LOOP" invariant — the resonant sections sit in the radiation/output path, never inside the feedback loop. |
+
+`bore_only` was removed in Q25: under constant drive it settled to DC at every setting, an impulse ring-down mostly fell below the amplitude floor, and a pitch-locked drive would measure the drive rather than the bore, so it could not pre-flight anything.
+
+`topology=` runs reject any `sweep_param` or `params` key outside the class's `PARAMS` with `TopologyError` (before rendering); `mirror=` runs are not validated.
 
 ## The `mirror=` Escape Hatch
 
@@ -76,8 +79,10 @@ lifted from the waveguide loop phase-comp notes.
 runaway  >  no_oscillation  >  mode_competition  >  phase_drift  >  pass
 ```
 
-Runaway short-circuits the sweep (early-exit on NaN/Inf or peak above `runaway_amplitude`) so
-divergent topologies never run unbounded.
+Runaway short-circuits the sweep so divergent topologies never run unbounded. The early exit
+tests the post-settle slice of the step just measured (NaN/Inf or peak above
+`runaway_amplitude`), and a sweep that stops early is reported as `runaway` ("stopped early at
+step k of n"), never `pass`.
 
 ### `python -m src.maxpat.dsp_sim` CLI
 
