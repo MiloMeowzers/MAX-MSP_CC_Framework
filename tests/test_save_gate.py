@@ -412,6 +412,52 @@ class TestFindingKey:
         assert _finding_key(a) != _finding_key(b)
 
 
+    def test_path_distinguishes_keys(self):
+        from src.maxpat.hooks import _finding_key
+        from src.maxpat.validation import ValidationResult
+
+        a = ValidationResult("objects", "error", "[p voice] same", path="obj-1")
+        b = ValidationResult("objects", "error", "[p voice] same", path="obj-2")
+        assert _finding_key(a) != _finding_key(b)
+        c = ValidationResult("objects", "error", "same", path="")
+        d = ValidationResult("objects", "error", "same")
+        assert _finding_key(c) == _finding_key(d)
+
+
+def _voice_pair(osc_in: str) -> dict:
+    """Two `p voice` boxes (obj-1, obj-2) with identical inner ids; the one
+    named by *osc_in* holds osc~ (a PD-object blocker), the other cycle~."""
+
+    def voice(box_id: str, text: str) -> dict:
+        return {"box": {
+            "id": box_id, "maxclass": "newobj", "text": "p voice",
+            "numinlets": 0, "numoutlets": 0, "outlettype": [],
+            "patching_rect": [10.0, 10.0, 60.0, 22.0],
+            "patcher": {"boxes": [{"box": {
+                "id": "obj-10", "maxclass": "newobj", "text": text,
+                "numinlets": 2, "numoutlets": 1, "outlettype": [""],
+                "patching_rect": [10.0, 10.0, 60.0, 22.0],
+            }}], "lines": []},
+        }}
+
+    return {"patcher": {"boxes": [
+        voice("obj-1", "osc~ 440" if osc_in == "obj-1" else "cycle~ 440"),
+        voice("obj-2", "osc~ 440" if osc_in == "obj-2" else "cycle~ 440"),
+    ], "lines": []}}
+
+
+class TestNestedGateKey:
+    def test_moved_nested_blocker_is_new(self):
+        from src.maxpat.hooks import _gate_report
+
+        baseline = _voice_pair("obj-1")
+        new = _voice_pair("obj-2")
+        report = _gate_report(new, baseline, [])
+        assert len(report.new_blockers) == 1, report.new_blockers
+        assert report.new_blockers[0].path == "obj-2"
+        assert "'osc~'" in report.new_blockers[0].message
+
+
 class TestGateDb:
     def test_gate_db_cached(self):
         from src.maxpat.hooks import _gate_db

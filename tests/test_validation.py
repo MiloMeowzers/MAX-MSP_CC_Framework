@@ -811,8 +811,11 @@ class TestDomainGuard:
 class TestEmbeddedGenExpr:
     """VALID-04 / D-17: embedded gen~ codeboxes inside .maxpat files get
     Checks 1-9 from validate_genexpr piped through as ValidationResult
-    findings, tagged with the gen~ box id. Top-level only (D-07 scope
-    alignment with the domain guard)."""
+    findings, tagged with the gen~ box id. Layer 5 checks codeboxes in every
+    scope and every gen container (gen~, mc.gen~ data.patcher, jit.gen ...),
+    reported at the container's parent scope (Q19); the top-level-only D-07
+    note is retired. A top-level gen~ keeps the ``gen~ '<id>' codebox: ``
+    form exercised here."""
 
     def _patch_with_gen_codebox(self, code, gen_id="g1"):
         """Build a minimal patch with one top-level gen~ wrapping a single

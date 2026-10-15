@@ -453,3 +453,145 @@ class TestSaveGateNested:
         assert vfind[0].message.startswith("[p synth] ")
         assert "'osc~' is a Pure Data object" in vfind[0].message
         assert not P.exists()
+
+
+# ---------------------------------------------------------------------------
+# Layer 5: codeboxes in every gen scope (Task 2)
+# ---------------------------------------------------------------------------
+
+_DELAY_CODE = "out1 = delay(in1, 100);"
+
+
+def _codebox(box_id="obj-90", code=_DELAY_CODE):
+    return _box(box_id, None, 1, 1, maxclass="codebox", code=code)
+
+
+def _gen_inner(boxes, **keys):
+    keys.setdefault("classnamespace", "dsp.gen")
+    return _inner(boxes, **keys)
+
+
+def _delay_hits(results):
+    return [r for r in results if "delay()" in r.message]
+
+
+class TestLayer5EveryScope:
+    def test_p_gen_codebox_reported_once_at_parent(self, db):
+        d = _patch([
+            _container("obj-1", "p synth", _inner([
+                _container("obj-2", "gen~", _gen_inner([_codebox()]), outlettype=["signal"]),
+            ])),
+        ])
+        res = validate_patch(d, db=db)
+        hits = _delay_hits(res)
+        assert len(hits) == 1, [r.message for r in res]
+        assert hits[0].level == "error"
+        assert hits[0].path == "obj-1"
+        assert hits[0].message.startswith("[p synth] gen~ 'obj-2' codebox: ")
+        assert not any("codebox" in r.message for r in res if r.path == "obj-1/obj-2")
+
+    def test_top_level_mcgen_data_patcher(self, db):
+        d = _patch([
+            _box("obj-1", "mc.gen~ @chans 2", 1, 1, outlettype=["multichannelsignal"],
+                 data={"patcher": _gen_inner([_codebox()])}),
+        ])
+        res = validate_patch(d, db=db)
+        hits = _delay_hits(res)
+        assert len(hits) == 1, [r.message for r in res]
+        assert hits[0].level == "error"
+        assert hits[0].path == ""
+        assert hits[0].message.startswith("mc.gen~ 'obj-1' codebox: ")
+
+    @pytest.mark.parametrize("name", ["jit.gen", "jit.pix", "jit.gl.pix", "gen", "mcs.gen~"])
+    def test_gen_family_containers(self, db, name):
+        d = _patch([
+            _container("obj-1", name, _gen_inner([_codebox()], classnamespace="jit.gen")),
+        ])
+        res = validate_patch(d, db=db)
+        hits = _delay_hits(res)
+        assert len(hits) == 1, [r.message for r in res]
+        assert hits[0].path == ""
+        assert hits[0].message.startswith(f"{name} 'obj-1' codebox: ")
+
+    def test_p_inside_gen_codebox(self, db):
+        d = _patch([
+            _container("obj-1", "gen~", _gen_inner([
+                _container("obj-2", "p sub", _inner([_codebox()])),
+            ]), outlettype=["signal"]),
+        ])
+        res = validate_patch(d, db=db)
+        hits = _delay_hits(res)
+        assert len(hits) == 1, [r.message for r in res]
+        assert hits[0].path == "obj-1"
+        assert hits[0].message.startswith("[gen~] p 'obj-2' codebox: ")
+
+    def test_top_level_gen_file_codebox_unchecked(self, db):
+        d = _patch([_codebox("obj-1")], classnamespace="dsp.gen")
+        assert _delay_hits(validate_patch(d, db=db)) == []
+
+    def test_top_level_gen_tilde_form_unchanged(self, db):
+        d = _patch([_container("g1", "gen~", _gen_inner([_codebox()]), outlettype=["signal"])])
+        hits = _delay_hits(validate_patch(d, db=db))
+        assert len(hits) == 1
+        assert hits[0].path == ""
+        assert hits[0].message.startswith("gen~ 'g1' codebox: ")
+
+
+# ---------------------------------------------------------------------------
+# Nested RNBO scopes (Task 2)
+# ---------------------------------------------------------------------------
+
+
+def _rnbo(boxes, lines=None, box_id="obj-1"):
+    return _container(box_id, "rnbo~", _inner(boxes, lines, classnamespace="rnbo"))
+
+
+def _rnbo_compat(results):
+    return [r for r in results if r.layer == "rnbo-objects"]
+
+
+class TestNestedRnbo:
+    def test_incompatible_object_warns(self, db):
+        res = validate_patch(_patch([_rnbo([_box("obj-10", "coll", 1, 4)])]), db=db)
+        hits = _rnbo_compat(res)
+        assert len(hits) == 1, [r.message for r in res]
+        assert hits[0].level == "warning"
+        assert hits[0].path == "obj-1"
+        assert hits[0].message == (
+            "[rnbo~] Object 'coll' is not RNBO-compatible -- cannot be used in RNBO patches"
+        )
+        assert not has_blocking_errors(res)
+
+    def test_alias_resolution(self, db):
+        res = validate_patch(_patch([_rnbo([
+            _box("obj-10", "t b b", 1, 2),
+            _box("obj-11", "sel 1", 2, 2),
+            _box("obj-12", "f", 2, 1),
+        ])]), db=db)
+        assert _rnbo_compat(res) == []
+
+    def _line_print(self):
+        boxes = [
+            _box("obj-10", "line~", 2, 2, outlettype=["signal", ""]),
+            _box("obj-11", "print", 1, 0, outlettype=[]),
+        ]
+        return boxes, [_line("obj-10", 0, "obj-11", 0)]
+
+    def test_type_checks_skipped_in_rnbo(self, db):
+        boxes, lines = self._line_print()
+        res = validate_patch(_patch([_rnbo(boxes, lines)]), db=db)
+        assert [r for r in res if r.proposed_removal] == []
+        boxes, lines = self._line_print()
+        res = validate_patch(_patch([_container("obj-1", "p x", _inner(boxes, lines))]), db=db)
+        props = [r for r in res if r.proposed_removal]
+        assert [(r.path, r.proposed_removal) for r in props] == [("obj-1", ("obj-10", 0, "obj-11", 0))]
+
+    def test_bounds_still_checked_in_rnbo(self, db):
+        boxes, _ = self._line_print()
+        res = validate_patch(_patch([_rnbo(boxes, [_line("obj-10", 5, "obj-11", 0)])]), db=db)
+        props = [r for r in res if r.proposed_removal]
+        assert [(r.path, r.proposed_removal) for r in props] == [("obj-1", ("obj-10", 5, "obj-11", 0))]
+
+    def test_top_level_rnbo_unchanged(self, db):
+        d = _patch([_box("obj-1", "coll", 1, 4)], classnamespace="rnbo")
+        assert _rnbo_compat(validate_patch(d, db=db)) == []

@@ -489,17 +489,22 @@ _GATE_WS_RE = re.compile(r"\s+")
 
 
 def _finding_key(result) -> tuple:
-    """Hashable identity of a blocking finding: rule template + box ids.
+    """Hashable identity of a blocking finding: rule template + box ids + path.
 
     Finding text is never compared as-is. The key is
-    ``(origin, template, ids, proposed_removal)``:
+    ``(origin, template, ids, proposed_removal, path)``:
 
     - origin: ``("validate", layer, level)`` or ``("review", severity)``;
     - template: the text with box ids replaced by ``<id>`` first, then
       quoted spans by ``<q>``, then numbers by ``<n>``, whitespace collapsed;
     - ids: sorted unique ``obj-N`` ids from the text, plus the source and
       destination ids of ``proposed_removal`` when set;
-    - proposed_removal: the cord tuple, or None.
+    - proposed_removal: the cord tuple, or None;
+    - path: ``ValidationResult.path`` (``""`` at the top level and for
+      critic findings). It keeps findings in identically labelled
+      subpatchers apart: ``[p voice]`` obj-1 and ``[p voice]`` obj-2 share
+      a template and inner ids, so without it a blocker moved from one to
+      the other would match the baseline (Q19).
     """
     if isinstance(result, ValidationResult):
         origin: tuple = ("validate", result.layer, result.level)
@@ -519,7 +524,7 @@ def _finding_key(result) -> tuple:
     template = _GATE_QUOTED_RE.sub("<q>", template)
     template = _GATE_NUM_RE.sub("<n>", template)
     template = _GATE_WS_RE.sub(" ", template).strip()
-    return (origin, template, tuple(sorted(ids)), removal)
+    return (origin, template, tuple(sorted(ids)), removal, getattr(result, "path", ""))
 
 
 def _blocking_findings(patch_dict: dict, scope: "str | None" = None) -> list:

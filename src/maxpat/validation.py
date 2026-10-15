@@ -206,8 +206,13 @@ def validate_patch(
     get ``path`` (the box-id chain) and a ``[label > label] `` message
     prefix. A nested Layer-1 error skips that scope and every scope under
     it; sibling scopes still run. A gen scope skips Layer 4 (MSP / Max-UI
-    rules). Layer 2d warns once per unextracted package per call. External
-    files are never loaded.
+    rules). Layer 2d warns once per unextracted package per call. In a
+    nested rnbo~ scope, an object that is not rnbo_compatible (raw or
+    alias-resolved) is a ``rnbo-objects`` warning, and Layer 3 checks only
+    bounds / missing boxes / malformed cords (no signal or role type
+    checks); a top-level rnbo scope (.rnbopat) is unchanged. Layer 5 checks
+    the codeboxes of every gen patcher embedded in a scope, reported at that
+    scope. External files are never loaded.
 
     The input is never mutated (dict or Patcher). Cords Layer 3 considers
     invalid come back as errors with ``proposed_removal`` set; apply them
@@ -299,8 +304,14 @@ def _validate_scope_layers(
         patch_dict, db, warned_packages=state.warned_packages,
     ))
 
+    # Nested rnbo~ scope: rnbo_compatible:false warns (never blocks), and
+    # Layer 3 checks bounds only (RNBO I/O types are not modelled by the DB)
+    nested_rnbo = nested and scope == "rnbo"
+    if nested_rnbo:
+        results.extend(_validate_rnbo_compat(patch_dict, db))
+
     # Layer 3: Connection bounds and signal types (pure; proposes removals)
-    results.extend(_validate_connections(patch_dict, db))
+    results.extend(_validate_connections(patch_dict, db, type_checks=not nested_rnbo))
 
     # Layer 4: Domain-specific rules -- MSP / Max-UI only, skipped in gen
     if scope != "gen":
@@ -309,9 +320,53 @@ def _validate_scope_layers(
     # Layer 4b: Domain restriction guard (Phase 29 / VALID-02)
     results.extend(_validate_domain_restrictions(patch_dict, db, scope))
 
-    # Layer 5: Embedded GenExpr codebox walker (Phase 29 / VALID-04)
-    results.extend(_validate_embedded_genexpr(patch_dict, db))
+    # Layer 5: GenExpr codeboxes of the gen patchers embedded in this scope
+    results.extend(_validate_embedded_genexpr(patch_dict, db, scope))
 
+    return results
+
+
+_RNBO_DB_CACHE: list = []
+
+
+def _rnbo_db():
+    """Process-wide RNBODatabase, built on first use (lazy import)."""
+    if not _RNBO_DB_CACHE:
+        from src.maxpat.rnbo import RNBODatabase
+
+        _RNBO_DB_CACHE.append(RNBODatabase())
+    return _RNBO_DB_CACHE[0]
+
+
+def _validate_rnbo_compat(
+    patch_dict: dict,
+    db: ObjectDatabase,
+) -> list[ValidationResult]:
+    """Nested rnbo~ scope: warn on objects that are not rnbo_compatible.
+
+    A name is compatible when ``RNBODatabase.is_rnbo_compatible`` accepts it
+    raw or alias-resolved (``t`` -> ``trigger``). Warning level, never a
+    save blocker (Q19 decision; the rnbo_compatible data has gaps). The
+    message matches ``rnbo_validation.validate_rnbo_patch``.
+    """
+    rnbo_db = _rnbo_db()
+    aliases = getattr(db, "_aliases", {}) or {}
+    results: list[ValidationResult] = []
+    for box_entry in patch_dict["patcher"]["boxes"]:
+        box = box_entry.get("box") if isinstance(box_entry, dict) else None
+        if not isinstance(box, dict):
+            continue
+        name = walk.object_name(box)
+        if not name:
+            continue
+        canonical = aliases.get(name, name)
+        if rnbo_db.is_rnbo_compatible(name) or rnbo_db.is_rnbo_compatible(canonical):
+            continue
+        results.append(ValidationResult(
+            "rnbo-objects", "warning",
+            f"Object '{name}' is not RNBO-compatible -- "
+            f"cannot be used in RNBO patches",
+        ))
     return results
 
 
@@ -906,6 +961,8 @@ def _is_container_box(box: dict) -> bool:
 def _validate_connections(
     patch_dict: dict,
     db: ObjectDatabase,
+    *,
+    type_checks: bool = True,
 ) -> list[ValidationResult]:
     """Validate connection index bounds and signal/control type compatibility.
 
@@ -916,7 +973,8 @@ def _validate_connections(
     from relationships.json (e.g. tapin~ -> tapout~; no type/role checks)
     -> container destination (no type/role checks) -> role dispatch
     (skipped for container sources; mismatches warn, cord kept) -> legacy
-    signal/control check.
+    signal/control check. With ``type_checks=False`` (nested rnbo~ scopes,
+    Q19) a cord whose bounds pass is not checked further.
     """
     results: list[ValidationResult] = []
 
@@ -988,7 +1046,7 @@ def _validate_connections(
             ))
             out_of_bounds = True
 
-        if out_of_bounds:
+        if out_of_bounds or not type_checks:
             continue
 
         # --- Known companion pair (relationships.json): no type/role checks ---
@@ -1380,26 +1438,33 @@ def _validate_domain_restrictions(
 def _validate_embedded_genexpr(
     patch_dict: dict,
     db: ObjectDatabase,
+    scope: str = "max",
 ) -> list[ValidationResult]:
-    """Walk top-level gen~ boxes; for each embedded codebox with a 'code'
-    attribute, run validate_genexpr (which carries its Checks 1-9: the
-    gen-domain operator check 6, delay() 7 and init-before-if/else 9;
-    Check 8, the clip() rejection, was retired in Q12 -- GenExpr has clip()).
+    """Check the GenExpr codeboxes of every gen patcher embedded in this scope.
 
-    Findings flow through the ValidationResult pipeline (consistent with
-    .gendsp files going through hooks.validate_code_file). Tags each
-    finding with the gen~ box id for debuggability.
+    For every box B of this scope (*scope*: max / gen / rnbo) whose embedded
+    patcher (``walk.inner_patcher``: ``patcher`` or mc.gen~ ``data.patcher``)
+    is a gen scope (``walk.inner_scope``: gen~, mc.gen~, mcs.gen~, gen,
+    jit.gen, jit.pix, jit.gl.pix, or any subpatcher of a gen patcher), each
+    ``maxclass == "codebox"`` box in that patcher with a non-empty ``code``
+    str runs validate_genexpr (Checks 1-9: the gen-domain operator check 6,
+    delay() 7 and init-before-if/else 9; Check 8, the clip() rejection, was
+    retired in Q12 -- GenExpr has clip()). Findings are emitted in THIS
+    scope as ``<container> '<id>' codebox: <msg>`` (container = B's name,
+    else its maxclass), so they carry this scope's path and prefix. A
+    top-level gen~ gives exactly the pre-Q19 ``gen~ '<id>' codebox: `` form.
 
-    Top-level only -- does not recurse into nested gen~ subpatchers (D-07
-    scope-rule alignment with the domain-restriction guard). Survey of 28
-    real .maxpat files showed zero nested gen~ inside gen~; recursion is a
-    one-line change if Phase 30 surfaces a real case.
+    Reporting rule (Q19): every codebox is reported exactly once, by the
+    scope that holds its container. The walker still visits the gen patcher
+    itself, but that scope's own codeboxes are its parent's job, so a
+    top-level gen file's own codeboxes (``.gendsp``) stay unchecked here --
+    ``hooks.validate_code_file`` covers them.
 
     Note (RESEARCH.md R1): existing Layer 4 helpers
     `_check_genexpr_io_syntax` and `_check_genexpr_delay_usage` iterate
-    box_lookup (top-level only) and match boxes whose maxclass=='newobj'
-    with text starting 'codebox'. Embedded codeboxes inside gen~ have
-    maxclass=='codebox' (not 'newobj') and live in inner.boxes (not
+    box_lookup and match boxes whose maxclass=='newobj' with text starting
+    'codebox'. Embedded codeboxes inside gen patchers have
+    maxclass=='codebox' (not 'newobj') and live in the inner patcher (not
     box_lookup), so the two channels do NOT overlap in the canonical
     embedded-codebox case. Top-level codeboxes remain a duplicate-emission
     corner case (rare in practice). Consolidating to a single channel is
@@ -1409,42 +1474,36 @@ def _validate_embedded_genexpr(
     # circular import at module top.
     from src.maxpat.code_validation import validate_genexpr
 
+    if scope not in DOMAIN_SCOPES:
+        scope = "max"
     results: list[ValidationResult] = []
     for box_entry in patch_dict["patcher"]["boxes"]:
-        box = box_entry.get("box", {})
-        # gen~ at the outer level can carry maxclass='newobj' with text
-        # 'gen~ ...' OR maxclass='gen~' directly (subpatcher container --
-        # see _validate_maxclass_usage for the existing convention check).
-        # Accept both shapes.
-        maxclass = box.get("maxclass", "")
-        text = box.get("text", "")
-        is_gen_tilde = (
-            maxclass == "gen~"
-            or (maxclass == "newobj" and text.startswith("gen~"))
-        )
-        if not is_gen_tilde:
+        box = box_entry.get("box") if isinstance(box_entry, dict) else None
+        if not isinstance(box, dict):
             continue
-        inner = box.get("patcher")
-        # Defensive type guard: malformed .maxpat files may set
-        # "patcher" to a non-dict value (e.g., []). Membership-only
-        # checks pass `if not inner` for None/{}, but a non-empty
-        # list survives the truthy check and AttributeErrors on
-        # `.get()`. Mirrors the dict-guard pattern in
-        # `_apply_signal_role_writethrough`.
-        if not isinstance(inner, dict):
+        inner = walk.inner_patcher(box)
+        if inner is None:
             continue
-        gen_id = box.get("id", "<unknown>")
-        for inner_entry in inner.get("boxes", []):
-            inner_box = inner_entry.get("box", {})
+        if walk.inner_scope(box, scope) != "gen":
+            continue
+        inner_boxes = inner.get("boxes")
+        if not isinstance(inner_boxes, list):
+            continue
+        container = walk.box_name(box) or walk.box_maxclass(box)
+        box_id = box.get("id", "<unknown>")
+        for inner_entry in inner_boxes:
+            inner_box = inner_entry.get("box") if isinstance(inner_entry, dict) else None
+            if not isinstance(inner_box, dict):
+                continue
             if inner_box.get("maxclass") != "codebox":
                 continue
             code = inner_box.get("code")
-            if not code:
+            if not isinstance(code, str) or not code:
                 continue
             for r in validate_genexpr(code, db=db):
                 results.append(ValidationResult(
                     r.layer, r.level,
-                    f"gen~ '{gen_id}' codebox: {r.message}",
+                    f"{container} '{box_id}' codebox: {r.message}",
                     auto_fixed=r.auto_fixed,
                 ))
     return results
