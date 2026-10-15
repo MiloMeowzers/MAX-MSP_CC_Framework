@@ -5,6 +5,14 @@ not detect:
   - Fan-out without trigger (ordering ambiguity): blocker when branches
     reconverge on one box at different inlets, otherwise warning (Q3 / E1)
   - Hot/cold inlet ordering issues (stale value computation)
+  - Invalid trigger types (Q21 / R4): ``t a`` and any other single
+    lower-case letter outside b, i, f, l, s outputs the literal symbol
+  - ``$N`` arity (Q21 / R4): a message box's highest ``$N`` above the
+    atoms its inlet-0 feeders can together supply
+  - Trigger order (Q21 / R4): one trigger feeding a box's hot inlet 0 from
+    a higher outlet than a cold inlet (directly or through one hop).
+    Task 2 decision ``idiom-exempt``: Max's previous-value / delta idioms
+    (storage targets, same-value direct feeds, waveform~) are not reported.
   - Redundant/duplicate patchlines
 
 Every scope of the shared :class:`src.maxpat.graph.PatchGraph` is reviewed
@@ -21,6 +29,7 @@ patterns a MAX expert would flag during code review.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict, deque
 
 from src.maxpat import walk
@@ -54,37 +63,79 @@ _ALL_HOT_NAMES = frozenset({
 })
 
 
-def review_structure(patch_dict: dict, *, graph: "PatchGraph | None" = None) -> list[CriticResult]:
+def review_structure(
+    patch_dict: dict,
+    *,
+    graph: "PatchGraph | None" = None,
+    db=None,
+) -> list[CriticResult]:
     """Review structural aspects of a patch, every scope (Q20).
 
     Checks, per scope of the shared graph:
       1. Fan-out without trigger (2+ non-display destinations from one
          control outlet; blocker only on reconvergence -- Q3 / E1)
       2. Hot/cold inlet ordering (multiple inlets fed without trigger ordering)
-      3. Redundant/duplicate patchlines
+      3. Invalid trigger types (blocker; Q21 / R4)
+      4. Message ``$N`` arity (blocker; Q21 / R4)
+      5. Trigger order: one trigger feeding a hot inlet after a cold one
+         (blocker; Q21 / R4; previous-value idioms exempt)
+      6. Redundant/duplicate patchlines
 
-    Gen scopes run only check 3. Top-level results come first, nested
+    Gen scopes run only check 6. Top-level results come first, nested
     scopes follow in pre-order, tagged with their path.
 
     Args:
         patch_dict: A .maxpat-format dict.
         graph: The shared PatchGraph of *patch_dict* (review_patch passes
             it); built here when None.
+        db: Keyword-only ObjectDatabase for the Q21 checks (inlet ``hot``
+            flags, outlet types). review_patch passes its own; when None,
+            one is built here, at most once per call and only when a check
+            needs it.
 
     Returns:
         List of CriticResult findings.
     """
     if graph is None:
         graph = PatchGraph.build(patch_dict)
+    dbh = _LazyDB(db)
     results: list[CriticResult] = []
     for scope in graph.scopes:
         found: list[CriticResult] = []
         if scope.context != "gen":
             found.extend(_check_fan_out_without_trigger(scope.boxes, scope.edges))
             found.extend(_check_hot_cold_ordering(scope.boxes, scope.edges))
+            found.extend(_check_trigger_types(scope))
+            found.extend(_check_dollar_arity(scope, dbh))
+            found.extend(_check_trigger_order(scope, dbh))
         found.extend(_check_redundant_connections(scope.edges))
         results.extend(tag_results(found, scope.path))
     return results
+
+
+class _LazyDB:
+    """An ObjectDatabase handle built on first use (at most one per call)."""
+
+    __slots__ = ("_db",)
+
+    def __init__(self, db=None):
+        self._db = db
+
+    def get(self):
+        if self._db is None:
+            from src.maxpat.db_lookup import ObjectDatabase
+
+            self._db = ObjectDatabase()
+        return self._db
+
+    def lookup(self, name):
+        if not isinstance(name, str) or not name:
+            return None
+        try:
+            obj = self.get().lookup(name)
+        except Exception:
+            return None
+        return obj if isinstance(obj, dict) else None
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +472,370 @@ def _check_hot_cold_ordering(
 
 
 # ---------------------------------------------------------------------------
-# Check 3: Redundant/duplicate connections
+# Q21 / R4 helpers: trigger letters and outlet atom counts
+# ---------------------------------------------------------------------------
+
+# trigger.maxref.xml lists only these type letters; any other symbol argument
+# is output as a constant.
+_TRIGGER_TYPE_LETTERS = frozenset("bifls")
+
+# Trigger letters that pass the incoming value on (not a bang or a constant).
+_TRIGGER_VALUE_LETTERS = frozenset("ifls")
+
+_DOLLAR_RE = re.compile(r"(?<!\\)\$([1-9])")
+
+
+def _box_label(box) -> str:
+    """The box text when it has one (``'t l f f'``), else its name (``'button'``)."""
+    return walk.box_text(box) or walk.box_name(box)
+
+
+def _trigger_letters(box) -> list[str]:
+    """The type arguments of a trigger box: the tokens after the name up to
+    the first ``@`` attribute, or ``["i", "i"]`` when there are none (an
+    argument-less ``t`` acts as ``t i i``)."""
+    letters: list[str] = []
+    for token in walk.box_args(box):
+        if token.startswith("@"):
+            break
+        letters.append(token)
+    return letters or ["i", "i"]
+
+
+def _trigger_letter_atoms(token: str) -> "int | None":
+    """Atoms a trigger outlet of type *token* emits (planner decision 6a)."""
+    if not token or token[0] in "#$":
+        return None
+    if token == "b":
+        return 0
+    if token == "l":
+        return None
+    if token in ("i", "f", "s"):
+        return 1
+    if len(token) == 1 and token.isalpha() and token.isupper():
+        # Upper-case letters: Max behaviour undocumented -> unknown
+        return None
+    # A number or another symbol is output as one constant atom
+    return 1
+
+
+def _db_entry(entries, index: int):
+    """The DB inlet/outlet entry with ``id == index`` (else list position)."""
+    if not isinstance(entries, list):
+        return None
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("id") == index:
+            return entry
+    if 0 <= index < len(entries) and isinstance(entries[index], dict):
+        return entries[index]
+    return None
+
+
+def _outlet_atoms(box, outlet, dbh) -> "int | None":
+    """Atom count *box* outlet *outlet* emits, or None when unknown.
+
+    Precedence (Q21, planner decision 6):
+      a. a trigger/t outlet takes its type letter (:func:`_trigger_letters`);
+         an outlet past the argument count is unknown;
+      b. otherwise, for a DB object that is not ``variable_io``, the DB
+         outlet: ``type`` bang or ``signal_role`` trigger = 0; ``type``
+         int/float/symbol or ``signal_role`` float = 1;
+      c. otherwise the box's MAX-saved ``outlettype`` at that index:
+         ``bang`` = 0, ``int`` / ``float`` = 1.
+    Anything else is unknown.
+    """
+    if not isinstance(box, dict) or not isinstance(outlet, int) or isinstance(outlet, bool):
+        return None
+    if outlet < 0:
+        return None
+    name = walk.box_name(box)
+    if name in _TRIGGER_NAMES:
+        letters = _trigger_letters(box)
+        if outlet >= len(letters):
+            return None
+        return _trigger_letter_atoms(letters[outlet])
+
+    obj = dbh.lookup(name)
+    if obj is not None and not obj.get("variable_io"):
+        entry = _db_entry(obj.get("outlets"), outlet)
+        if entry is not None:
+            otype = entry.get("type")
+            role = entry.get("signal_role")
+            if otype == "bang" or role == "trigger":
+                return 0
+            if otype in ("int", "float", "symbol") or role == "float":
+                return 1
+
+    outlettype = box.get("outlettype")
+    if isinstance(outlettype, list) and outlet < len(outlettype):
+        saved = outlettype[outlet]
+        if saved == "bang":
+            return 0
+        if saved in ("int", "float"):
+            return 1
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Check 3: Invalid trigger types (Q21 / R4)
+# ---------------------------------------------------------------------------
+
+def _check_trigger_types(scope) -> list[CriticResult]:
+    """Flag single lower-case letters a trigger does not know (Q21 / R4).
+
+    trigger.maxref.xml lists only b, i, f, l and s; every other symbol is
+    output as a constant, so ``t a`` (meant as "anything") outputs the
+    literal symbol ``a``. Planner decision 8: flag any single lower-case
+    ASCII letter outside b/i/f/l/s (covers ``a``, PD's ``p`` and typos);
+    skip upper case (undocumented), ``@`` / ``#`` / ``$`` tokens and
+    multi-character constants. One blocker per distinct token per box.
+    """
+    results: list[CriticResult] = []
+    for box_id, box in scope.boxes.items():
+        if walk.box_maxclass(box) != "newobj" or walk.box_name(box) not in _TRIGGER_NAMES:
+            continue
+        seen: set[str] = set()
+        for tok in walk.box_args(box):
+            if tok.startswith("@"):
+                break
+            if (
+                len(tok) == 1
+                and "a" <= tok <= "z"
+                and tok not in _TRIGGER_TYPE_LETTERS
+                and tok not in seen
+            ):
+                seen.add(tok)
+                results.append(CriticResult(
+                    "blocker",
+                    f"Invalid trigger type: '{walk.box_text(box)}' ({box_id}) "
+                    f"argument '{tok}' is not a trigger type (b, i, f, l, s) "
+                    f"-- it outputs the literal symbol '{tok}'",
+                    "Use b, i, f, l or s; any other symbol is output as a "
+                    "constant. For an anything message where order does not "
+                    "matter, fan out directly; where order matters use "
+                    "'t l l' or 't s s'.",
+                ))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Check 4: Message $N arity (Q21 / R4)
+# ---------------------------------------------------------------------------
+
+def _check_dollar_arity(scope, dbh) -> list[CriticResult]:
+    """Flag a message box whose highest ``$N`` its feeders can never fill.
+
+    ``$N`` is ``(?<!\\\\)\\$([1-9])`` on the message text. The unit is the
+    set of inlet-0 feeders (planner decision 7, assumption delta): Max
+    stores ``$`` arguments and a bang resends them (message.maxref.xml), so
+    a bang beside a value feeder is the resend idiom. A box is flagged only
+    when nothing feeds inlet 1 (a ``set`` there replaces the text), at
+    least one cord feeds inlet 0, every inlet-0 feeder's atom count is known
+    (:func:`_outlet_atoms`, planner decision 6) and the largest is below
+    the highest N.
+    """
+    results: list[CriticResult] = []
+    for box_id, box in scope.boxes.items():
+        if walk.box_maxclass(box) != "message":
+            continue
+        text = walk.box_text(box)
+        if not text:
+            continue
+        ns = [int(m) for m in _DOLLAR_RE.findall(text)]
+        if not ns:
+            continue
+        n = max(ns)
+        in_edges = scope.in_edges.get(box_id, ())
+        if any(e.inlet == 1 for e in in_edges):
+            continue
+        feeders = [e for e in in_edges if e.inlet == 0]
+        if not feeders:
+            continue
+        counts = []
+        for e in feeders:
+            src = scope.boxes.get(e.src)
+            k = _outlet_atoms(src, e.outlet, dbh) if src is not None else None
+            if k is None:
+                counts = None
+                break
+            counts.append(k)
+        if counts is None:
+            continue
+        k = max(counts)
+        if k >= n:
+            continue
+        feeder_desc = ", ".join(
+            f"'{_box_label(scope.boxes.get(e.src))}' ({e.src}) outlet {e.outlet}"
+            for e in feeders
+        )
+        results.append(CriticResult(
+            "blocker",
+            f"Message $N arity: '{text}' ({box_id}) uses ${n} but its feeders "
+            f"supply at most {k} atom(s): {feeder_desc} -- $ arguments above "
+            f"{k} keep their stored value (0 until set)",
+            f"Feed it from an outlet that carries all {n} values (a 't l' "
+            f"outlet, pack or another list source), or lower the highest $N.",
+        ))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Check 5: Trigger order (Q21 / R4)
+# ---------------------------------------------------------------------------
+
+# Targets never checked (planner decision 4): gate/switch and their graphic
+# siblings take a control inlet first; pak and funnel are all-hot in Max
+# (the DB marks their inlet 1 cold -- an overrides follow-up); and
+# _ALL_HOT_NAMES boxes route each inlet independently.
+_ORDER_EXCLUDED_NAMES = frozenset({
+    "gate", "switch", "ggate", "gswitch", "gswitch2", "pak", "funnel",
+}) | _ALL_HOT_NAMES
+
+# One-hop relays (planner decision 5): entered at inlet 0, they pass on
+# through outlet 0. ``zl`` counts only as ``zl reg``.
+_ORDER_HOP_NAMES = frozenset({"zl.reg", "f", "float", "i", "int", "prepend"})
+
+# Task 2 decision ``idiom-exempt``: storage targets output the previous
+# value on purpose (``t i b`` -> ``i``, fibonacci ``t b b`` -> ``int``) ...
+_ORDER_STORAGE_NAMES = frozenset({"i", "int", "f", "float", "zl.reg"})
+# ... and waveform~ (BEAP's UI cases).
+_ORDER_IDIOM_TARGETS = frozenset({"waveform~"})
+
+
+def _is_zl_reg(box) -> bool:
+    if walk.box_name(box) == "zl.reg":
+        return True
+    args = walk.box_args(box)
+    return walk.box_name(box) == "zl" and bool(args) and args[0] == "reg"
+
+
+def _is_order_hop(box) -> bool:
+    if walk.box_maxclass(box) == "message":
+        return True
+    return walk.box_name(box) in _ORDER_HOP_NAMES or _is_zl_reg(box)
+
+
+def _inlet_is_cold(box, inlet: int, dbh) -> bool:
+    """True when the DB marks *box* inlet *inlet* (> 0) ``hot: false``.
+
+    Planner decision 3: unknown objects have no cold inlets. For a
+    ``variable_io`` object an inlet past the DB list takes the last listed
+    inlet's flag when 2+ inlets are listed (pack), and is cold when only
+    inlet 0 is listed (expr, vexpr, if, sprintf).
+    """
+    if inlet <= 0:
+        return False
+    obj = dbh.lookup(walk.box_name(box))
+    if obj is None:
+        return False
+    inlets = obj.get("inlets")
+    if not isinstance(inlets, list):
+        return False
+    entry = _db_entry(inlets, inlet) if inlet < len(inlets) else None
+    if entry is not None:
+        return entry.get("hot") is False
+    if not obj.get("variable_io"):
+        return False
+    if len(inlets) >= 2:
+        last = inlets[-1]
+        return isinstance(last, dict) and last.get("hot") is False
+    return len(inlets) == 1
+
+
+def _is_order_idiom(dst_box, letters, hot, cold) -> bool:
+    """The previous-value / delta idiom shapes exempted by the Task 2
+    decision ``idiom-exempt``: a storage target (whatever the feed), a
+    waveform~ target, or a target whose hot and cold inlets are all fed
+    directly by value outlets (i/f/l/s) of the trigger -- the "correct"
+    order would compute x op x there."""
+    name = walk.box_name(dst_box)
+    if name in _ORDER_STORAGE_NAMES or _is_zl_reg(dst_box):
+        return True
+    if name in _ORDER_IDIOM_TARGETS:
+        return True
+    feeds = list(hot) + list(cold)
+    return bool(feeds) and all(
+        how == "direct"
+        and outlet < len(letters)
+        and letters[outlet] in _TRIGGER_VALUE_LETTERS
+        for outlet, how in feeds
+    )
+
+
+def _check_trigger_order(scope, dbh) -> list[CriticResult]:
+    """Flag a trigger that feeds a box's hot inlet before its cold inlets.
+
+    Trigger outlets fire right to left, so the hot inlet 0 must be fed by
+    the lowest outlet index (Rule #3; Q21 / R4). For each trigger, every
+    (box, inlet) it reaches directly or through one hop (planner decision
+    5: a message box, ``zl.reg`` / ``zl reg``, f/float, i/int or prepend,
+    entered at inlet 0 and left by outlet 0) is collected. A target that is
+    the trigger itself, is in ``_ORDER_EXCLUDED_NAMES`` (decision 4) or is
+    not reached at inlet 0 is skipped. Cold inlets follow
+    :func:`_inlet_is_cold` (decision 3). One blocker per (trigger, target)
+    when min(hot outlets) > min(cold outlets); one outlet feeding both is
+    the fan-out critic's concern.
+
+    Task 2 decision: ``idiom-exempt`` -- the previous-value / delta shapes
+    of :func:`_is_order_idiom` are never reported.
+    """
+    results: list[CriticResult] = []
+    for t_id, t_box in scope.boxes.items():
+        if walk.box_name(t_box) not in _TRIGGER_NAMES:
+            continue
+        letters = _trigger_letters(t_box)
+        # dst_id -> inlet -> set of (outlet, "direct" | "hop")
+        reach: dict = defaultdict(lambda: defaultdict(set))
+        for edge in scope.out_edges.get(t_id, ()):
+            if edge.dst == t_id:
+                continue
+            reach[edge.dst][edge.inlet].add((edge.outlet, "direct"))
+            hop_box = scope.boxes.get(edge.dst)
+            if edge.inlet != 0 or hop_box is None or not _is_order_hop(hop_box):
+                continue
+            for nxt in scope.out_edges.get(edge.dst, ()):
+                if nxt.outlet != 0 or nxt.dst == t_id:
+                    continue
+                reach[nxt.dst][nxt.inlet].add((edge.outlet, "hop"))
+
+        for dst_id, inlets in reach.items():
+            dst_box = scope.boxes.get(dst_id)
+            if dst_box is None or 0 not in inlets:
+                continue
+            d_name = walk.box_name(dst_box)
+            if d_name in _ORDER_EXCLUDED_NAMES:
+                continue
+            hot = inlets[0]
+            cold_inlets = sorted(
+                i for i in inlets if i > 0 and _inlet_is_cold(dst_box, i, dbh)
+            )
+            if not cold_inlets:
+                continue
+            cold = set()
+            for i in cold_inlets:
+                cold |= inlets[i]
+            h = min(o for o, _ in hot)
+            if h <= min(o for o, _ in cold):
+                continue
+            if _is_order_idiom(dst_box, letters, hot, cold):
+                continue
+            ci = ", ".join(str(i) for i in cold_inlets)
+            co = ", ".join(str(o) for o in sorted({o for o, _ in cold}))
+            results.append(CriticResult(
+                "blocker",
+                f"Trigger order: '{walk.box_text(t_box)}' ({t_id}) feeds the hot "
+                f"inlet 0 of '{d_name}' ({dst_id}) from outlet {h} but cold "
+                f"inlet(s) {ci} from outlet(s) {co} -- trigger outlets fire "
+                f"right to left, so outlet {h} fires first and '{d_name}' "
+                f"outputs with stale cold values",
+                "Reorder the trigger so the hot inlet is fed by the lowest "
+                "outlet index (outlet 0 fires last), e.g. 't l b' -> 't b l'.",
+            ))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Check 6: Redundant/duplicate connections
 # ---------------------------------------------------------------------------
 
 def _check_redundant_connections(

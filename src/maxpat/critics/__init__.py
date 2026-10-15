@@ -72,7 +72,8 @@ def review_patch(
     """Run all critics on a patch and return combined results.
 
     Combines DSP critic (signal flow, gen~ I/O, gain staging),
-    structure critic (fan-out, hot/cold ordering, duplicates),
+    structure critic (fan-out, hot/cold ordering, trigger types, message
+    $N arity, duplicates; it shares *db* -- Q21),
     RNBO critic (param naming, I/O completeness, duplicates),
     M4L critic (gain stages before plugout~, required objects, device
     quality, parameter uniqueness),
@@ -97,8 +98,8 @@ def review_patch(
         ext_code: Optional C++ source code string for external code review.
         ext_archetype: Archetype for external code review ("message", "dsp",
             "scheduler"). Only used when ext_code is provided.
-        db: Keyword-only ObjectDatabase used for package detection and the
-            package critic. None (default) constructs exactly one per call;
+        db: Keyword-only ObjectDatabase used for package detection, the
+            package critic and the structure critic's Q21 checks. None (default) constructs exactly one per call;
             the save gate passes one cached instance (Q7).
 
     One shared :class:`src.maxpat.graph.PatchGraph` is built per call and
@@ -114,7 +115,7 @@ def review_patch(
 
     results: list[CriticResult] = []
     results.extend(review_dsp(patch_dict, code_context=code_context, graph=graph))
-    results.extend(review_structure(patch_dict, graph=graph))
+    results.extend(review_structure(patch_dict, graph=graph, db=db))
     results.extend(review_layout(patch_dict, graph=graph))
 
     # RNBO critic: auto-invoke when rnbo~ boxes detected (any scope)
