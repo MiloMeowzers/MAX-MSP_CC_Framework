@@ -5,7 +5,8 @@ No auto-fix -- all results are informational or diagnostic.
 
 Exports:
 - validate_genexpr: Validate GenExpr DSP code (gen-domain operators, syntax, Params)
-- validate_js: Validate js object (Legacy Engine, ES5) JavaScript (inlets/outlets, handlers, bounds)
+- validate_js: Validate js object (Legacy Engine, ES5) JavaScript (inlets/outlets,
+  handlers, bounds, ES5 lint scoped to js/jsui -- never v8/v8ui; comments ignored)
 - validate_n4m: Validate Node for Max JavaScript (require, handlers, outlet)
 - detect_js_type: Detect whether JavaScript code is N4M or js object
 """
@@ -660,7 +661,118 @@ def _lint_genexpr(code: str, m: str) -> list[ValidationResult]:
     return out
 
 
-def validate_js(code: str) -> list[ValidationResult]:
+# ---------------------------------------------------------------------------
+# js: comment/string mask and ES5 lint (Q22 / R6, D-01..D-03)
+# ---------------------------------------------------------------------------
+
+def _js_mask(code: str) -> tuple[str, list]:
+    """Blank JS comments, string contents and template-literal bodies.
+
+    Single left-to-right scan; the result has the same length as *code* and
+    keeps every newline. ``//`` and ``/* */`` comments, ``'...'`` / ``"..."``
+    contents (backslash escapes honoured) and template-literal bodies become
+    spaces; the quote characters and backticks stay. Returns
+    ``(mask, template_lines)`` where *template_lines* holds the 1-based line
+    of each opening backtick seen outside comments and strings. An
+    unterminated construct runs to EOF. Never raises.
+    """
+    out = list(code)
+    n = len(code)
+    template_lines: list = []
+    line = 1
+    i = 0
+    state = ""  # "" normal, "//", "/*", "'", '"', "`"
+    while i < n:
+        c = code[i]
+        if c == "\n":
+            line += 1
+            if state == "//":
+                state = ""
+            i += 1
+            continue
+        if state == "":
+            if c == "/" and i + 1 < n and code[i + 1] in "/*":
+                state = "//" if code[i + 1] == "/" else "/*"
+                out[i] = out[i + 1] = " "
+                i += 2
+                continue
+            if c in "'\"":
+                state = c
+            elif c == "`":
+                state = "`"
+                template_lines.append(line)
+            i += 1
+            continue
+        if state == "//":
+            if c != "\r":
+                out[i] = " "
+            i += 1
+            continue
+        if state == "/*":
+            if c == "*" and i + 1 < n and code[i + 1] == "/":
+                out[i] = out[i + 1] = " "
+                state = ""
+                i += 2
+                continue
+            if c != "\r":
+                out[i] = " "
+            i += 1
+            continue
+        # inside a string or template literal
+        if c == "\\" and i + 1 < n:
+            out[i] = " "
+            if code[i + 1] == "\n":
+                line += 1
+            elif code[i + 1] != "\r":
+                out[i + 1] = " "
+            i += 2
+            continue
+        if c == state:
+            state = ""
+        elif c != "\r":
+            out[i] = " "
+        i += 1
+    return "".join(out), template_lines
+
+
+_JS_ES6_PATTERNS = (
+    ("'const'", re.compile(r"\bconst\s+[A-Za-z_$]")),
+    ("'let'", re.compile(r"\blet\s+[A-Za-z_$\[{]")),
+    ("'=>' (arrow function)", re.compile(r"=>")),
+    ("template literal", None),
+    ("'class'", re.compile(r"(?<![.\w$])class\s+[A-Za-z_$]")),
+    ("default parameter", None),
+)
+_JS_FUNC_PARAMS = re.compile(r"\bfunction\b\s*[\w$]*\s*\(([^)]*)\)")
+_JS_DEFAULT_EQ = re.compile(r"(?<![=!<>])=(?!=)")
+_JS_LEGACY_ENGINES = ("js", "jsui")
+_JS_MODERN_ENGINES = ("v8", "v8ui")
+
+
+def _js_es6_forms(masked: str, template_lines: list) -> list:
+    """[(form, [lines...]), ...] for every ES6 form present, in a fixed
+    order."""
+    def line_of(pos: int) -> int:
+        return masked.count("\n", 0, pos) + 1
+
+    found = []
+    for form, pattern in _JS_ES6_PATTERNS:
+        if form == "template literal":
+            lines = list(template_lines)
+        elif form == "default parameter":
+            lines = [
+                line_of(mt.start())
+                for mt in _JS_FUNC_PARAMS.finditer(masked)
+                if _JS_DEFAULT_EQ.search(mt.group(1))
+            ]
+        else:
+            lines = [line_of(mt.start()) for mt in pattern.finditer(masked)]
+        if lines:
+            found.append((form, lines))
+    return found
+
+
+def validate_js(code: str, *, engine: str | None = None) -> list[ValidationResult]:
     """Validate js object (Legacy Engine, ES5) JavaScript code.
 
     Checks:
@@ -668,19 +780,35 @@ def validate_js(code: str) -> list[ValidationResult]:
     2. outlets declaration present
     3. Handler function presence
     4. outlet() index bounds
+    5. ES5 lint (Q22 / R6): ES6 syntax -- ``const``, ``let``, ``=>``,
+       template literals, ``class``, default parameters -- scoped by
+       *engine* (D-01): an error per form when engine is ``"js"`` or
+       ``"jsui"`` (the Legacy Engine rejects it), nothing for ``"v8"`` /
+       ``"v8ui"`` (Modern Engine), and exactly one info when the engine is
+       None or unknown (D-02 note).
+
+    Checks 1-5 run on a comment/string mask (Q22 / G8): ``// inlets = 2``,
+    ``/* outlets = 3 */``, a commented-out ``outlet(5, x)`` or ES6 syntax
+    inside a string or comment never count.
 
     All results use layer="code". Report-only, no auto-fix.
 
     Args:
         code: js object JavaScript source code string.
+        engine: The MAX object that loads the file: "js", "jsui", "v8",
+            "v8ui", or None when unknown (D-03: callers that know the box
+            pass its engine directly).
 
     Returns:
         List of ValidationResult.
     """
     results: list[ValidationResult] = []
+    if not isinstance(code, str):
+        code = ""
+    masked, template_lines = _js_mask(code)
 
     # Check 1: inlets declaration
-    inlets_match = re.search(r"inlets\s*=\s*(\d+)", code)
+    inlets_match = re.search(r"inlets\s*=\s*(\d+)", masked)
     if not inlets_match:
         results.append(ValidationResult(
             "code", "error",
@@ -688,7 +816,7 @@ def validate_js(code: str) -> list[ValidationResult]:
         ))
 
     # Check 2: outlets declaration
-    outlets_match = re.search(r"outlets\s*=\s*(\d+)", code)
+    outlets_match = re.search(r"outlets\s*=\s*(\d+)", masked)
     if not outlets_match:
         results.append(ValidationResult(
             "code", "error",
@@ -699,7 +827,7 @@ def validate_js(code: str) -> list[ValidationResult]:
     handler_names = ["bang", "msg_int", "msg_float", "list", "anything"]
     found_handlers = []
     for handler in handler_names:
-        if re.search(rf"function\s+{handler}\s*\(", code):
+        if re.search(rf"function\s+{handler}\s*\(", masked):
             found_handlers.append(handler)
 
     if not found_handlers:
@@ -717,7 +845,7 @@ def validate_js(code: str) -> list[ValidationResult]:
     # Check 4: outlet() index bounds
     if outlets_match:
         num_outlets = int(outlets_match.group(1))
-        outlet_calls = re.findall(r"outlet\(\s*(\d+)", code)
+        outlet_calls = re.findall(r"outlet\(\s*(\d+)", masked)
         for idx_str in outlet_calls:
             idx = int(idx_str)
             if idx >= num_outlets:
@@ -726,6 +854,26 @@ def validate_js(code: str) -> list[ValidationResult]:
                     f"outlet() index {idx} out of bounds "
                     f"(declared outlets = {num_outlets}, valid indices: 0-{num_outlets - 1})",
                 ))
+
+    # Check 5: ES5 lint by engine (D-01 / D-02).
+    forms = _js_es6_forms(masked, template_lines)
+    if forms and engine not in _JS_MODERN_ENGINES:
+        if engine in _JS_LEGACY_ENGINES:
+            for form, lines in forms:
+                results.append(ValidationResult(
+                    "code", "error",
+                    f"ES6 syntax {form} on line {min(lines)} ({len(lines)} in "
+                    f"total) -- js/jsui run the Legacy Engine (ES5), which "
+                    f"rejects it; rewrite in ES5 or load the file with v8/v8ui",
+                ))
+        else:
+            first = min(min(lines) for _f, lines in forms)
+            results.append(ValidationResult(
+                "code", "info",
+                f"ES6 syntax found ({', '.join(f for f, _l in forms)}; first on "
+                f"line {first}) -- legal in v8/v8ui only; an error if js/jsui "
+                f"loads this file (engine unknown)",
+            ))
 
     return results
 
