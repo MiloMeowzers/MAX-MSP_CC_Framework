@@ -106,48 +106,134 @@ def measure_peak(buf: np.ndarray) -> float:
     return float(np.max(np.abs(buf)))
 
 
+def measure_ac_rms(buf: np.ndarray) -> float:
+    """RMS amplitude after removing the buffer mean (Q25 / H4).
+
+    A DC-only buffer reads 0.0, so a constant offset cannot defeat the
+    classifier's amplitude_floor (no_oscillation) check. Returns 0.0 for an
+    empty buffer and NaN if any sample is non-finite, the same contract as
+    measure_rms.
+    """
+    if buf.size == 0:
+        return 0.0
+    if not np.all(np.isfinite(buf)):
+        return float("nan")
+    x = buf - np.mean(buf)
+    return float(np.sqrt(np.mean(x * x)))
+
+
+# Pitch-detector inspection window and peak-picking knobs (Q25 / H1).
+_FMIN_HZ = 40.0
+_FMAX_HZ = 4000.0
+_CLARITY = 0.5
+_PEAK_FRACTION = 0.9
+
+
+def _parabolic(y: np.ndarray, k: int) -> float:
+    """Sub-sample peak position around index k; returns k at array edges."""
+    if k < 1 or k > y.size - 2:
+        return float(k)
+    y0, y1, y2 = float(y[k - 1]), float(y[k]), float(y[k + 1])
+    denom = y0 - 2.0 * y1 + y2
+    if abs(denom) <= 1e-12:
+        return float(k)
+    offset = 0.5 * (y0 - y2) / denom
+    offset = max(-1.0, min(1.0, offset))
+    return float(k) + offset
+
+
 def measure_fundamental(buf: np.ndarray, sample_rate: float) -> float:
-    """Estimate fundamental frequency via autocorrelation peak detection.
+    """Estimate the fundamental with a normalized autocorrelation (NACF).
 
-    Uses scipy.signal.correlate then locates the first peak after the
-    zero-lag lobe. Sub-sample accuracy via parabolic interpolation around
-    the peak. Returns 0.0 if no clear period is detected (silence, noise,
-    or non-finite buffer).
+    Algorithm (Q25 / H1):
+      1. Reject buffers shorter than 64 samples or holding any non-finite
+         sample; remove the mean; reject near-silence (max |x| < 1e-9).
+      2. Raw autocorrelation via one FFT (scipy.signal.correlate,
+         method="fft"), positive lags 0..N//2, each lag normalized by the
+         energy of its overlapping region, r(k) / sqrt(E_head(k) * E_tail(k)),
+         so long lags are not penalized by the shrinking overlap.
+      3. Find the first zero crossing of the NACF. In the region from there
+         (or the 4 kHz lag, whichever is later) to the 40 Hz lag, take the
+         maximum M; below a clarity of 0.5 there is no pitch.
+      4. The period is the FIRST lag whose NACF exceeds 0.9 * M, climbed to
+         its local maximum and parabolic-interpolated. Taking the first
+         strong peak (not the global maximum) is what stops sub-octave
+         errors; starting after the zero crossing is what stops the zero-lag
+         lobe being read as a 4 kHz pitch.
+      5. Multi-period refinement: re-locate the NACF peak near 2T, 4T, 8T, ...
+         and divide by the multiple. Harmonic-rich waves (naive saw, pulse,
+         square) have corner-shaped NACF peaks, so a single parabolic fit is
+         biased by up to a few cents; the error stays constant per peak while
+         the lag grows, so dividing by the multiple shrinks it.
 
-    Bounded by the [50 Hz, 4 kHz] inspection window: max_lag corresponds
-    to the lower bound, min_lag to the upper. T-04 (DoS) mitigation: the
-    autocorrelation region is bounded by buffer size, no unbounded math.
+    Before Q25 the detector took the global ACF maximum over the window: a
+    58.27 Hz sine read 4009.09 Hz and 220 / 440 Hz saws read 109.99 Hz.
+
+    Inspection window: [40 Hz, 4 kHz] (50 Hz, the lowest tested pitch, has
+    margin). Returns 0.0 when no clear period is found (silence, DC, noise,
+    non-finite input, or a result outside the window); never a negative or
+    non-finite value.
+
+    T-04 (DoS): one FFT autocorrelation of the buffer plus O(log N)
+    refinement steps; every region is bounded by the buffer size.
     """
     if buf.size < 64 or not np.all(np.isfinite(buf)):
         return 0.0
-    # Remove DC, normalize to [-1, 1] so correlation peaks scale uniformly.
-    x = buf - np.mean(buf)
-    peak_abs = float(np.max(np.abs(x)))
-    if peak_abs < 1e-9:
+    x = np.asarray(buf, dtype=np.float64) - float(np.mean(buf))
+    if float(np.max(np.abs(x))) < 1e-9:
         return 0.0
-    x = x / peak_abs
-    corr = scipy.signal.correlate(x, x, mode="full")
-    corr = corr[corr.size // 2:]  # positive lags only
-    # Inspection window: max 4 kHz (smallest lag) -> min 50 Hz (largest lag).
-    min_lag = max(2, int(sample_rate / 4000.0))
-    max_lag = min(corr.size - 1, int(sample_rate / 50.0))
-    if max_lag <= min_lag:
+    n = x.size
+    half = n // 2
+    corr = scipy.signal.correlate(x, x, mode="full", method="fft")
+    corr = corr[n - 1:n - 1 + half + 1]  # lags 0..N//2
+    # Energy of the overlapping head x[0:N-k] and tail x[k:N] for each lag.
+    csum = np.concatenate(([0.0], np.cumsum(x * x)))
+    lags = np.arange(half + 1)
+    e_head = csum[n - lags]
+    e_tail = csum[n] - csum[lags]
+    nacf = corr / np.maximum(np.sqrt(np.maximum(e_head * e_tail, 0.0)), 1e-20)
+
+    lag_min = max(2, int(math.floor(sample_rate / _FMAX_HZ)))
+    lag_max = min(half, int(math.ceil(sample_rate / _FMIN_HZ)) + 1)
+    if lag_max <= lag_min:
         return 0.0
-    region = corr[min_lag:max_lag]
-    peak_lag_local = int(np.argmax(region))
-    peak_lag = float(peak_lag_local + min_lag)
-    # Parabolic interpolation around the peak for sub-sample accuracy.
-    if 1 <= peak_lag_local <= region.size - 2:
-        y0 = region[peak_lag_local - 1]
-        y1 = region[peak_lag_local]
-        y2 = region[peak_lag_local + 1]
-        denom = y0 - 2.0 * y1 + y2
-        if abs(denom) > 1e-12:
-            offset = 0.5 * (y0 - y2) / denom
-            peak_lag = peak_lag + float(offset)
-    if peak_lag <= 0.0:
+    below = np.nonzero(nacf[1:lag_max + 1] < 0.0)[0]
+    if below.size == 0:
         return 0.0
-    return float(sample_rate / peak_lag)
+    z = int(below[0]) + 1
+    start = max(z, lag_min)
+    if start >= lag_max:
+        return 0.0
+    region = nacf[start:lag_max + 1]
+    peak_max = float(np.max(region))
+    if peak_max < _CLARITY:
+        return 0.0
+    k = start + int(np.nonzero(region > _PEAK_FRACTION * peak_max)[0][0])
+    while k + 1 <= half and nacf[k + 1] > nacf[k]:
+        k += 1
+    period = _parabolic(nacf, k)
+    if not (math.isfinite(period) and period > 0.0):
+        return 0.0
+
+    m = 2
+    while m * period + period / 4.0 < half:
+        centre = int(round(m * period))
+        width = max(2, int(period / 4.0))
+        lo = max(1, centre - width)
+        hi = min(half, centre + width)
+        if hi <= lo:
+            break
+        local = int(np.argmax(nacf[lo:hi + 1])) + lo
+        refined = _parabolic(nacf, local) / m
+        if not (math.isfinite(refined) and refined > 0.0):
+            break
+        period = refined
+        m *= 2
+
+    freq = float(sample_rate / period)
+    if not math.isfinite(freq) or freq < _FMIN_HZ or freq > _FMAX_HZ:
+        return 0.0
+    return freq
 
 
 def cents_offset(measured_hz: float, target_hz: float) -> float:

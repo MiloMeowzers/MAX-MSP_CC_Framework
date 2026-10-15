@@ -235,3 +235,46 @@ class TestPublicSurface:
         assert MODE_COMPETITION == "mode_competition"
         assert NO_OSCILLATION == "no_oscillation"
         assert RUNAWAY == "runaway"
+
+
+# ===========================================================================
+# Q25 / H1: pitch detection end to end through run_simulation
+# ===========================================================================
+
+
+def _vector_wave_factory(kind):
+    """Return a mirror factory emitting a vectorised sine or naive saw at params['freq']."""
+
+    def factory(sample_rate, params):
+        freq = float(params.get("freq", 220.0))
+
+        def render(n_samples, step_params):
+            t = np.arange(n_samples) / sample_rate
+            if kind == "sine":
+                return 0.5 * np.sin(2 * np.pi * freq * t)
+            return 0.5 * (2.0 * np.mod(freq * t, 1.0) - 1.0)
+
+        return render
+
+    return factory
+
+
+class TestPitchEndToEnd:
+    """Q25 / H1: the bassoon register and harmonic-rich waves read correctly through run_simulation.
+
+    Before Q25 the 58.27 Hz sine was mode_competition at 4009.09 Hz and the
+    440 Hz saw read an octave low.
+    """
+
+    @pytest.mark.parametrize("kind,freq", [("sine", 58.27), ("saw", 440.0)])
+    def test_mirror_passes_with_exact_pitch(self, kind, freq):
+        report = run_simulation(
+            mirror=_vector_wave_factory(kind),
+            params={"freq": freq, "breath": 0.6},
+            sweep_param="breath",
+            sweep=(0.0, 1.0, 4),
+        )
+        assert report.verdict == PASS, report.reason
+        assert len(report.measurements) == 4
+        for m in report.measurements:
+            assert m.measured_hz == pytest.approx(freq, abs=0.01), m
