@@ -68,12 +68,14 @@ def review_patch(
     ext_archetype: str = "message",
     *,
     db=None,
+    is_new: bool = False,
 ) -> list[CriticResult]:
     """Run all critics on a patch and return combined results.
 
     Combines DSP critic (signal flow, gen~ I/O, gain staging),
     structure critic (fan-out, hot/cold ordering, trigger types, message
-    $N arity, duplicates; it shares *db* -- Q21),
+    $N arity, duplicates, uninitialized UI -> DSP state; it shares *db* --
+    Q21, Q24),
     RNBO critic (param naming, I/O completeness, duplicates),
     M4L critic (gain stages before plugout~, required objects, device
     quality, parameter uniqueness),
@@ -101,6 +103,11 @@ def review_patch(
         db: Keyword-only ObjectDatabase used for package detection, the
             package critic and the structure critic's Q21 checks. None (default) constructs exactly one per call;
             the save gate passes one cached instance (Q7).
+        is_new: Keyword-only. True for a new patch: the structure critic's
+            Q24 uninitialized-state findings (a UI value holder reaching
+            DSP with nothing setting it at load) are blockers. False
+            (default, an edit) keeps them warnings. The save gate passes
+            True for a file with no baseline; no other result changes.
 
     One shared :class:`src.maxpat.graph.PatchGraph` is built per call and
     passed to the critics (S1, Q20).
@@ -115,7 +122,7 @@ def review_patch(
 
     results: list[CriticResult] = []
     results.extend(review_dsp(patch_dict, code_context=code_context, graph=graph))
-    results.extend(review_structure(patch_dict, graph=graph, db=db))
+    results.extend(review_structure(patch_dict, graph=graph, db=db, is_new=is_new))
     results.extend(review_layout(patch_dict, graph=graph))
 
     # RNBO critic: auto-invoke when rnbo~ boxes detected (any scope)

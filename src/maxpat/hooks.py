@@ -270,7 +270,9 @@ def save_patch_roundtrip(
     the HEAD version of the path, else the file on disk -- by rule template
     plus box ids, never by finding text. Only findings the save introduces
     raise PatchValidationError; pre-existing ones save. A new file (no
-    baseline) refuses every blocker. The caller's dict is never modified.
+    baseline) refuses every blocker, and is reviewed with ``is_new=True``
+    so a Q24 uninitialized-state finding blocks it (on an edit it is a
+    warning). The caller's dict is never modified.
 
     Args:
         patch_dict: The .maxpat dict (output of Patcher.to_dict()).
@@ -527,7 +529,12 @@ def _finding_key(result) -> tuple:
     return (origin, template, tuple(sorted(ids)), removal, getattr(result, "path", ""))
 
 
-def _blocking_findings(patch_dict: dict, scope: "str | None" = None) -> list:
+def _blocking_findings(
+    patch_dict: dict,
+    scope: "str | None" = None,
+    *,
+    is_new: bool = False,
+) -> list:
     """Blocking validation errors and critic blockers of *patch_dict*.
 
     Runs validate_patch and review_patch on deepcopies with the cached gate
@@ -536,13 +543,15 @@ def _blocking_findings(patch_dict: dict, scope: "str | None" = None) -> list:
     proposed removals, except a legacy ``auto_fixed`` one without a
     proposal. Pre-existing findings are exempted by the baseline diff, not
     here. *scope* is passed to validate_patch (None auto-detects; Q12).
+    *is_new* is passed to review_patch: with True a Q24 uninitialized-state
+    finding is a blocker, otherwise a warning that never blocks.
     """
     from src.maxpat.critics import review_patch
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         v_results = validate_patch(copy.deepcopy(patch_dict), db=_gate_db(), scope=scope)
-        c_results = review_patch(copy.deepcopy(patch_dict), db=_gate_db())
+        c_results = review_patch(copy.deepcopy(patch_dict), db=_gate_db(), is_new=is_new)
 
     found = [
         r for r in v_results
@@ -700,8 +709,13 @@ def _gate_report(
     Pure (no I/O). ``baseline_dict`` None means a new file: every blocking
     finding is new. Otherwise a finding is new when its key's count in the
     new patch exceeds its count in the baseline (multiset match).
+
+    A new file is reviewed with ``is_new=True``, so a Q24 uninitialized-state
+    finding (a UI value holder reaching DSP with nothing setting it at
+    load) blocks only a file with no baseline; an edit reviews both sides
+    with the default, where it is a warning.
     """
-    new_findings = _blocking_findings(new_dict, scope=scope)
+    new_findings = _blocking_findings(new_dict, scope=scope, is_new=baseline_dict is None)
     if baseline_dict is None:
         new_blockers = list(new_findings)
     else:

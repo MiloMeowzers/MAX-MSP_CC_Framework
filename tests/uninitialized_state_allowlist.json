@@ -1,0 +1,679 @@
+{
+  "_doc": "Q24 (quick 261015-j0n) uninitialized-state WARNINGS in committed, frozen patches (never edited to satisfy critics; fix-plan rule 3). Q24 is a blocker only for a new file (review_patch(..., is_new=True), set by the save gate for a file with no baseline); on these committed files review_patch reports it as a warning. tests/test_uninitialized_state.py::TestCommittedCorpus pins every committed .maxpat/.maxhelp file: it fails on any new, missing or stale entry and on a missing reason, and checks each entry's maxclass against the box (guards id drift). Matching key: patch path + box_id + CriticResult path (\"\" at the top level). Unlike review_blocker_allowlist.json and validate_error_allowlist.json, calibration (user-confirmed) projects may appear here because every entry is a warning (granularsynthtest obj-26 is a spec latent case).",
+  "patches": {
+    "patches/FDNVerb/generated/FDNVerb.maxhelp": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-8",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-29",
+        "maxclass": "gain~",
+        "path": "",
+        "reason": "Fix-plan Q24 latent case: plain gain~ with parameter_enable 0 and no init route, so it loads at 0 (silent) until the fader is touched. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/barnett-dbap/generated/barnett-dbap.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-13",
+        "maxclass": "number",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/barnett-dbap/generated/control-demo.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-39",
+        "maxclass": "slider",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-41",
+        "maxclass": "flonum",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/barnett-dbap/generated/dbap-source.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-13",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-15",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-20",
+        "maxclass": "number",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/disintegrate/generated/disintegrate-helper.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-8",
+        "maxclass": "flonum",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-10",
+        "maxclass": "gain~",
+        "path": "",
+        "reason": "Fix-plan Q24 latent case: plain gain~ with parameter_enable 0 and no init route, so it loads at 0 (silent) until the fader is touched. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/gen-eq/generated/gen-eq-mc-test.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-8",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/gen-eq/generated/gen-eq-test.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-8",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/gong-model/generated/gong-model.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-407",
+        "maxclass": "flonum",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). It feeds the cold inlet of `f 0.8`: shows 0 while 0.8 is stored. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/granularsynthtest/generated/granularsynthtest.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-26",
+        "maxclass": "gain~",
+        "path": "",
+        "reason": "Fix-plan Q24 latent case: plain gain~ with parameter_enable 0 and no init route, so it loads at 0 (silent) until the fader is touched. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/intelligent-corpus-remixer/generated/intelligent-corpus-remixer.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-11",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-13",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-17",
+        "maxclass": "number",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-20",
+        "maxclass": "live.gain~",
+        "path": "",
+        "reason": "live.gain~ with parameter_enable 0 and no init route: it loads at its default until touched. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-50",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/looper/generated/looper-demo.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-7",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/mixer/generated/mixer-strip.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-57",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-58",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-72",
+        "maxclass": "umenu",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-76",
+        "maxclass": "umenu",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-80",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-81",
+        "maxclass": "umenu",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-85",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-86",
+        "maxclass": "umenu",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-90",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-91",
+        "maxclass": "umenu",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-95",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-96",
+        "maxclass": "umenu",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-100",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-101",
+        "maxclass": "umenu",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-105",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-106",
+        "maxclass": "umenu",
+        "path": "",
+        "reason": "Abstraction under autopattr @autorestore 0 with no pattrstorage in this file; the host mixer.maxpat's pattrstorage mixstate recalls it at load (patches/mixer/context.md), which a per-file review cannot see. Reported per the locked Q24 rule D-02 (autopattr counts only with a pattrstorage in the same patch tree). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/physics-composition/generated/physics-composition.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-22",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/reverse-delay/generated/reverse-delay-mono.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-138",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-140",
+        "maxclass": "flonum",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/reverse-delay/generated/reverse-delay.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-138",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-140",
+        "maxclass": "flonum",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/rhythmic-corpus-chopper/generated/rhythmic-corpus-chopper.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-8",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-10",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/rhythmic-sampler/generated/slot.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-48",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-138",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/sample-layers/generated/sample-layers.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-8",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/simple-fm/generated/simple-fm.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-76",
+        "maxclass": "umenu",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/spectraldetector/generated/spectraldetector.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-3",
+        "maxclass": "umenu",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-8",
+        "maxclass": "gain~",
+        "path": "",
+        "reason": "Fix-plan Q24 latent case: plain gain~ with parameter_enable 0 and no init route, so it loads at 0 (silent) until the fader is touched. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/stereo-feedback-delay/generated/stereo-feedback-delay.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-8",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Preset member that nothing recalls at load (no loadmess into preset obj-59): shows 0 until touched while gen~ keeps its Param defaults. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-13",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Preset member that nothing recalls at load (no loadmess into preset obj-59): shows 0 until touched while gen~ keeps its Param defaults. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-18",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Preset member that nothing recalls at load (no loadmess into preset obj-59): shows 0 until touched while gen~ keeps its Param defaults. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-23",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Preset member that nothing recalls at load (no loadmess into preset obj-59): shows 0 until touched while gen~ keeps its Param defaults. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-28",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Preset member that nothing recalls at load (no loadmess into preset obj-59): shows 0 until touched while gen~ keeps its Param defaults. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-33",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Preset member that nothing recalls at load (no loadmess into preset obj-59): shows 0 until touched while gen~ keeps its Param defaults. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-38",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Preset member that nothing recalls at load (no loadmess into preset obj-59): shows 0 until touched while gen~ keeps its Param defaults. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-43",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Preset member that nothing recalls at load (no loadmess into preset obj-59): shows 0 until touched while gen~ keeps its Param defaults. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/stutter/generated/stutter.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-21",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-28",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-42",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-44",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-47",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/tape-wobble/generated/tape-wobble.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-10",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-12",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-15",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-17",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-20",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-22",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-25",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-27",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-29",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-32",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-34",
+        "maxclass": "dial",
+        "path": "",
+        "reason": "Parameter control with no init route: shows its default until touched while the DSP runs on its own value (pre-R8 debt). Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/terrain-synth/generated/terrain-synth.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-759",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-784",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-835",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ],
+    "patches/timestretch/generated/timestretch.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-48",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      },
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-49",
+        "maxclass": "toggle",
+        "path": "",
+        "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
+      }
+    ]
+  }
+}
