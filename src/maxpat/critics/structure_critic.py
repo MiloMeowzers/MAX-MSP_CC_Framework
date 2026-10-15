@@ -889,6 +889,28 @@ def _check_redundant_connections(
 # DSP (planner decision 4) and get the gain-stage finding text.
 _GAIN_STAGES = frozenset({"gain~", "live.gain~"})
 
+# D-01: the other value holders, by maxclass. Every class not listed here
+# or in _GAIN_STAGES (button, kslider, multislider, textedit, nodes,
+# matrixctrl, mc.live.gain~, ...) is never reported.
+_VALUE_HOLDERS = frozenset({
+    "slider", "dial", "number", "flonum", "live.dial", "live.slider",
+    "live.numbox", "toggle", "live.toggle", "umenu", "live.menu", "tab",
+    "live.tab", "radiogroup",
+})
+
+_ALL_VALUE_HOLDERS = _VALUE_HOLDERS | _GAIN_STAGES
+
+# D-03: DSP targets by name (the walk stops at the first DSP box).
+_DSP_NAMES = frozenset({
+    "gen~", "mc.gen~", "rnbo~", "poly~", "mc.poly~", "*~", "mc.*~",
+    "gain~", "live.gain~",
+})
+
+# Planner decision 4: the audio switches are never DSP targets. Their
+# control input is the global audio on/off, off at load like an unset
+# toggle (adc~ stays a target: a channel number is real state).
+_AUDIO_SWITCHES = frozenset({"dac~", "ezdac~", "mc.dac~", "ezadc~"})
+
 # Sources that fire at load (planner decision 3).
 _LOAD_SOURCES = frozenset({"loadbang", "loadmess", "live.thisdevice"})
 
@@ -906,13 +928,70 @@ _UNINIT_SUGGESTION = (
 )
 
 
-class _InitContext:
-    """Whole-graph facts for the Q24 check, computed lazily once per call."""
+def _attr_value(tokens: list, attr: str) -> "str | None":
+    """The token after ``@attr`` in *tokens*, or None."""
+    for index, token in enumerate(tokens):
+        if token == attr:
+            return tokens[index + 1] if index + 1 < len(tokens) else None
+    return None
 
-    __slots__ = ("graph",)
+
+def _is_zero(token) -> bool:
+    try:
+        return float(token) == 0.0
+    except (TypeError, ValueError):
+        return False
+
+
+class _InitContext:
+    """Whole-graph facts for the Q24 check, computed lazily once per call.
+
+    ``has_pattrstorage``: a ``pattrstorage`` box in any scope (D-02).
+    ``bindto``: the ``pattr @bindto`` targets of every scope, whole and by
+    last ``::`` segment (D-02). ``autopattrs(scope)``: the autopattr boxes
+    of one scope.
+    """
+
+    __slots__ = ("graph", "_storage", "_bindto", "_autopattrs")
 
     def __init__(self, graph):
         self.graph = graph
+        self._storage = None
+        self._bindto = None
+        self._autopattrs: dict = {}
+
+    @property
+    def has_pattrstorage(self) -> bool:
+        if self._storage is None:
+            self._storage = any(
+                walk.box_name(box) == "pattrstorage"
+                for scope in self.graph.scopes
+                for box in scope.boxes.values()
+            )
+        return self._storage
+
+    @property
+    def bindto(self) -> frozenset:
+        if self._bindto is None:
+            names: set = set()
+            for scope in self.graph.scopes:
+                for box in scope.boxes.values():
+                    if walk.box_name(box) != "pattr":
+                        continue
+                    target = _attr_value(walk.box_args(box), "@bindto")
+                    if target:
+                        names.add(target)
+                        names.add(target.split("::")[-1])
+            self._bindto = frozenset(names)
+        return self._bindto
+
+    def autopattrs(self, scope) -> list:
+        key = id(scope)
+        found = self._autopattrs.get(key)
+        if found is None:
+            found = [box for box in scope.boxes.values() if walk.box_name(box) == "autopattr"]
+            self._autopattrs[key] = found
+        return found
 
 
 def _has_parameter_initial(box) -> bool:
@@ -958,28 +1037,136 @@ def _is_slaved_gain(scope, box_id, dbh) -> bool:
     return False
 
 
-def _has_load_path(graph, scope, box_id) -> bool:
-    """An upstream control walk from the box reaches a load source."""
+def _db_has_signal_port(dbh, name) -> bool:
+    """True when the DB entry of *name* has a signal inlet or outlet."""
+    entry = dbh.lookup(name)
+    if entry is None:
+        return False
+    for key in ("inlets", "outlets"):
+        ports = entry.get(key)
+        for port in ports if isinstance(ports, list) else ():
+            if isinstance(port, dict) and port.get("signal") is True:
+                return True
+    return False
+
+
+def _is_dsp_box(box, dbh) -> bool:
+    """D-03 / planner decision 4: a box that ends the reach walk.
+
+    Never the audio switches (dac~, ezdac~, mc.dac~, ezadc~); then a DSP
+    name (gen~, mc.gen~, rnbo~, poly~, mc.poly~, ``*~``, ``mc.*~``, gain~,
+    live.gain~), a signal ``outlettype`` entry, or a DB signal inlet /
+    outlet. Embedded p / bpatcher containers never get here (the walk
+    crosses them); opaque boxes are judged by name, outlettype or DB.
+    """
+    if not isinstance(box, dict):
+        return False
+    name = walk.box_name(box)
+    if name in _AUDIO_SWITCHES:
+        return False
+    if name in _DSP_NAMES:
+        return True
+    outlettype = box.get("outlettype")
+    if isinstance(outlettype, list) and any(
+        isinstance(t, str) and t in SIGNAL_OUTLET_TYPES for t in outlettype
+    ):
+        return True
+    db_name = walk.object_name(box)
+    return bool(db_name) and _db_has_signal_port(dbh, db_name)
+
+
+def _first_dsp(graph, scope, box_id, dbh):
+    """The first DSP ``(scope, box_id, box)`` the downstream control walk
+    reaches (D-03), or None."""
+    for s, b in graph.control_walk(scope, box_id, downstream=True):
+        target = s.boxes.get(b)
+        if _is_dsp_box(target, dbh):
+            return s, b, target
+    return None
+
+
+def _is_pattr_bound(scope, box_id, box, ctx) -> bool:
+    """D-02 per-control binding: a cord to or from a ``pattr``, a ``pattr
+    @bindto`` naming the varname (whole or last ``::`` segment), or a
+    varname in a patcher holding autopattr when a pattrstorage exists
+    anywhere in the tree."""
+    for e in scope.in_edges.get(box_id, ()):
+        if walk.box_name(scope.boxes.get(e.src)) == "pattr":
+            return True
+    for e in scope.out_edges.get(box_id, ()):
+        if walk.box_name(scope.boxes.get(e.dst)) == "pattr":
+            return True
+    varname = box.get("varname")
+    if not isinstance(varname, str) or not varname:
+        return False
+    if varname in ctx.bindto:
+        return True
+    autopattrs = ctx.autopattrs(scope)
+    if autopattrs and ctx.has_pattrstorage:
+        return True
+    return _autopattr_restores(autopattrs, varname)
+
+
+def _autopattr_restores(autopattrs, varname) -> bool:
+    """Planner decision 3: *varname* is a key of a same-patcher autopattr's
+    ``restore`` dict and that autopattr does not carry ``@autorestore 0``
+    (autopattr.maxref.xml: autorestore defaults to 1 and outputs the last
+    saved values at load)."""
+    for ap in autopattrs:
+        restore = ap.get("restore")
+        if not isinstance(restore, dict) or varname not in restore:
+            continue
+        if _is_zero(_attr_value(walk.box_args(ap), "@autorestore")):
+            continue
+        return True
+    return False
+
+
+def _upstream_initialized(graph, scope, box_id) -> bool:
+    """One upstream control walk: True on a load source (loadbang,
+    loadmess, live.thisdevice), or on a value holder outside the control's
+    own downstream control set (a follower -- planner decision 3: that
+    holder is initialized and drives this one at load, or is reported
+    itself). The downstream set is computed lazily, once."""
+    downstream_set = None
     for s, b in graph.control_walk(scope, box_id, downstream=False):
-        if walk.box_name(s.boxes.get(b)) in _LOAD_SOURCES:
+        upstream_box = s.boxes.get(b)
+        if walk.box_name(upstream_box) in _LOAD_SOURCES:
+            return True
+        if walk.box_maxclass(upstream_box) not in _ALL_VALUE_HOLDERS:
+            continue
+        if downstream_set is None:
+            downstream_set = {
+                (id(ds), db_id)
+                for ds, db_id in graph.control_walk(scope, box_id, downstream=True)
+            }
+        if (id(s), b) not in downstream_set:
             return True
     return False
 
 
 def _is_initialized(graph, scope, box_id, box, dbh, ctx) -> bool:
-    """True when something sets the control at load (cheapest route first)."""
+    """True when something sets the control at load, cheapest route first:
+    parameter initial value, D-02 pattr binding / autopattr restore,
+    slaved gain~ (planner decision 3), then the upstream walk."""
     if _has_parameter_initial(box):
+        return True
+    if _is_pattr_bound(scope, box_id, box, ctx):
         return True
     if walk.box_maxclass(box) in _GAIN_STAGES and _is_slaved_gain(scope, box_id, dbh):
         return True
-    return _has_load_path(graph, scope, box_id)
+    return _upstream_initialized(graph, scope, box_id)
 
 
 def _check_uninitialized_state(graph, scope, dbh, is_new, ctx) -> list[CriticResult]:
     """Q24 / R8: a value holder that reaches DSP must be set at load.
 
-    One finding per uninitialized control: a blocker when *is_new* (a new
-    patch), else a warning. Read-only; malformed boxes never raise.
+    D-01 value holders only (gain~ / live.gain~ always reach DSP, planner
+    decision 4); the others when the downstream control walk reaches a DSP
+    box (D-03). One finding per uninitialized control (never per DSP
+    target): a blocker when *is_new* (a new patch), else a warning (planner
+    decision 2). Not run in rnbo scopes. Read-only; malformed boxes never
+    raise.
     """
     if scope.scope == "rnbo":
         return []
@@ -987,15 +1174,30 @@ def _check_uninitialized_state(graph, scope, dbh, is_new, ctx) -> list[CriticRes
     results: list[CriticResult] = []
     for box_id, box in scope.boxes.items():
         maxclass = walk.box_maxclass(box)
-        if maxclass not in _GAIN_STAGES:
+        if maxclass in _GAIN_STAGES:
+            dsp = None
+        elif maxclass in _VALUE_HOLDERS:
+            dsp = _first_dsp(graph, scope, box_id, dbh)
+            if dsp is None:
+                continue
+        else:
             continue
         if _is_initialized(graph, scope, box_id, box, dbh, ctx):
             continue
-        results.append(CriticResult(
-            severity,
-            f"Uninitialized state: '{_box_label(box)}' ({box_id}) is a gain "
-            f"stage that nothing sets at load {_UNINIT_ROUTES} -- it loads at "
-            "its default (a plain gain~ at 0, silent) until touched",
-            _UNINIT_SUGGESTION,
-        ))
+        label = _box_label(box)
+        if dsp is None:
+            finding = (
+                f"Uninitialized state: '{label}' ({box_id}) is a gain stage that "
+                f"nothing sets at load {_UNINIT_ROUTES} -- it loads at its default "
+                "(a plain gain~ at 0, silent) until touched"
+            )
+        else:
+            _dsp_scope, dsp_id, dsp_box = dsp
+            finding = (
+                f"Uninitialized state: '{label}' ({box_id}) drives DSP at "
+                f"'{_box_label(dsp_box)}' ({dsp_id}) but nothing sets it at load "
+                f"{_UNINIT_ROUTES} -- it shows its default until touched while "
+                "the DSP runs on its own value"
+            )
+        results.append(CriticResult(severity, finding, _UNINIT_SUGGESTION))
     return results

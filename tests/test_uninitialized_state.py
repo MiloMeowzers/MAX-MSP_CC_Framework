@@ -461,3 +461,627 @@ class TestSaveGate:
         assert any(getattr(r, "finding", "").startswith(_Q24) for r in new.new_blockers)
         edit = _gate_report(d, copy.deepcopy(d), [copy.deepcopy(d)])
         assert not any(getattr(r, "finding", "").startswith(_Q24) for r in edit.new_blockers)
+
+
+# ===========================================================================
+# Task 2 builders: value holders, DSP targets, bridges
+# ===========================================================================
+
+_HOLDER_CLASSES = (
+    "slider", "dial", "number", "flonum", "live.dial", "live.slider",
+    "live.numbox", "toggle", "live.toggle", "umenu", "live.menu", "tab",
+    "live.tab", "radiogroup",
+)
+_EXCLUDED_CLASSES = ("button", "kslider", "multislider", "textedit", "nodes", "matrixctrl")
+
+
+def _ui(box_id, maxclass="dial", varname=None, **attrs):
+    box = _box(box_id, maxclass=maxclass, numinlets=1, numoutlets=2,
+               outlettype=["", ""])
+    if maxclass.startswith("live."):
+        box["parameter_enable"] = 0
+    if varname is not None:
+        box["varname"] = varname
+    box.update(attrs)
+    return box
+
+
+def _dial(box_id="obj-1", **kw):
+    return _ui(box_id, "dial", **kw)
+
+
+def _flonum(box_id, **kw):
+    return _ui(box_id, "flonum", **kw)
+
+
+def _gen(box_id):
+    return _box(box_id, "gen~", numinlets=2, numoutlets=1, outlettype=["signal"])
+
+
+def _prepend(box_id, text="prepend cut"):
+    return _obj(box_id, text)
+
+
+def _send(box_id, text):
+    return _obj(box_id, text, numinlets=1, numoutlets=0, outlettype=[])
+
+
+def _recv(box_id, text):
+    return _obj(box_id, text, numinlets=0, numoutlets=1)
+
+
+def _param_initial(value=0.5):
+    return {"parameter_enable": 1, "saved_attribute_attributes": {"valueof": {
+        "parameter_initial_enable": 1, "parameter_initial": [value],
+        "parameter_longname": "cut", "parameter_type": 0}}}
+
+
+def _to_gen(control, extra=(), extra_lines=()):
+    """*control* (obj-1) -> prepend cut (obj-2) -> gen~ (obj-3)."""
+    boxes = [control, _prepend("obj-2"), _gen("obj-3")] + list(extra)
+    lines = [_ln(control["id"], 0, "obj-2", 0), _ln("obj-2", 0, "obj-3", 0)] + list(extra_lines)
+    return boxes, lines
+
+
+def _nest(box_id, label, boxes, lines, **kw):
+    return _container(box_id, label, boxes, lines,
+                      numinlets=kw.pop("numinlets", 0), numoutlets=kw.pop("numoutlets", 0), **kw)
+
+
+def _patch(boxes, lines=()):
+    return _make_patch(list(boxes), list(lines))
+
+
+# ===========================================================================
+# control_walk (downstream, bridges, `;` parser, depth)
+# ===========================================================================
+
+
+class TestControlWalkDownstream:
+    def _down(self, d, start="obj-1", scope=None, **kw):
+        g = PatchGraph.build(d)
+        return list(g.control_walk(scope or g.top, start, downstream=True, **kw))
+
+    def test_send_receive(self):
+        d = _patch([_dial(), _send("obj-2", "s cut"), _recv("obj-3", "r cut"), _gen("obj-4")],
+                   [_ln("obj-1", 0, "obj-2", 0), _ln("obj-3", 0, "obj-4", 0)])
+        assert _ids(self._down(d)) == ["obj-2", "obj-3", "obj-4"]
+
+    def test_send_long_names(self):
+        d = _patch([_dial(), _send("obj-2", "send cut"), _recv("obj-3", "receive cut")],
+                   [_ln("obj-1", 0, "obj-2", 0)])
+        assert _ids(self._down(d)) == ["obj-2", "obj-3"]
+
+    def test_other_channel_not_bridged(self):
+        d = _patch([_dial(), _send("obj-2", "s cut"), _recv("obj-3", "r res")],
+                   [_ln("obj-1", 0, "obj-2", 0)])
+        assert _ids(self._down(d)) == ["obj-2"]
+
+    def test_value_bridge(self):
+        d = _patch([_dial(), _obj("obj-2", "v cut"), _obj("obj-3", "value cut"), _gen("obj-4")],
+                   [_ln("obj-1", 0, "obj-2", 0), _ln("obj-3", 0, "obj-4", 0)])
+        assert _ids(self._down(d)) == ["obj-2", "obj-3", "obj-4"]
+
+    def test_pv_related_scopes_only(self):
+        inner_a = _nest("obj-5", "p a", [_obj("in-1", "pv cut")], [])
+        inner_b = _nest("obj-6", "p b", [_obj("in-1", "pv cut")], [])
+        d = _patch([_dial(), _obj("obj-2", "pv cut"), inner_a],
+                   [_ln("obj-1", 0, "obj-2", 0)])
+        pairs = self._down(d)
+        assert [(s.key, b) for s, b in pairs] == [("", "obj-2"), ("obj-5", "in-1")]
+        # sibling subpatchers are not related to each other
+        d2 = _patch([inner_a, inner_b])
+        g = PatchGraph.build(d2)
+        a = next(s for s in g.scopes if s.key == "obj-5")
+        assert list(g.control_walk(a, "in-1", downstream=True)) == []
+
+    def test_message_remote_targets(self):
+        d = _patch([_dial(), _msg("obj-2", "; cut $1; res 0"), _recv("obj-3", "r cut"),
+                    _obj("obj-4", "v res"), _recv("obj-5", "r other")],
+                   [_ln("obj-1", 0, "obj-2", 0)])
+        assert _ids(self._down(d)) == ["obj-2", "obj-3", "obj-4"]
+
+    def test_message_carriage_return_target(self):
+        d = _patch([_dial(), _msg("obj-2", ";\rwhrt pitch 7"), _recv("obj-3", "r whrt")],
+                   [_ln("obj-1", 0, "obj-2", 0)])
+        assert _ids(self._down(d)) == ["obj-2", "obj-3"]
+
+    def test_escaped_semicolon_is_not_a_segment(self):
+        d = _patch([_dial(), _msg("obj-2", "a \\; cut 1"), _recv("obj-3", "r cut")],
+                   [_ln("obj-1", 0, "obj-2", 0)])
+        assert _ids(self._down(d)) == ["obj-2"]
+
+    def test_parser(self):
+        from src.maxpat.graph import _message_remote_targets
+
+        assert _message_remote_targets(_msg("m", "; cut 1; res 2")) == ["cut", "res"]
+        assert _message_remote_targets(_msg("m", ";\rwhrt pitch 7")) == ["whrt"]
+        assert _message_remote_targets(_msg("m", "1 2")) == []
+        assert _message_remote_targets(_msg("m", ";")) == []
+        assert _message_remote_targets({"maxclass": "message", "text": 7}) == []
+        assert _message_remote_targets(_obj("m", "; cut 1")) == []
+
+    def test_upstream_receive_reaches_message_and_send(self):
+        d = _patch([_loadbang("obj-1"), _msg("obj-2", "; cut 0.5"), _recv("obj-3", "r cut"),
+                    _dial("obj-4"), _send("obj-5", "s cut")],
+                   [_ln("obj-1", 0, "obj-2", 0), _ln("obj-3", 0, "obj-4", 0)])
+        g = PatchGraph.build(d)
+        ids = _ids(g.control_walk(g.top, "obj-4", downstream=False))
+        assert ids[:3] == ["obj-3", "obj-5", "obj-2"]
+        assert "obj-1" in ids
+
+    def test_signal_cord_never_followed(self):
+        d = _patch([_cycle("obj-1"), _gen("obj-2")], [_ln("obj-1", 0, "obj-2", 0)])
+        assert self._down(d) == []
+
+    def test_crossing_into_p_and_out(self):
+        inner = [_inlet("in-1"), _prepend("in-2", "prepend x"), _outlet("in-3")]
+        p = _container("obj-2", "p route", inner,
+                       [_ln("in-1", 0, "in-2", 0), _ln("in-2", 0, "in-3", 0)])
+        d = _patch([_dial(), p, _gen("obj-3")],
+                   [_ln("obj-1", 0, "obj-2", 0), _ln("obj-2", 0, "obj-3", 0)])
+        assert _ids(self._down(d)) == ["in-2", "obj-3"]
+
+    def test_depth_bound(self):
+        boxes = [_dial()] + [_obj(f"obj-{i}", "t i") for i in range(2, 6)]
+        lines = [_ln(f"obj-{i}", 0, f"obj-{i + 1}", 0) for i in range(1, 5)]
+        d = _patch(boxes, lines)
+        assert _ids(self._down(d, max_depth=2)) == ["obj-2", "obj-3"]
+        assert _ids(self._down(d)) == ["obj-2", "obj-3", "obj-4", "obj-5"]
+
+    def test_gen_scope_not_bridged(self):
+        gen = _container("obj-9", "gen~", [_send("in-1", "s cut")], [],
+                         numinlets=1, numoutlets=1, outlettype=["signal"],
+                         classnamespace="dsp.gen")
+        d = _patch([_dial(), _send("obj-2", "s cut"), gen, _recv("obj-3", "r cut")],
+                   [_ln("obj-1", 0, "obj-2", 0)])
+        g = PatchGraph.build(d)
+        inner = next(s for s in g.scopes if s.key == "obj-9")
+        assert list(g.control_walk(inner, "in-1", downstream=True)) == []
+
+
+# ===========================================================================
+# D-01: which classes are value holders
+# ===========================================================================
+
+
+class TestValueHolderClasses:
+    @pytest.mark.parametrize("maxclass", _HOLDER_CLASSES)
+    def test_holder_reported(self, maxclass, db):
+        control = _ui("obj-1", maxclass)
+        boxes, lines = _to_gen(control)
+        boxes[1] = _prepend("obj-2", "prepend x")
+        found = _q24(_review(boxes, lines, db))
+        assert [r.finding for r in found] == [_generic_text(maxclass, "obj-1", "gen~", "obj-3")]
+        assert found[0].suggestion == _SUGGESTION
+
+    @pytest.mark.parametrize("maxclass", _EXCLUDED_CLASSES + ("mc.live.gain~", "comment"))
+    def test_excluded_never_reported(self, maxclass, db):
+        boxes, lines = _to_gen(_ui("obj-1", maxclass))
+        assert _q24(_review(boxes, lines, db)) == []
+
+    def test_dial_into_print_only(self, db):
+        boxes = [_dial(), _send("obj-2", "print x")]
+        assert _q24(_review(boxes, [_ln("obj-1", 0, "obj-2", 0)], db)) == []
+
+
+# ===========================================================================
+# D-03: reach
+# ===========================================================================
+
+
+class TestReach:
+    def _one(self, d, db):
+        found = _q24(review_structure(d, db=db))
+        assert len(found) == 1, [r.finding for r in found]
+        return found[0]
+
+    def test_times_tilde_inlet_1(self, db):
+        d = _patch([_dial(), _obj("obj-2", "*~ 0.", numinlets=2, outlettype=["signal"])],
+                   [_ln("obj-1", 0, "obj-2", 1)])
+        assert self._one(d, db).finding == _generic_text("dial", "obj-1", "*~ 0.", "obj-2")
+
+    def test_through_embedded_p(self, db):
+        inner = [_inlet("in-1"), _prepend("in-2", "prepend x"), _outlet("in-3")]
+        p = _container("obj-2", "p route", inner,
+                       [_ln("in-1", 0, "in-2", 0), _ln("in-2", 0, "in-3", 0)])
+        d = _patch([_dial(), p, _gen("obj-3")],
+                   [_ln("obj-1", 0, "obj-2", 0), _ln("obj-2", 0, "obj-3", 0)])
+        assert self._one(d, db).finding == _generic_text("dial", "obj-1", "gen~", "obj-3")
+
+    def test_into_embedded_bpatcher(self, db):
+        inner = [_inlet("in-1"), _obj("in-2", "*~ 0.", numinlets=2, outlettype=["signal"])]
+        bp = _container("obj-2", "", inner, [_ln("in-1", 0, "in-2", 1)],
+                        maxclass="bpatcher", numinlets=1, numoutlets=0)
+        d = _patch([_dial(), bp], [_ln("obj-1", 0, "obj-2", 0)])
+        assert self._one(d, db).finding == _generic_text("dial", "obj-1", "*~ 0.", "in-2")
+
+    def test_dial_inside_p_reaches_top(self, db):
+        inner = [_dial("in-1"), _outlet("in-2")]
+        p = _container("obj-1", "p ui", inner, [_ln("in-1", 0, "in-2", 0)],
+                       numinlets=0, numoutlets=1)
+        d = _patch([p, _prepend("obj-2"), _gen("obj-3")],
+                   [_ln("obj-1", 0, "obj-2", 0), _ln("obj-2", 0, "obj-3", 0)])
+        r = self._one(d, db)
+        assert r.path == "obj-1"
+        assert r.finding == "[p ui] " + _generic_text("dial", "in-1", "gen~", "obj-3")
+
+    def test_external_bpatcher(self, db):
+        bp = _box("obj-2", maxclass="bpatcher", numinlets=1, numoutlets=1,
+                  outlettype=["signal"])
+        bp["name"] = "voice.maxpat"
+        d = _patch([_dial(), bp], [_ln("obj-1", 0, "obj-2", 0)])
+        assert self._one(d, db).finding == _generic_text("dial", "obj-1", "bpatcher", "obj-2")
+
+    def test_send_receive(self, db):
+        d = _patch([_dial(), _send("obj-2", "s cut"), _recv("obj-3", "r cut"), _gen("obj-4")],
+                   [_ln("obj-1", 0, "obj-2", 0), _ln("obj-3", 0, "obj-4", 0)])
+        assert self._one(d, db).finding == _generic_text("dial", "obj-1", "gen~", "obj-4")
+
+    def test_remote_message(self, db):
+        d = _patch([_dial(), _msg("obj-2", "; cut $1"), _recv("obj-3", "r cut"), _gen("obj-4")],
+                   [_ln("obj-1", 0, "obj-2", 0), _ln("obj-3", 0, "obj-4", 0)])
+        assert self._one(d, db).finding == _generic_text("dial", "obj-1", "gen~", "obj-4")
+
+    def test_value(self, db):
+        d = _patch([_dial(), _obj("obj-2", "v cut"), _obj("obj-3", "v cut"), _gen("obj-4")],
+                   [_ln("obj-1", 0, "obj-2", 0), _ln("obj-3", 0, "obj-4", 0)])
+        assert self._one(d, db).finding == _generic_text("dial", "obj-1", "gen~", "obj-4")
+
+    def test_pv_from_subpatcher_to_parent(self, db):
+        inner = _nest("obj-1", "p a", [_dial("in-1"), _obj("in-2", "pv cut")],
+                      [_ln("in-1", 0, "in-2", 0)])
+        d = _patch([inner, _obj("obj-2", "pv cut"), _prepend("obj-3"), _gen("obj-4")],
+                   [_ln("obj-2", 0, "obj-3", 0), _ln("obj-3", 0, "obj-4", 0)])
+        r = self._one(d, db)
+        assert r.path == "obj-1"
+        assert r.finding == "[p a] " + _generic_text("dial", "in-1", "gen~", "obj-4")
+
+
+# ===========================================================================
+# Exclusions: the audio switches, rnbo scopes
+# ===========================================================================
+
+
+class TestExclusions:
+    @pytest.mark.parametrize("target", [
+        _obj("obj-2", "dac~", numinlets=2, numoutlets=0, outlettype=[]),
+        _box("obj-2", maxclass="ezdac~", numinlets=2, numoutlets=0, outlettype=[]),
+        _obj("obj-2", "mc.dac~", numinlets=1, numoutlets=0, outlettype=[]),
+        _box("obj-2", maxclass="ezadc~", numinlets=1, numoutlets=2,
+             outlettype=["signal", "signal"]),
+    ], ids=["dac~", "ezdac~", "mc.dac~", "ezadc~"])
+    def test_audio_switch_is_not_dsp(self, target, db):
+        d = _patch([_ui("obj-1", "toggle"), target], [_ln("obj-1", 0, "obj-2", 0)])
+        assert _q24(review_structure(d, db=db)) == []
+
+    def test_adc_is_dsp(self, db):
+        adc = _obj("obj-2", "adc~", numinlets=1, numoutlets=2, outlettype=["signal", "signal"])
+        d = _patch([_ui("obj-1", "toggle"), adc], [_ln("obj-1", 0, "obj-2", 0)])
+        assert _q24_ids(review_structure(d, db=db)) == ["obj-1"]
+
+    def test_rnbo_scope_never_checked(self, db):
+        boxes = [_dial("in-1"), _obj("in-2", "*~ 0.", numinlets=2, outlettype=["signal"])]
+        lines = [_ln("in-1", 0, "in-2", 1)]
+        rnbo = _container("obj-1", "rnbo~", boxes, lines, numinlets=1, numoutlets=1,
+                          outlettype=["signal"], classnamespace="rnbo")
+        assert _q24(review_structure(_patch([rnbo]), db=db)) == []
+
+
+# ===========================================================================
+# D-03: depth bound and cycles
+# ===========================================================================
+
+
+def _chain(n, tail_gen=True):
+    boxes = [_dial()] + [_obj(f"obj-{i}", "t i") for i in range(2, n + 2)]
+    lines = [_ln(f"obj-{i}", 0, f"obj-{i + 1}", 0) for i in range(1, n + 1)]
+    if tail_gen:
+        boxes.append(_gen("obj-999"))
+        lines.append(_ln(f"obj-{n + 1}", 0, "obj-999", 0))
+    return boxes, lines
+
+
+class TestDepthAndCycles:
+    def test_gen_at_depth_64_found(self, db):
+        boxes, lines = _chain(63)
+        assert _q24_ids(_review(boxes, lines, db)) == ["obj-1"]
+
+    def test_gen_beyond_depth_64_not_found(self, db):
+        boxes, lines = _chain(64)
+        assert _q24(_review(boxes, lines, db)) == []
+
+    def _loop(self, with_gen):
+        boxes = [_dial(), _obj("obj-2", "t i"), _obj("obj-3", "+ 0", numinlets=2)]
+        lines = [_ln("obj-1", 0, "obj-2", 0), _ln("obj-2", 0, "obj-3", 0),
+                 _ln("obj-3", 0, "obj-2", 0)]
+        if with_gen:
+            boxes.append(_gen("obj-4"))
+            lines.append(_ln("obj-3", 0, "obj-4", 0))
+        return boxes, lines
+
+    def test_cycle_without_dsp(self, db):
+        boxes, lines = self._loop(False)
+        assert _q24(_review(boxes, lines, db)) == []
+
+    def test_cycle_with_dsp(self, db):
+        boxes, lines = self._loop(True)
+        assert _q24_ids(_review(boxes, lines, db)) == ["obj-1"]
+
+
+# ===========================================================================
+# Init routes (dial -> prepend cut -> gen~)
+# ===========================================================================
+
+
+class TestInitRoutes:
+    def _ids(self, boxes, lines, db):
+        return _q24_ids(_review(boxes, lines, db))
+
+    def test_parameter_initial_clears(self, db):
+        boxes, lines = _to_gen(_dial(**_param_initial()))
+        assert self._ids(boxes, lines, db) == []
+
+    def test_parameter_enable_without_initial_enable(self, db):
+        attrs = _param_initial()
+        del attrs["saved_attribute_attributes"]["valueof"]["parameter_initial_enable"]
+        boxes, lines = _to_gen(_dial(**attrs))
+        assert self._ids(boxes, lines, db) == ["obj-1"]
+
+    def test_parameter_disabled_with_valueof_initial(self, db):
+        attrs = _param_initial()
+        attrs["parameter_enable"] = 0
+        boxes, lines = _to_gen(_dial(**attrs))
+        assert self._ids(boxes, lines, db) == ["obj-1"]
+
+    def test_live_dial_parameter_initial(self, db):
+        boxes, lines = _to_gen(_ui("obj-1", "live.dial", **_param_initial()))
+        assert self._ids(boxes, lines, db) == []
+
+    def test_loadmess(self, db):
+        boxes, lines = _to_gen(_dial(), [_loadmess("obj-10", "loadmess 0.5")],
+                               [_ln("obj-10", 0, "obj-1", 0)])
+        assert self._ids(boxes, lines, db) == []
+
+    def test_loadbang_trigger_message(self, db):
+        boxes, lines = _to_gen(
+            _dial(), [_loadbang("obj-10"), _obj("obj-11", "t b"), _msg("obj-12", "0.5")],
+            [_ln("obj-10", 0, "obj-11", 0), _ln("obj-11", 0, "obj-12", 0),
+             _ln("obj-12", 0, "obj-1", 0)])
+        assert self._ids(boxes, lines, db) == []
+
+    def test_live_thisdevice(self, db):
+        boxes, lines = _to_gen(
+            _dial(), [_obj("obj-10", "live.thisdevice", numoutlets=3), _msg("obj-12", "0.5")],
+            [_ln("obj-10", 0, "obj-12", 0), _ln("obj-12", 0, "obj-1", 0)])
+        assert self._ids(boxes, lines, db) == []
+
+    @pytest.mark.parametrize("text", ["; cut 0.5", ";\rcut 0.5"])
+    def test_loadbang_remote_message(self, text, db):
+        boxes, lines = _to_gen(
+            _dial(), [_loadbang("obj-10"), _msg("obj-11", text), _recv("obj-12", "r cut")],
+            [_ln("obj-10", 0, "obj-11", 0), _ln("obj-12", 0, "obj-1", 0)])
+        assert self._ids(boxes, lines, db) == []
+
+    def test_loadmess_send_receive(self, db):
+        boxes, lines = _to_gen(
+            _dial(), [_loadmess("obj-10"), _send("obj-11", "s cutin"), _recv("obj-12", "r cutin")],
+            [_ln("obj-10", 0, "obj-11", 0), _ln("obj-12", 0, "obj-1", 0)])
+        assert self._ids(boxes, lines, db) == []
+
+    def test_loadmess_value(self, db):
+        boxes, lines = _to_gen(
+            _dial(), [_loadmess("obj-10"), _obj("obj-11", "v cutin"), _obj("obj-12", "v cutin")],
+            [_ln("obj-10", 0, "obj-11", 0), _ln("obj-12", 0, "obj-1", 0)])
+        assert self._ids(boxes, lines, db) == []
+
+    def test_loadmess_inside_p(self, db):
+        p = _container("obj-10", "p init", [_loadmess("in-1"), _outlet("in-2")],
+                       [_ln("in-1", 0, "in-2", 0)], numinlets=0, numoutlets=1)
+        boxes, lines = _to_gen(_dial(), [p], [_ln("obj-10", 0, "obj-1", 0)])
+        assert self._ids(boxes, lines, db) == []
+
+    def test_no_route_reported(self, db):
+        boxes, lines = _to_gen(_dial())
+        assert self._ids(boxes, lines, db) == ["obj-1"]
+
+
+# ===========================================================================
+# D-02: per-control pattr binding (dial varname "cut")
+# ===========================================================================
+
+
+def _pattr(box_id, text="pattr cutp"):
+    return _obj(box_id, text, numinlets=1, numoutlets=3)
+
+
+def _autopattr(box_id, text="autopattr", restore=None):
+    box = _obj(box_id, text, numinlets=1, numoutlets=4)
+    if restore is not None:
+        box["restore"] = restore
+    return box
+
+
+def _pattrstorage(box_id, text="pattrstorage presets"):
+    return _obj(box_id, text, numinlets=1, numoutlets=5)
+
+
+class TestPattrBinding:
+    def _ids(self, boxes, lines=(), db=None):
+        return _q24_ids(review_structure(_patch(boxes, lines), db=db))
+
+    def _base(self, varname="cut"):
+        return _to_gen(_dial(varname=varname) if varname else _dial())
+
+    def test_cord_into_pattr(self, db):
+        boxes, lines = self._base()
+        assert self._ids(boxes + [_pattr("obj-10")],
+                         lines + [_ln("obj-1", 0, "obj-10", 0)], db) == []
+
+    def test_cord_out_of_pattr(self, db):
+        boxes, lines = self._base()
+        assert self._ids(boxes + [_pattr("obj-10")],
+                         lines + [_ln("obj-10", 1, "obj-1", 0)], db) == []
+
+    def test_bindto_anywhere(self, db):
+        boxes, lines = self._base()
+        sub = _nest("obj-10", "p state", [_pattr("in-1", "pattr x @bindto cut")], [])
+        assert self._ids(boxes + [sub], lines, db) == []
+
+    def test_bindto_hierarchical(self, db):
+        boxes, lines = self._base()
+        assert self._ids(boxes + [_pattr("obj-10", "pattr x @bindto sub::cut")], lines, db) == []
+
+    def test_bindto_other_name_reported(self, db):
+        boxes, lines = self._base()
+        assert self._ids(boxes + [_pattr("obj-10", "pattr x @bindto res")], lines, db) == ["obj-1"]
+
+    def test_autopattr_with_pattrstorage_in_subpatcher(self, db):
+        boxes, lines = self._base()
+        presets = _nest("obj-11", "p presets", [_pattrstorage("in-1")], [])
+        assert self._ids(boxes + [_autopattr("obj-10"), presets], lines, db) == []
+
+    def test_autopattr_restore_dict(self, db):
+        boxes, lines = self._base()
+        ap = _autopattr("obj-10", restore={"cut": [0.5]})
+        assert self._ids(boxes + [ap], lines, db) == []
+
+    def test_autopattr_restore_dict_autorestore_off(self, db):
+        boxes, lines = self._base()
+        ap = _autopattr("obj-10", "autopattr @autorestore 0", restore={"cut": [0.5]})
+        assert self._ids(boxes + [ap], lines, db) == ["obj-1"]
+
+    def test_autopattr_without_varname_reported(self, db):
+        boxes, lines = self._base(varname=None)
+        assert self._ids(boxes + [_autopattr("obj-10"), _pattrstorage("obj-11")],
+                         lines, db) == ["obj-1"]
+
+    def test_autopattr_in_other_subpatcher_reported(self, db):
+        boxes, lines = self._base()
+        other = _nest("obj-10", "p other", [_autopattr("in-1")], [])
+        assert self._ids(boxes + [other, _pattrstorage("obj-11")], lines, db) == ["obj-1"]
+
+    def test_unbound_control_in_pattr_patch_still_reported(self, db):
+        boxes = [_dial("obj-1", varname="cut"), _dial("obj-4"), _prepend("obj-2"),
+                 _gen("obj-3"), _autopattr("obj-10"), _pattrstorage("obj-11")]
+        lines = [_ln("obj-1", 0, "obj-2", 0), _ln("obj-4", 0, "obj-2", 0),
+                 _ln("obj-2", 0, "obj-3", 0)]
+        assert self._ids(boxes, lines, db) == ["obj-4"]
+
+
+# ===========================================================================
+# Followers: a holder driven by another holder
+# ===========================================================================
+
+
+def _follower_chain(dial, extra=(), extra_lines=()):
+    """dial (obj-1) -> scale -> flonum (obj-3) -> prepend cut -> gen~."""
+    boxes = [dial, _obj("obj-2", "scale 0 127 0. 1."), _flonum("obj-3"),
+             _prepend("obj-4"), _gen("obj-5")] + list(extra)
+    lines = [_ln("obj-1", 0, "obj-2", 0), _ln("obj-2", 0, "obj-3", 0),
+             _ln("obj-3", 0, "obj-4", 0), _ln("obj-4", 0, "obj-5", 0)] + list(extra_lines)
+    return boxes, lines
+
+
+class TestFollower:
+    _chain = staticmethod(_follower_chain)
+
+    def test_initialized_leader(self, db):
+        boxes, lines = self._chain(_dial(), [_loadmess("obj-10")], [_ln("obj-10", 0, "obj-1", 0)])
+        assert _q24_ids(_review(boxes, lines, db)) == []
+
+    def test_uninitialized_leader_reported_once(self, db):
+        boxes, lines = self._chain(_dial())
+        assert _q24_ids(_review(boxes, lines, db)) == ["obj-1"]
+
+    def test_parameter_initial_leader(self, db):
+        boxes, lines = self._chain(_dial(**_param_initial()))
+        assert _q24_ids(_review(boxes, lines, db)) == []
+
+    def test_mutual_pair_both_reported(self, db):
+        boxes = [_dial(), _flonum("obj-2"), _prepend("obj-3", "prepend set"),
+                 _prepend("obj-4"), _gen("obj-5")]
+        lines = [_ln("obj-1", 0, "obj-2", 0), _ln("obj-2", 0, "obj-3", 0),
+                 _ln("obj-3", 0, "obj-1", 0), _ln("obj-2", 0, "obj-4", 0),
+                 _ln("obj-4", 0, "obj-5", 0)]
+        assert sorted(_q24_ids(_review(boxes, lines, db))) == ["obj-1", "obj-2"]
+
+
+# ===========================================================================
+# Robustness and purity
+# ===========================================================================
+
+
+def _junk_boxes():
+    return [
+        {"id": "obj-1", "maxclass": "live.dial", "parameter_enable": 1,
+         "saved_attribute_attributes": 5, "outlettype": ["", ""]},
+        {"id": "obj-2", "maxclass": "live.dial", "parameter_enable": 1,
+         "saved_attribute_attributes": {"valueof": 3}, "outlettype": ["", ""]},
+        {"id": "obj-3", "maxclass": "dial", "varname": 5, "outlettype": [""]},
+        _autopattr("obj-4", restore="x"),
+        {"id": "obj-5", "maxclass": "newobj", "text": None},
+        _pattr("obj-6", "pattr @bindto"),
+        {"id": "obj-7", "maxclass": "message", "text": 7},
+        _send("obj-8", "s"), _recv("obj-9", "r"), _obj("obj-10", "v"), _obj("obj-11", "pv"),
+        _gen("obj-12"), _pattrstorage("obj-13"),
+        {"id": "obj-14", "maxclass": "gain~", "outlettype": None, "parameter_enable": "x"},
+        {"id": "obj-15", "maxclass": "toggle", "outlettype": "int"},
+    ]
+
+
+def _junk_lines():
+    lines = []
+    for i in range(1, 16):
+        lines.append(_ln(f"obj-{i}", 0, "obj-12", 0))
+    lines += [
+        _ln("obj-1", "0", "obj-12", 0),
+        _ln("obj-2", 0.5, "obj-12", 0),
+        _ln("obj-missing", 0, "obj-3", 0),
+        _ln("obj-3", 0, "obj-missing", 0),
+        _ln("obj-7", 0, "obj-1", 0),
+        _ln("obj-8", 0, "obj-9", 0),
+    ]
+    return lines
+
+
+class TestRobustness:
+    def test_review_structure_never_raises(self, db):
+        d = _patch(_junk_boxes(), _junk_lines())
+        assert isinstance(review_structure(d, db=db, is_new=True), list)
+        nested = _patch([_nest("obj-1", "p junk", _junk_boxes(), _junk_lines())])
+        assert isinstance(review_structure(nested, db=db), list)
+
+    def test_control_walk_never_raises(self):
+        d = _patch(_junk_boxes(), _junk_lines())
+        g = PatchGraph.build(d)
+        for box_id in list(g.top.boxes) + ["obj-missing", None, 5]:
+            for downstream in (True, False):
+                assert isinstance(list(g.control_walk(g.top, box_id, downstream=downstream)), list)
+
+
+def _every_shape_patch():
+    shapes = []
+    shapes.append(_latent())
+    shapes.append(_to_gen(_dial(varname="cut")))
+    shapes.append(_follower_chain(_dial()))
+    shapes.append((_junk_boxes(), _junk_lines()))
+    for maxclass in _HOLDER_CLASSES + _EXCLUDED_CLASSES:
+        shapes.append(_to_gen(_ui("obj-1", maxclass)))
+    shapes.append(_to_gen(_dial(), [_loadbang("obj-10"), _msg("obj-11", "; cut 0.5"),
+                                    _recv("obj-12", "r cut")],
+                          [_ln("obj-10", 0, "obj-11", 0), _ln("obj-12", 0, "obj-1", 0)]))
+    shapes.append(_to_gen(_dial(varname="cut"), [_autopattr("obj-10", restore={"cut": [1]}),
+                                                 _pattr("obj-11", "pattr x @bindto cut")]))
+    boxes = [_nest(f"obj-{i + 1}", f"p s{i}", b, l) for i, (b, l) in enumerate(shapes)]
+    boxes.append(_pattrstorage("obj-900"))
+    return _patch(boxes)
+
+
+class TestPurity:
+    def test_review_patch_does_not_mutate(self, db):
+        d = _every_shape_patch()
+        before = copy.deepcopy(d)
+        res = review_patch(d, db=db, is_new=True)
+        assert _q24(res)
+        assert d == before
