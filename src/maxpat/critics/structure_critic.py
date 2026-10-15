@@ -14,6 +14,13 @@ not detect:
     Task 2 decision ``idiom-exempt``: Max's previous-value / delta idioms
     (storage targets, same-value direct feeds, waveform~) are not reported.
   - Redundant/duplicate patchlines
+  - Uninitialized state (Q24 / R8, review §4.1 class 4 "Load-time init"):
+    a UI value holder (D-01) whose control output reaches DSP (D-03,
+    :meth:`PatchGraph.control_walk`) with nothing that sets it at load --
+    no parameter initial value, loadmess / loadbang / live.thisdevice path,
+    pattr / pattrstorage restore (D-02) or slaved gain~ input. A warning on
+    an edit, a blocker for a new patch (``is_new``; the save gate sets it
+    for a file with no baseline).
 
 Every scope of the shared :class:`src.maxpat.graph.PatchGraph` is reviewed
 on its own boxes and cords (Q20); nested findings carry
@@ -68,6 +75,7 @@ def review_structure(
     *,
     graph: "PatchGraph | None" = None,
     db=None,
+    is_new: bool = False,
 ) -> list[CriticResult]:
     """Review structural aspects of a patch, every scope (Q20).
 
@@ -80,6 +88,11 @@ def review_structure(
       5. Trigger order: one trigger feeding a hot inlet after a cold one
          (blocker; Q21 / R4; previous-value idioms exempt)
       6. Redundant/duplicate patchlines
+      7. Uninitialized state (Q24 / R8): a UI value holder (D-01) whose
+         control output reaches DSP (D-03) with nothing that sets it at
+         load (parameter initial value, loadmess / loadbang path, pattr /
+         pattrstorage restore -- D-02 -- or a slaved gain~ input). A
+         warning, or a blocker when *is_new*. Not run in rnbo scopes.
 
     Gen scopes run only check 6. Top-level results come first, nested
     scopes follow in pre-order, tagged with their path.
@@ -89,9 +102,13 @@ def review_structure(
         graph: The shared PatchGraph of *patch_dict* (review_patch passes
             it); built here when None.
         db: Keyword-only ObjectDatabase for the Q21 checks (inlet ``hot``
-            flags, outlet types). review_patch passes its own; when None,
-            one is built here, at most once per call and only when a check
-            needs it.
+            flags, outlet types) and the Q24 DSP / slaved-gain tests.
+            review_patch passes its own; when None, one is built here, at
+            most once per call and only when a check needs it.
+        is_new: Keyword-only. True for a new patch (the save gate sets it
+            for a file with no baseline): a Q24 uninitialized-state finding
+            is then a blocker. False (default, every edit) keeps it a
+            warning. No other check reads it.
 
     Returns:
         List of CriticResult findings.
@@ -99,6 +116,7 @@ def review_structure(
     if graph is None:
         graph = PatchGraph.build(patch_dict)
     dbh = _LazyDB(db)
+    ctx = _InitContext(graph)
     results: list[CriticResult] = []
     for scope in graph.scopes:
         found: list[CriticResult] = []
@@ -108,6 +126,7 @@ def review_structure(
             found.extend(_check_trigger_types(scope))
             found.extend(_check_dollar_arity(scope, dbh))
             found.extend(_check_trigger_order(scope, dbh))
+            found.extend(_check_uninitialized_state(graph, scope, dbh, is_new, ctx))
         found.extend(_check_redundant_connections(scope.edges))
         results.extend(tag_results(found, scope.path))
     return results
@@ -859,4 +878,124 @@ def _check_redundant_connections(
         else:
             seen.add(key)
 
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Check 7: Uninitialized state (Q24 / R8)
+# ---------------------------------------------------------------------------
+
+# Gain stages: value holders that are DSP themselves, so they always reach
+# DSP (planner decision 4) and get the gain-stage finding text.
+_GAIN_STAGES = frozenset({"gain~", "live.gain~"})
+
+# Sources that fire at load (planner decision 3).
+_LOAD_SOURCES = frozenset({"loadbang", "loadmess", "live.thisdevice"})
+
+_UNINIT_ROUTES = (
+    "(no parameter initial value, loadmess/loadbang path, "
+    "pattr/pattrstorage restore or slaved gain~ input)"
+)
+
+_UNINIT_SUGGESTION = (
+    "Initialize it at load: parameter_enable 1 with parameter_initial_enable 1 "
+    "and a parameter_initial value, or loadmess <value> (or loadbang -> message) "
+    "into it, or a pattr binding (or a varname under autopattr with a "
+    "pattrstorage); a slave gain~ takes the master gain~'s right outlet into "
+    "its left inlet."
+)
+
+
+class _InitContext:
+    """Whole-graph facts for the Q24 check, computed lazily once per call."""
+
+    __slots__ = ("graph",)
+
+    def __init__(self, graph):
+        self.graph = graph
+
+
+def _has_parameter_initial(box) -> bool:
+    """``parameter_enable`` 1 plus ``saved_attribute_attributes.valueof``
+    with ``parameter_initial_enable`` 1 and a ``parameter_initial`` key
+    (planner decision 3: the proven plain-dial / add_m4l_gen_synth form)."""
+    if box.get("parameter_enable") != 1:
+        return False
+    saved = box.get("saved_attribute_attributes")
+    if not isinstance(saved, dict):
+        return False
+    valueof = saved.get("valueof")
+    if not isinstance(valueof, dict):
+        return False
+    return valueof.get("parameter_initial_enable") == 1 and "parameter_initial" in valueof
+
+
+def _db_outlet_is_signal(dbh, name, outlet) -> "bool | None":
+    """The DB ``signal`` flag of *name*'s outlet *outlet*, or None when unknown."""
+    entry = dbh.lookup(name)
+    if entry is None:
+        return None
+    outlets = entry.get("outlets")
+    port = _db_entry(outlets, outlet) if isinstance(outlets, list) else None
+    if not isinstance(port, dict) or "signal" not in port:
+        return None
+    return port.get("signal") is True
+
+
+def _is_slaved_gain(scope, box_id, dbh) -> bool:
+    """A gain~ / live.gain~ fed at inlet 0 by another gain stage's outlet
+    whose DB entry is not signal (gain~ outlet 1). Decided by the DB, not
+    ``Edge.signal``: mixer-bus saves the master's outlettype as
+    ``["signal", "signal"]`` (planner decision 3)."""
+    for e in scope.in_edges.get(box_id, ()):
+        if e.inlet != 0 or e.src == box_id:
+            continue
+        src = scope.boxes.get(e.src)
+        if src is None or walk.box_maxclass(src) not in _GAIN_STAGES:
+            continue
+        if _db_outlet_is_signal(dbh, walk.box_maxclass(src), e.outlet) is False:
+            return True
+    return False
+
+
+def _has_load_path(graph, scope, box_id) -> bool:
+    """An upstream control walk from the box reaches a load source."""
+    for s, b in graph.control_walk(scope, box_id, downstream=False):
+        if walk.box_name(s.boxes.get(b)) in _LOAD_SOURCES:
+            return True
+    return False
+
+
+def _is_initialized(graph, scope, box_id, box, dbh, ctx) -> bool:
+    """True when something sets the control at load (cheapest route first)."""
+    if _has_parameter_initial(box):
+        return True
+    if walk.box_maxclass(box) in _GAIN_STAGES and _is_slaved_gain(scope, box_id, dbh):
+        return True
+    return _has_load_path(graph, scope, box_id)
+
+
+def _check_uninitialized_state(graph, scope, dbh, is_new, ctx) -> list[CriticResult]:
+    """Q24 / R8: a value holder that reaches DSP must be set at load.
+
+    One finding per uninitialized control: a blocker when *is_new* (a new
+    patch), else a warning. Read-only; malformed boxes never raise.
+    """
+    if scope.scope == "rnbo":
+        return []
+    severity = "blocker" if is_new else "warning"
+    results: list[CriticResult] = []
+    for box_id, box in scope.boxes.items():
+        maxclass = walk.box_maxclass(box)
+        if maxclass not in _GAIN_STAGES:
+            continue
+        if _is_initialized(graph, scope, box_id, box, dbh, ctx):
+            continue
+        results.append(CriticResult(
+            severity,
+            f"Uninitialized state: '{_box_label(box)}' ({box_id}) is a gain "
+            f"stage that nothing sets at load {_UNINIT_ROUTES} -- it loads at "
+            "its default (a plain gain~ at 0, silent) until touched",
+            _UNINIT_SUGGESTION,
+        ))
     return results

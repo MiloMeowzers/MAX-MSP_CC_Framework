@@ -29,6 +29,17 @@ skipped rather than raising.
 * **Adjacency once.** Scope adjacency is built once per graph; no traversal
   rebuilds it per node.
 
+:meth:`PatchGraph.control_walk` (Q24 / R8) is a separate, additive
+generator over **control** cords for the uninitialized-state check: a cord
+whose ``Edge.signal`` is True is never followed, ``p`` / embedded bpatcher
+containers and their port boxes are crossed port-exactly and never yielded,
+and named bridges link ``send``/``s`` -> ``receive``/``r``, ``value``/``v``,
+``pv`` (same, ancestor or descendant scope) and ``;`` remote-message
+segments (a message box -> ``receive``/``r`` and ``value``/``v`` of each
+target) in non-gen, non-rnbo scopes. BFS with a visited set; each cord or
+bridge hop adds one to the depth and a node at ``max_depth`` is yielded but
+not expanded. The bridge map is built lazily once per graph.
+
 :class:`GraphMixin` provides the traversal methods mixed into Patcher
 (downstream/upstream queries, signal path tracing, connected components);
 downstream / upstream / signal_path run on one PatchGraph per call.
@@ -36,6 +47,7 @@ downstream / upstream / signal_path run on one PatchGraph per call.
 
 from __future__ import annotations
 
+import re
 from collections import deque
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -212,7 +224,8 @@ class PatchGraph:
     the top is an empty max scope with patcher ``{}``.
     """
 
-    __slots__ = ("scopes", "_by_ids", "_child_index", "_ranks", "_channels")
+    __slots__ = ("scopes", "_by_ids", "_child_index", "_ranks", "_channels",
+                 "_control_bridges")
 
     def __init__(self, scopes: list):
         self.scopes = scopes
@@ -224,6 +237,7 @@ class PatchGraph:
                 self._child_index.setdefault((id(scope.parent), scope.container), scope)
         self._ranks: dict = {}
         self._channels = None
+        self._control_bridges = None
 
     @classmethod
     def build(cls, patch, scope: "str | None" = None) -> "PatchGraph":
@@ -453,6 +467,194 @@ class PatchGraph:
                 return box_id
         return None
 
+    # -- control walk (Q24 / R8) ---------------------------------------------
+
+    def control_walk(self, scope: Scope, box_id, *, downstream: bool, max_depth: int = 64):
+        """Yield ``(scope, box_id)`` pairs reachable over control cords (Q24).
+
+        BFS order; the start is never yielded and each pair at most once.
+        Downstream follows ``scope.out_edges`` stable-sorted by outlet,
+        upstream ``scope.in_edges`` stable-sorted by inlet; a cord whose
+        ``Edge.signal`` is True is never followed. A cord into a ``p`` /
+        embedded bpatcher (``_crossing_child``) continues at the inner port
+        box of that x-rank, and reaching an inner exit port continues along
+        the parent container's cords at that rank (signal cords still
+        skipped); containers and port boxes are traversed, never yielded.
+        Bridges (non-gen, non-rnbo scopes, channel = literal first
+        argument): ``send``/``s`` -> ``receive``/``r``; ``value``/``v`` ->
+        every other ``value``/``v``; ``pv`` -> every other ``pv`` in the
+        same, an ancestor or a descendant scope; a message box -> every
+        ``receive``/``r`` and ``value``/``v`` of each ``;`` segment target.
+        Upstream mirrors them. Each cord or bridge hop adds 1 to the depth
+        (a port crossing rides on its cord); a node at *max_depth* is
+        yielded but not expanded. Read-only; malformed input never raises.
+        """
+        visited = {(id(scope), box_id)}
+        crossed: set = set()
+        queue: deque = deque([(scope, box_id, 0)])
+        while queue:
+            cur_scope, cur_id, depth = queue.popleft()
+            if depth >= max_depth:
+                continue
+            for nxt_scope, nxt_id in self._control_neighbours(cur_scope, cur_id, downstream, crossed):
+                key = (id(nxt_scope), nxt_id)
+                if key in visited:
+                    continue
+                visited.add(key)
+                yield nxt_scope, nxt_id
+                queue.append((nxt_scope, nxt_id, depth + 1))
+
+    def _control_neighbours(self, scope: Scope, box_id, downstream: bool, crossed: set) -> list:
+        """Real (non-transparent) control neighbours of one node, in order."""
+        out: list = []
+        if downstream:
+            for e in sorted(scope.out_edges.get(box_id, ()), key=lambda e: e.outlet):
+                if not e.signal:
+                    self._control_land(scope, e.dst, e.inlet, True, crossed, out)
+        else:
+            for e in sorted(scope.in_edges.get(box_id, ()), key=lambda e: e.inlet):
+                if not e.signal:
+                    self._control_land(scope, e.src, e.outlet, False, crossed, out)
+        out.extend(self._control_bridged(scope, box_id, downstream))
+        return out
+
+    def _control_land(self, scope: Scope, box_id, port, downstream: bool,
+                      crossed: set, out: list) -> None:
+        """Resolve a cord landing on *box_id* at *port* through crossing
+        containers and port boxes; append the real boxes reached to *out*."""
+        pending: deque = deque([(scope, box_id, port)])
+        while pending:
+            s, b, p = pending.popleft()
+            box = s.boxes.get(b)
+            if box is None:
+                continue
+            inner = self._crossing_child(s, b)
+            if inner is not None:
+                key = (id(s), b, downstream, p)
+                if key in crossed:
+                    continue
+                crossed.add(key)
+                port_id = self._port_ranks(inner)["inlet" if downstream else "outlet"].get(p)
+                if port_id is not None and port_id in inner.boxes:
+                    pending.append((inner, port_id, None))
+                continue
+            maxclass = walk.box_maxclass(box)
+            if maxclass not in ("inlet", "outlet"):
+                out.append((s, b))
+                continue
+            key = (id(s), b, downstream)
+            if key in crossed:
+                continue
+            crossed.add(key)
+            if maxclass == ("inlet" if downstream else "outlet"):
+                # Entered from the container: continue inside this scope.
+                if downstream:
+                    for e in sorted(s.out_edges.get(b, ()), key=lambda e: e.outlet):
+                        if not e.signal:
+                            pending.append((s, e.dst, e.inlet))
+                else:
+                    for e in sorted(s.in_edges.get(b, ()), key=lambda e: e.inlet):
+                        if not e.signal:
+                            pending.append((s, e.src, e.outlet))
+                continue
+            # Leaving a crossing scope through its port box.
+            parent = s.parent
+            if parent is None or s.context not in _CROSSING_CONTEXTS:
+                continue
+            container = self._container_id(parent, s.container)
+            rank = self._port_ranks(s)["rank"].get(b)
+            if container is None or rank is None:
+                continue
+            if downstream:
+                for e in sorted(parent.out_edges.get(container, ()), key=lambda e: e.outlet):
+                    if e.outlet == rank and not e.signal:
+                        pending.append((parent, e.dst, e.inlet))
+            else:
+                for e in sorted(parent.in_edges.get(container, ()), key=lambda e: e.inlet):
+                    if e.inlet == rank and not e.signal:
+                        pending.append((parent, e.src, e.outlet))
+
+    def _control_bridge_map(self) -> dict:
+        """Lazily built, cached bridge index of the control walk."""
+        if self._control_bridges is not None:
+            return self._control_bridges
+        maps: dict = {"send": {}, "receive": {}, "value": {}, "pv": {},
+                      "msg_by_target": {}, "msg_targets": {}}
+        for scope in self.scopes:
+            if scope.scope in ("gen", "rnbo"):
+                continue
+            for box_id, box in scope.boxes.items():
+                if walk.box_maxclass(box) == "message":
+                    targets = _message_remote_targets(box)
+                    if targets:
+                        maps["msg_targets"][(id(scope), box_id)] = targets
+                        for target in targets:
+                            maps["msg_by_target"].setdefault(target, []).append((scope, box_id))
+                    continue
+                kind = _CONTROL_BRIDGE_KINDS.get(walk.box_name(box))
+                if kind is None:
+                    continue
+                args = walk.box_args(box)
+                if not args:
+                    continue
+                maps[kind].setdefault(args[0], []).append((scope, box_id))
+        self._control_bridges = maps
+        return maps
+
+    @staticmethod
+    def _scopes_related(a: Scope, b: Scope) -> bool:
+        """True when *a* and *b* are the same scope or one contains the other."""
+        for x, y in ((a, b), (b, a)):
+            node = x
+            while node is not None:
+                if node is y:
+                    return True
+                node = node.parent
+        return False
+
+    def _control_bridged(self, scope: Scope, box_id, downstream: bool) -> list:
+        """Bridge partners of one node (see :meth:`control_walk`)."""
+        if scope.scope in ("gen", "rnbo"):
+            return []
+        box = scope.boxes.get(box_id)
+        if box is None:
+            return []
+        maps = self._control_bridge_map()
+        out: list = []
+        if walk.box_maxclass(box) == "message":
+            if downstream:
+                for target in maps["msg_targets"].get((id(scope), box_id), ()):
+                    out.extend(maps["receive"].get(target, ()))
+                    out.extend(maps["value"].get(target, ()))
+            return out
+        kind = _CONTROL_BRIDGE_KINDS.get(walk.box_name(box))
+        if kind is None:
+            return out
+        args = walk.box_args(box)
+        if not args:
+            return out
+        channel = args[0]
+        if kind == "send":
+            if downstream:
+                out.extend(maps["receive"].get(channel, ()))
+        elif kind == "receive":
+            if not downstream:
+                out.extend(maps["send"].get(channel, ()))
+                out.extend(maps["msg_by_target"].get(channel, ()))
+        elif kind == "value":
+            out.extend(
+                (s, b) for s, b in maps["value"].get(channel, ())
+                if not (s is scope and b == box_id)
+            )
+            if not downstream:
+                out.extend(maps["msg_by_target"].get(channel, ()))
+        elif kind == "pv":
+            out.extend(
+                (s, b) for s, b in maps["pv"].get(channel, ())
+                if not (s is scope and b == box_id) and self._scopes_related(s, scope)
+            )
+        return out
+
 
 # Contexts whose containers are crossed port-exactly (G9).
 _CROSSING_CONTEXTS = frozenset({"max", "bpatcher"})
@@ -464,6 +666,39 @@ _BRIDGE_NAMES = {
     "receive": ("receive", "control"), "r": ("receive", "control"),
     "receive~": ("receive", "signal"), "r~": ("receive", "signal"),
 }
+
+
+# Control-walk bridge names (Q24): object name -> bridge kind.
+_CONTROL_BRIDGE_KINDS = {
+    "send": "send", "s": "send",
+    "receive": "receive", "r": "receive",
+    "value": "value", "v": "value",
+    "pv": "pv",
+}
+
+# A ``;`` not escaped with a backslash starts a remote-message segment.
+_REMOTE_SPLIT_RE = re.compile(r"(?<!\\);")
+
+
+def _message_remote_targets(box) -> list:
+    """Receive names targeted by a message box's ``;`` segments (Q24).
+
+    Only a ``message`` box with str text. The text is split on ``;`` not
+    preceded by a backslash; for every segment after the first, the first
+    whitespace token after stripping spaces, ``\\r`` and ``\\n`` is a target
+    (``;\\rwhrt pitch 7`` targets ``whrt``). Unique, in order; never raises.
+    """
+    if walk.box_maxclass(box) != "message":
+        return []
+    text = walk.box_text(box)
+    if ";" not in text:
+        return []
+    out: list = []
+    for segment in _REMOTE_SPLIT_RE.split(text)[1:]:
+        tokens = segment.strip(" \r\n").split()
+        if tokens and tokens[0] not in out:
+            out.append(tokens[0])
+    return out
 
 
 def _accepts_signal(box, inlet: int, db) -> bool:
