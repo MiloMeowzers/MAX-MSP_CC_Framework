@@ -5,6 +5,10 @@ not detect:
   - Fan-out without trigger (ordering ambiguity): blocker when branches
     reconverge on one box at different inlets, otherwise warning (Q3 / E1)
   - Hot/cold inlet ordering issues (stale value computation)
+  - Invalid trigger types (Q21 / R4): ``t a`` and any other single
+    lower-case letter outside b, i, f, l, s outputs the literal symbol
+  - ``$N`` arity (Q21 / R4): a message box's highest ``$N`` above the
+    atoms its inlet-0 feeders can together supply
   - Redundant/duplicate patchlines
 
 Every scope of the shared :class:`src.maxpat.graph.PatchGraph` is reviewed
@@ -21,6 +25,7 @@ patterns a MAX expert would flag during code review.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict, deque
 
 from src.maxpat import walk
@@ -54,37 +59,76 @@ _ALL_HOT_NAMES = frozenset({
 })
 
 
-def review_structure(patch_dict: dict, *, graph: "PatchGraph | None" = None) -> list[CriticResult]:
+def review_structure(
+    patch_dict: dict,
+    *,
+    graph: "PatchGraph | None" = None,
+    db=None,
+) -> list[CriticResult]:
     """Review structural aspects of a patch, every scope (Q20).
 
     Checks, per scope of the shared graph:
       1. Fan-out without trigger (2+ non-display destinations from one
          control outlet; blocker only on reconvergence -- Q3 / E1)
       2. Hot/cold inlet ordering (multiple inlets fed without trigger ordering)
-      3. Redundant/duplicate patchlines
+      3. Invalid trigger types (blocker; Q21 / R4)
+      4. Message ``$N`` arity (blocker; Q21 / R4)
+      5. Redundant/duplicate patchlines
 
-    Gen scopes run only check 3. Top-level results come first, nested
+    Gen scopes run only check 5. Top-level results come first, nested
     scopes follow in pre-order, tagged with their path.
 
     Args:
         patch_dict: A .maxpat-format dict.
         graph: The shared PatchGraph of *patch_dict* (review_patch passes
             it); built here when None.
+        db: Keyword-only ObjectDatabase for the Q21 checks (inlet ``hot``
+            flags, outlet types). review_patch passes its own; when None,
+            one is built here, at most once per call and only when a check
+            needs it.
 
     Returns:
         List of CriticResult findings.
     """
     if graph is None:
         graph = PatchGraph.build(patch_dict)
+    dbh = _LazyDB(db)
     results: list[CriticResult] = []
     for scope in graph.scopes:
         found: list[CriticResult] = []
         if scope.context != "gen":
             found.extend(_check_fan_out_without_trigger(scope.boxes, scope.edges))
             found.extend(_check_hot_cold_ordering(scope.boxes, scope.edges))
+            found.extend(_check_trigger_types(scope))
+            found.extend(_check_dollar_arity(scope, dbh))
         found.extend(_check_redundant_connections(scope.edges))
         results.extend(tag_results(found, scope.path))
     return results
+
+
+class _LazyDB:
+    """An ObjectDatabase handle built on first use (at most one per call)."""
+
+    __slots__ = ("_db",)
+
+    def __init__(self, db=None):
+        self._db = db
+
+    def get(self):
+        if self._db is None:
+            from src.maxpat.db_lookup import ObjectDatabase
+
+            self._db = ObjectDatabase()
+        return self._db
+
+    def lookup(self, name):
+        if not isinstance(name, str) or not name:
+            return None
+        try:
+            obj = self.get().lookup(name)
+        except Exception:
+            return None
+        return obj if isinstance(obj, dict) else None
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +465,215 @@ def _check_hot_cold_ordering(
 
 
 # ---------------------------------------------------------------------------
-# Check 3: Redundant/duplicate connections
+# Q21 / R4 helpers: trigger letters and outlet atom counts
+# ---------------------------------------------------------------------------
+
+# trigger.maxref.xml lists only these type letters; any other symbol argument
+# is output as a constant.
+_TRIGGER_TYPE_LETTERS = frozenset("bifls")
+
+# Trigger letters that pass the incoming value on (not a bang or a constant).
+_TRIGGER_VALUE_LETTERS = frozenset("ifls")
+
+_DOLLAR_RE = re.compile(r"(?<!\\)\$([1-9])")
+
+
+def _box_label(box) -> str:
+    """The box text when it has one (``'t l f f'``), else its name (``'button'``)."""
+    return walk.box_text(box) or walk.box_name(box)
+
+
+def _trigger_letters(box) -> list[str]:
+    """The type arguments of a trigger box: the tokens after the name up to
+    the first ``@`` attribute, or ``["i", "i"]`` when there are none (an
+    argument-less ``t`` acts as ``t i i``)."""
+    letters: list[str] = []
+    for token in walk.box_args(box):
+        if token.startswith("@"):
+            break
+        letters.append(token)
+    return letters or ["i", "i"]
+
+
+def _trigger_letter_atoms(token: str) -> "int | None":
+    """Atoms a trigger outlet of type *token* emits (planner decision 6a)."""
+    if not token or token[0] in "#$":
+        return None
+    if token == "b":
+        return 0
+    if token == "l":
+        return None
+    if token in ("i", "f", "s"):
+        return 1
+    if len(token) == 1 and token.isalpha() and token.isupper():
+        # Upper-case letters: Max behaviour undocumented -> unknown
+        return None
+    # A number or another symbol is output as one constant atom
+    return 1
+
+
+def _db_entry(entries, index: int):
+    """The DB inlet/outlet entry with ``id == index`` (else list position)."""
+    if not isinstance(entries, list):
+        return None
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("id") == index:
+            return entry
+    if 0 <= index < len(entries) and isinstance(entries[index], dict):
+        return entries[index]
+    return None
+
+
+def _outlet_atoms(box, outlet, dbh) -> "int | None":
+    """Atom count *box* outlet *outlet* emits, or None when unknown.
+
+    Precedence (Q21, planner decision 6):
+      a. a trigger/t outlet takes its type letter (:func:`_trigger_letters`);
+         an outlet past the argument count is unknown;
+      b. otherwise, for a DB object that is not ``variable_io``, the DB
+         outlet: ``type`` bang or ``signal_role`` trigger = 0; ``type``
+         int/float/symbol or ``signal_role`` float = 1;
+      c. otherwise the box's MAX-saved ``outlettype`` at that index:
+         ``bang`` = 0, ``int`` / ``float`` = 1.
+    Anything else is unknown.
+    """
+    if not isinstance(box, dict) or not isinstance(outlet, int) or isinstance(outlet, bool):
+        return None
+    if outlet < 0:
+        return None
+    name = walk.box_name(box)
+    if name in _TRIGGER_NAMES:
+        letters = _trigger_letters(box)
+        if outlet >= len(letters):
+            return None
+        return _trigger_letter_atoms(letters[outlet])
+
+    obj = dbh.lookup(name)
+    if obj is not None and not obj.get("variable_io"):
+        entry = _db_entry(obj.get("outlets"), outlet)
+        if entry is not None:
+            otype = entry.get("type")
+            role = entry.get("signal_role")
+            if otype == "bang" or role == "trigger":
+                return 0
+            if otype in ("int", "float", "symbol") or role == "float":
+                return 1
+
+    outlettype = box.get("outlettype")
+    if isinstance(outlettype, list) and outlet < len(outlettype):
+        saved = outlettype[outlet]
+        if saved == "bang":
+            return 0
+        if saved in ("int", "float"):
+            return 1
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Check 3: Invalid trigger types (Q21 / R4)
+# ---------------------------------------------------------------------------
+
+def _check_trigger_types(scope) -> list[CriticResult]:
+    """Flag single lower-case letters a trigger does not know (Q21 / R4).
+
+    trigger.maxref.xml lists only b, i, f, l and s; every other symbol is
+    output as a constant, so ``t a`` (meant as "anything") outputs the
+    literal symbol ``a``. Planner decision 8: flag any single lower-case
+    ASCII letter outside b/i/f/l/s (covers ``a``, PD's ``p`` and typos);
+    skip upper case (undocumented), ``@`` / ``#`` / ``$`` tokens and
+    multi-character constants. One blocker per distinct token per box.
+    """
+    results: list[CriticResult] = []
+    for box_id, box in scope.boxes.items():
+        if walk.box_maxclass(box) != "newobj" or walk.box_name(box) not in _TRIGGER_NAMES:
+            continue
+        seen: set[str] = set()
+        for tok in walk.box_args(box):
+            if tok.startswith("@"):
+                break
+            if (
+                len(tok) == 1
+                and "a" <= tok <= "z"
+                and tok not in _TRIGGER_TYPE_LETTERS
+                and tok not in seen
+            ):
+                seen.add(tok)
+                results.append(CriticResult(
+                    "blocker",
+                    f"Invalid trigger type: '{walk.box_text(box)}' ({box_id}) "
+                    f"argument '{tok}' is not a trigger type (b, i, f, l, s) "
+                    f"-- it outputs the literal symbol '{tok}'",
+                    "Use b, i, f, l or s; any other symbol is output as a "
+                    "constant. For an anything message where order does not "
+                    "matter, fan out directly; where order matters use "
+                    "'t l l' or 't s s'.",
+                ))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Check 4: Message $N arity (Q21 / R4)
+# ---------------------------------------------------------------------------
+
+def _check_dollar_arity(scope, dbh) -> list[CriticResult]:
+    """Flag a message box whose highest ``$N`` its feeders can never fill.
+
+    ``$N`` is ``(?<!\\\\)\\$([1-9])`` on the message text. The unit is the
+    set of inlet-0 feeders (planner decision 7, assumption delta): Max
+    stores ``$`` arguments and a bang resends them (message.maxref.xml), so
+    a bang beside a value feeder is the resend idiom. A box is flagged only
+    when nothing feeds inlet 1 (a ``set`` there replaces the text), at
+    least one cord feeds inlet 0, every inlet-0 feeder's atom count is known
+    (:func:`_outlet_atoms`, planner decision 6) and the largest is below
+    the highest N.
+    """
+    results: list[CriticResult] = []
+    for box_id, box in scope.boxes.items():
+        if walk.box_maxclass(box) != "message":
+            continue
+        text = walk.box_text(box)
+        if not text:
+            continue
+        ns = [int(m) for m in _DOLLAR_RE.findall(text)]
+        if not ns:
+            continue
+        n = max(ns)
+        in_edges = scope.in_edges.get(box_id, ())
+        if any(e.inlet == 1 for e in in_edges):
+            continue
+        feeders = [e for e in in_edges if e.inlet == 0]
+        if not feeders:
+            continue
+        counts = []
+        for e in feeders:
+            src = scope.boxes.get(e.src)
+            k = _outlet_atoms(src, e.outlet, dbh) if src is not None else None
+            if k is None:
+                counts = None
+                break
+            counts.append(k)
+        if counts is None:
+            continue
+        k = max(counts)
+        if k >= n:
+            continue
+        feeder_desc = ", ".join(
+            f"'{_box_label(scope.boxes.get(e.src))}' ({e.src}) outlet {e.outlet}"
+            for e in feeders
+        )
+        results.append(CriticResult(
+            "blocker",
+            f"Message $N arity: '{text}' ({box_id}) uses ${n} but its feeders "
+            f"supply at most {k} atom(s): {feeder_desc} -- $ arguments above "
+            f"{k} keep their stored value (0 until set)",
+            f"Feed it from an outlet that carries all {n} values (a 't l' "
+            f"outlet, pack or another list source), or lower the highest $N.",
+        ))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Check 5: Redundant/duplicate connections
 # ---------------------------------------------------------------------------
 
 def _check_redundant_connections(
