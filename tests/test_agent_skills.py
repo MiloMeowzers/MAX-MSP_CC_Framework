@@ -820,7 +820,6 @@ _OUTPUT_PROTOCOL_MARKER = "Make surgical edits or section rebuild"
 _BUILDER_SIGNATURE_MARKER = "### `Patcher.add_"
 
 # Strict xfail for guard cases a later Q18 task satisfies (removed by that task).
-PENDING_T2 = pytest.mark.xfail(strict=True, reason="pending-q18-t2")
 PENDING_T3 = pytest.mark.xfail(strict=True, reason="pending-q18-t3")
 
 
@@ -895,7 +894,6 @@ def test_dedupe_rnbo_ext_subsections_kept() -> None:
     assert "### Archetype Reference" in _read_skill("max-ext-agent")
 
 
-@PENDING_T2
 def test_dsp_agent_loads_genexpr_rules() -> None:
     """Q18: gen~ detail moved out of CLAUDE.md is still loaded by the DSP agent."""
     section = _h2_section(_read_skill("max-dsp-agent"), "## Domain Context Loading")
@@ -903,7 +901,6 @@ def test_dsp_agent_loads_genexpr_rules() -> None:
     assert "genexpr-rules.md" in section
 
 
-@PENDING_T2
 def test_ui_agent_points_to_uicontrast_section() -> None:
     """Q18: the contrast algorithm moved to ui-presets.md is reachable from the UI agent."""
     assert "Text Contrast Resolution" in _read_skill("max-ui-agent")

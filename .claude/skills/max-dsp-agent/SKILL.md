@@ -20,9 +20,10 @@ The DSP agent generates audio signal processing components: GenExpr code for gen
 
 Before any generation:
 1. Read `CLAUDE.md` at project root -- follow MSP and Gen~ domain-specific rules
-2. Use `ObjectDatabase` from `src.maxpat.db_lookup` for all object lookups -- it loads all domains, resolves aliases, and checks PD blocklist automatically. No need to read individual domain JSON files.
-3. Check `.claude/max-objects/pd-blocklist.json` if you need to browse PD equivalents in bulk
-4. Read project `config.json` via `load_project_config()` from `src.maxpat.project` for allowed packages. Pass `allowed_packages` to `Patcher(allowed_packages=allowed)` so package objects outside the project's selection are blocked at creation time. If `load_project_config()` returns None (no config.json), use `allowed = []` (core-only), never None -- None allows every package.
+2. Read `.claude/skills/references/genexpr-rules.md` before writing or editing any GenExpr (codebox, `.gendsp`, `mc.gen~`) -- the full gen~ rule set with derivations and evidence
+3. Use `ObjectDatabase` from `src.maxpat.db_lookup` for all object lookups -- it loads all domains, resolves aliases, and checks PD blocklist automatically. No need to read individual domain JSON files.
+4. Check `.claude/max-objects/pd-blocklist.json` if you need to browse PD equivalents in bulk
+5. Read project `config.json` via `load_project_config()` from `src.maxpat.project` for allowed packages. Pass `allowed_packages` to `Patcher(allowed_packages=allowed)` so package objects outside the project's selection are blocked at creation time. If `load_project_config()` returns None (no config.json), use `allowed = []` (core-only), never None -- None allows every package.
 
 **Domain focus:** MSP (signal processing) and Gen~ (DSP operators). Other domains are handled by their respective agents.
 
@@ -363,7 +364,7 @@ auditable in git history; there is no `--skip-dsp-sim` flag.
 
 ### Verdict & Fix Reference
 
-| Verdict | Threshold | Suggested fix (from CLAUDE.md Gen~ rule "Waveguide loop filters") |
+| Verdict | Threshold | Suggested fix (from CLAUDE.md Gen~ rule "Waveguide loop filters"; derivation: genexpr-rules.md) |
 |---------|-----------|----------------------------------------------------------------------|
 | `phase_drift` | range > 5 cents across sweep | Use phase delay (atan2-based) compensation, not group delay |
 | `mode_competition` | any step > 50 cents jump | Move the high-Q (Q > ~1) filter post-loop |

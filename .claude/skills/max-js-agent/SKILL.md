@@ -33,6 +33,10 @@ Before any generation:
 - Console: `maxAPI.post('message')` for MAX console output
 - Dict access: `maxAPI.getDict('name')`, `maxAPI.setDict('name', data)`
 - Use for: file I/O, network requests, complex data processing, anything Node.js does better than MAX
+- **`node.script` and `node.codebox` are in the object database** with refpage-verified I/O, so both are usable in generated patches under CLAUDE.md Rule #1.
+- `node.script` has a fixed 1 inlet / 2 outlets (not argument-configurable): the left outlet carries whatever the script sends via `maxAPI.outlet()`, the right outlet is the dump out (stdout, stderr, and status updates).
+- `node.codebox` has the same fixed shape but embeds its JavaScript in the box rather than taking a filename argument.
+- For file-I/O-shaped work a build-time Python data tool that emits `coll`/`dict` data files the patch loads with verified objects remains a fine alternative — such a tool is not a Rule #5 violation (Rule #5 only forbids regenerating `.maxpat` files) — but it is an option now, not a requirement.
 
 ### js Object Script Generation (Legacy Engine, ES5)
 - **Write ES5 only for `js` / `jsui`:** `var` and `function` declarations. No `const`/`let`, arrow functions, template literals, classes, destructuring, default parameters, or `async`/`await` -- those need a `v8` / `v8ui` / `v8.codebox` object. `Patcher.add_js()` and `generate_js_script()` both target `js`; every confirmed-working script in `patches/` is ES5 in a `js` box.

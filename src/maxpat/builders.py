@@ -407,11 +407,32 @@ class BuildersMixin:
     ) -> "Box":
         """Create a flonum/comment/number readout overlapping a target control.
 
-        Codifies the CLAUDE.md Rule #6 overlay-readout recipe: ``bring_to_front``
-        (overlay renders on top) plus ``ignoreclick=1`` (clicks pass through to
-        the underlying control). The readout copies ``target.patching_rect`` by
+        Home of the overlay-readout recipe; CLAUDE.md Rule #6 "Z-Order
+        Awareness" points here. Codifies it as ``bring_to_front`` (overlay
+        renders on top) plus ``ignoreclick=1`` (clicks pass through to the
+        underlying control). The readout copies ``target.patching_rect`` by
         default; ``offset_x``/``offset_y`` fine-tune the position without
         aliasing the target's rect.
+
+        Z-order model: in ``.maxpat`` files objects earlier in the ``boxes``
+        array render on top of later ones (index 0 = topmost).
+
+        Manual equivalent (the overlay readout pattern, from gen-eq):
+
+        1. Create the interactive control (e.g., ``dial``).
+        2. Create the readout display (e.g., ``flonum``).
+        3. Call ``bring_to_front(readout)`` to move it to index 0 (renders on
+           top of the dial).
+        4. Set ``ignoreclick=1`` on the readout so the dial remains
+           interactive (omit for editable readouts).
+        5. Position the readout overlapping the dial (same or overlapping
+           coordinates).
+
+        Background elements (panels, step markers): ``add_panel()`` /
+        ``add_step_marker()`` set ``background=1`` to force them behind all
+        objects regardless of array position. For explicit control use
+        ``bring_to_front(box)`` (index 0 = top), ``send_to_back(box)`` (end =
+        bottom) or ``set_z_index(box, index)``.
 
         Args:
             target: The Box to overlay (typically a dial or numeric control).
@@ -493,7 +514,8 @@ class BuildersMixin:
     ) -> tuple["Box", list["Box"]]:
         """Build a multislider parameter bank with aligned comment labels.
 
-        Codifies the CLAUDE.md "Multislider as Labeled Parameter Bank" recipe:
+        Home of the multislider labeled-parameter-bank recipe; CLAUDE.md Rule #4
+        "Multislider as Labeled Parameter Bank" points here. Codifies it as
         size*24 px height, contdata=1, setstyle=1, orientation=0 (horizontal
         bars stacked vertically), setminmax derived as ``[min(mins),
         max(maxes)]`` envelope across all params (D-10). Returns
@@ -503,6 +525,33 @@ class BuildersMixin:
         "Reading values by index" (``fetch`` not ``fetchindex``;
         outlet 1 not 0; do NOT insert ``split`` between multislider and
         consumer).
+
+        Recipe (manual equivalent), when multislider bars represent labeled
+        parameters with comment labels alongside:
+
+        - Set ``orientation: 0`` (horizontal bars stacked vertically)
+          explicitly.
+        - Bar-to-label alignment formula: multislider height =
+          ``size * label_spacing`` where label_spacing matches comment
+          spacing (typically 24px for fontsize=10 labels).
+        - Comment labels start at the same Y as the multislider top, spaced
+          at ``ms_height / ms_size`` intervals.
+        - For fontsize=10 labels: use height=18, spacing=24px, so
+          multislider height = size * 24.
+        - Always set ``contdata: 1`` for real-time feedback during drag.
+        - Always set ``setstyle: 1`` for bar display.
+        - When adding utility/routing objects (prepend chains, init messages,
+          js engines), encapsulate them in named subpatchers (``p drift``,
+          ``p settings``, etc.) to keep top-level patch clean.
+        - Example extra_attrs for a 14-param bank:
+          ``{"size": 14, "setminmax": [0.0, 1.0], "orientation": 0,
+          "contdata": 1, "setstyle": 1}``
+
+        Reading values by index: send ``fetch $1`` (NOT ``fetchindex`` -- it
+        does not exist). The fetched value emerges from the **right** outlet
+        (outlet 1); outlet 0 is for direct-edit/drag interaction. Don't insert
+        ``split`` between multislider and the consumer -- multislider already
+        emits the correct values, and ``split`` filters out valid step data.
 
         Note on per-bar ranges: multislider supports a single ``setminmax``
         for all bars; per-bar ranges require runtime config messages, not

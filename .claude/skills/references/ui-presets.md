@@ -149,3 +149,20 @@ What MAX 9 draws when a box or patcher does not set its own color. Values come f
 
 - A box with no `textcolor` renders its text at the theme text color, 0.85 (light gray), not black.
 - The contrast critic (`layout_critic.py`) and `aesthetics.py` still assume the legacy defaults (black text when `textcolor` is missing, a 0.333 canvas) until Q26 (review E7) makes them theme-aware. So before recoloring a box that has no `textcolor` because of a "Low contrast text" warning, check the warning against these values: 0.85 text on a 0.235 canvas is readable.
+
+## Text Contrast Resolution
+
+The full algorithm behind CLAUDE.md Rule #4 "Text Contrast: Resolve Against the Displayed Surface". The contrast code still assumes the legacy defaults described in "Max 9 Theme Defaults" above until Q26.
+
+Text color is NEVER chosen against the editing background alone. Resolve it against the **effective background in whichever coordinate space the text is displayed in**, and judge it by WCAG contrast ratio (minimum 4.5:1, `MIN_CONTRAST_RATIO` in `defaults.py`), not by a `luminance > 0.5` flip.
+
+Precedence when resolving the effective background:
+
+1. **A box's own `bgcolor` wins over any panel beneath it.** A box that paints its own background IS its own background. `add_section_header` pairs a light `header_bgcolor` with its text; the reader sees that pairing, not the dark canvas behind it.
+2. **Presentation coordinates, when the box is in presentation** — the box's `presentation_rect` center against the `presentation_rect` of panels that are themselves in presentation. Presentation is the user-facing surface, so it decides on conflict; the layout critic emits a `note` naming the box when patching mode is the compromised space.
+3. **Patching coordinates** — `patching_rect` center against panels' `patching_rect`s.
+4. **Patcher background** as fallback.
+
+Panels encode their fill three different ways and all three must be read: `bgfillcolor` dict (`color1`, else `color`), a flat top-level `grad1`, or `bgcolor`. A panel with none of them is genuinely indeterminate — MAX ships no discoverable default — so treat it as *assumed* and pick the text color that maximizes the MINIMUM contrast across the plausible surfaces rather than betting on a guess.
+
+Use `ensure_text_contrast(patcher)` on new patches (it runs automatically via `apply_auto_styling`) and the explicitly-called `repair_text_contrast(patcher)` on existing ones. Contrast is NOT recomputed on the edit path — `apply_auto_styling` runs only when `finalize_patch(is_new=True)` — so an edited patch keeps whatever text colors it already had unless you call the repair helper.

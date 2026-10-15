@@ -249,15 +249,6 @@ DETAIL_HOMES = {
 
 ALLOWED_BARE_MD = {"context.md", "CONTEXT.md"}
 
-# Strict xfail for guard cases a later Q18 task satisfies (removed by that task).
-PENDING_T2 = pytest.mark.xfail(strict=True, reason="pending-q18-t2")
-_PENDING_T2_IDS = (
-    {f"genexpr-{i:02d}" for i in range(1, 21)}
-    | {f"uicontrast-{i:02d}" for i in (1, 3, 4, 5, 6, 7)}
-    | {f"jsagent-{i:02d}" for i in (1, 2, 3)}
-)
-_PENDING_T2_KEYS = {"genexpr", "uicontrast", "jsagent"}
-
 _REPO_PATH_RE = re.compile(r"(?<![\w/.-])((?:\.claude|src|tools|tests)/[\w./<>{}*-]*)")
 _BARE_MD_RE = re.compile(r"(?<![\w/.-])([\w.-]+\.md)\b")
 _MEMORY_NOTE_RE = re.compile(r"\b(feedback|project|reference)_[a-z0-9_]+\.md\b")
@@ -285,7 +276,6 @@ def _private_path_findings(text: str) -> list:
     return found
 
 
-@PENDING_T2
 def test_claude_md_size_budget():
     """Q18/S11: CLAUDE.md is loaded every session; keep it within the ratchet."""
     size = len(CLAUDE_MD.read_bytes())
@@ -319,13 +309,7 @@ for _key, _anchors in ((k, v[1]) for k, v in MOVED_DETAIL.items()):
     _MOVED_IDS += [f"{_key}-{i:02d}" for i in range(1, len(_anchors) + 1)]
 
 
-_MOVED_PARAMS = [
-    pytest.param(*case, id=cid, marks=[PENDING_T2] if cid in _PENDING_T2_IDS else [])
-    for case, cid in zip(_MOVED_CASES, _MOVED_IDS)
-]
-
-
-@pytest.mark.parametrize("key,path,anchor", _MOVED_PARAMS)
+@pytest.mark.parametrize("key,path,anchor", _MOVED_CASES, ids=_MOVED_IDS)
 def test_moved_detail_present(key: str, path: str, anchor: str):
     """Q18: detail moved out of CLAUDE.md exists verbatim at its new home."""
     target = REPO_ROOT / path
@@ -335,10 +319,7 @@ def test_moved_detail_present(key: str, path: str, anchor: str):
     )
 
 
-@pytest.mark.parametrize(
-    "key",
-    [pytest.param(k, id=k, marks=[PENDING_T2] if k in _PENDING_T2_KEYS else []) for k in DETAIL_HOMES],
-)
+@pytest.mark.parametrize("key", list(DETAIL_HOMES), ids=list(DETAIL_HOMES))
 def test_claude_md_points_to_detail_home(claude_content: str, key: str):
     """Q18: CLAUDE.md names every detail home by its full path."""
     assert DETAIL_HOMES[key] in claude_content, (
@@ -364,7 +345,6 @@ def test_claude_md_pointer_paths_exist(claude_content: str):
     assert bad == [], f"CLAUDE.md cites paths that do not exist: {bad}"
 
 
-@PENDING_T2
 def test_claude_md_no_private_paths(claude_content: str):
     """Q18/§3.8: shipped CLAUDE.md never points into .planning/, /Users/ or MEM."""
     found = _private_path_findings(claude_content)
@@ -372,7 +352,7 @@ def test_claude_md_no_private_paths(claude_content: str):
 
 
 @pytest.mark.parametrize(
-    "key", ["dbmaint", pytest.param("genexpr", marks=PENDING_T2)], ids=["dbmaint", "genexpr"]
+    "key", ["dbmaint", "genexpr"], ids=["dbmaint", "genexpr"]
 )
 def test_shipped_doc_has_no_private_paths(key: str):
     """Q18: the new reference docs ship, so they carry no private paths."""
@@ -382,7 +362,6 @@ def test_shipped_doc_has_no_private_paths(key: str):
     assert found == [], f"{DETAIL_HOMES[key]} cites unshipped locations: {found}"
 
 
-@PENDING_T2
 def test_builder_docstrings_carry_recipes():
     """Q18: the multislider and overlay recipes live in the builder docstrings."""
     from src.maxpat.patcher import Patcher

@@ -69,6 +69,7 @@ Before any generation:
 - Clear visual flow: parameters left-to-right or top-to-bottom
 - Adequate spacing: minimum 10px between controls, 20px between groups
 - Max 9 default theme colors (text 0.85, canvas 0.235, box fill 0.172): `.claude/skills/references/ui-presets.md` "Max 9 Theme Defaults"
+- Text color resolves against the displayed background (box `bgcolor` > presentation panel > patching panel > canvas), judged by WCAG 4.5:1. Algorithm: `.claude/skills/references/ui-presets.md` "Text Contrast Resolution"
 
 ### Presentation Mode Attributes
 - `presentation: 1` -- include box in presentation view
