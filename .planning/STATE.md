@@ -2,10 +2,10 @@
 gsd_state_version: "1.0"
 milestone: v5.0
 status: completed
-last_updated: "2026-10-15T16:50:34.764Z"
-last_activity: 2026-10-14
+last_updated: "2026-10-15T17:45:04.210Z"
+last_activity: 2026-10-15
 last_activity_desc: "Completed quick task 261001-hwb: Max 9.2.0 update — object DB re-synced from the installed bundle, 9.2 guidance added"
-state_head: e9c7302050c1180d6ebaf576fb122d48c6555bf3
+state_head: 78ada8533780e0c8541db1d1636e35d330d02052
 progress:
   total_phases: 5
   completed_phases: 5
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v5.0)
 Phase: —
 Plan: —
 Status: v5.0 shipped; awaiting `/gsd-new-milestone` to start next cycle
-Last activity: 2026-10-15 - Completed quick task 261015-bt8: Implement Q21 in .planning/reviews/2026-10-11-fix-plan.md — trigger type, $N arity, trigger order checks
+Last activity: 2026-10-15 - Completed quick task 261015-du0: Implement Q22 in .planning/reviews/2026-10-11-fix-plan.md — GenExpr parser, codebox lint, js ES5 lint
 
 Previous: 2026-09-21 - Completed quick task 260921-kfd: SF-04/SF-06/SF-07 closed — CLAUDE.md `live.*` extraction note revised (all 30 resolve); added refpage `<c74object name>`-is-authoritative rule and refpage-placeholder (54.5%) counts-not-types / never-overwrite-overrides rule
 
@@ -115,6 +115,7 @@ None.
 | 261014-t1y | Implement Q19 in .planning/reviews/2026-10-11-fix-plan.md — shared walker and recursive validation | 2026-10-15 | 7eaa71fa | Verified | [261014-t1y-implement-q19-in-planning-reviews-2026-1](./quick/261014-t1y-implement-q19-in-planning-reviews-2026-1/) |
 | 261014-uzq | Implement Q20 in .planning/reviews/2026-10-11-fix-plan.md — recursive critics, analyze, checklist, graph | 2026-10-15 | f3bfdce3 | Verified | [261014-uzq-implement-q20-in-planning-reviews-2026-1](./quick/261014-uzq-implement-q20-in-planning-reviews-2026-1/) |
 | 261015-bt8 | Implement Q21 in .planning/reviews/2026-10-11-fix-plan.md — trigger type, $N arity, trigger order checks | 2026-10-15 | e9c73020 | Verified | [261015-bt8-implement-q21-in-planning-reviews-2026-1](./quick/261015-bt8-implement-q21-in-planning-reviews-2026-1/) |
+| 261015-du0 | Implement Q22 in .planning/reviews/2026-10-11-fix-plan.md — GenExpr parser, codebox lint, js ES5 lint | 2026-10-15 | 78ada853 | Verified | [261015-du0-implement-q22-in-planning-reviews-2026-1](./quick/261015-du0-implement-q22-in-planning-reviews-2026-1/) |
 
 ## Deferred Items
 
