@@ -18,14 +18,17 @@ import copy
 import re
 
 from src.maxpat.defaults import DEFAULT_PATCHER_PROPS, FONT_NAME, FONT_SIZE, GEN_PATCHER_BGCOLOR
+from src.maxpat.genexpr_parse import io_counts, line_comment_starts, mask, statements
 
 
 def parse_genexpr_io(code: str) -> tuple[int, int]:
     """Extract input and output counts from GenExpr code.
 
-    Scans for ``in1``, ``in2``, ... and ``out1``, ``out2``, ... patterns
-    using word-boundary-aware regex to avoid matching variable names like
-    ``index`` or ``input``.
+    Scans for ``in1``, ``in2``, ... and ``out1``, ``out2``, ... with
+    word-boundary-aware regexes (so ``index`` / ``input`` never match) on
+    the comment/string mask from :mod:`src.maxpat.genexpr_parse`, so I/O
+    names inside ``//`` / ``/* */`` comments and string literals are
+    ignored (Q22 / G2: ``// mix in4 and out3`` no longer yields 4 inlets).
 
     Args:
         code: GenExpr source code string.
@@ -33,14 +36,7 @@ def parse_genexpr_io(code: str) -> tuple[int, int]:
     Returns:
         (num_inputs, num_outputs) tuple. Returns (0, 0) if none found.
     """
-    # Match standalone in1, in2, ... (word boundary before 'in', digit after)
-    in_matches = re.findall(r"\bin(\d+)\b", code)
-    out_matches = re.findall(r"\bout(\d+)\b", code)
-
-    max_in = max((int(n) for n in in_matches), default=0)
-    max_out = max((int(n) for n in out_matches), default=0)
-
-    return (max_in, max_out)
+    return io_counts(code)
 
 
 def build_genexpr(
@@ -87,20 +83,35 @@ def build_genexpr(
     return "\n\n".join(sections) + "\n"
 
 
-_DECL_PREFIXES = ("Param ", "History ", "Delay ", "Buffer ", "Data ")
 _TYPE_ORDER = {"Param": 0, "History": 1, "Delay": 2, "Buffer": 3, "Data": 3}
+_METHOD_CALL = re.compile(r"\w+\.\w+\(")
+
+
+def _is_expression_stmt(st) -> bool:
+    return st.kind != "decl" and ("=" in st.text or _METHOD_CALL.search(st.text) is not None)
 
 
 def reorder_genexpr_declarations(code: str) -> str:
     """Reorder GenExpr code so all declarations precede expressions.
 
     GenExpr requires Param, History, Delay, Buffer, and Data declarations
-    to appear before any expression or assignment. This function extracts
-    all declaration lines (with associated preceding comments) and moves
-    them to the top, grouped by type: Param, then History, then Delay,
-    then Buffer/Data.
+    to appear before any expression or assignment. This works on whole
+    STATEMENTS from :mod:`src.maxpat.genexpr_parse` (Q22 / G1), not lines:
 
-    If no reordering is needed, returns the original code unchanged.
+    * Only depth-0 declarations move; a declaration inside a brace block
+      (a function body) is never touched.
+    * A declaration inside a ``/* */`` or ``//`` comment is not a statement,
+      so it stays inside its comment, in place.
+    * A multi-line ``Param g(0.5,\n  min=0, max=1);`` moves as one verbatim
+      piece, together with the whole-line ``//`` comments directly above it
+      and a trailing comment on its last line.
+
+    Pieces are emitted grouped Param, History, Delay, Buffer/Data (stable
+    within each group), then one blank line, then the remaining code. Every
+    piece is sliced from the ORIGINAL text, so comments survive.
+
+    If no depth-0 declaration follows an expression statement, the input is
+    returned byte-identical.
 
     Args:
         code: GenExpr source code string.
@@ -108,62 +119,104 @@ def reorder_genexpr_declarations(code: str) -> str:
     Returns:
         Reordered GenExpr code string.
     """
-    lines = code.split("\n")
-
-    # Quick check: is reordering actually needed?
-    first_expr_line = -1
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        if not stripped or stripped.startswith("//") or stripped.startswith("#"):
-            continue
-        is_decl = any(stripped.startswith(p) for p in _DECL_PREFIXES)
-        is_expr = not is_decl and ("=" in stripped or re.search(r"\w+\.\w+\(", stripped))
-        if is_decl and first_expr_line >= 0:
-            break  # found a declaration after an expression — needs reorder
-        if is_expr and first_expr_line < 0:
-            first_expr_line = i
-    else:
-        # Loop completed without break — no declaration after expression
+    if not isinstance(code, str) or not code:
         return code
 
-    # Extract declarations (with preceding comments) into type groups
-    decl_groups: dict[int, list[str]] = {0: [], 1: [], 2: [], 3: []}
-    remaining: list[str] = []
-
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-
-        # Identify declaration type
-        decl_type = None
-        for prefix in _DECL_PREFIXES:
-            if stripped.startswith(prefix):
-                decl_type = prefix.strip()
+    stmts = statements(code)
+    seen_expr = False
+    needed = False
+    for st in stmts:
+        if st.kind == "decl":
+            if st.depth == 0 and seen_expr:
+                needed = True
                 break
+        elif _is_expression_stmt(st):
+            seen_expr = True
+    if not needed:
+        return code
 
-        if decl_type is not None:
-            group = _TYPE_ORDER[decl_type]
-            # Pull directly-preceding comment lines from remaining
-            associated: list[str] = []
-            while remaining and remaining[-1].strip().startswith("//"):
-                associated.insert(0, remaining.pop())
-            decl_groups[group].extend(associated)
-            decl_groups[group].append(line)
+    m = mask(code)
+    comment_starts = line_comment_starts(code)
+
+    def line_start(pos: int) -> int:
+        return code.rfind("\n", 0, pos) + 1
+
+    def line_end(pos: int) -> int:
+        e = code.find("\n", pos)
+        return len(code) if e < 0 else e
+
+    def whole_line_comment(ls: int, le: int) -> bool:
+        if m[ls:le].strip():
+            return False
+        k = ls
+        while k < le and code[k] in " \t\r":
+            k += 1
+        return k in comment_starts
+
+    pieces: list[tuple[int, int, int]] = []  # (start, end, group)
+    for st in stmts:
+        if st.kind != "decl" or st.depth != 0:
+            continue
+        dtype = st.text.split(None, 1)[0]
+        group = _TYPE_ORDER.get(dtype, 3)
+        ps = st.start
+        ls = line_start(ps)
+        if not m[ls:ps].strip():
+            ps = ls
+            while ps > 0:
+                prev_ls = line_start(ps - 1)
+                prev_le = ps - 1
+                if prev_ls == ps or not whole_line_comment(prev_ls, prev_le):
+                    break
+                if pieces and prev_ls < pieces[-1][1]:
+                    break
+                ps = prev_ls
+        pe = st.end
+        le = line_end(pe)
+        if not m[pe:le].strip():
+            pe = le + 1 if le < len(code) else le
+        pieces.append((ps, pe, group))
+
+    removed = [False] * len(code)
+    for ps, pe, _g in pieces:
+        for k in range(ps, pe):
+            removed[k] = True
+
+    remainder: list[str] = []
+    pos = 0
+    n = len(code)
+    while pos < n:
+        nl = code.find("\n", pos)
+        content_end = n if nl < 0 else nl
+        kept = "".join(code[k] for k in range(pos, content_end) if not removed[k])
+        touched = any(removed[k] for k in range(pos, content_end + (0 if nl < 0 else 1)))
+        if touched and not kept.strip():
+            pass  # left whitespace-only by a removal: drop the line
         else:
-            remaining.append(line)
+            remainder.append(kept + ("" if nl < 0 else "\n"))
+        pos = content_end + 1
 
-    # Reassemble: declarations first (grouped), then remaining code
-    output: list[str] = []
-    for gid in sorted(decl_groups.keys()):
-        if decl_groups[gid]:
-            output.extend(decl_groups[gid])
+    rest = "".join(remainder)
+    while rest:
+        nl = rest.find("\n")
+        if nl < 0:
+            if not rest.strip():
+                rest = ""
+            break
+        if rest[:nl].strip():
+            break
+        rest = rest[nl + 1:]
 
-    # Ensure blank line separator between declarations and code
-    if output and remaining:
-        if output[-1].strip() and remaining[0].strip():
-            output.append("")
-
-    output.extend(remaining)
-    return "\n".join(output)
+    out: list[str] = []
+    for gid in (0, 1, 2, 3):
+        for ps, pe, g in pieces:
+            if g != gid:
+                continue
+            piece = code[ps:pe]
+            if not piece.endswith("\n"):
+                piece += "\n"
+            out.append(piece)
+    return "".join(out) + "\n" + rest
 
 
 def generate_gendsp(

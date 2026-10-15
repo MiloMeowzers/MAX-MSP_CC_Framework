@@ -15,9 +15,10 @@ Exports:
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any
+
+from src.maxpat.genexpr_parse import parse_params
 
 
 class RNBODatabase:
@@ -97,42 +98,25 @@ class RNBODatabase:
 def parse_genexpr_params(code: str) -> list[dict]:
     """Extract Param declarations from GenExpr code.
 
-    Matches patterns like: Param name(default, min=min_val, max=max_val);
-    Returns a list of dicts with name/default/min/max.
+    Uses the shared GenExpr parser (:func:`src.maxpat.genexpr_parse.parse_params`,
+    Q22 / G4): comments are ignored, whitespace and multi-line argument
+    lists are tolerated, ``min =`` / ``max =`` kwargs may appear in any
+    order, and every name of a comma list (``Param a(1), b(2);``) is
+    returned.
+
+    Values may be None: ``default`` is None when the first positional
+    argument is absent or not a plain numeric literal (``samplerate*0.25``),
+    and ``min`` / ``max`` are None when the kwarg is absent or non-literal.
 
     Args:
         code: GenExpr source code string.
 
     Returns:
-        List of param dicts: [{"name": str, "default": float, "min": float, "max": float}]
+        List of param dicts:
+        [{"name": str, "default": float | None, "min": float | None,
+          "max": float | None}]
     """
-    pattern = r"Param\s+(\w+)\(([^)]+)\);"
-    params: list[dict] = []
-
-    for match in re.finditer(pattern, code):
-        name = match.group(1)
-        args_str = match.group(2)
-
-        # Parse: default, min=val, max=val
-        parts = [p.strip() for p in args_str.split(",")]
-        default = float(parts[0]) if parts else 0.0
-        min_val = 0.0
-        max_val = 1.0
-
-        for part in parts[1:]:
-            if part.startswith("min="):
-                min_val = float(part[4:])
-            elif part.startswith("max="):
-                max_val = float(part[4:])
-
-        params.append({
-            "name": name,
-            "default": default,
-            "min": min_val,
-            "max": max_val,
-        })
-
-    return params
+    return parse_params(code)
 
 
 # ===========================================================================
@@ -270,10 +254,15 @@ def add_rnbo(
         param_default = param.get("default", 0.0)
         param_min = param.get("min", 0.0)
         param_max = param.get("max", 1.0)
-        param_text = (
-            f"param @name {param_name} "
-            f"@min {param_min} @max {param_max} @initial {param_default}"
-        )
+        # A None value (an absent or non-literal GenExpr bound, Q22 / G4)
+        # omits that attribute so RNBO's own default applies.
+        param_text = f"param @name {param_name}"
+        if param_min is not None:
+            param_text += f" @min {param_min}"
+        if param_max is not None:
+            param_text += f" @max {param_max}"
+        if param_default is not None:
+            param_text += f" @initial {param_default}"
 
         param_box = Box.__new__(Box)
         param_box.name = "param"

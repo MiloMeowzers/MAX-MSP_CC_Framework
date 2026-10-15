@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from src.maxpat.genexpr_parse import line_paren_depths, mask
 from src.maxpat.validation import ValidationResult
 
 if TYPE_CHECKING:
@@ -42,30 +43,6 @@ _GENEXPR_KEYWORDS = frozenset({
 # before-if/else). Module-level so multiple checks can reuse without rebinding.
 # Hoisted from validate_genexpr local scope (Phase 29 / VALID-04 / D-16).
 _DECL_PREFIXES = ("Param ", "History ", "Delay ", "Buffer ", "Data ")
-
-
-def _strip_line_comments(code: str) -> str:
-    """Remove `//` line comments so regex checks (Checks 6, 7) can scan
-    code text without false-positive matches inside commented-out
-    examples. Block comments (`/* ... */`) are handled separately by
-    _strip_block_comments (Check 6). Single pass; preserves line count for
-    error line-number reporting in Check 9.
-    """
-    return "\n".join(
-        re.sub(r"//.*$", "", line) for line in code.split("\n")
-    )
-
-
-def _strip_block_comments(code: str) -> str:
-    """Replace each ``/* ... */`` block comment with as many newlines as it
-    spans, so names inside it are never tokenized (Q12 / G3) and line
-    numbers stay put."""
-    return re.sub(
-        r"/\*.*?\*/",
-        lambda m: "\n" * m.group(0).count("\n"),
-        code,
-        flags=re.DOTALL,
-    )
 
 
 # Check 6 patterns (Q12 / G3).
@@ -100,6 +77,16 @@ def validate_genexpr(
        to the expr/vexpr/if objects and is a CLAUDE.md rule.
     9. Init-before-if/else flow analysis (error, D-16)
 
+    Checks 1-9 run on the comment/string mask from
+    :mod:`src.maxpat.genexpr_parse` (Q22 / S5): comment and string-literal
+    characters are blanked to spaces with offsets and newlines kept, so
+    braces, ``delay(``, ``in4`` or ``Param`` inside ``//`` / ``/* */`` never
+    count. Checks 2 and 5 skip continuation lines of a multi-line paren
+    group (Check 2: a line that starts or ends inside an open paren;
+    Check 5: a line that starts inside one), so a multi-line
+    ``Param g(0.5,\n  min=0, max=1);`` is neither a missing semicolon nor
+    an expression.
+
     All results use layer="code". Report-only, no auto-fix.
 
     Args:
@@ -110,16 +97,18 @@ def validate_genexpr(
         List of ValidationResult.
     """
     results: list[ValidationResult] = []
+    if not isinstance(code, str):
+        code = ""
 
-    # Strip // line comments once so Checks 6/7 don't false-positive on
-    # commented examples. Preserves line count for Check 9 line-number
-    # reporting (Check 9 walks `lines` directly and uses its own //
-    # skipping, so it does NOT use code_stripped).
-    code_stripped = _strip_line_comments(code)
+    # One comment/string mask for every check (Q22 / S5): same length and
+    # newlines as `code`, so line numbers are unchanged.
+    m = mask(code)
+    raw_lines = code.split("\n")
+    paren_depths = line_paren_depths(code)
 
     # Check 1: Balanced braces
-    open_count = code.count("{")
-    close_count = code.count("}")
+    open_count = m.count("{")
+    close_count = m.count("}")
     if open_count != close_count:
         results.append(ValidationResult(
             "code", "error",
@@ -127,9 +116,13 @@ def validate_genexpr(
         ))
 
     # Check 2: Semicolons on statement lines
-    lines = code.split("\n")
+    lines = m.split("\n")
     for i, line in enumerate(lines):
         stripped = line.strip()
+        # Continuation rule (Q22): a line inside a multi-line paren group
+        # (start or end inside an open paren) is not a statement line.
+        if i < len(paren_depths) and (paren_depths[i][0] > 0 or paren_depths[i][1] > 0):
+            continue
 
         # Skip empty, comments, braces-only, preprocessor
         if not stripped:
@@ -154,12 +147,12 @@ def validate_genexpr(
         if is_statement and not stripped.endswith(";") and not stripped.endswith("{") and not stripped.endswith("}"):
             results.append(ValidationResult(
                 "code", "warning",
-                f"Line {i + 1}: possible missing semicolon: '{stripped}'",
+                f"Line {i + 1}: possible missing semicolon: '{raw_lines[i].strip()}'",
             ))
 
     # Check 3: in/out declarations
-    in_matches = re.findall(r"\bin(\d+)\b", code)
-    out_matches = re.findall(r"\bout(\d+)\b", code)
+    in_matches = re.findall(r"\bin(\d+)\b", m)
+    out_matches = re.findall(r"\bout(\d+)\b", m)
     max_in = max((int(n) for n in in_matches), default=0)
     max_out = max((int(n) for n in out_matches), default=0)
     if max_in > 0 or max_out > 0:
@@ -170,7 +163,7 @@ def validate_genexpr(
 
     # Check 4: Param validation
     param_pattern = re.compile(r"Param\s+(\w+)\s*\(([^)]*)\)")
-    for match in param_pattern.finditer(code):
+    for match in param_pattern.finditer(m):
         param_name = match.group(1)
         param_args = match.group(2)
 
@@ -188,6 +181,10 @@ def validate_genexpr(
     for i, line in enumerate(lines):
         stripped = line.strip()
         if not stripped or stripped.startswith("//") or stripped.startswith("#"):
+            continue
+        # Continuation rule (Q22): a line that starts inside an open paren
+        # continues the previous statement (multi-line Param args).
+        if i < len(paren_depths) and paren_depths[i][0] > 0:
             continue
         if any(stripped.startswith(p) for p in _DECL_PREFIXES):
             last_decl_line = i
@@ -209,10 +206,10 @@ def validate_genexpr(
         from src.maxpat.db_lookup import ObjectDatabase
         db = ObjectDatabase()
 
-    # Scan the comment-stripped source (// and /* */) so an ALL-CAPS banner
-    # like `// === SATURATION (Pade tanh) ===` is never tokenized
+    # Scan the comment/string mask (// and /* */ blanked) so an ALL-CAPS
+    # banner like `// === SATURATION (Pade tanh) ===` is never tokenized
     # (tape-wobble false positive: DRIFT/EQ/LFO/ROLLOFF/SATURATION/SIGNAL).
-    scan = _strip_block_comments(code_stripped)
+    scan = m
 
     # Names introduced by declarations: every `name(` inside a declaration
     # statement, so `History z0(0.), z1(0.);` declares both z0 and z1.
@@ -261,8 +258,8 @@ def validate_genexpr(
 
     # Check 7: delay() rejection (D-14, VALID-04). Compile-fatal in MAX,
     # so ERROR severity. Word-boundary prevents matching Delay(...) or
-    # myDelay.read(...). Comment-stripped via code_stripped.
-    if re.search(r"\bdelay\s*\(", code_stripped):
+    # myDelay.read(...). Runs on the comment/string mask.
+    if re.search(r"\bdelay\s*\(", m):
         results.append(ValidationResult(
             "code", "error",
             "delay() is not supported in GenExpr codebox; "
@@ -289,7 +286,7 @@ def validate_genexpr(
     # positive limitations (D-20) surfaced in the suggestion line.
     declared = set()
     for match in re.finditer(
-        r"(?:Param|History|Delay|Buffer|Data)\s+(\w+)\s*\(", code
+        r"(?:Param|History|Delay|Buffer|Data)\s+(\w+)\s*\(", m
     ):
         declared.add(match.group(1))
 
