@@ -160,6 +160,151 @@ class TestJsRobustness:
 
 
 # ---------------------------------------------------------------------------
+# Q22-fix CR-01 (D-02): regex literals in the js mask
+# ---------------------------------------------------------------------------
+
+_BT = "`"
+_BS = "\\"
+_REPRO_QUOTE = 'var s = x.replace(/"/g, "");\noutlets = 1;\nfunction bang() { outlet(3, 1); }'
+_REPRO_BACKTICK = "inlets = 1;\noutlets = 1;\nvar r = /" + _BT + "/;\nfunction bang() { outlet(3, 1); }"
+_REPRO_SLASHES = "inlets = 1;\noutlets = 1;\nfunction bang() { var re = " + r"/\/\//" + "; outlet(3, 1); }"
+
+
+def _in_bang(stmt):
+    return "inlets = 1;\noutlets = 1;\nfunction bang() { " + stmt + " }"
+
+
+def _oob_found(results):
+    hits = [
+        r for r in results
+        if r.level == "error" and "outlet() index 3 out of bounds" in r.message
+        and "declared outlets = 1" in r.message
+    ]
+    return len(hits) == 1
+
+
+class TestRegexLiterals:
+    def test_review_repro_quote_in_regex(self):
+        from src.maxpat.code_validation import validate_js
+
+        res = validate_js(_REPRO_QUOTE, engine="js")
+        msgs = [r.message for r in res]
+        assert "Missing 'outlets' declaration (required for js object)" not in msgs
+        assert not any("No handler functions found" in m for m in msgs)
+        assert "Handler functions found: bang" in msgs
+        assert _oob_found(res)
+
+    @pytest.mark.parametrize("engine", ["js", "jsui"])
+    def test_review_repro_backtick_in_regex(self, engine):
+        from src.maxpat.code_validation import validate_js
+
+        res = validate_js(_REPRO_BACKTICK, engine=engine)
+        assert _es6(res) == []
+        assert "Handler functions found: bang" in [r.message for r in res]
+        assert _oob_found(res)
+
+    def test_review_repro_escaped_slashes(self):
+        from src.maxpat.code_validation import validate_js
+
+        assert _REPRO_SLASHES.count("/\\/\\//") == 1
+        assert _oob_found(validate_js(_REPRO_SLASHES, engine="js"))
+
+    @pytest.mark.parametrize("prefix", [
+        "return", "typeof", "case", "x =", "f(", "a,", "c ?", "!", "a &&",
+        "{", ";", "}",
+    ])
+    def test_regex_after_keyword_or_punctuation(self, prefix):
+        from src.maxpat.code_validation import validate_js
+
+        stmt = prefix + ' /"/.test(s); outlet(3, 1);'
+        assert _oob_found(validate_js(_in_bang(stmt), engine="js"))
+
+    @pytest.mark.parametrize("division", [
+        "var h = a / 2;",
+        "var h = 10 / 2;",
+        "var h = 1.5 / 2;",
+        "var h = f(a) / 2;",
+        "var h = arr[0] / 2;",
+        "var h = a.b / 2;",
+        "var h = 4; h /= 2;",
+        "var h = a /* c */ / 2;",
+        'var h = "s" / 2;',
+        "var h = returned / 2;",
+    ])
+    def test_division_is_not_regex(self, division):
+        from src.maxpat.code_validation import validate_js
+
+        stmt = division + ' var q = "/"; outlet(3, h);'
+        assert _oob_found(validate_js(_in_bang(stmt), engine="js"))
+
+    def test_slash_inside_character_class(self):
+        from src.maxpat.code_validation import validate_js
+
+        stmt = 'var re = /[/"]/g; outlet(3, 1);'
+        assert _oob_found(validate_js(_in_bang(stmt), engine="js"))
+
+    def test_unterminated_regex_recovers_at_line_end(self):
+        from src.maxpat.code_validation import validate_js
+
+        code = 'var re = /"abc\ninlets = 1;\noutlets = 1;\nfunction bang() { outlet(3, 1); }'
+        res = validate_js(code, engine="js")
+        msgs = [r.message for r in res]
+        assert not any("Missing 'inlets'" in m for m in msgs)
+        assert not any("Missing 'outlets'" in m for m in msgs)
+        assert _oob_found(res)
+
+    def test_template_literal_after_regex_still_flagged(self):
+        from src.maxpat.code_validation import validate_js
+
+        code = _HEADER + "var r = /x/; var s = " + _BT + "t" + _BT + ";"
+        res = _es6(validate_js(code, engine="js"))
+        assert len(res) == 1
+        assert res[0].level == "error"
+        assert "template literal" in res[0].message
+        assert "on line 4" in res[0].message
+
+    @pytest.mark.parametrize("stmt", [
+        'var h = a; /* / " */ outlet(3, h);',
+        'var h = a; // /"/\noutlet(3, h);',
+    ])
+    def test_comment_still_wins_over_regex(self, stmt):
+        from src.maxpat.code_validation import validate_js
+
+        assert _oob_found(validate_js(_in_bang(stmt), engine="js"))
+
+    @pytest.mark.parametrize("code", [
+        _REPRO_QUOTE,
+        _REPRO_BACKTICK,
+        _REPRO_SLASHES,
+        "x = /a/;\r\ny = 1;\r\n",
+        'var r = /[\\/"]/g;\n',
+    ])
+    def test_mask_preserves_length_and_line_breaks(self, code):
+        from src.maxpat.code_validation import _js_mask
+
+        result = _js_mask(code)
+        assert isinstance(result, tuple)
+        masked, template_lines = result
+        assert isinstance(masked, str)
+        assert isinstance(template_lines, list)
+        assert len(masked) == len(code)
+        for i, ch in enumerate(code):
+            if ch in "\r\n":
+                assert masked[i] == ch, i
+
+    @pytest.mark.parametrize("code", [
+        "/", "x = /", "x = /[/", "x = /" + _BS, "return /", "}/",
+        "a = /[" + _BS + "]",
+        "x = /a/g", "/\n/", "a / / b", "x = /" + _BT, 'x = /"\n',
+    ])
+    @pytest.mark.parametrize("engine", [None, "js", "v8"])
+    def test_regex_never_raises(self, code, engine):
+        from src.maxpat.code_validation import validate_js
+
+        assert isinstance(validate_js(code, engine=engine), list)
+
+
+# ---------------------------------------------------------------------------
 # D-02: engine resolution from the project's patches
 # ---------------------------------------------------------------------------
 

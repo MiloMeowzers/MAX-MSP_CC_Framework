@@ -104,9 +104,10 @@ def validate_genexpr(
         ``identifier <op> numeric literal`` (warning)
     14. De-hoist: a derived local that combines another derived local alias
         with a Param in a Param-only expression (warning)
-    15. ``tanh(...)/tanh(...)`` normalization: error when the codebox
-        declares a History or Delay (a feedback path exists, D-04),
-        otherwise warning; no dataflow analysis
+    15. ``tanh(...)/tanh(...)`` normalization: error when the codebox has
+        feedback state -- a History that is assigned somewhere, or any
+        Delay (a read-only History such as the de-hoist ``History one(1)``
+        is not feedback state) -- otherwise warning; no dataflow analysis
     16. Notes (info): ``else if`` chains and 2-argument ``peek``
 
     Checks 1-9 run on the comment/string mask from
@@ -502,15 +503,22 @@ def _lint_genexpr(code: str, m: str) -> list[ValidationResult]:
 
     params: list[str] = []
     state_names: set = set()
-    has_feedback_state = False
+    history_names: set = set()
+    has_delay = False
     for dtype, names, _st in decls:
         if dtype == "Param":
             params.extend(n for n in names if n not in params)
         else:
             state_names.update(names)
-            if dtype in ("History", "Delay"):
-                has_feedback_state = True
+            if dtype == "History":
+                history_names.update(names)
+            elif dtype == "Delay":
+                has_delay = True
     param_set = set(params)
+    # Feedback state (Q22-fix CR-02, D-03): a History that is assigned
+    # somewhere in the body, or any Delay. A read-only History such as the
+    # de-hoist `History one(1)` is not feedback state.
+    has_feedback_state = has_delay or bool(history_names & set(assigned))
 
     # Check 10: tabs in the RAW code (a tab inside a comment still counts).
     if "\t" in code:
@@ -611,8 +619,9 @@ def _lint_genexpr(code: str, m: str) -> list[ValidationResult]:
                 f"de-hoist with History one(1)",
             ))
 
-    # Check 15: tanh(...)/tanh(...) normalization (D-04: error with
-    # History/Delay state, otherwise warning).
+    # Check 15: tanh(...)/tanh(...) normalization (D-04, refined by Q22-fix
+    # D-03: error with feedback state -- an assigned History or any Delay --
+    # otherwise warning; no dataflow analysis).
     for mt in _LINT_TANH.finditer(m):
         open_pos = mt.end() - 1
         close = open_pos + 1 + len(_paren_content(m, open_pos))
@@ -665,29 +674,71 @@ def _lint_genexpr(code: str, m: str) -> list[ValidationResult]:
 # js: comment/string mask and ES5 lint (Q22 / R6, D-01..D-03)
 # ---------------------------------------------------------------------------
 
+# Keywords after which a `/` starts a regex literal rather than a division
+# (Q22-fix CR-01, D-02). Matched against the whole identifier that ends at
+# the previous significant character, so `returned / 2` stays a division.
+_JS_REGEX_PREFIX_KEYWORDS = frozenset({
+    "return", "typeof", "instanceof", "in", "of", "new", "delete", "void",
+    "throw", "case", "do", "else", "yield", "await",
+})
+_JS_IDENT_CHARS = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_$"
+)
+_JS_BLANK_CHARS = frozenset(" \t\r\f\v")
+
+
 def _js_mask(code: str) -> tuple[str, list]:
-    """Blank JS comments, string contents and template-literal bodies.
+    """Blank JS comments, string contents, template-literal bodies and
+    regex-literal bodies.
 
     Single left-to-right scan; the result has the same length as *code* and
     keeps every newline. ``//`` and ``/* */`` comments, ``'...'`` / ``"..."``
     contents (backslash escapes honoured) and template-literal bodies become
     spaces; the quote characters and backticks stay. Returns
     ``(mask, template_lines)`` where *template_lines* holds the 1-based line
-    of each opening backtick seen outside comments and strings. An
-    unterminated construct runs to EOF. Never raises.
+    of each opening backtick seen outside comments, strings and regex
+    literals. An unterminated comment, string or template runs to EOF.
+    Never raises.
+
+    Regex literals (Q22-fix CR-01, D-02): outside comments and strings, a
+    lone ``/`` (not ``//`` or ``/*``, which always open a comment) starts a
+    regex literal when the previous significant token does not end a value
+    -- an identifier, a number, ``)``, ``]``, or a closing quote, backtick
+    or regex ``/`` ends a value -- or when the whole identifier ending at
+    the previous significant character is in ``_JS_REGEX_PREFIX_KEYWORDS``
+    (``return``, ``typeof``, ``case`` ...). Otherwise it is a division.
+    Whitespace and comments never change the previous token; ``}`` does not
+    end a value, so ``}`` followed by ``/`` starts a regex. Inside a regex,
+    character classes ``[...]`` and backslash escapes are honoured until
+    the closing ``/``; the body becomes spaces while the delimiters and the
+    flags stay. A regex literal cannot span lines, so an unterminated one
+    ends at its line end. Known limit of this standard heuristic: a ``)``
+    closing an ``if`` / ``while`` / ``for`` header directly before a regex
+    literal reads as a division, and a ``/`` after a postfix ``++`` /
+    ``--`` reads as a regex (both bounded to one line).
     """
     out = list(code)
     n = len(code)
     template_lines: list = []
     line = 1
     i = 0
-    state = ""  # "" normal, "//", "/*", "'", '"', "`"
+    state = ""  # "" normal, "//", "/*", "'", '"', "`", "re"
+    in_class = False
+    value_end = False  # the last significant token ends a value
+    last_sig = -1  # index of the last significant character (normal state)
+    ident_start = -1  # start of the identifier ending at last_sig, else -1
     while i < n:
         c = code[i]
         if c == "\n":
             line += 1
             if state == "//":
                 state = ""
+            elif state == "re":
+                # Unterminated regex literal: recover at the line end.
+                state = ""
+                in_class = False
+                value_end = False
+                ident_start = -1
             i += 1
             continue
         if state == "":
@@ -696,11 +747,60 @@ def _js_mask(code: str) -> tuple[str, list]:
                 out[i] = out[i + 1] = " "
                 i += 2
                 continue
-            if c in "'\"":
-                state = c
-            elif c == "`":
-                state = "`"
-                template_lines.append(line)
+            if c in _JS_BLANK_CHARS:
+                i += 1
+                continue
+            if c == "/":
+                keyword = (
+                    ident_start >= 0
+                    and code[ident_start:last_sig + 1] in _JS_REGEX_PREFIX_KEYWORDS
+                )
+                if not value_end or keyword:
+                    state = "re"
+                    in_class = False
+                else:
+                    value_end = False
+                    ident_start = -1
+                    last_sig = i
+                i += 1
+                continue
+            if c in _JS_IDENT_CHARS:
+                if not (ident_start >= 0 and last_sig == i - 1):
+                    ident_start = i
+                value_end = True
+            else:
+                ident_start = -1
+                value_end = c in ")]"
+                if c in "'\"":
+                    state = c
+                elif c == "`":
+                    state = "`"
+                    template_lines.append(line)
+            last_sig = i
+            i += 1
+            continue
+        if state == "re":
+            if c == "\\":
+                out[i] = " "
+                if i + 1 < n and code[i + 1] not in "\r\n":
+                    out[i + 1] = " "
+                    i += 2
+                else:
+                    i += 1
+                continue
+            if c == "/" and not in_class:
+                state = ""
+                value_end = True
+                ident_start = -1
+                last_sig = i
+                i += 1
+                continue
+            if c == "[":
+                in_class = True
+            elif c == "]":
+                in_class = False
+            if c != "\r":
+                out[i] = " "
             i += 1
             continue
         if state == "//":
@@ -728,7 +828,12 @@ def _js_mask(code: str) -> tuple[str, list]:
             i += 2
             continue
         if c == state:
+            # A closing quote or backtick ends a value: a following `/` is
+            # a division (no keyword lookup).
             state = ""
+            value_end = True
+            ident_start = -1
+            last_sig = i
         elif c != "\r":
             out[i] = " "
         i += 1
@@ -787,9 +892,11 @@ def validate_js(code: str, *, engine: str | None = None) -> list[ValidationResul
        ``"v8ui"`` (Modern Engine), and exactly one info when the engine is
        None or unknown (D-02 note).
 
-    Checks 1-5 run on a comment/string mask (Q22 / G8): ``// inlets = 2``,
+    Checks 1-5 run on a comment/string/regex-literal mask (Q22 / G8;
+    regex literals Q22-fix CR-01, see ``_js_mask``): ``// inlets = 2``,
     ``/* outlets = 3 */``, a commented-out ``outlet(5, x)`` or ES6 syntax
-    inside a string or comment never count.
+    inside a string, comment or regex literal never count, and a quote,
+    backtick or ``//`` inside a regex literal opens nothing.
 
     All results use layer="code". Report-only, no auto-fix.
 
