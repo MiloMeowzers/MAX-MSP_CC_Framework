@@ -104,9 +104,10 @@ def validate_genexpr(
         ``identifier <op> numeric literal`` (warning)
     14. De-hoist: a derived local that combines another derived local alias
         with a Param in a Param-only expression (warning)
-    15. ``tanh(...)/tanh(...)`` normalization: error when the codebox
-        declares a History or Delay (a feedback path exists, D-04),
-        otherwise warning; no dataflow analysis
+    15. ``tanh(...)/tanh(...)`` normalization: error when the codebox has
+        feedback state -- a History that is assigned somewhere, or any
+        Delay (a read-only History such as the de-hoist ``History one(1)``
+        is not feedback state) -- otherwise warning; no dataflow analysis
     16. Notes (info): ``else if`` chains and 2-argument ``peek``
 
     Checks 1-9 run on the comment/string mask from
@@ -502,15 +503,22 @@ def _lint_genexpr(code: str, m: str) -> list[ValidationResult]:
 
     params: list[str] = []
     state_names: set = set()
-    has_feedback_state = False
+    history_names: set = set()
+    has_delay = False
     for dtype, names, _st in decls:
         if dtype == "Param":
             params.extend(n for n in names if n not in params)
         else:
             state_names.update(names)
-            if dtype in ("History", "Delay"):
-                has_feedback_state = True
+            if dtype == "History":
+                history_names.update(names)
+            elif dtype == "Delay":
+                has_delay = True
     param_set = set(params)
+    # Feedback state (Q22-fix CR-02, D-03): a History that is assigned
+    # somewhere in the body, or any Delay. A read-only History such as the
+    # de-hoist `History one(1)` is not feedback state.
+    has_feedback_state = has_delay or bool(history_names & set(assigned))
 
     # Check 10: tabs in the RAW code (a tab inside a comment still counts).
     if "\t" in code:
@@ -611,8 +619,9 @@ def _lint_genexpr(code: str, m: str) -> list[ValidationResult]:
                 f"de-hoist with History one(1)",
             ))
 
-    # Check 15: tanh(...)/tanh(...) normalization (D-04: error with
-    # History/Delay state, otherwise warning).
+    # Check 15: tanh(...)/tanh(...) normalization (D-04, refined by Q22-fix
+    # D-03: error with feedback state -- an assigned History or any Delay --
+    # otherwise warning; no dataflow analysis).
     for mt in _LINT_TANH.finditer(m):
         open_pos = mt.end() - 1
         close = open_pos + 1 + len(_paren_content(m, open_pos))

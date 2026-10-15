@@ -8,6 +8,7 @@ never-raise robustness.
 from __future__ import annotations
 
 import time
+import warnings
 
 import pytest
 
@@ -253,7 +254,7 @@ _TANH_ERR = (
 
 class TestCheck15Tanh:
     def test_error_with_history(self, db):
-        code = "Param drive(2, min=1, max=10);\nHistory h(0);\ny = tanh(in1 * drive) / tanh(drive);\nout1 = y;"
+        code = "Param drive(2, min=1, max=10);\nHistory h(0);\ny = tanh(in1 * drive) / tanh(drive);\nh = y;\nout1 = y;"
         res = _with(_run(code, db), "tanh(...)/tanh(...)")
         assert len(res) == 1
         assert res[0].level == "error"
@@ -286,6 +287,78 @@ class TestCheck15Tanh:
     def test_not_flagged(self, line, db):
         code = f"Param g(2, min=1, max=10);\nHistory h(0);\ntanh_drive = 1;\n{line}\nout1 = y;"
         assert _with(_run(code, db), "tanh(...)/tanh(...)") == []
+
+
+# ---------------------------------------------------------------------------
+# Check 15 feedback state (Q22-fix CR-02, D-03): only a History that is
+# assigned somewhere, or any Delay, makes tanh/tanh an error.
+# ---------------------------------------------------------------------------
+
+_CR02_REPRO = "\n".join([
+    "Param drive(2);",
+    "History one(1);",
+    "d = drive * one;",
+    "out1 = tanh(in1 * d) / tanh(d);",
+])
+_FB_HEAD = "Param drive(2, min=1, max=10);\nHistory h(0);\ny = tanh(in1 * drive) / tanh(drive);"
+
+
+class TestCheck15FeedbackState:
+    def test_review_repro_history_one_is_warning(self, db):
+        results = _run(_CR02_REPRO, db)
+        res = _with(results, "tanh(...)/tanh(...)")
+        assert len(res) == 1
+        assert res[0].level == "warning"
+        assert res[0].message == (
+            "Line 4: tanh(...)/tanh(...) normalization -- on a feedback path the "
+            "loop gain moves with drive; prefer tanh(x*g)/g"
+        )
+        assert [r for r in results if r.level == "error"] == []
+
+    def test_declared_never_assigned_history_is_warning(self, db):
+        code = _FB_HEAD + "\nout1 = y;"
+        res = _with(_run(code, db), "tanh(...)/tanh(...)")
+        assert len(res) == 1
+        assert res[0].level == "warning"
+
+    @pytest.mark.parametrize("assign", [
+        "h = y;",
+        "h += y;",
+        "if (in1 > 0) {\n  h = y;\n}",
+    ])
+    def test_assigned_history_is_error(self, assign, db):
+        code = f"{_FB_HEAD}\n{assign}\nout1 = y;"
+        res = _with(_run(code, db), "tanh(...)/tanh(...)")
+        assert len(res) == 1
+        assert res[0].level == "error"
+        assert res[0].message == _TANH_ERR
+
+    def test_history_one_beside_feedback_history_is_error(self, db):
+        code = ("Param drive(2, min=1, max=10);\nHistory one(1);\nHistory z(0);\n"
+                "y = tanh(in1 * drive * one) / tanh(drive);\nz = y;\nout1 = y + z;")
+        (r,) = _with(_run(code, db), "tanh(...)/tanh(...)")
+        assert r.level == "error"
+
+    def test_delay_is_feedback_without_assignment(self, db):
+        code = ("Param drive(2, min=1, max=10);\nHistory one(1);\nDelay d(100);\n"
+                "y = tanh(in1 * drive * one) / tanh(drive);\nout1 = y;")
+        (r,) = _with(_run(code, db), "tanh(...)/tanh(...)")
+        assert r.level == "error"
+
+    def test_validate_patch_history_one_not_blocked(self):
+        from src.maxpat import Patcher
+        from src.maxpat.validation import validate_patch
+
+        def tanh_errors(code):
+            p = Patcher()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                p.add_gen(code)
+            return [r for r in validate_patch(p.to_dict())
+                    if r.level == "error" and "tanh(...)/tanh(...)" in r.message]
+
+        assert tanh_errors(_CR02_REPRO) == []
+        assert len(tanh_errors(f"{_FB_HEAD}\nh = y;\nout1 = y;")) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -341,7 +414,7 @@ _FAMILIES = [
     ("nested for loop", "s = 0;\nfor (i = 0; i < 4; i += 1) { for (j = 0; j < 4; j += 1) { s += j; } }\nout1 = s;", "warning"),
     ("is not a numeric literal", "Param n(4, min=1, max=8);\ns = 0;\nfor (i = 0; i < n; i += 1) { s += i; }\nout1 = s;", "warning"),
     ("Param-only expression", "Param f(1, min=0, max=2);\nsr = samplerate;\nk = f / sr;\nout1 = in1 * k;", "warning"),
-    ("tanh(...)/tanh(...)", "Param d(2, min=1, max=4);\nHistory h(0);\ny = tanh(in1 * d) / tanh(d);\nout1 = y;", "error"),
+    ("tanh(...)/tanh(...)", "Param d(2, min=1, max=4);\nHistory h(0);\ny = tanh(in1 * d) / tanh(d);\nh = y;\nout1 = y;", "error"),
     ("tanh(...)/tanh(...)", "Param d(2, min=1, max=4);\ny = tanh(in1 * d) / tanh(d);\nout1 = y;", "warning"),
     ("'else if' chain", "y = 0;\nif (in1 > 0) { y = 1; } else if (in1 < 0) { y = 2; }\nout1 = y;", "info"),
     ("2-argument peek", 'Buffer b("b");\nx = peek(b, 0);\nout1 = x;', "info"),
