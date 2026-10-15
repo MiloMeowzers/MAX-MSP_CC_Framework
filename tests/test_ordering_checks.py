@@ -382,3 +382,332 @@ class TestAtomChecksEndToEnd:
         d = _make_patch(boxes, lines)
         assert isinstance(review_structure(d, db=db), list)
         assert isinstance(review_patch(copy.deepcopy(d), db=db), list)
+
+
+# ===========================================================================
+# Trigger order (Task 3)
+# ===========================================================================
+
+# The Task 2 decision (quick 261015-bt8, Q/decision.txt): Max's previous-value
+# / delta idioms are exempt from the trigger-order blocker.
+_DECISION = "idiom-exempt"
+
+
+def _order(boxes, lines, db):
+    return _q21(_review(boxes, lines, db), _ORDER)
+
+
+def _pack(box_id="obj-9", text="pack 0 0", n_in=2):
+    return _box(box_id, text, numinlets=n_in, numoutlets=1)
+
+
+def _hop(box_id, kind):
+    if kind == "message":
+        return _msg(box_id, "go")
+    return _box(box_id, kind, numinlets=2, numoutlets=1)
+
+
+_HOPS = ["zl.reg", "zl reg", "f", "float", "i", "int", "message", "prepend foo"]
+
+
+class TestTriggerOrder:
+    def test_bang_fed_hot_exact_text(self, db):
+        f = _order(
+            [_t("obj-1", "t l b"), _pack()],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        )
+        assert len(f) == 1 and f[0].severity == "blocker"
+        assert f[0].finding == (
+            "Trigger order: 't l b' (obj-1) feeds the hot inlet 0 of 'pack' (obj-9) "
+            "from outlet 1 but cold inlet(s) 1 from outlet(s) 0 -- trigger outlets "
+            "fire right to left, so outlet 1 fires first and 'pack' outputs with "
+            "stale cold values"
+        )
+        assert f[0].suggestion == (
+            "Reorder the trigger so the hot inlet is fed by the lowest outlet index "
+            "(outlet 0 fires last), e.g. 't l b' -> 't b l'."
+        )
+
+    def test_correct_order_clean(self, db):
+        assert _order(
+            [_t("obj-1", "t b l"), _pack()],
+            [_ln("obj-1", 0, "obj-9", 0), _ln("obj-1", 1, "obj-9", 1)], db,
+        ) == []
+
+    @pytest.mark.parametrize("kind", _HOPS)
+    def test_one_hop_counts(self, db, kind):
+        f = _order(
+            [_t("obj-1", "t l b"), _hop("obj-2", kind), _pack()],
+            [_ln("obj-1", 1, "obj-2", 0), _ln("obj-2", 0, "obj-9", 0),
+             _ln("obj-1", 0, "obj-9", 1)], db,
+        )
+        assert len(f) == 1 and f[0].severity == "blocker"
+        assert "of 'pack' (obj-9) from outlet 1" in f[0].finding
+
+    def test_two_hops_do_not_count(self, db):
+        assert _order(
+            [_t("obj-1", "t l b"), _hop("obj-2", "f"), _hop("obj-3", "i"), _pack()],
+            [_ln("obj-1", 1, "obj-2", 0), _ln("obj-2", 0, "obj-3", 0),
+             _ln("obj-3", 0, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        ) == []
+
+    def test_hop_fed_at_inlet1_does_not_propagate(self, db):
+        assert _order(
+            [_t("obj-1", "t l b"), _hop("obj-2", "f"), _pack()],
+            [_ln("obj-1", 1, "obj-2", 1), _ln("obj-2", 0, "obj-9", 0),
+             _ln("obj-1", 0, "obj-9", 1)], db,
+        ) == []
+
+    def test_same_outlet_hot_and_cold(self, db):
+        assert _order(
+            [_t("obj-1", "t l b"), _pack()],
+            [_ln("obj-1", 0, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        ) == []
+
+    @pytest.mark.parametrize("text", [
+        "gate 2", "switch 2", "ggate", "gswitch", "poly~ voice 4", "js foo.js",
+        "p sub", "pak 0 0", "funnel 2",
+    ])
+    def test_excluded_targets(self, db, text):
+        assert _order(
+            [_t("obj-1", "t l b"), _box("obj-9", text, numinlets=3, numoutlets=1)],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        ) == []
+
+    def test_groove_inlet1_is_hot(self, db):
+        assert _order(
+            [_t("obj-1", "t l b"),
+             _box("obj-9", "groove~ buf 2", numinlets=3, numoutlets=3,
+                  outlettype=["signal", "signal", "signal"])],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        ) == []
+
+    def test_unknown_object(self, db):
+        assert _order(
+            [_t("obj-1", "t l b"), _box("obj-9", "foobar 1 2", numinlets=2)],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        ) == []
+
+    def test_gen_scope(self, db):
+        d = _nested(
+            "gen~",
+            [_t("obj-2", "t l b"), _pack()],
+            [_ln("obj-2", 1, "obj-9", 0), _ln("obj-2", 0, "obj-9", 1)],
+            classnamespace="dsp.gen",
+        )
+        assert _q21(review_structure(d, db=db), _ORDER) == []
+
+    def test_pack_variable_io_inlet2_cold(self, db):
+        f = _order(
+            [_t("obj-1", "t l b"), _pack(text="pack 0 0 0", n_in=3)],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-9", 2)], db,
+        )
+        assert len(f) == 1 and "cold inlet(s) 2 from outlet(s) 0" in f[0].finding
+
+    def test_expr_inlet1_cold(self, db):
+        f = _order(
+            [_t("obj-1", "t i b"), _box("obj-9", "expr $i1+$i2", numinlets=2)],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        )
+        assert len(f) == 1 and "of 'expr' (obj-9)" in f[0].finding
+
+
+# ===========================================================================
+# 14f2221 probe (3c9452a5, inside obj-24 `p slicer`)
+# ===========================================================================
+
+
+def _probe_14f2221(fixed: bool):
+    boxes = [
+        _B("obj-900", "newobj", "fluid.buf2list", 2, 1, ["list"]),
+        _B("obj-19", "newobj", "t b l" if fixed else "t l b", 1, 2,
+           ["", ""] if fixed else ["", "bang"]),
+        _B("obj-17", "newobj", "zl.reg", 2, 2, ["", ""]),
+        _B("obj-18", "newobj", "ears.slice~ @timeunit samps", 2, 2, ["", ""]),
+    ]
+    if fixed:
+        lines = [
+            _ln("obj-900", 0, "obj-19", 0),
+            _ln("obj-19", 0, "obj-17", 0),
+            _ln("obj-17", 0, "obj-18", 0),
+            _ln("obj-19", 1, "obj-18", 1),
+        ]
+    else:
+        lines = [
+            _ln("obj-900", 0, "obj-19", 0),
+            _ln("obj-19", 1, "obj-17", 0),
+            _ln("obj-17", 0, "obj-18", 0),
+            _ln("obj-19", 0, "obj-18", 1),
+        ]
+    return boxes, lines
+
+
+_14F_TEXT = (
+    "Trigger order: 't l b' (obj-19) feeds the hot inlet 0 of 'ears.slice~' "
+    "(obj-18) from outlet 1 but cold inlet(s) 1 from outlet(s) 0"
+)
+
+
+class TestProbe14f2221:
+    def test_prefix_caught_top_level(self, db):
+        res = _review(*_probe_14f2221(False), db)
+        blockers = [r for r in res if r.severity == "blocker"]
+        assert len(blockers) == 1
+        assert blockers[0].finding.startswith(_14F_TEXT)
+        assert blockers[0].path == ""
+
+    def test_prefix_caught_nested(self, db):
+        d = _nested("p slicer", *_probe_14f2221(False), box_id="obj-24")
+        res = review_structure(d, db=db)
+        blockers = [r for r in res if r.severity == "blocker"]
+        assert len(blockers) == 1
+        assert blockers[0].path == "obj-24"
+        assert blockers[0].finding.startswith("[p slicer] " + _14F_TEXT)
+
+    def test_fixed_clean(self, db):
+        for d in (_make_patch(*_probe_14f2221(True)),
+                  _nested("p slicer", *_probe_14f2221(True), box_id="obj-24")):
+            res = review_structure(d, db=db)
+            assert _q21(res) == []
+            assert [r for r in res if r.severity == "blocker"] == []
+
+
+# ===========================================================================
+# 2e40f06 probe (cc361028, inside obj-26 `p player`)
+# ===========================================================================
+
+
+def _probe_2e40f06(fixed: bool):
+    boxes = [
+        _B("obj-10", "newobj", "route symbol", 2, 2, ["", ""]),
+        _B("obj-6", "newobj", "t b s" if fixed else "t s b", 1, 2,
+           ["", ""] if fixed else ["", "bang"]),
+        _B("obj-5", "message", "set $1", 2, 1, [""]),
+        _B("obj-7", "message", "0", 2, 1, [""]),
+        _B("obj-9", "newobj", "groove~ rcc_dummy 2", 3, 3, ["signal", "signal", "signal"]),
+    ]
+    if fixed:
+        lines = [
+            _ln("obj-10", 0, "obj-6", 0),
+            _ln("obj-6", 1, "obj-5", 0),
+            _ln("obj-5", 0, "obj-9", 0),
+            _ln("obj-6", 0, "obj-7", 0),
+            _ln("obj-7", 0, "obj-9", 1),
+        ]
+    else:
+        lines = [
+            _ln("obj-10", 0, "obj-6", 0),
+            _ln("obj-6", 0, "obj-5", 0),
+            _ln("obj-5", 0, "obj-9", 0),
+            _ln("obj-6", 1, "obj-7", 0),
+            _ln("obj-7", 0, "obj-9", 1),
+        ]
+    return _nested("p player", boxes, lines, box_id="obj-26")
+
+
+class TestProbe2e40f06:
+    """2e40f06 cannot satisfy "pre-fix caught, fixed passes" (planner decision 2).
+
+    The pre-fix ``t s b`` fed ``set $1`` (groove~ inlet 0) from outlet 0,
+    which fires last, and ``0`` (groove~ inlet 1) from outlet 1: it already
+    obeys R4. The fix ``t b s`` sends the hot message first, the opposite
+    of R4. groove~ inlet 1 is Loop Min (groove~.maxref.xml), a signal/float
+    inlet the DB marks ``hot: true``, and ``set`` does not consume it;
+    v0.0.5 (d76608b7) later replaced that cord with ``startloop``. So it was
+    not a hot/cold bug, and neither form fires (the user kept this probe in
+    Task 2 to pin that).
+    """
+
+    @pytest.mark.parametrize("fixed", [False, True])
+    def test_neither_form_fires(self, db, fixed):
+        assert _q21(review_structure(_probe_2e40f06(fixed), db=db)) == []
+
+
+# ===========================================================================
+# Previous-value / delta idioms (Task 2 decision: _DECISION)
+# ===========================================================================
+
+
+def _expect_idiom(found):
+    assert _DECISION == "idiom-exempt"
+    assert found == []
+
+
+class TestPreviousValueIdiom:
+    def test_t_f_f_into_minus(self, db):
+        _expect_idiom(_order(
+            [_t("obj-1", "t f f"), _box("obj-9", "- 0.", numinlets=2)],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        ))
+
+    def test_t_i_b_into_i(self, db):
+        _expect_idiom(_order(
+            [_t("obj-1", "t i b"), _box("obj-9", "i", numinlets=2)],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        ))
+
+    def test_t_f_b_into_f(self, db):
+        _expect_idiom(_order(
+            [_t("obj-1", "t f b"), _box("obj-9", "f 0.", numinlets=2)],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        ))
+
+    def test_t_f_f_into_greater(self, db):
+        _expect_idiom(_order(
+            [_t("obj-1", "t f f"), _box("obj-9", "> 0.", numinlets=2)],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        ))
+
+    def test_t_l_l_b_into_vexpr(self, db):
+        _expect_idiom(_order(
+            [_t("obj-1", "t l l b"), _box("obj-9", "vexpr $f1-$f2", numinlets=2)],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        ))
+
+    def test_fibonacci_t_b_b_into_int_one_hop(self, db):
+        _expect_idiom(_order(
+            [_t("obj-1", "t b b"), _box("obj-2", "int", numinlets=2),
+             _box("obj-3", "int", numinlets=2)],
+            [_ln("obj-1", 1, "obj-2", 0), _ln("obj-1", 0, "obj-3", 0),
+             _ln("obj-3", 0, "obj-2", 1)], db,
+        ))
+
+    def test_t_b_l_into_waveform(self, db):
+        _expect_idiom(_order(
+            [_t("obj-1", "t b l"), _msg("obj-3", "go"),
+             _box("obj-9", "waveform~", maxclass="waveform~", numinlets=5,
+                  numoutlets=6)],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-3", 0),
+             _ln("obj-3", 0, "obj-9", 4)], db,
+        ))
+
+    def test_non_idiom_control_blocks(self, db):
+        f = _order(
+            [_t("obj-1", "t l b"), _pack()],
+            [_ln("obj-1", 1, "obj-9", 0), _ln("obj-1", 0, "obj-9", 1)], db,
+        )
+        assert [r.severity for r in f] == ["blocker"]
+
+
+# ===========================================================================
+# Purity
+# ===========================================================================
+
+
+class TestPurity:
+    def test_review_patch_does_not_mutate(self, db):
+        boxes = [
+            _t("obj-1", "t a", 1),
+            _t("obj-2", "t b", 1), _msg("obj-3", "$1"),
+            _t("obj-4", "t l b"), _pack(),
+        ]
+        lines = [
+            _ln("obj-2", 0, "obj-3", 0),
+            _ln("obj-4", 1, "obj-9", 0), _ln("obj-4", 0, "obj-9", 1),
+        ]
+        d = _make_patch(boxes, lines)
+        before = copy.deepcopy(d)
+        res = review_patch(d, db=db)
+        assert d == before
+        for kind in _Q21:
+            assert _q21(res, kind), kind

@@ -9,6 +9,10 @@ not detect:
     lower-case letter outside b, i, f, l, s outputs the literal symbol
   - ``$N`` arity (Q21 / R4): a message box's highest ``$N`` above the
     atoms its inlet-0 feeders can together supply
+  - Trigger order (Q21 / R4): one trigger feeding a box's hot inlet 0 from
+    a higher outlet than a cold inlet (directly or through one hop).
+    Task 2 decision ``idiom-exempt``: Max's previous-value / delta idioms
+    (storage targets, same-value direct feeds, waveform~) are not reported.
   - Redundant/duplicate patchlines
 
 Every scope of the shared :class:`src.maxpat.graph.PatchGraph` is reviewed
@@ -73,9 +77,11 @@ def review_structure(
       2. Hot/cold inlet ordering (multiple inlets fed without trigger ordering)
       3. Invalid trigger types (blocker; Q21 / R4)
       4. Message ``$N`` arity (blocker; Q21 / R4)
-      5. Redundant/duplicate patchlines
+      5. Trigger order: one trigger feeding a hot inlet after a cold one
+         (blocker; Q21 / R4; previous-value idioms exempt)
+      6. Redundant/duplicate patchlines
 
-    Gen scopes run only check 5. Top-level results come first, nested
+    Gen scopes run only check 6. Top-level results come first, nested
     scopes follow in pre-order, tagged with their path.
 
     Args:
@@ -101,6 +107,7 @@ def review_structure(
             found.extend(_check_hot_cold_ordering(scope.boxes, scope.edges))
             found.extend(_check_trigger_types(scope))
             found.extend(_check_dollar_arity(scope, dbh))
+            found.extend(_check_trigger_order(scope, dbh))
         found.extend(_check_redundant_connections(scope.edges))
         results.extend(tag_results(found, scope.path))
     return results
@@ -673,7 +680,162 @@ def _check_dollar_arity(scope, dbh) -> list[CriticResult]:
 
 
 # ---------------------------------------------------------------------------
-# Check 5: Redundant/duplicate connections
+# Check 5: Trigger order (Q21 / R4)
+# ---------------------------------------------------------------------------
+
+# Targets never checked (planner decision 4): gate/switch and their graphic
+# siblings take a control inlet first; pak and funnel are all-hot in Max
+# (the DB marks their inlet 1 cold -- an overrides follow-up); and
+# _ALL_HOT_NAMES boxes route each inlet independently.
+_ORDER_EXCLUDED_NAMES = frozenset({
+    "gate", "switch", "ggate", "gswitch", "gswitch2", "pak", "funnel",
+}) | _ALL_HOT_NAMES
+
+# One-hop relays (planner decision 5): entered at inlet 0, they pass on
+# through outlet 0. ``zl`` counts only as ``zl reg``.
+_ORDER_HOP_NAMES = frozenset({"zl.reg", "f", "float", "i", "int", "prepend"})
+
+# Task 2 decision ``idiom-exempt``: storage targets output the previous
+# value on purpose (``t i b`` -> ``i``, fibonacci ``t b b`` -> ``int``) ...
+_ORDER_STORAGE_NAMES = frozenset({"i", "int", "f", "float", "zl.reg"})
+# ... and waveform~ (BEAP's UI cases).
+_ORDER_IDIOM_TARGETS = frozenset({"waveform~"})
+
+
+def _is_zl_reg(box) -> bool:
+    if walk.box_name(box) == "zl.reg":
+        return True
+    args = walk.box_args(box)
+    return walk.box_name(box) == "zl" and bool(args) and args[0] == "reg"
+
+
+def _is_order_hop(box) -> bool:
+    if walk.box_maxclass(box) == "message":
+        return True
+    return walk.box_name(box) in _ORDER_HOP_NAMES or _is_zl_reg(box)
+
+
+def _inlet_is_cold(box, inlet: int, dbh) -> bool:
+    """True when the DB marks *box* inlet *inlet* (> 0) ``hot: false``.
+
+    Planner decision 3: unknown objects have no cold inlets. For a
+    ``variable_io`` object an inlet past the DB list takes the last listed
+    inlet's flag when 2+ inlets are listed (pack), and is cold when only
+    inlet 0 is listed (expr, vexpr, if, sprintf).
+    """
+    if inlet <= 0:
+        return False
+    obj = dbh.lookup(walk.box_name(box))
+    if obj is None:
+        return False
+    inlets = obj.get("inlets")
+    if not isinstance(inlets, list):
+        return False
+    entry = _db_entry(inlets, inlet) if inlet < len(inlets) else None
+    if entry is not None:
+        return entry.get("hot") is False
+    if not obj.get("variable_io"):
+        return False
+    if len(inlets) >= 2:
+        last = inlets[-1]
+        return isinstance(last, dict) and last.get("hot") is False
+    return len(inlets) == 1
+
+
+def _is_order_idiom(dst_box, letters, hot, cold) -> bool:
+    """The previous-value / delta idiom shapes exempted by the Task 2
+    decision ``idiom-exempt``: a storage target (whatever the feed), a
+    waveform~ target, or a target whose hot and cold inlets are all fed
+    directly by value outlets (i/f/l/s) of the trigger -- the "correct"
+    order would compute x op x there."""
+    name = walk.box_name(dst_box)
+    if name in _ORDER_STORAGE_NAMES or _is_zl_reg(dst_box):
+        return True
+    if name in _ORDER_IDIOM_TARGETS:
+        return True
+    feeds = list(hot) + list(cold)
+    return bool(feeds) and all(
+        how == "direct"
+        and outlet < len(letters)
+        and letters[outlet] in _TRIGGER_VALUE_LETTERS
+        for outlet, how in feeds
+    )
+
+
+def _check_trigger_order(scope, dbh) -> list[CriticResult]:
+    """Flag a trigger that feeds a box's hot inlet before its cold inlets.
+
+    Trigger outlets fire right to left, so the hot inlet 0 must be fed by
+    the lowest outlet index (Rule #3; Q21 / R4). For each trigger, every
+    (box, inlet) it reaches directly or through one hop (planner decision
+    5: a message box, ``zl.reg`` / ``zl reg``, f/float, i/int or prepend,
+    entered at inlet 0 and left by outlet 0) is collected. A target that is
+    the trigger itself, is in ``_ORDER_EXCLUDED_NAMES`` (decision 4) or is
+    not reached at inlet 0 is skipped. Cold inlets follow
+    :func:`_inlet_is_cold` (decision 3). One blocker per (trigger, target)
+    when min(hot outlets) > min(cold outlets); one outlet feeding both is
+    the fan-out critic's concern.
+
+    Task 2 decision: ``idiom-exempt`` -- the previous-value / delta shapes
+    of :func:`_is_order_idiom` are never reported.
+    """
+    results: list[CriticResult] = []
+    for t_id, t_box in scope.boxes.items():
+        if walk.box_name(t_box) not in _TRIGGER_NAMES:
+            continue
+        letters = _trigger_letters(t_box)
+        # dst_id -> inlet -> set of (outlet, "direct" | "hop")
+        reach: dict = defaultdict(lambda: defaultdict(set))
+        for edge in scope.out_edges.get(t_id, ()):
+            if edge.dst == t_id:
+                continue
+            reach[edge.dst][edge.inlet].add((edge.outlet, "direct"))
+            hop_box = scope.boxes.get(edge.dst)
+            if edge.inlet != 0 or hop_box is None or not _is_order_hop(hop_box):
+                continue
+            for nxt in scope.out_edges.get(edge.dst, ()):
+                if nxt.outlet != 0 or nxt.dst == t_id:
+                    continue
+                reach[nxt.dst][nxt.inlet].add((edge.outlet, "hop"))
+
+        for dst_id, inlets in reach.items():
+            dst_box = scope.boxes.get(dst_id)
+            if dst_box is None or 0 not in inlets:
+                continue
+            d_name = walk.box_name(dst_box)
+            if d_name in _ORDER_EXCLUDED_NAMES:
+                continue
+            hot = inlets[0]
+            cold_inlets = sorted(
+                i for i in inlets if i > 0 and _inlet_is_cold(dst_box, i, dbh)
+            )
+            if not cold_inlets:
+                continue
+            cold = set()
+            for i in cold_inlets:
+                cold |= inlets[i]
+            h = min(o for o, _ in hot)
+            if h <= min(o for o, _ in cold):
+                continue
+            if _is_order_idiom(dst_box, letters, hot, cold):
+                continue
+            ci = ", ".join(str(i) for i in cold_inlets)
+            co = ", ".join(str(o) for o in sorted({o for o, _ in cold}))
+            results.append(CriticResult(
+                "blocker",
+                f"Trigger order: '{walk.box_text(t_box)}' ({t_id}) feeds the hot "
+                f"inlet 0 of '{d_name}' ({dst_id}) from outlet {h} but cold "
+                f"inlet(s) {ci} from outlet(s) {co} -- trigger outlets fire "
+                f"right to left, so outlet {h} fires first and '{d_name}' "
+                f"outputs with stale cold values",
+                "Reorder the trigger so the hot inlet is fed by the lowest "
+                "outlet index (outlet 0 fires last), e.g. 't l b' -> 't b l'.",
+            ))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Check 6: Redundant/duplicate connections
 # ---------------------------------------------------------------------------
 
 def _check_redundant_connections(
