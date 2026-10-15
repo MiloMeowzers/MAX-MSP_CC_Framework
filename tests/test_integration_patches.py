@@ -116,6 +116,54 @@ def _is_allowlisted(patch_rel: str, result) -> bool:
         return False
     return any(_allow_key(e) == key for e in entries)
 
+# ---------------------------------------------------------------------------
+# Validate-error allowlist (true positives in frozen committed patches, Q22)
+# ---------------------------------------------------------------------------
+# Scope: validate_patch ERRORS (test_validate_patch_no_errors) in frozen
+# committed patches only. Q22 (quick 261015-du0) added validate_genexpr
+# Checks 10-16, which reach validate_patch through Layer 5
+# (_validate_embedded_genexpr); review_blocker_allowlist.json covers critic
+# blockers only. Keys are signature-scoped: (kind, container box_id, name,
+# ValidationResult path), never a line number. Only level == "error" results
+# without a proposed_removal are ever exempted; every entry carries a reason
+# and must still fire (test_validate_allowlist_entries_are_live).
+_VALIDATE_ALLOWLIST_PATH = Path(__file__).resolve().parent / "validate_error_allowlist.json"
+with open(_VALIDATE_ALLOWLIST_PATH) as _f:
+    _VALIDATE_ALLOWLIST = json.load(_f).get("patches", {})
+
+_CONST_ASSIGN_RE = re.compile(
+    r"(\S+) '([^']+)' codebox: Assignment to GenExpr built-in constant '([^']+)'"
+)
+
+
+def _validate_result_key(result):
+    """Signature key of a validate_patch result, or None if not eligible."""
+    if result.level != "error" or result.proposed_removal is not None:
+        return None
+    m = _CONST_ASSIGN_RE.search(result.message)
+    if m:
+        return ("genexpr_const_assign", m.group(2), m.group(3), getattr(result, "path", ""))
+    return None
+
+
+def _validate_entry_key(entry: dict):
+    """Signature key of a validate-error allowlist entry."""
+    if entry.get("kind") == "genexpr_const_assign":
+        return ("genexpr_const_assign", entry.get("box_id"), entry.get("name"),
+                entry.get("path", ""))
+    return None
+
+
+def _is_validate_allowlisted(patch_rel: str, result) -> bool:
+    """True only if `patch_rel` has entries AND the result's key matches one."""
+    entries = _VALIDATE_ALLOWLIST.get(patch_rel)
+    if not entries:
+        return False
+    key = _validate_result_key(result)
+    if key is None:
+        return False
+    return any(_validate_entry_key(e) == key for e in entries)
+
 # Known issues: patches that fail specific tests with documented reasons.
 # Marked xfail(strict=True): when the blocker is fixed the case XPASSes and
 # fails, forcing the entry to be deleted (review A8).
@@ -165,6 +213,10 @@ def test_validate_patch_no_errors(patch_path: Path, db: ObjectDatabase) -> None:
         r for r in results
         if r.level == "error" or r.proposed_removal is not None
     ]
+    # Signature-scoped validate-error allowlist (Q22): true positives in
+    # frozen patches only; proposed removals are never exempted.
+    patch_rel = patch_path.relative_to(_REPO_ROOT).as_posix()
+    blocking = [r for r in blocking if not _is_validate_allowlisted(patch_rel, r)]
 
     assert not blocking, (
         f"{len(blocking)} error(s) / proposed removal(s) in {patch_path.name}:\n"
@@ -305,3 +357,69 @@ def test_allowlist_key_includes_path() -> None:
     top = CriticResult("blocker", finding, "s")
     assert not _is_allowlisted(patch_rel, nested)
     assert _is_allowlisted(patch_rel, top)
+
+
+# ---------------------------------------------------------------------------
+# Test 5: validate-error allowlist hygiene (Q22)
+# ---------------------------------------------------------------------------
+
+def test_validate_allowlist_entries_are_live(db: ObjectDatabase) -> None:
+    """Every validate-error allowlist entry names an existing file, carries a
+    reason, and matches an error validate_patch emits on that file today."""
+    problems = []
+    for patch_rel, entries in sorted(_VALIDATE_ALLOWLIST.items()):
+        path = _REPO_ROOT / patch_rel
+        if not path.is_file():
+            problems.append(f"{patch_rel}: file missing ({len(entries)} entries)")
+            continue
+        with open(path) as f:
+            live = {
+                _validate_result_key(r)
+                for r in validate_patch(json.load(f), db)
+            }
+        for entry in entries:
+            reason = entry.get("reason")
+            if not (isinstance(reason, str) and reason.strip()):
+                problems.append(f"{patch_rel}: no reason for {_validate_entry_key(entry)}")
+            if _validate_entry_key(entry) is None or _validate_entry_key(entry) not in live:
+                problems.append(
+                    f"{patch_rel}: stale (does not fire) {_validate_entry_key(entry)}")
+    assert not problems, (
+        f"{len(problems)} validate allowlist problem(s):\n"
+        + "\n".join(f"  - {p}" for p in problems)
+    )
+
+
+def test_validate_allowlist_excludes_calibration_projects() -> None:
+    bad = sorted(k for k in _VALIDATE_ALLOWLIST if _project_of(k) in _CALIBRATION_PROJECTS)
+    assert not bad, f"calibration-project patches in the validate allowlist: {bad}"
+
+
+def test_validate_allowlist_key_is_scoped() -> None:
+    """Only the exact (box_id, name, path) error is exempted, for that patch."""
+    from src.maxpat.validation import ValidationResult
+
+    patch_rel = "patches/tape-wobble/generated/tape-wobble.maxpat"
+
+    def msg(box_id, name):
+        return (
+            f"gen~ '{box_id}' codebox: Assignment to GenExpr built-in constant "
+            f"'{name}' (line 42) -- the built-in constant wins silently, so the "
+            f"assignment has no effect; rename the variable"
+        )
+
+    assert _is_validate_allowlisted(patch_rel, ValidationResult("code", "error", msg("obj-3", "pi")))
+    assert _is_validate_allowlisted(patch_rel, ValidationResult("code", "error", msg("obj-3", "twopi")))
+    # Different name, box id, path or patch: not exempted.
+    assert not _is_validate_allowlisted(patch_rel, ValidationResult("code", "error", msg("obj-3", "e")))
+    assert not _is_validate_allowlisted(patch_rel, ValidationResult("code", "error", msg("obj-4", "pi")))
+    assert not _is_validate_allowlisted(
+        patch_rel, ValidationResult("code", "error", msg("obj-3", "pi"), path="obj-9"))
+    assert not _is_validate_allowlisted(
+        "patches/other/generated/x.maxpat", ValidationResult("code", "error", msg("obj-3", "pi")))
+    # A proposed removal is never exempted; a warning is never consulted.
+    assert not _is_validate_allowlisted(
+        patch_rel,
+        ValidationResult("code", "error", msg("obj-3", "pi"),
+                         proposed_removal=("obj-1", 0, "obj-2", 0)))
+    assert _validate_result_key(ValidationResult("code", "warning", msg("obj-3", "pi"))) is None

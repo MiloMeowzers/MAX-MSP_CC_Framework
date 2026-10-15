@@ -15,7 +15,20 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from src.maxpat.genexpr_parse import line_paren_depths, mask
+from src.maxpat.genexpr_parse import (
+    CONSTANTS as _GENEXPR_CONSTANTS,
+    _find_assign,
+    _for_parts,
+    _paren_content,
+    _split_top,
+    _strip_prefixes,
+    assigned_names,
+    declarations,
+    line_paren_depths,
+    mask,
+    split_args,
+    statements,
+)
 from src.maxpat.validation import ValidationResult
 
 if TYPE_CHECKING:
@@ -77,6 +90,24 @@ def validate_genexpr(
        to the expr/vexpr/if objects and is a CLAUDE.md rule.
     9. Init-before-if/else flow analysis (error, D-16)
 
+    Codebox safe-construct lint (Q22 / R6; the CLAUDE.md "Gen~" rules and
+    genexpr-rules.md), at the spec severities (D-06: the spec's "note" is
+    the validator's ``info`` level):
+
+    10. Tab character anywhere in the RAW code, comments included (error)
+    11. Assignment to a GenExpr built-in constant name such as ``pi`` or
+        ``twopi`` -- the constant wins silently (error)
+    12. A Param name assigned as a local ("can't assign to parameter")
+        (error)
+    13. Loop shape: a nested ``for``, or a ``for`` whose condition is not
+        ``identifier <op> numeric literal`` (warning)
+    14. De-hoist: a derived local that combines another derived local alias
+        with a Param in a Param-only expression (warning)
+    15. ``tanh(...)/tanh(...)`` normalization: error when the codebox
+        declares a History or Delay (a feedback path exists, D-04),
+        otherwise warning; no dataflow analysis
+    16. Notes (info): ``else if`` chains and 2-argument ``peek``
+
     Checks 1-9 run on the comment/string mask from
     :mod:`src.maxpat.genexpr_parse` (Q22 / S5): comment and string-literal
     characters are blanked to spaces with offsets and newlines kept, so
@@ -102,13 +133,13 @@ def validate_genexpr(
 
     # One comment/string mask for every check (Q22 / S5): same length and
     # newlines as `code`, so line numbers are unchanged.
-    m = mask(code)
+    masked = mask(code)
     raw_lines = code.split("\n")
     paren_depths = line_paren_depths(code)
 
     # Check 1: Balanced braces
-    open_count = m.count("{")
-    close_count = m.count("}")
+    open_count = masked.count("{")
+    close_count = masked.count("}")
     if open_count != close_count:
         results.append(ValidationResult(
             "code", "error",
@@ -116,7 +147,7 @@ def validate_genexpr(
         ))
 
     # Check 2: Semicolons on statement lines
-    lines = m.split("\n")
+    lines = masked.split("\n")
     for i, line in enumerate(lines):
         stripped = line.strip()
         # Continuation rule (Q22): a line inside a multi-line paren group
@@ -151,8 +182,8 @@ def validate_genexpr(
             ))
 
     # Check 3: in/out declarations
-    in_matches = re.findall(r"\bin(\d+)\b", m)
-    out_matches = re.findall(r"\bout(\d+)\b", m)
+    in_matches = re.findall(r"\bin(\d+)\b", masked)
+    out_matches = re.findall(r"\bout(\d+)\b", masked)
     max_in = max((int(n) for n in in_matches), default=0)
     max_out = max((int(n) for n in out_matches), default=0)
     if max_in > 0 or max_out > 0:
@@ -163,7 +194,7 @@ def validate_genexpr(
 
     # Check 4: Param validation
     param_pattern = re.compile(r"Param\s+(\w+)\s*\(([^)]*)\)")
-    for match in param_pattern.finditer(m):
+    for match in param_pattern.finditer(masked):
         param_name = match.group(1)
         param_args = match.group(2)
 
@@ -209,7 +240,7 @@ def validate_genexpr(
     # Scan the comment/string mask (// and /* */ blanked) so an ALL-CAPS
     # banner like `// === SATURATION (Pade tanh) ===` is never tokenized
     # (tape-wobble false positive: DRIFT/EQ/LFO/ROLLOFF/SATURATION/SIGNAL).
-    scan = m
+    scan = masked
 
     # Names introduced by declarations: every `name(` inside a declaration
     # statement, so `History z0(0.), z1(0.);` declares both z0 and z1.
@@ -259,7 +290,7 @@ def validate_genexpr(
     # Check 7: delay() rejection (D-14, VALID-04). Compile-fatal in MAX,
     # so ERROR severity. Word-boundary prevents matching Delay(...) or
     # myDelay.read(...). Runs on the comment/string mask.
-    if re.search(r"\bdelay\s*\(", m):
+    if re.search(r"\bdelay\s*\(", masked):
         results.append(ValidationResult(
             "code", "error",
             "delay() is not supported in GenExpr codebox; "
@@ -286,7 +317,7 @@ def validate_genexpr(
     # positive limitations (D-20) surfaced in the suggestion line.
     declared = set()
     for match in re.finditer(
-        r"(?:Param|History|Delay|Buffer|Data)\s+(\w+)\s*\(", m
+        r"(?:Param|History|Delay|Buffer|Data)\s+(\w+)\s*\(", masked
     ):
         declared.add(match.group(1))
 
@@ -373,7 +404,260 @@ def validate_genexpr(
         ))
         break  # first-error-and-stop, matches Check 5
 
+    # Checks 10-16 (Q22 / R6) run after Check 9's loop, so its
+    # first-error-and-stop `break` never skips them.
+    results.extend(_lint_genexpr(code, masked))
+
     return results
+
+
+# ---------------------------------------------------------------------------
+# Checks 10-16: codebox safe-construct lint (Q22 / R6)
+# ---------------------------------------------------------------------------
+
+_LINT_TANH = re.compile(r"(?<![\w.])tanh\s*\(")
+_LINT_TANH_DIV = re.compile(r"\s*/\s*tanh\s*\(")
+_LINT_PEEK = re.compile(r"(?<![\w.])peek\s*\(")
+_LINT_ELSE_IF = re.compile(r"\belse\s+if\b")
+_LINT_KWARG = re.compile(r"^\s*[A-Za-z_]\w*\s*=(?!=)")
+_LINT_RHS_IDENT = re.compile(r"(?<![\w.$])[A-Za-z_]\w*")
+_LINT_IDENT = re.compile(r"[A-Za-z_]\w*")
+_LINT_NUM = r"-?(?:\d+(?:\.\d*)?|\.\d+)"
+_LINT_CMP = r"(?:<=|<|>=|>|!=)"
+_LINT_BOUND = re.compile(
+    rf"^(?:[A-Za-z_]\w*{_LINT_CMP}{_LINT_NUM}|{_LINT_NUM}{_LINT_CMP}[A-Za-z_]\w*)$"
+)
+
+
+def _lint_line(m: str, pos: int) -> int:
+    return m.count("\n", 0, pos) + 1
+
+
+def _rhs_identifiers(rhs: str) -> set:
+    """Identifiers an assignment RHS reads: not calls (``name(``), not
+    ``kw=`` keys inside parens."""
+    names = set()
+    depth = 0
+    depth_at = []
+    for c in rhs:
+        depth_at.append(depth)
+        if c == "(":
+            depth += 1
+        elif c == ")" and depth > 0:
+            depth -= 1
+    for mt in _LINT_RHS_IDENT.finditer(rhs):
+        after = rhs[mt.end():].lstrip()
+        if after.startswith("("):
+            continue
+        if after.startswith("=") and not after.startswith("==") and depth_at[mt.start()] > 0:
+            continue
+        names.add(mt.group(0))
+    return names
+
+
+def _assignment_records(code: str, stmts: list) -> list:
+    """(names, op, rhs, line) per assignment, sourced exactly like
+    genexpr_parse.assigned_names: non-decl statements (a leading else and
+    if / while / for paren group stripped) plus for-header init and
+    increment parts."""
+    records = []
+
+    def add(text: str, base: int) -> None:
+        a, b = _find_assign(text)
+        if a < 0:
+            return
+        names = [x.strip() for x in split_args(text[:a])]
+        names = [x for x in names if _LINT_IDENT.fullmatch(x)]
+        if names:
+            records.append((names, text[a:b], text[b:], code.count("\n", 0, base + a) + 1))
+
+    for st in stmts:
+        if st.kind == "decl":
+            continue
+        if st.kind == "header":
+            fp = _for_parts(st.text)
+            if fp is not None:
+                base, parts = fp
+                for idx in (0, 2):
+                    if idx < len(parts):
+                        off, part = parts[idx]
+                        for sub_off, sub in _split_top(part, ","):
+                            add(sub, st.start + base + off + sub_off)
+            continue
+        pos = _strip_prefixes(st.text)
+        add(st.text[pos:], st.start + pos)
+    return records
+
+
+def _lint_genexpr(code: str, m: str) -> list[ValidationResult]:
+    """Checks 10-16 (see validate_genexpr). Never raises."""
+    out: list[ValidationResult] = []
+    try:
+        stmts = statements(code)
+        decls = declarations(code)
+        assigned = assigned_names(code)
+    except Exception:  # pragma: no cover - the parser never raises
+        return out
+
+    params: list[str] = []
+    state_names: set = set()
+    has_feedback_state = False
+    for dtype, names, _st in decls:
+        if dtype == "Param":
+            params.extend(n for n in names if n not in params)
+        else:
+            state_names.update(names)
+            if dtype in ("History", "Delay"):
+                has_feedback_state = True
+    param_set = set(params)
+
+    # Check 10: tabs in the RAW code (a tab inside a comment still counts).
+    if "\t" in code:
+        tab_lines = [i + 1 for i, ln in enumerate(code.split("\n")) if "\t" in ln]
+        shown = ", ".join(str(n) for n in tab_lines[:5])
+        if len(tab_lines) > 5:
+            shown += f" and {len(tab_lines) - 5} more"
+        out.append(ValidationResult(
+            "code", "error",
+            f"Tab character in codebox code (line(s) {shown}) -- codeboxes must "
+            f"use spaces only; tabs are the prime suspect for MAX's generic "
+            f"'failed to compile genpatcher' error",
+        ))
+
+    # Check 11: assignment to a built-in constant (one result per name).
+    for name in sorted((n for n in assigned if n in _GENEXPR_CONSTANTS),
+                       key=lambda n: (min(assigned[n]), n)):
+        out.append(ValidationResult(
+            "code", "error",
+            f"Assignment to GenExpr built-in constant '{name}' (line "
+            f"{min(assigned[name])}) -- the built-in constant wins silently, so "
+            f"the assignment has no effect; rename the variable",
+        ))
+
+    # Check 12: a Param name assigned as a local (one result per name).
+    for name in sorted((n for n in assigned if n in param_set),
+                       key=lambda n: (min(assigned[n]), n)):
+        out.append(ValidationResult(
+            "code", "error",
+            f"Param '{name}' is assigned as a local (line {min(assigned[name])}) "
+            f"-- GenExpr rejects it with \"can't assign to parameter\"; rename "
+            f"the local or the Param",
+        ))
+
+    # Check 13: loop shape -- nested `for`, non-literal bound.
+    open_headers: list = []
+    for st in stmts:
+        open_headers = open_headers[:st.depth]
+        if st.kind != "header":
+            continue
+        fp = _for_parts(st.text)
+        if fp is not None:
+            enclosing = [h for h in open_headers if _for_parts(h.text) is not None]
+            if "for" in st.parents and enclosing:
+                out.append(ValidationResult(
+                    "code", "warning",
+                    f"Line {st.line}: nested for loop (inside the for loop on line "
+                    f"{enclosing[-1].line}) -- codebox loops must be single and "
+                    f"non-nested; amortize the inner scan across samples with a "
+                    f"History cursor",
+                ))
+            parts = fp[1]
+            cond = parts[1][1] if len(parts) >= 3 else ""
+            if not _LINT_BOUND.match("".join(cond.split())):
+                out.append(ValidationResult(
+                    "code", "warning",
+                    f"Line {st.line}: for loop bound '{' '.join(cond.split())}' is "
+                    f"not a numeric literal -- use a constant bound with a variable "
+                    f"inner guard: for (i = 0; i < 600; i += 1) {{ if (i < win) "
+                    f"{{ ... }} }}",
+                ))
+        open_headers.append(st)
+
+    # Check 14: de-hoist fixpoint. A derived local has exactly one plain `=`
+    # assignment, is not a Param or History/Delay/Buffer/Data name, and reads
+    # only Params, samplerate/vectorsize, built-in constants and other
+    # derived locals (a literal-only RHS counts).
+    per_name: dict = {}
+    for names, op, rhs, line in _assignment_records(code, stmts):
+        for n in names:
+            per_name.setdefault(n, []).append((op, rhs, line))
+    base_names = param_set | {"samplerate", "vectorsize"} | set(_GENEXPR_CONSTANTS)
+    candidates: dict = {}
+    for n, recs in per_name.items():
+        if (len(recs) == 1 and recs[0][0] == "="
+                and n not in state_names and n not in param_set):
+            candidates[n] = (_rhs_identifiers(recs[0][1]), recs[0][2])
+    derived: set = set()
+    changed = True
+    while changed:
+        changed = False
+        for n, (ids, _line) in candidates.items():
+            if n not in derived and ids <= (base_names | derived):
+                derived.add(n)
+                changed = True
+    for n in sorted(derived, key=lambda k: (candidates[k][1], k)):
+        ids, line = candidates[n]
+        aliases = sorted(ids & derived)
+        used_params = sorted(ids & param_set)
+        if aliases and used_params:
+            out.append(ValidationResult(
+                "code", "warning",
+                f"Line {line}: '{n}' combines local alias(es) "
+                f"{', '.join(repr(a) for a in aliases)} with Param(s) "
+                f"{', '.join(repr(p) for p in used_params)} in a Param-only "
+                f"expression -- gen~ hoists it and the alias can be undeclared or "
+                f"emitted out of order; write samplerate and constants directly or "
+                f"de-hoist with History one(1)",
+            ))
+
+    # Check 15: tanh(...)/tanh(...) normalization (D-04: error with
+    # History/Delay state, otherwise warning).
+    for mt in _LINT_TANH.finditer(m):
+        open_pos = mt.end() - 1
+        close = open_pos + 1 + len(_paren_content(m, open_pos))
+        if close >= len(m) or m[close] != ")":
+            continue
+        if not _LINT_TANH_DIV.match(m, close + 1):
+            continue
+        line = _lint_line(m, mt.start())
+        if has_feedback_state:
+            out.append(ValidationResult(
+                "code", "error",
+                f"Line {line}: tanh(...)/tanh(...) normalization in a codebox with "
+                f"History/Delay state (a feedback path) -- the loop gain then moves "
+                f"with drive; normalize by the drive gain: tanh(x*g)/g",
+            ))
+        else:
+            out.append(ValidationResult(
+                "code", "warning",
+                f"Line {line}: tanh(...)/tanh(...) normalization -- on a feedback "
+                f"path the loop gain moves with drive; prefer tanh(x*g)/g",
+            ))
+
+    # Check 16: notes at `info` (the spec's "note", D-06).
+    else_ifs = list(_LINT_ELSE_IF.finditer(m))
+    if else_ifs:
+        out.append(ValidationResult(
+            "code", "info",
+            f"Line {_lint_line(m, else_ifs[0].start())}: 'else if' chain "
+            f"({len(else_ifs)} in total) -- valid GenExpr; the proven-safe codebox "
+            f"set nests else {{ if ... }} instead (precaution note)",
+        ))
+    peek2: list = []
+    for mt in _LINT_PEEK.finditer(m):
+        args = split_args(_paren_content(m, mt.end() - 1))
+        positional = [a for a in args if a.strip() and not _LINT_KWARG.match(a)]
+        if len(positional) == 2:
+            peek2.append(mt.start())
+    if peek2:
+        out.append(ValidationResult(
+            "code", "info",
+            f"Line {_lint_line(m, peek2[0])}: 2-argument peek ({len(peek2)} in "
+            f"total) -- valid in MAX; the proven-safe codebox set passes the "
+            f"channel: peek(buf, idx, 0) (style note)",
+        ))
+
+    return out
 
 
 def validate_js(code: str) -> list[ValidationResult]:
