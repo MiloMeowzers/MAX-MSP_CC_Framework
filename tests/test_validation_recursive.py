@@ -1,0 +1,455 @@
+"""Recursive, per-scope validation (Q19; review A7, S1, S2, G8 part).
+
+validate_patch walks every embedded patcher (``p``, embedded bpatcher, gen~,
+mc.gen~ ``data.patcher``, jit.gen, rnbo~ ...) through ``walk.iter_patchers``
+and runs Layers 1-5 on each with that scope's own rules. Nested findings
+carry ``ValidationResult.path`` (the box-id chain, ``obj-1/obj-2``) and a
+``[label > label] `` message prefix; top-level findings are unchanged.
+apply_fixes removes nested cords in their own scope only, and the save gate
+refuses a new file with a nested blocker.
+
+Saves run inside a throwaway git repo under ``tmp_path`` (fixture and
+helper copied from tests/test_save_gate.py, not imported).
+"""
+
+from __future__ import annotations
+
+import copy
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from src.maxpat.db_lookup import ObjectDatabase
+from src.maxpat.patcher import Patcher
+from src.maxpat.validation import (
+    ValidationResult,
+    apply_fixes,
+    has_blocking_errors,
+    validate_patch,
+)
+
+
+@pytest.fixture(scope="module")
+def db():
+    return ObjectDatabase()
+
+
+# ---------------------------------------------------------------------------
+# Builders (local, in the style of tests/test_domain_scope.py)
+# ---------------------------------------------------------------------------
+
+
+def _box(box_id, text, n_in=1, n_out=1, maxclass="newobj", outlettype=None, **extra):
+    box = {
+        "id": box_id,
+        "maxclass": maxclass,
+        "numinlets": n_in,
+        "numoutlets": n_out,
+        "outlettype": outlettype if outlettype is not None else [""] * n_out,
+        "patching_rect": [10.0, 10.0, 80.0, 22.0],
+    }
+    if text is not None:
+        box["text"] = text
+    box.update(extra)
+    return {"box": box}
+
+
+def _line(src, outlet, dst, inlet):
+    return {"patchline": {"source": [src, outlet], "destination": [dst, inlet]}}
+
+
+def _inner(boxes=None, lines=None, **keys):
+    d = {"boxes": boxes if boxes is not None else [], "lines": lines if lines is not None else []}
+    d.update(keys)
+    return d
+
+
+def _container(box_id, text, inner, n_in=1, n_out=1, maxclass="newobj", **extra):
+    entry = _box(box_id, text, n_in=n_in, n_out=n_out, maxclass=maxclass, **extra)
+    entry["box"]["patcher"] = inner
+    return entry
+
+
+def _patch(boxes=None, lines=None, **keys):
+    return {"patcher": _inner(boxes, lines, **keys)}
+
+
+def _sig(results):
+    return [(r.layer, r.level, r.message, r.proposed_removal, r.path) for r in results]
+
+
+def _a7_content():
+    """The A7 reproduction: osc~ (PD), *~ 0.5, cycle~ outlet 2 -> *~ (OOR)."""
+    boxes = [
+        _box("obj-1", "osc~ 440", 2, 1, outlettype=["signal"]),
+        _box("obj-2", "*~ 0.5", 2, 1, outlettype=["signal"]),
+        _box("obj-3", "cycle~ 440", 2, 1, outlettype=["signal"]),
+    ]
+    lines = [_line("obj-3", 2, "obj-2", 0)]
+    return boxes, lines
+
+
+def _osc_p(box_id="obj-1", label="p synth"):
+    return _container(box_id, label, _inner([_box("obj-10", "osc~ 440", 2, 1, outlettype=["signal"])]))
+
+
+def _osc_hits(results):
+    return [r for r in results if "'osc~' is a Pure Data object" in r.message]
+
+
+# ---------------------------------------------------------------------------
+# A7: nested findings are reported with their path
+# ---------------------------------------------------------------------------
+
+
+class TestNestedFindings:
+    def test_osc_in_p_synth(self, db):
+        results = validate_patch(_patch([_osc_p()]), db=db)
+        hits = _osc_hits(results)
+        assert len(hits) == 1, results
+        r = hits[0]
+        assert r.layer == "objects" and r.level == "error"
+        assert r.path == "obj-1"
+        assert r.message == "[p synth] 'osc~' is a Pure Data object, not MAX. Use cycle~ instead."
+
+    def test_top_level_path_empty(self, db):
+        boxes, lines = _a7_content()
+        results = validate_patch(_patch(boxes, lines), db=db)
+        assert results
+        assert all(r.path == "" for r in results)
+        assert not any(r.message.startswith("[") for r in results)
+
+    def test_nested_parity_with_top_level(self, db):
+        """Invariant: content wrapped in `p synth` gives exactly its top-level
+        findings, prefixed and tagged with the p's path."""
+        boxes, lines = _a7_content()
+        top = validate_patch(_patch(copy.deepcopy(boxes), copy.deepcopy(lines)), db=db)
+        wrapped = _patch([_container("obj-1", "p synth", _inner(boxes, lines))])
+        res = validate_patch(wrapped, db=db)
+        nested = [r for r in res if r.path == "obj-1"]
+        expected = [
+            (r.layer, r.level, "[p synth] " + r.message, r.proposed_removal, "obj-1")
+            for r in top
+        ]
+        assert _sig(nested) == expected
+        assert [r for r in res if r.path not in ("", "obj-1")] == []
+        # The A7 content is a real blocker set at either depth.
+        assert any(r.proposed_removal == ("obj-3", 2, "obj-2", 0) for r in nested)
+        assert has_blocking_errors(res)
+
+    def test_oor_cord_in_subpatcher_proposed_with_path(self, db):
+        boxes, lines = _a7_content()
+        res = validate_patch(_patch([_container("obj-1", "p synth", _inner(boxes, lines))]), db=db)
+        props = [r for r in res if r.proposed_removal is not None]
+        assert len(props) == 1
+        assert props[0].proposed_removal == ("obj-3", 2, "obj-2", 0)
+        assert props[0].path == "obj-1"
+        assert props[0].message.startswith("[p synth] Outlet index 2 out of bounds on 'obj-3'")
+
+    def test_order_top_then_preorder(self, db):
+        d = _patch([
+            _box("obj-9", "osc~ 1", 2, 1, outlettype=["signal"]),
+            _container("obj-1", "p a", _inner([
+                _box("obj-10", "osc~ 2", 2, 1, outlettype=["signal"]),
+                _container("obj-2", "p b", _inner([
+                    _box("obj-20", "osc~ 3", 2, 1, outlettype=["signal"]),
+                ])),
+            ])),
+            _container("obj-3", "p c", _inner([
+                _box("obj-30", "osc~ 4", 2, 1, outlettype=["signal"]),
+            ])),
+        ])
+        res = validate_patch(d, db=db)
+        paths = [r.path for r in res]
+        first_nested = next(i for i, p in enumerate(paths) if p)
+        assert all(p == "" for p in paths[:first_nested])
+        seen = []
+        for p in paths[first_nested:]:
+            assert p != ""
+            if not seen or seen[-1] != p:
+                seen.append(p)
+        assert seen == ["obj-1", "obj-1/obj-2", "obj-3"]
+        deep = [r for r in _osc_hits(res) if r.path == "obj-1/obj-2"]
+        assert deep[0].message.startswith("[p a > p b] ")
+
+    def test_external_not_loaded(self, db, monkeypatch):
+        import builtins
+
+        opened = []
+        real_open = builtins.open
+
+        def spy(file, *a, **kw):
+            opened.append(str(file))
+            return real_open(file, *a, **kw)
+
+        d = _patch([
+            _box("obj-1", None, 1, 1, maxclass="bpatcher", name="nowhere-x.maxpat"),
+            _box("obj-2", "poly~ nowhere-voice 8", 1, 1),
+        ])
+        monkeypatch.setattr(builtins, "open", spy)
+        res = validate_patch(d, db=db)
+        monkeypatch.undo()
+        assert not any("nowhere" in f for f in opened)
+        assert all(r.path == "" for r in res)
+
+    def test_deep_chain(self, db):
+        cur = _inner([_box("obj-x", "osc~ 1", 2, 1, outlettype=["signal"])])
+        for i in range(1500, 0, -1):
+            cur = _inner([_container(f"obj-{i}", "p d", cur)])
+        res = validate_patch({"patcher": cur}, db=db)
+        hits = _osc_hits(res)
+        assert len(hits) == 1
+        assert hits[0].path.count("/") == 1499
+        assert hits[0].path.startswith("obj-1/obj-2/")
+
+
+# ---------------------------------------------------------------------------
+# apply_fixes: nested proposals are removed in their own scope only
+# ---------------------------------------------------------------------------
+
+
+def _nested_oor_with_twin():
+    """Top-level cord with the SAME 4-tuple as the nested OOR cord."""
+    boxes, lines = _a7_content()
+    top_boxes = [
+        _container("obj-1", "p synth", _inner(boxes, lines)),
+        _box("obj-3", "cycle~ 440", 2, 3, outlettype=["signal", "", ""]),
+        _box("obj-2", "*~ 0.5", 2, 1, outlettype=["signal"]),
+    ]
+    return _patch(top_boxes, [_line("obj-3", 2, "obj-2", 0)])
+
+
+class TestApplyFixesNested:
+    def test_dict_removes_inner_only(self, db):
+        d = _nested_oor_with_twin()
+        res = validate_patch(d, db=db)
+        assert [r.proposed_removal for r in res if r.proposed_removal] == [("obj-3", 2, "obj-2", 0)]
+        inner_lines = d["patcher"]["boxes"][0]["box"]["patcher"]["lines"]
+        top_lines = d["patcher"]["lines"]
+        removed = apply_fixes(d, res)
+        assert removed == [("obj-1", "obj-3", 2, "obj-2", 0)]
+        assert d["patcher"]["boxes"][0]["box"]["patcher"]["lines"] is inner_lines
+        assert inner_lines == []
+        assert d["patcher"]["lines"] is top_lines
+        assert len(top_lines) == 1
+        assert [r for r in validate_patch(d, db=db) if r.proposed_removal] == []
+
+    def test_patcher_removes_inner_only(self, db):
+        d = _nested_oor_with_twin()
+        p = Patcher.from_dict(copy.deepcopy(d), db=db)
+        res = validate_patch(p, db=db)
+        removed = apply_fixes(p, res)
+        assert removed == [("obj-1", "obj-3", 2, "obj-2", 0)]
+        inner = p.boxes[0]._inner_patcher
+        assert inner.lines == []
+        assert len(p.lines) == 1
+        assert [r for r in validate_patch(p, db=db) if r.proposed_removal] == []
+
+    def _mcgen(self):
+        inner = _inner(
+            [
+                _box("obj-11", "in 1", 0, 1, outlettype=[""]),
+                _box("obj-12", "out 1", 1, 0, outlettype=[]),
+            ],
+            [_line("obj-11", 3, "obj-12", 0)],
+            classnamespace="dsp.gen",
+        )
+        top = _box("obj-1", "mc.gen~ @chans 2", 1, 1, outlettype=["multichannelsignal"],
+                   data={"patcher": inner})
+        return _patch([top])
+
+    def test_mcgen_data_patcher_dict(self, db):
+        d = self._mcgen()
+        res = validate_patch(d, db=db)
+        props = [r for r in res if r.proposed_removal]
+        assert len(props) == 1 and props[0].path == "obj-1"
+        assert props[0].message.startswith("[mc.gen~] ")
+        removed = apply_fixes(d, res)
+        assert removed == [("obj-1", "obj-11", 3, "obj-12", 0)]
+        assert d["patcher"]["boxes"][0]["box"]["data"]["patcher"]["lines"] == []
+        assert [r for r in validate_patch(d, db=db) if r.proposed_removal] == []
+
+    def test_mcgen_data_patcher_patcher(self, db):
+        p = Patcher.from_dict(self._mcgen(), db=db)
+        res = validate_patch(p, db=db)
+        removed = apply_fixes(p, res)
+        assert removed == [("obj-1", "obj-11", 3, "obj-12", 0)]
+        out = p.to_dict()
+        assert out["patcher"]["boxes"][0]["box"]["data"]["patcher"]["lines"] == []
+        assert [r for r in validate_patch(p, db=db) if r.proposed_removal] == []
+
+    def test_mixed_top_and_nested_result_order(self, db):
+        boxes, lines = _a7_content()
+        d = _patch(
+            [
+                _box("obj-5", "number", 1, 2, maxclass="number", outlettype=["", "bang"]),
+                _box("obj-6", "print", 1, 0, outlettype=[]),
+                _container("obj-1", "p synth", _inner(boxes, lines)),
+            ],
+            [_line("obj-5", 0, "obj-6", 7)],
+        )
+        res = validate_patch(d, db=db)
+        removed = apply_fixes(d, res)
+        assert removed == [("obj-5", 0, "obj-6", 7), ("obj-1", "obj-3", 2, "obj-2", 0)]
+        assert d["patcher"]["lines"] == []
+        assert d["patcher"]["boxes"][2]["box"]["patcher"]["lines"] == []
+        assert [r for r in validate_patch(d, db=db) if r.proposed_removal] == []
+
+    def test_top_level_unchanged_return_shape(self, db):
+        boxes, lines = _a7_content()
+        d = _patch(boxes, lines)
+        res = validate_patch(d, db=db)
+        assert apply_fixes(d, res) == [("obj-3", 2, "obj-2", 0)]
+
+
+# ---------------------------------------------------------------------------
+# Scope rules
+# ---------------------------------------------------------------------------
+
+
+def _unterminated(results):
+    return [r for r in results if "Unterminated signal chain" in r.message]
+
+
+class TestScopeRules:
+    def _cyc(self):
+        return _box("obj-10", "cycle~ 440", 2, 1, outlettype=["signal"])
+
+    def test_gen_scope_skips_layer4(self, db):
+        d = _patch([_container("obj-1", "gen~", _inner([self._cyc()]))])
+        assert _unterminated(validate_patch(d, db=db)) == []
+
+    def test_top_level_gen_skips_layer4(self, db):
+        d = _patch([self._cyc()], classnamespace="dsp.gen")
+        assert _unterminated(validate_patch(d, db=db)) == []
+
+    def test_p_scope_runs_layer4(self, db):
+        d = _patch([_container("obj-1", "p x", _inner([self._cyc()]))])
+        hits = _unterminated(validate_patch(d, db=db))
+        assert len(hits) == 1
+        assert hits[0].path == "obj-1"
+        assert hits[0].message.startswith("[p x] Unterminated signal chain")
+
+    def test_layer1_error_prunes_scope(self, db):
+        d = _patch([
+            _container("obj-1", "p bad", _inner(
+                [_container("obj-2", "p deeper", _inner([
+                    _box("obj-20", "osc~ 1", 2, 1, outlettype=["signal"]),
+                ]))],
+                lines="x",
+            )),
+            _osc_p("obj-3", "p sib"),
+        ])
+        res = validate_patch(d, db=db)
+        json_errs = [r for r in res if r.layer == "json"]
+        assert len(json_errs) == 1
+        assert json_errs[0].path == "obj-1"
+        assert json_errs[0].message == "[p bad] Missing or invalid 'lines' array in patcher"
+        osc = _osc_hits(res)
+        assert [r.path for r in osc] == ["obj-3"]
+        assert not any(r.path.startswith("obj-1") and r.layer != "json" for r in res)
+
+    def test_community_warning_once_per_patch(self, db, monkeypatch):
+        info = dict(db.get_package_info("FluCoMa") or {})
+        info["extracted"] = False
+        monkeypatch.setitem(db._package_info, "FluCoMa", info)
+        fl = lambda i: _box(i, "fluid.ampfeature~", 1, 2, outlettype=["signal", ""])  # noqa: E731
+        d = _patch([fl("obj-1"), _container("obj-2", "p f", _inner([fl("obj-20")]))])
+        res = validate_patch(d, db=db)
+        hits = [r for r in res if r.layer == "packages" and "not extracted" in r.message]
+        assert len(hits) == 1
+        assert hits[0].path == ""
+
+
+# ---------------------------------------------------------------------------
+# Purity
+# ---------------------------------------------------------------------------
+
+
+def _mixed_nested():
+    boxes, lines = _a7_content()
+    gen_inner = _inner([
+        _box("obj-21", "in 1", 0, 1, outlettype=[""]),
+        _box("obj-22", "codebox", 1, 1, maxclass="codebox", code="out1 = in1;"),
+    ], [_line("obj-21", 0, "obj-22", 0)], classnamespace="dsp.gen")
+    return _patch([
+        _container("obj-1", "p synth", _inner(boxes, lines)),
+        _container("obj-2", "gen~", gen_inner, outlettype=["signal"]),
+        _box("obj-3", "mc.gen~", 1, 1, outlettype=["multichannelsignal"],
+             data={"patcher": copy.deepcopy(gen_inner)}),
+    ])
+
+
+class TestPurity:
+    def test_nested_dict_unchanged(self, db):
+        d = _mixed_nested()
+        before = copy.deepcopy(d)
+        validate_patch(d, db=db)
+        assert d == before
+
+    def test_patcher_unchanged_and_parity(self, db):
+        d = _mixed_nested()
+        p = Patcher.from_dict(copy.deepcopy(d), db=db)
+        before = p.to_dict()
+        res_p = validate_patch(p, db=db)
+        assert p.to_dict() == before
+        assert _sig(res_p) == _sig(validate_patch(d, db=db))
+        assert any(r.path == "obj-1" for r in res_p)
+
+
+# ---------------------------------------------------------------------------
+# Save gate: a nested blocker refuses a new file
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _isolate_git_env(monkeypatch):
+    """Make sure no inherited git env var can redirect git to another repo."""
+    for var in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+        monkeypatch.delenv(var, raising=False)
+
+
+def _git(root: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", *args], cwd=str(root), capture_output=True, text=True, check=True,
+    )
+    return result.stdout
+
+
+def _repo(tmp_path: Path) -> Path:
+    """Create a throwaway git repo at tmp_path/repo and return its resolved root."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    hooks = tmp_path / "empty-hooks"
+    hooks.mkdir()
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "test@example.com")
+    _git(root, "config", "user.name", "Save Gate Test")
+    _git(root, "config", "commit.gpgsign", "false")
+    _git(root, "config", "core.hooksPath", str(hooks))
+    return root.resolve()
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
+class TestSaveGateNested:
+    def test_new_file_with_nested_osc_refused(self, tmp_path):
+        from src.maxpat.hooks import PatchValidationError, save_patch_roundtrip
+
+        root = _repo(tmp_path)
+        P = root / "patches" / "demo" / "generated" / "demo.maxpat"
+        d = Patcher().to_dict()
+        d["patcher"]["boxes"].append(_osc_p())
+
+        with pytest.raises(PatchValidationError) as excinfo:
+            save_patch_roundtrip(d, P)
+
+        vfind = [
+            f for f in excinfo.value.findings
+            if isinstance(f, ValidationResult) and f.path == "obj-1"
+        ]
+        assert vfind, excinfo.value.findings
+        assert vfind[0].message.startswith("[p synth] ")
+        assert "'osc~' is a Pure Data object" in vfind[0].message
+        assert not P.exists()

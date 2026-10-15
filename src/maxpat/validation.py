@@ -1,12 +1,22 @@
 """Multi-layer validation pipeline for MAX patches.
 
-Four layers run sequentially, stopping early on structural errors:
+Layers run sequentially per patcher scope, stopping early on structural errors:
   Layer 1 (json):        JSON structure checks (patcher, boxes, lines)
   Layer 2 (objects):     Object existence against ObjectDatabase, plus the
                          implied RNBO/Gen restriction of rnbo/gen-only names
                          against the patch scope (max / gen / rnbo; Q12 / C3)
   Layer 3 (connections): Connection index bounds and signal/control type checks
   Layer 4 (domain):      Domain-specific rules (gain staging, unterminated chains, feedback)
+  Layer 4b / 5:          Explicit domain restrictions; embedded GenExpr codeboxes
+
+Recursive (Q19 / review A7): the top level runs first, unchanged; then every
+embedded patcher (``p``, embedded bpatcher / poly~, gen~, mc.gen~
+``data.patcher``, jit.gen, rnbo~ ...) found by ``walk.iter_patchers`` runs
+the same layers with its own scope, in walker pre-order. A nested finding
+carries ``ValidationResult.path`` (the box-id chain, ``obj-1/obj-2``) and a
+``[p synth > gen~] `` message prefix; a top-level finding has ``path == ""``
+and an unprefixed message. A gen scope skips Layer 4 (MSP / Max-UI domain
+rules). External abstractions are never loaded.
 
 Validation is pure: ``validate_patch`` never mutates its input, and dict and
 Patcher input produce identical results. A cord Layer 3 considers invalid is
@@ -27,6 +37,7 @@ import re as _re
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
+from src.maxpat import walk
 from src.maxpat.db_lookup import DOMAIN_SCOPES, ObjectDatabase, detect_patcher_scope
 from src.maxpat.maxclass_map import is_ui_object, UI_MAXCLASSES
 
@@ -119,11 +130,16 @@ class ValidationResult:
         auto_fixed: Legacy flag kept for back-compatibility; validate_patch
             never sets it (validation no longer modifies anything).
         proposed_removal: ``(src_id, src_outlet, dst_id, dst_inlet)`` of a
-            top-level cord the validator considers invalid, or None. Applied
-            only by an explicit ``apply_fixes`` call.
+            cord the validator considers invalid, or None. The ids are local
+            to the patcher named by *path*. Applied only by an explicit
+            ``apply_fixes`` call.
+        path: Scope of the finding (Q19): ``""`` at the top level, otherwise
+            the box-id chain of the embedded patcher it was found in
+            (``obj-1/obj-2``). Nested findings also carry the label prefix
+            (``[p synth > gen~] ``) in *message*.
     """
 
-    __slots__ = ("layer", "level", "message", "auto_fixed", "proposed_removal")
+    __slots__ = ("layer", "level", "message", "auto_fixed", "proposed_removal", "path")
 
     def __init__(
         self,
@@ -132,6 +148,7 @@ class ValidationResult:
         message: str,
         auto_fixed: bool = False,
         proposed_removal: tuple | list | None = None,
+        path: str = "",
     ):
         self.layer = layer
         self.level = level
@@ -140,6 +157,7 @@ class ValidationResult:
         self.proposed_removal = (
             tuple(proposed_removal) if proposed_removal is not None else None
         )
+        self.path = path
 
     def __repr__(self) -> str:
         return f"[{self.layer}:{self.level}] {self.message}"
@@ -156,7 +174,7 @@ def validate_patch(
     *,
     scope: str | None = None,
 ) -> list[ValidationResult]:
-    """Run the full four-layer validation pipeline on a patch.
+    """Run the full validation pipeline on a patch and every embedded patcher.
 
     Args:
         patch: Either a Patcher instance or a raw dict in .maxpat format.
@@ -177,7 +195,19 @@ def validate_patch(
             the scope.
 
     Returns:
-        Combined list of ValidationResult from all layers.
+        Combined list of ValidationResult from all layers and scopes: the
+        top level first (exactly as before Q19), then each embedded
+        patcher in ``walk.iter_patchers`` pre-order.
+
+    Recursion (Q19 / review A7): every embedded patcher dict (``p``,
+    embedded bpatcher / poly~, gen~ / mc.gen~ ``data.patcher`` / jit.gen,
+    rnbo~ ...) runs Layers 1-5 with its own scope (``walk.scope_of`` of its
+    context; a ``p`` inherits its parent's gen / rnbo scope). Nested results
+    get ``path`` (the box-id chain) and a ``[label > label] `` message
+    prefix. A nested Layer-1 error skips that scope and every scope under
+    it; sibling scopes still run. A gen scope skips Layer 4 (MSP / Max-UI
+    rules). Layer 2d warns once per unextracted package per call. External
+    files are never loaded.
 
     The input is never mutated (dict or Patcher). Cords Layer 3 considers
     invalid come back as errors with ``proposed_removal`` set; apply them
@@ -219,6 +249,42 @@ def validate_patch(
     if any(r.level == "error" for r in layer1):
         return results  # Stop early -- structure is broken
 
+    state = _ScopeState()
+
+    # Layers 2-5 on the top level (unchanged order and messages)
+    results.extend(_validate_scope_layers(
+        patch_dict, db, allowed_packages, scope, nested=False, state=state,
+    ))
+
+    # Every embedded patcher, in walker pre-order (Q19 / A7)
+    results.extend(_validate_nested_scopes(
+        patch_dict, db, allowed_packages, scope, state,
+    ))
+
+    return results
+
+
+class _ScopeState:
+    """Per-``validate_patch`` state shared across scopes."""
+
+    __slots__ = ("warned_packages",)
+
+    def __init__(self) -> None:
+        self.warned_packages: set[str] = set()
+
+
+def _validate_scope_layers(
+    patch_dict: dict,
+    db: ObjectDatabase,
+    allowed_packages: list[str] | None,
+    scope: str,
+    *,
+    nested: bool,
+    state: _ScopeState,
+) -> list[ValidationResult]:
+    """Layers 2-5 on one scope (``patch_dict`` is ``{"patcher": ...}``)."""
+    results: list[ValidationResult] = []
+
     # Layer 2: Object existence
     results.extend(_validate_objects_exist(patch_dict, db, scope))
 
@@ -228,14 +294,17 @@ def validate_patch(
     # Layer 2c: Package gating (defense in depth)
     results.extend(_validate_package_gating(patch_dict, db, allowed_packages))
 
-    # Layer 2d: Community package extracted check
-    results.extend(_validate_community_extracted(patch_dict, db))
+    # Layer 2d: Community package extracted check (once per package per call)
+    results.extend(_validate_community_extracted(
+        patch_dict, db, warned_packages=state.warned_packages,
+    ))
 
     # Layer 3: Connection bounds and signal types (pure; proposes removals)
     results.extend(_validate_connections(patch_dict, db))
 
-    # Layer 4: Domain-specific rules
-    results.extend(_validate_domain_rules(patch_dict, db))
+    # Layer 4: Domain-specific rules -- MSP / Max-UI only, skipped in gen
+    if scope != "gen":
+        results.extend(_validate_domain_rules(patch_dict, db))
 
     # Layer 4b: Domain restriction guard (Phase 29 / VALID-02)
     results.extend(_validate_domain_restrictions(patch_dict, db, scope))
@@ -243,6 +312,47 @@ def validate_patch(
     # Layer 5: Embedded GenExpr codebox walker (Phase 29 / VALID-04)
     results.extend(_validate_embedded_genexpr(patch_dict, db))
 
+    return results
+
+
+def _tag(results: list[ValidationResult], path: tuple) -> list[ValidationResult]:
+    """Set ``path`` and the label prefix on nested results (in place)."""
+    ids = walk.path_ids(path)
+    prefix = walk.path_prefix(path)
+    for r in results:
+        r.path = ids
+        r.message = prefix + r.message
+    return results
+
+
+def _validate_nested_scopes(
+    patch_dict: dict,
+    db: ObjectDatabase,
+    allowed_packages: list[str] | None,
+    scope: str,
+    state: _ScopeState,
+) -> list[ValidationResult]:
+    """Layers 1-5 on every embedded patcher, tagged with its path."""
+    results: list[ValidationResult] = []
+    pruned: list[tuple] = []
+    for path, inner, context in walk.iter_patchers(patch_dict, scope=scope):
+        if not path:
+            continue
+        if any(path[:len(p)] == p for p in pruned):
+            continue
+        wrapped = {"patcher": inner}
+        layer1 = _tag(_validate_json_structure(wrapped), path)
+        results.extend(layer1)
+        if any(r.level == "error" for r in layer1):
+            pruned.append(path)
+            continue
+        results.extend(_tag(
+            _validate_scope_layers(
+                wrapped, db, allowed_packages, walk.scope_of(context),
+                nested=True, state=state,
+            ),
+            path,
+        ))
     return results
 
 
@@ -278,31 +388,78 @@ def has_blocking_errors(
 
 
 def apply_fixes(patch, results: list[ValidationResult]) -> list[tuple]:
-    """Remove the top-level cords proposed for removal in *results*.
+    """Remove the cords proposed for removal in *results*, in their own scope.
 
     This is the ONLY code path that removes cords; ``validate_patch`` never
     does. Accepts a raw .maxpat dict (lines are removed by slice-assignment
-    on ``patch["patcher"]["lines"]`` so caller references stay valid) or a
-    Patcher (``patch.lines`` is filtered in place).
+    so caller references stay valid) or a Patcher (``lines`` filtered in
+    place).
 
-    Returns the distinct proposed keys that matched at least one line, in
-    order. A no-op returning ``[]`` when nothing is proposed, nothing
-    matches, or the dict has no ``patcher.lines``. Re-run ``validate_patch``
-    afterwards: removing a cord can change other findings.
+    Proposals are grouped by ``ValidationResult.path`` (Q19). The top level
+    (``path == ""``) behaves exactly as before. A nested proposal is removed
+    only from the lines of the patcher whose box-id chain equals its path:
+    for a dict via ``walk.iter_patchers``; for a Patcher via each box's
+    inner Patcher, or the mc.gen~ ``data.patcher`` dict kept in the box's
+    raw attributes. Every other lines list is untouched, including one
+    holding a cord with the same 4-tuple. A path that names no scope, or
+    more than one, removes nothing.
+
+    Returns the distinct matched proposals in result order: the 4-tuple
+    ``(src_id, src_outlet, dst_id, dst_inlet)`` for a top-level cord, the
+    5-tuple ``(path, src_id, src_outlet, dst_id, dst_inlet)`` for a nested
+    one. A no-op returning ``[]`` when nothing is proposed or matches.
+    Re-run ``validate_patch`` afterwards: removing a cord can change other
+    findings.
     """
     from src.maxpat.patcher import Patcher as PatcherClass
 
-    keys: list[tuple] = []
+    order: list[tuple[str, tuple]] = []
     for r in results:
         key = getattr(r, "proposed_removal", None)
-        if key is not None and key not in keys:
-            keys.append(key)
-    if not keys:
+        if key is None:
+            continue
+        path = getattr(r, "path", "")
+        if not isinstance(path, str):
+            path = ""
+        item = (path, key)
+        if item not in order:
+            order.append(item)
+    if not order:
         return []
+
+    by_path: dict[str, list[tuple]] = {}
+    for path, key in order:
+        by_path.setdefault(path, []).append(key)
+
+    matched: set[tuple[str, tuple]] = set()
+    is_patcher = isinstance(patch, PatcherClass)
+    scopes = None
+    for path, keys in by_path.items():
+        if path == "":
+            for k in _apply_top_level(patch, keys, is_patcher):
+                matched.add(("", k))
+            continue
+        if scopes is None:
+            scopes = _patcher_scope_map(patch) if is_patcher else _dict_scope_map(patch)
+        targets = scopes.get(path, [])
+        if len(targets) != 1:
+            continue  # unknown or ambiguous path: remove nothing
+        for k in _filter_scope_lines(targets[0], set(keys)):
+            matched.add((path, k))
+
+    out: list[tuple] = []
+    for path, key in order:
+        if (path, key) in matched:
+            out.append(key if path == "" else (path,) + tuple(key))
+    return out
+
+
+def _apply_top_level(patch, keys: list[tuple], is_patcher: bool) -> set[tuple]:
+    """Top-level removal, unchanged from pre-Q19 apply_fixes."""
     wanted = set(keys)
     matched: set[tuple] = set()
 
-    if isinstance(patch, PatcherClass):
+    if is_patcher:
         kept = []
         for line in patch.lines:
             k = (line.source_id, line.source_outlet, line.dest_id, line.dest_inlet)
@@ -315,10 +472,12 @@ def apply_fixes(patch, results: list[ValidationResult]) -> list[tuple]:
         patcher = patch.get("patcher") if isinstance(patch, dict) else None
         lines = patcher.get("lines") if isinstance(patcher, dict) else None
         if not isinstance(lines, list):
-            return []
+            return matched
         kept = []
         for entry in lines:
             patchline = entry.get("patchline", {}) if isinstance(entry, dict) else {}
+            if not isinstance(patchline, dict):
+                patchline = {}
             k = _line_key(patchline)
             if k in wanted:
                 matched.add(k)
@@ -326,7 +485,96 @@ def apply_fixes(patch, results: list[ValidationResult]) -> list[tuple]:
                 kept.append(entry)
         lines[:] = kept
 
-    return [k for k in keys if k in matched]
+    return matched
+
+
+def _filter_scope_lines(target, wanted: set[tuple]) -> set[tuple]:
+    """Remove *wanted* cords from one scope (a Patcher or a patcher dict)."""
+    from src.maxpat.patcher import Patcher as PatcherClass
+
+    matched: set[tuple] = set()
+    if isinstance(target, PatcherClass):
+        kept = []
+        for line in target.lines:
+            k = (line.source_id, line.source_outlet, line.dest_id, line.dest_inlet)
+            if k in wanted:
+                matched.add(k)
+            else:
+                kept.append(line)
+        target.lines[:] = kept
+        return matched
+    lines = target.get("lines") if isinstance(target, dict) else None
+    if not isinstance(lines, list):
+        return matched
+    kept = []
+    for entry in lines:
+        patchline = entry.get("patchline", {}) if isinstance(entry, dict) else {}
+        if not isinstance(patchline, dict):
+            patchline = {}
+        k = _line_key(patchline)
+        if k in wanted:
+            matched.add(k)
+        else:
+            kept.append(entry)
+    lines[:] = kept
+    return matched
+
+
+def _dict_scope_map(patch) -> dict[str, list]:
+    """``path_ids`` -> [patcher dict] for every nested scope of a dict."""
+    scopes: dict[str, list] = {}
+    for path, inner, _ in walk.iter_patchers(patch):
+        if path:
+            scopes.setdefault(walk.path_ids(path), []).append(inner)
+    return scopes
+
+
+def _patcher_scope_map(patcher) -> dict[str, list]:
+    """``path_ids`` -> [inner Patcher or patcher dict] for a Patcher.
+
+    Mirrors the ids ``validate_patch`` sees through ``Patcher.to_dict()``:
+    a box's inner Patcher (``_inner_patcher``) when present, else the
+    mc.gen~ ``data.patcher`` dict in the box's raw attributes (``_raw``
+    for a loaded box, ``extra_attrs`` for a created one), walked in dict
+    mode below that.
+    """
+    from src.maxpat.patcher import Patcher as PatcherClass
+
+    scopes: dict[str, list] = {}
+    stack: list[tuple[str, object]] = [("", patcher)]
+    seen: set[int] = set()
+    while stack:
+        path, node = stack.pop()
+        if id(node) in seen:
+            continue
+        seen.add(id(node))
+        if path:
+            scopes.setdefault(path, []).append(node)
+        if isinstance(node, PatcherClass):
+            for box in node.boxes:
+                box_id = str(box.id) if box.id is not None else "?"
+                child_path = f"{path}/{box_id}" if path else box_id
+                inner = getattr(box, "_inner_patcher", None)
+                if inner is not None:
+                    stack.append((child_path, inner))
+                    continue
+                raw = box._raw if getattr(box, "_raw", None) is not None else box.extra_attrs
+                data_inner = walk.inner_patcher({"data": raw.get("data")}) if isinstance(raw, dict) else None
+                if data_inner is not None:
+                    stack.append((child_path, data_inner))
+        elif isinstance(node, dict):
+            boxes = node.get("boxes")
+            if not isinstance(boxes, list):
+                continue
+            for entry in boxes:
+                box = entry.get("box") if isinstance(entry, dict) else None
+                inner = walk.inner_patcher(box)
+                if inner is None:
+                    continue
+                box_id = box.get("id")
+                box_id = str(box_id) if box_id is not None else "?"
+                stack.append((f"{path}/{box_id}", inner))
+    return scopes
 
 
 # ===========================================================================
@@ -557,15 +805,19 @@ def _validate_package_gating(
 def _validate_community_extracted(
     patch_dict: dict,
     db: ObjectDatabase,
+    warned_packages: set | None = None,
 ) -> list[ValidationResult]:
     """Layer 2d: Warn when patch uses objects from unextracted community packages.
 
     Per D-07/D-09: Block generation with community packages that have not been
     locally extracted. The check uses the ``extracted`` flag in package_info.json
-    (no filesystem probing).
+    (no filesystem probing). *warned_packages* is shared across the scopes of
+    one ``validate_patch`` call so a package warns once per patch (Q19);
+    None starts a fresh set.
     """
     results: list[ValidationResult] = []
-    warned_packages: set[str] = set()
+    if warned_packages is None:
+        warned_packages = set()
 
     for box_entry in patch_dict["patcher"]["boxes"]:
         box = box_entry.get("box", {})
@@ -1072,21 +1324,18 @@ def _validate_domain_restrictions(
     db: ObjectDatabase,
     scope: str = "max",
 ) -> list[ValidationResult]:
-    """Hard-block top-level boxes whose domain_restricted whitelist forbids
-    the top-level patcher's scope (*scope*: max / gen / rnbo; Q12).
+    """Hard-block boxes whose domain_restricted whitelist forbids the scope
+    of the patcher they sit in (*scope*: max / gen / rnbo; Q12).
 
     Per D-05 (kept): explicit `domain_restricted` only — implied RNBO/Gen
     restrictions live in Layer 2. A box whose explicit restriction includes
     *scope* is allowed (``floor~`` in an rnbo patcher). At Max scope the
-    message is unchanged. Per D-07 (kept): top-level scope only — no recursion into
-    subpatchers or rnbo~ inner patchers. Per D-08: always ERROR severity,
-    auto_fixed=False (auto-removing the box would mangle the patch; emit
-    error and let the caller decide).
-
-    Catches the canonical violation (`floor~` at MSP top level outside
-    an `rnbo~` container) and stays simple. Edge cases like nested
-    `p subpatcher` containing a domain-restricted object outside any
-    rnbo~ are explicitly out of scope this phase (D-07).
+    message is unchanged. Runs in every scope: ``validate_patch`` calls it
+    for the top level and for each embedded patcher with that patcher's own
+    scope (Q19 retired D-07, "top-level only"), so ``floor~`` inside gen~
+    or inside a ``p`` in a Max patch is flagged with its path. Per D-08:
+    always ERROR severity, auto_fixed=False (auto-removing the box would
+    mangle the patch; emit error and let the caller decide).
     """
     results: list[ValidationResult] = []
     for box_entry in patch_dict["patcher"]["boxes"]:

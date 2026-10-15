@@ -682,11 +682,12 @@ class TestLayer4DomainRules:
 # ===========================================================================
 
 class TestDomainGuard:
-    """VALID-02 / D-05..D-08: top-level boxes with domain_restricted
-    annotations emit an ERROR ValidationResult. Top-level only — no
-    recursion into subpatchers (D-07). Always ERROR + auto_fixed=False
-    (D-08). Production fixture: floor~ has domain_restricted: ['rnbo']
-    in overrides.json (line ~11058)."""
+    """VALID-02 / D-05..D-08: boxes with domain_restricted annotations
+    emit an ERROR ValidationResult. Layer 4b runs in every scope (the top
+    level and each embedded patcher, with that patcher's own scope); the
+    D-07 "top-level only, no recursion" rule was retired in Q19. Always
+    ERROR + auto_fixed=False (D-08). Production fixture: floor~ has
+    domain_restricted: ['rnbo'] in overrides.json."""
 
     def test_floor_tilde_top_level_error(self, db):
         """floor~ at top level (outside rnbo~) emits ERROR naming the
@@ -710,11 +711,10 @@ class TestDomainGuard:
         # Suggestion to wrap
         assert "Wrap in" in domain_errors[0].message
 
-    def test_floor_tilde_in_gen_subpatcher_silent(self, db):
-        """REGRESSION (R6): floor~ nested in gen~ inner patcher must NOT
-        fire — D-07 top-level only. The walker iterates outer boxes only."""
-        # Outer patcher contains a single gen~ box; its inner patcher
-        # contains floor~. Domain guard MUST NOT recurse.
+    def test_floor_tilde_in_gen_subpatcher_flagged_with_path(self, db):
+        """Q19 (retires D-07): floor~ nested in a gen~ inner patcher is
+        checked in that gen scope and flagged, tagged with the gen~ box's
+        path and the ``[gen~] `` label prefix."""
         outer_gen_box = {
             "box": {
                 "id": "gen-1",
@@ -747,9 +747,11 @@ class TestDomainGuard:
             and "floor~" in r.message
             and "is restricted to" in r.message
         ]
-        assert floor_errors == [], (
-            f"D-07 violated: domain guard recursed into gen~ inner patcher. "
-            f"Got: {floor_errors}"
+        assert len(floor_errors) == 1, [r.message for r in results]
+        err = floor_errors[0]
+        assert err.path == "gen-1"
+        assert err.message == (
+            "[gen~] 'floor~' is restricted to ['rnbo']; not allowed in a gen patcher."
         )
 
     def test_unrestricted_object_silent(self, db):
