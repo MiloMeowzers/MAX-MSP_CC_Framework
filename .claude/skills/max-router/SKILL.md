@@ -75,7 +75,8 @@ When dispatching to multiple agents, minimize total SKILL.md context loaded.
 | Python API References | domain-specific (always load) | rnbo |
 | Editing Existing Patches | shared -- skip for secondaries | all agents |
 | Output Protocol (New Patches) | shared -- skip for secondaries | all agents |
-| Output Protocol (Edited Patches) | shared -- skip for secondaries | all agents |
+| Output Protocol (Edited Patches) | shared -- skip for secondaries | shared-capabilities.md (pointer in all agents) |
+| Builder API (stub) | shared -- skip for secondaries | patch, ui (full block in shared-capabilities.md) |
 | When to Use / When NOT to Use | shared -- skip for secondaries | all agents |
 | Bpatcher Argument Substitution | shared -- skip for secondaries | patch, dsp |
 | Shared Capabilities reference | shared -- skip for secondaries | all agents |

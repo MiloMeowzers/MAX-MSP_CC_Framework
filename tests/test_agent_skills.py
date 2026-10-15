@@ -819,9 +819,6 @@ _OUTPUT_PROTOCOL_HEADING = "## Output Protocol (Edited Patches)"
 _OUTPUT_PROTOCOL_MARKER = "Make surgical edits or section rebuild"
 _BUILDER_SIGNATURE_MARKER = "### `Patcher.add_"
 
-# Strict xfail for guard cases a later Q18 task satisfies (removed by that task).
-PENDING_T3 = pytest.mark.xfail(strict=True, reason="pending-q18-t3")
-
 
 def _h2_section(text: str, heading_prefix: str) -> str | None:
     """Return the text from the first line starting with heading_prefix to the next '## '."""
@@ -837,7 +834,6 @@ def _h2_section(text: str, heading_prefix: str) -> str | None:
     return None
 
 
-@PENDING_T3
 def test_dedupe_builder_api_in_shared() -> None:
     """Q18: the Builder API block lives once, in shared-capabilities.md."""
     text = SHARED_CAPABILITIES.read_text()
@@ -854,7 +850,6 @@ def test_dedupe_builder_api_in_shared() -> None:
         assert needle in section, f"shared Builder API section lacks {needle!r}"
 
 
-@PENDING_T3
 @pytest.mark.parametrize("agent_name", ["max-patch-agent", "max-ui-agent"])
 def test_dedupe_skill_builder_api_is_pointer(agent_name: str) -> None:
     """Q18: patch/ui agents carry a pointer stub, not the full Builder API body."""
@@ -866,7 +861,6 @@ def test_dedupe_skill_builder_api_is_pointer(agent_name: str) -> None:
     )
 
 
-@PENDING_T3
 def test_dedupe_output_protocol_in_shared() -> None:
     """Q18: the edited-patch output protocol lives once, in shared-capabilities.md."""
     text = SHARED_CAPABILITIES.read_text()
@@ -877,7 +871,6 @@ def test_dedupe_output_protocol_in_shared() -> None:
     assert "finalize_patch(patcher, is_new=False)" in section
 
 
-@PENDING_T3
 @pytest.mark.parametrize("agent_name", SPECIALIST_AGENTS)
 def test_dedupe_output_protocol_pointer(agent_name: str) -> None:
     """Q18: each specialist points to the shared output protocol instead of copying it."""

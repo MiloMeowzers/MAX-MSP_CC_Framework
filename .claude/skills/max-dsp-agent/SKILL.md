@@ -282,12 +282,7 @@ Extends the canonical BEAP templates in `.claude/max-objects/PACKAGES.md` (see a
 
 ## Output Protocol (Edited Patches)
 
-1. Load and analyze existing patch via `read_patch()` and `patcher.analyze()`
-2. Make surgical edits or section rebuild using find/modify/replace/insert/remove
-3. Finalize patch: `finalize_patch(patcher, is_new=False)` -- never clears existing midpoints: it routes only cords that have none and are new or touch a box you added or moved, and fills empty inlet/outlet assistance comments (saved to disk), without repositioning existing objects
-4. Validate via `validate_patch(patcher)`
-5. Return for critic review
-6. Save via `save_patch_roundtrip()`
+Follow "Output Protocol (Edited Patches)" in `.claude/skills/references/shared-capabilities.md`.
 
 ## DSP Pre-Flight Simulation
 
