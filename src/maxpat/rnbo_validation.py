@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from src.maxpat import walk
 from src.maxpat.validation import ValidationResult
 from src.maxpat.rnbo import RNBODatabase
 
@@ -47,9 +48,6 @@ RNBO_TARGET_CONSTRAINTS: dict[str, dict[str, Any]] = {
         "self_contained": True,
     },
 }
-
-# Structural maxclasses skipped during RNBO object checks
-_RNBO_STRUCTURAL_MAXCLASSES = frozenset({"inlet", "outlet", "patcher", "bpatcher"})
 
 # Patterns indicating external file references
 _FILE_ATTRIBUTE_PATTERNS = [
@@ -98,26 +96,6 @@ def validate_rnbo_patch(
 # Layer: RNBO Object Compatibility
 # ===========================================================================
 
-def _extract_object_name(box_dict: dict) -> str | None:
-    """Extract the MAX object name from a box dict.
-
-    Structural maxclasses return None to signal they should be skipped.
-    """
-    maxclass = box_dict.get("maxclass", "")
-
-    if maxclass in _RNBO_STRUCTURAL_MAXCLASSES:
-        return None
-
-    if maxclass == "newobj":
-        text = box_dict.get("text", "")
-        if text:
-            return text.split()[0]
-        return None
-
-    # UI objects: the maxclass IS the object name
-    return maxclass
-
-
 def _validate_rnbo_objects(
     patch_dict: dict,
     rnbo_db: RNBODatabase,
@@ -130,7 +108,7 @@ def _validate_rnbo_objects(
 
     for box_entry in boxes:
         box = box_entry.get("box", {})
-        name = _extract_object_name(box)
+        name = walk.object_name(box)
 
         if name is None:
             continue
@@ -176,7 +154,7 @@ def _validate_target_constraints(
 
     for box_entry in boxes:
         box = box_entry.get("box", {})
-        name = _extract_object_name(box)
+        name = walk.object_name(box)
         if name is None:
             continue
 
@@ -228,8 +206,8 @@ def _validate_self_contained(
 
     for box_entry in boxes:
         box = box_entry.get("box", {})
-        text = box.get("text", "")
-        name = _extract_object_name(box)
+        text = walk.box_text(box)
+        name = walk.object_name(box)
 
         if not text:
             continue

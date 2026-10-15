@@ -1,7 +1,8 @@
 """Multi-layer validation pipeline for MAX patches.
 
 Layers run sequentially per patcher scope, stopping early on structural errors:
-  Layer 1 (json):        JSON structure checks (patcher, boxes, lines)
+  Layer 1 (json):        JSON structure checks (patcher, boxes, lines, entry
+                         shapes, duplicate box ids)
   Layer 2 (objects):     Object existence against ObjectDatabase, plus the
                          implied RNBO/Gen restriction of rnbo/gen-only names
                          against the patch scope (max / gen / rnbo; Q12 / C3)
@@ -45,16 +46,11 @@ if TYPE_CHECKING:
     from src.maxpat.patcher import Patcher
 
 
-# ---------------------------------------------------------------------------
-# Structural maxclasses that are skipped during object existence checks.
-# These are patcher infrastructure, not user-created objects.
-# ---------------------------------------------------------------------------
-_STRUCTURAL_MAXCLASSES = frozenset({"inlet", "outlet", "patcher", "bpatcher"})
-
 # Maxclasses the maxclass-usage check (Layer 2b) exempts. MAX never saves
 # maxclass "patcher" -- p/patcher is a newobj box carrying an embedded patcher
 # (review C4) -- so that check does not exempt it, while
-# _STRUCTURAL_MAXCLASSES keeps "patcher" for name extraction.
+# walk.STRUCTURAL_MAXCLASSES keeps "patcher" for name extraction
+# (walk.object_name returns None for it).
 _MAXCLASS_USAGE_SKIP = frozenset({"inlet", "outlet", "bpatcher"})
 
 # Oscillator objects that need gain staging before dac~/ezdac~
@@ -637,7 +633,15 @@ def _patcher_scope_map(patcher) -> dict[str, list]:
 # ===========================================================================
 
 def _validate_json_structure(patch_dict: dict) -> list[ValidationResult]:
-    """Check that the patch dict has the required .maxpat structure."""
+    """Check that the patch dict has the required .maxpat structure.
+
+    Errors (Layer 1; any error stops the top level and prunes a nested
+    scope): missing ``patcher``; ``boxes`` / ``lines`` not a list; a box
+    entry that is not a dict or whose ``box`` value is not a dict; a line
+    entry that is not a dict or whose ``patchline`` value is not a dict
+    (a dict entry without the key stays tolerated); duplicate box ids
+    (str / int ``id``), one error per id in first-appearance order (Q19).
+    """
     results: list[ValidationResult] = []
 
     if "patcher" not in patch_dict:
@@ -661,35 +665,52 @@ def _validate_json_structure(patch_dict: dict) -> list[ValidationResult]:
             "Missing or invalid 'lines' array in patcher",
         ))
 
+    boxes = patcher.get("boxes")
+    lines = patcher.get("lines")
+
+    if isinstance(boxes, list):
+        for idx, entry in enumerate(boxes):
+            if not isinstance(entry, dict) or (
+                "box" in entry and not isinstance(entry["box"], dict)
+            ):
+                results.append(ValidationResult(
+                    "json", "error",
+                    f'Malformed box entry at index {idx}: expected {{"box": {{...}}}}',
+                ))
+
+    if isinstance(lines, list):
+        for idx, entry in enumerate(lines):
+            if not isinstance(entry, dict) or (
+                "patchline" in entry and not isinstance(entry["patchline"], dict)
+            ):
+                results.append(ValidationResult(
+                    "json", "error",
+                    f'Malformed line entry at index {idx}: expected {{"patchline": {{...}}}}',
+                ))
+
+    if isinstance(boxes, list):
+        counts: dict = {}
+        for entry in boxes:
+            box = entry.get("box") if isinstance(entry, dict) else None
+            if not isinstance(box, dict):
+                continue
+            box_id = box.get("id")
+            if isinstance(box_id, bool) or not isinstance(box_id, (str, int)):
+                continue
+            counts[box_id] = counts.get(box_id, 0) + 1
+        for box_id, n in counts.items():
+            if n > 1:
+                results.append(ValidationResult(
+                    "json", "error",
+                    f"Duplicate box id '{box_id}' ({n} boxes)",
+                ))
+
     return results
 
 
 # ===========================================================================
 # Layer 2: Object Existence
 # ===========================================================================
-
-def _extract_object_name(box_dict: dict) -> str | None:
-    """Extract the MAX object name from a box dict.
-
-    For maxclass=="newobj", the name is the first token of the "text" field.
-    For UI maxclasses, the name is the maxclass itself.
-    Structural maxclasses (inlet, outlet, patcher, bpatcher) return None
-    to signal they should be skipped.
-    """
-    maxclass = box_dict.get("maxclass", "")
-
-    if maxclass in _STRUCTURAL_MAXCLASSES:
-        return None
-
-    if maxclass == "newobj":
-        text = box_dict.get("text", "")
-        if text:
-            return text.split()[0]
-        return None
-
-    # UI objects: the maxclass IS the object name
-    return maxclass
-
 
 _SCOPE_PLACEMENT = {
     "rnbo": "inside an rnbo~ patcher",
@@ -713,7 +734,7 @@ def _validate_objects_exist(
 
     for box_entry in patch_dict["patcher"]["boxes"]:
         box = box_entry.get("box", {})
-        name = _extract_object_name(box)
+        name = walk.object_name(box)
 
         if name is None:
             continue  # structural maxclass -- skip
@@ -799,7 +820,7 @@ def _validate_maxclass_usage(patch_dict: dict) -> list[ValidationResult]:
             continue
 
         # Non-UI, non-structural maxclass that isn't newobj -- flag as error.
-        name = _extract_object_name(box) or maxclass
+        name = walk.object_name(box) or maxclass
         results.append(ValidationResult(
             "objects", "error",
             f"Wrong maxclass: object '{name}' uses maxclass='{maxclass}' "
@@ -840,7 +861,7 @@ def _validate_package_gating(
     results: list[ValidationResult] = []
     for box_entry in patch_dict["patcher"]["boxes"]:
         box = box_entry.get("box", {})
-        name = _extract_object_name(box)
+        name = walk.object_name(box)
         if name is None:
             continue
         package = db.get_package(name)
@@ -876,7 +897,7 @@ def _validate_community_extracted(
 
     for box_entry in patch_dict["patcher"]["boxes"]:
         box = box_entry.get("box", {})
-        name = _extract_object_name(box)
+        name = walk.object_name(box)
         if name is None:
             continue
         package = db.get_package(name)
@@ -953,8 +974,7 @@ def _is_container_box(box: dict) -> bool:
     if maxclass in ("patcher", "bpatcher"):
         return True
     if maxclass == "newobj":
-        tokens = str(box.get("text", "")).split()
-        return bool(tokens) and tokens[0] in _CONTAINER_NAMES
+        return walk.box_name(box) in _CONTAINER_NAMES
     return False
 
 
@@ -1050,8 +1070,8 @@ def _validate_connections(
             continue
 
         # --- Known companion pair (relationships.json): no type/role checks ---
-        src_name = _extract_object_name(src_box)
-        dst_name = _extract_object_name(dst_box)
+        src_name = walk.object_name(src_box)
+        dst_name = walk.object_name(dst_box)
         if (
             src_name is not None and dst_name is not None
             and db.is_known_pair(src_name, dst_name)
@@ -1075,7 +1095,7 @@ def _validate_connections(
             # audio, not the 1-channel form's done-bang (barnett-dbap
             # v0.4.0 lost its stereo file cord to that misread)
             src_args = (
-                src_box.get("text", "").split()[1:]
+                walk.box_args(src_box)
                 if src_box.get("maxclass") == "newobj" else None
             )
             src_role = db.get_signal_role(src_name, src_outlet, args=src_args)
@@ -1137,7 +1157,7 @@ def _inlet_accepts_signal(box_dict: dict, inlet_idx: int, db: ObjectDatabase) ->
     and not a signal/float type).
     """
     # Try to get inlet info from the database
-    name = _extract_object_name(box_dict)
+    name = walk.object_name(box_dict)
     if name is None:
         return True  # structural objects -- allow anything
 
@@ -1185,7 +1205,7 @@ def _classify_dst_inlet(dst_box: dict, dst_inlet: int, db: ObjectDatabase) -> st
     if maxclass in _FLOAT_DISPLAY_MAXCLASSES and dst_inlet == 0:
         return "float"
 
-    name = _extract_object_name(dst_box)
+    name = walk.object_name(dst_box)
     if name is None:
         return "control"  # structural maxclass; conservative
     obj = db.lookup(name)
@@ -1234,7 +1254,7 @@ def _classify_role_mismatch(
     here and falls through to the legacy branch. Plain ``signal`` inlets
     carry no role token and still warn.
     """
-    name = _extract_object_name(dst_box)
+    name = walk.object_name(dst_box)
     if name is not None:
         obj = db.lookup(name)
         if obj is not None:
@@ -1405,7 +1425,7 @@ def _validate_domain_restrictions(
         # _validate_maxclass_usage.
         if "patcher" in box:
             continue
-        name = _extract_object_name(box)
+        name = walk.object_name(box)
         if name is None:
             continue
         restrictions = db.get_domain_restrictions(name)
@@ -1509,17 +1529,6 @@ def _validate_embedded_genexpr(
     return results
 
 
-def _get_box_name(box_dict: dict) -> str:
-    """Get the object name from a box dict."""
-    maxclass = box_dict.get("maxclass", "")
-    if maxclass == "newobj":
-        text = box_dict.get("text", "")
-        if text:
-            return text.split()[0]
-        return ""
-    return maxclass
-
-
 # Pattern matching compound #N usage: text containing #N preceded or followed
 # by non-whitespace characters (e.g., "slot-#1", "#1-out", "my#2thing").
 # Standalone #N (space-delimited or at start/end of text) is fine.
@@ -1537,7 +1546,7 @@ def _check_compound_argument_substitution(
     results: list[ValidationResult] = []
 
     for box_id, box in box_lookup.items():
-        text = box.get("text", "")
+        text = walk.box_text(box)
         if not text:
             continue
 
@@ -1569,7 +1578,7 @@ def _check_unterminated_chains(
     results: list[ValidationResult] = []
 
     for box_id, box in box_lookup.items():
-        name = _get_box_name(box)
+        name = walk.box_name(box)
 
         # Only check MSP objects (name ends with ~)
         if not name.endswith("~"):
@@ -1612,13 +1621,13 @@ def _check_gain_staging(
     # Find all oscillator box ids
     osc_ids = []
     for box_id, box in box_lookup.items():
-        name = _get_box_name(box)
+        name = walk.box_name(box)
         if name in _OSCILLATOR_NAMES:
             osc_ids.append(box_id)
 
     # For each oscillator, BFS to see if it reaches dac~/ezdac~ without gain
     for osc_id in osc_ids:
-        osc_name = _get_box_name(box_lookup[osc_id])
+        osc_name = walk.box_name(box_lookup[osc_id])
         # BFS: track (current_id, passed_through_gain)
         from collections import deque
         queue = deque([(osc_id, False)])
@@ -1634,7 +1643,7 @@ def _check_gain_staging(
                 next_box = box_lookup.get(next_id)
                 if not next_box:
                     continue
-                next_name = _get_box_name(next_box)
+                next_name = walk.box_name(next_box)
 
                 next_has_gain = has_gain or (next_name in _GAIN_NAMES)
 
@@ -1666,16 +1675,15 @@ def _check_unsafe_gain_values(
     results: list[ValidationResult] = []
 
     for box_id, box in box_lookup.items():
-        name = _get_box_name(box)
+        name = walk.box_name(box)
         if name != "*~":
             continue
 
-        text = box.get("text", "")
-        parts = text.split()
-        if len(parts) < 2:
+        args = walk.box_args(box)
+        if not args:
             continue  # No argument -- skip
 
-        arg_str = parts[1]
+        arg_str = args[0]
         try:
             arg_val = float(arg_str)
         except ValueError:
@@ -1744,12 +1752,12 @@ def _check_feedback_loops(
         reported_cycles.add(cycle_key)
 
         # Check if cycle contains delay objects
-        cycle_names = [_get_box_name(box_lookup[bid]) for bid in cycle if bid in box_lookup]
+        cycle_names = [walk.box_name(box_lookup[bid]) for bid in cycle if bid in box_lookup]
         has_delay = any(name in _DELAY_NAMES for name in cycle_names)
 
         if not has_delay:
             node_desc = ", ".join(
-                f"{_get_box_name(box_lookup.get(bid, {}))} ({bid})"
+                f"{walk.box_name(box_lookup.get(bid, {}))} ({bid})"
                 for bid in cycle
             )
             results.append(ValidationResult(
@@ -1773,11 +1781,10 @@ def _check_genexpr_io_syntax(
     for box_id, box in box_lookup.items():
         if box.get("maxclass") != "newobj":
             continue
-        text = box.get("text", "")
-        if not text.startswith("codebox"):
+        if not walk.box_text(box).startswith("codebox"):
             continue
         code = box.get("code", "")
-        if not code:
+        if not isinstance(code, str) or not code:
             continue
         if _re.search(r'\b(in|out)\s+\d', code):
             results.append(ValidationResult(
@@ -1798,11 +1805,10 @@ def _check_genexpr_delay_usage(
     for box_id, box in box_lookup.items():
         if box.get("maxclass") != "newobj":
             continue
-        text = box.get("text", "")
-        if not text.startswith("codebox"):
+        if not walk.box_text(box).startswith("codebox"):
             continue
         code = box.get("code", "")
-        if not code:
+        if not isinstance(code, str) or not code:
             continue
         if _re.search(r'\bdelay\s*\(', code):
             results.append(ValidationResult(
@@ -1824,7 +1830,7 @@ def _check_gen_param_message_syntax(
     for box_id, box in box_lookup.items():
         if box.get("maxclass") != "message":
             continue
-        text = box.get("text", "")
+        text = walk.box_text(box)
         if not _re.search(r'@\w+\s+\$', text):
             continue
         # Check if any downstream box is gen~
@@ -1832,7 +1838,7 @@ def _check_gen_param_message_syntax(
             dst_box = box_lookup.get(dst_id)
             if not dst_box:
                 continue
-            dst_name = _get_box_name(dst_box)
+            dst_name = walk.box_name(dst_box)
             if dst_name == "gen~":
                 results.append(ValidationResult(
                     "domain", "warning",
@@ -1862,7 +1868,7 @@ def _check_comment_hash_substitution(
         src_box = box_lookup.get(src_id)
         if not src_box or src_box.get("maxclass") != "message":
             continue
-        src_text = src_box.get("text", "")
+        src_text = walk.box_text(src_box)
         if _re.match(r'\s*set\s', src_text) and _re.search(r'#\d+', src_text):
             set_fed.update(dst_ids)
 
@@ -1871,7 +1877,7 @@ def _check_comment_hash_substitution(
             continue
         if box_id in set_fed:
             continue
-        text = box.get("text", "")
+        text = walk.box_text(box)
         if _re.search(r'#\d+', text):
             results.append(ValidationResult(
                 "domain", "warning",
@@ -1892,7 +1898,7 @@ def _check_line_tilde_comma_messages(
     for box_id, box in box_lookup.items():
         if box.get("maxclass") != "message":
             continue
-        text = box.get("text", "")
+        text = walk.box_text(box)
         if "," not in text:
             continue
         # Check if any downstream box is line~
@@ -1900,7 +1906,7 @@ def _check_line_tilde_comma_messages(
             dst_box = box_lookup.get(dst_id)
             if not dst_box:
                 continue
-            dst_name = _get_box_name(dst_box)
+            dst_name = walk.box_name(dst_box)
             if dst_name == "line~":
                 results.append(ValidationResult(
                     "domain", "warning",
@@ -1921,7 +1927,7 @@ def _check_multislider_fetchindex(
     for box_id, box in box_lookup.items():
         if box.get("maxclass") != "message":
             continue
-        text = box.get("text", "")
+        text = walk.box_text(box)
         if "fetchindex" in text:
             results.append(ValidationResult(
                 "domain", "error",
@@ -1939,13 +1945,8 @@ def _check_umenu_items_format(
     results: list[ValidationResult] = []
 
     for box_id, box in box_lookup.items():
-        maxclass = box.get("maxclass", "")
         # umenu can be a UI maxclass or newobj with text "umenu"
-        is_umenu = (
-            maxclass == "umenu"
-            or (maxclass == "newobj" and box.get("text", "").split()[0] == "umenu")
-        )
-        if not is_umenu:
+        if walk.box_name(box) != "umenu":
             continue
         items = box.get("items")
         if not isinstance(items, list):

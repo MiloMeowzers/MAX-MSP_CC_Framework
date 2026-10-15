@@ -260,3 +260,29 @@ class TestIterPatchers:
         before = copy.deepcopy(d)
         list(walk.iter_patchers(d))
         assert d == before
+
+
+# ---------------------------------------------------------------------------
+# One name extractor (Q19 / S2)
+# ---------------------------------------------------------------------------
+
+
+class TestDedupe:
+    def test_validation_extractors_gone(self):
+        from src.maxpat import validation
+
+        assert not hasattr(validation, "_get_box_name")
+        assert not hasattr(validation, "_extract_object_name")
+
+    def test_rnbo_validation_extractor_gone(self):
+        from src.maxpat import rnbo_validation
+
+        assert not hasattr(rnbo_validation, "_extract_object_name")
+
+    @pytest.mark.parametrize("module", ["validation", "rnbo_validation"])
+    def test_no_bare_split_in_validators(self, module):
+        import re
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parent.parent / "src" / "maxpat" / f"{module}.py").read_text()
+        assert re.findall(r"\.split\(\s*\)", src) == []

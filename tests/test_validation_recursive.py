@@ -595,3 +595,118 @@ class TestNestedRnbo:
     def test_top_level_rnbo_unchanged(self, db):
         d = _patch([_box("obj-1", "coll", 1, 4)], classnamespace="rnbo")
         assert _rnbo_compat(validate_patch(d, db=db)) == []
+
+
+# ---------------------------------------------------------------------------
+# Robustness, duplicate ids, malformed entries (Task 3; review G8 part)
+# ---------------------------------------------------------------------------
+
+
+def _place(entries, nested, lines=None):
+    if nested:
+        return _patch([_container("obj-100", "p wrap", _inner(entries, lines))])
+    return _patch(entries, lines)
+
+
+class TestRobustness:
+    @pytest.mark.parametrize("nested", [False, True])
+    @pytest.mark.parametrize("maxclass", ["newobj", "message", "comment"])
+    @pytest.mark.parametrize("text", ["", "   ", None, 5, ["a"]])
+    def test_bad_text_never_raises(self, db, text, maxclass, nested):
+        entry = _box("obj-1", None, 1, 1, maxclass=maxclass)
+        entry["box"]["text"] = text
+        other = _box("obj-2", "print", 1, 0, outlettype=[])
+        res = validate_patch(_place([entry, other], nested, [_line("obj-1", 0, "obj-2", 0)]), db=db)
+        assert isinstance(res, list)
+
+    def test_empty_newobj_next_to_umenu(self, db):
+        """The G8 IndexError: `_check_umenu_items_format` split empty text."""
+        d = _patch([
+            _box("obj-1", "", 1, 1),
+            _box("obj-2", None, 1, 3, maxclass="umenu", items=["a", ",", "b"]),
+        ])
+        assert isinstance(validate_patch(d, db=db), list)
+
+    def test_duplicate_ids_top_level(self, db):
+        d = _patch([
+            _box("obj-1", "osc~ 1", 2, 1, outlettype=["signal"]),
+            _box("obj-1", "cycle~ 440", 2, 1, outlettype=["signal"]),
+        ], [_line("obj-1", 0, "obj-1", 0)])
+        res = validate_patch(d, db=db)
+        assert [(r.layer, r.level, r.message, r.path) for r in res] == [
+            ("json", "error", "Duplicate box id 'obj-1' (2 boxes)", ""),
+        ]
+
+    def test_duplicate_ids_nested_prunes(self, db):
+        d = _patch([
+            _container("obj-1", "p dup", _inner([
+                _box("obj-5", "print", 1, 0, outlettype=[]),
+                _box("obj-5", "print", 1, 0, outlettype=[]),
+                _box("obj-6", "osc~ 1", 2, 1, outlettype=["signal"]),
+            ])),
+            _osc_p("obj-2", "p sib"),
+        ])
+        res = validate_patch(d, db=db)
+        errs = [r for r in res if r.layer == "json"]
+        assert [(r.path, r.message) for r in errs] == [
+            ("obj-1", "[p dup] Duplicate box id 'obj-5' (2 boxes)"),
+        ]
+        assert [r.path for r in _osc_hits(res)] == ["obj-2"]
+
+    @pytest.mark.parametrize("nested", [False, True])
+    @pytest.mark.parametrize("kind", ["box_entry", "box_value", "line_entry", "patchline_value"])
+    def test_malformed_entries_layer1(self, db, kind, nested):
+        boxes = [_box("obj-1", "print", 1, 0, outlettype=[])]
+        lines = []
+        if kind == "box_entry":
+            boxes.append(5)
+            want = 'Malformed box entry at index 1: expected {"box": {...}}'
+        elif kind == "box_value":
+            boxes.append({"box": "nope"})
+            want = 'Malformed box entry at index 1: expected {"box": {...}}'
+        elif kind == "line_entry":
+            lines.append("x")
+            want = 'Malformed line entry at index 0: expected {"patchline": {...}}'
+        else:
+            lines.append({"patchline": 3})
+            want = 'Malformed line entry at index 0: expected {"patchline": {...}}'
+        res = validate_patch(_place(boxes, nested, lines), db=db)
+        errs = [r for r in res if r.layer == "json" and r.level == "error"]
+        assert len(errs) == 1, [r.message for r in res]
+        if nested:
+            assert errs[0].path == "obj-100"
+            assert errs[0].message == "[p wrap] " + want
+        else:
+            assert errs[0].path == ""
+            assert errs[0].message == want
+
+    def test_dict_entry_without_box_key_tolerated(self, db):
+        d = _patch([_box("obj-1", "print", 1, 0, outlettype=[]), {"other": 1}], [{"other": 2}])
+        assert [r for r in validate_patch(d, db=db) if r.layer == "json"] == []
+
+    @pytest.mark.requires_max
+    def test_bundle_sweep_never_raises(self, db):
+        import json
+        import warnings
+
+        from tests.conftest import MAX_APP_PATH
+        from src.maxpat.db_lookup import SCOPE_BY_SUFFIX
+
+        root = MAX_APP_PATH / "Contents" / "Resources" / "C74"
+        files = sorted(list(root.rglob("*.maxpat")) + list(root.rglob("*.maxhelp")))
+        assert files
+        raised = []
+        for f in files:
+            try:
+                d = json.loads(f.read_text(errors="replace"))
+            except (ValueError, OSError):
+                continue
+            if not isinstance(d, dict) or not isinstance(d.get("patcher"), dict):
+                continue
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    validate_patch(d, db=db, scope=SCOPE_BY_SUFFIX.get(f.suffix))
+            except Exception as exc:  # noqa: BLE001 -- collect every crash
+                raised.append((str(f.relative_to(root)), repr(exc)))
+        assert raised == []
