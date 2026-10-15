@@ -2,11 +2,18 @@
 
 Bridges automated validation and manual MAX testing by generating
 step-by-step checklists based on the objects found in a patch.
+
+The object names come from every non-gen scope of ``walk.iter_patchers``
+(top level and every embedded ``p`` / bpatcher / poly~ / rnbo~ patcher;
+GenExpr operators are not Max objects), and from object boxes only:
+comment and message text never counts (G10, Q20).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+
+from src.maxpat import walk
 
 
 def generate_test_checklist(
@@ -14,7 +21,9 @@ def generate_test_checklist(
 ) -> str:
     """Generate a markdown test checklist from a patch dictionary.
 
-    Scans the patch for object types and builds relevant manual test steps.
+    Scans every non-gen scope of the patch for object types (object boxes
+    only; comments and messages are ignored) and builds relevant manual
+    test steps.
     Each step has a numbered item, descriptive name, action, and expected result
     with Pass/Fail checkboxes.
 
@@ -26,8 +35,7 @@ def generate_test_checklist(
     Returns:
         Complete markdown string with numbered test steps.
     """
-    boxes = patch_dict.get("patcher", {}).get("boxes", [])
-    object_names = _extract_object_names(boxes)
+    object_names = _extract_object_names(patch_dict)
 
     has_signal = any(name.endswith("~") for name in object_names)
     has_dac = any(name in ("dac~", "ezdac~") for name in object_names)
@@ -156,30 +164,27 @@ def save_test_results(
     return result_path
 
 
-def _extract_object_names(boxes: list[dict]) -> list[str]:
-    """Extract object names from a list of box dicts.
+def _extract_object_names(patch_dict) -> list[str]:
+    """Object names of every object box in every non-gen scope (G10, Q20).
 
-    Handles both 'text' field (newobj) and 'maxclass' for UI objects.
-    For text like "metro 500", extracts the base name "metro".
+    Walks ``walk.iter_patchers(patch_dict)`` and skips gen-context scopes.
+    Boxes whose maxclass is ``comment`` or ``message`` are ignored; every
+    other box contributes ``walk.object_name(box)`` (a newobj's first
+    token, else its maxclass), skipped when None (structural or empty).
+    Empty, whitespace-only and non-str text never raises.
     """
-    names = []
-    for box_wrapper in boxes:
-        box = box_wrapper.get("box", {})
-        text = box.get("text", "")
-        maxclass = box.get("maxclass", "")
-
-        if text:
-            # First word of text is the object name
-            base_name = text.split()[0]
-            names.append(base_name)
-            # Also keep full text for pattern matching (e.g., "metro 500")
-            if base_name != text:
-                names.append(text)
-
-        # UI objects use maxclass directly
-        if maxclass in ("toggle", "button", "number", "flonum", "slider",
-                        "dial", "comment", "message", "live.dial"):
-            if maxclass not in names:
-                names.append(maxclass)
-
+    names: list[str] = []
+    for _path, patcher, context in walk.iter_patchers(patch_dict):
+        if context == "gen":
+            continue
+        boxes = patcher.get("boxes")
+        for entry in boxes if isinstance(boxes, list) else ():
+            box = entry.get("box") if isinstance(entry, dict) else None
+            if not isinstance(box, dict):
+                continue
+            if walk.box_maxclass(box) in ("comment", "message"):
+                continue
+            name = walk.object_name(box)
+            if name:
+                names.append(name)
     return names

@@ -684,3 +684,66 @@ class TestOnboard:
         assert "## Overview" in result
         assert "## Sections" in result
         assert "## Signal Flow" in result
+
+
+# ===========================================================================
+# TestRecursiveAnalyze (Q20) -- analyze() looks inside subpatchers
+# ===========================================================================
+
+
+def _section(text: str, header: str) -> str:
+    """The body of the ``## header`` section of an analyze() string."""
+    start = text.index(header)
+    rest = text[start + len(header):]
+    nxt = rest.find("\n## ")
+    return rest if nxt < 0 else rest[:nxt]
+
+
+class TestRecursiveAnalyze:
+    def _synth(self):
+        p = Patcher()
+        sub_box, inner = p.add_subpatcher("synth", inlets=0, outlets=1)
+        osc = inner.add_box("cycle~", args=["440"])
+        gain = inner.add_box("*~", args=["0.5"])
+        inner.add_connection(osc, 0, gain, 0)
+        inner.add_connection(gain, 0, inner.get_outlets()[0], 0)
+        lb = inner.add_box("loadbang")
+        prn = inner.add_box("print")
+        inner.add_connection(lb, 0, prn, 0)
+        slider = inner.add_box("slider")
+        slider.extra_attrs["varname"] = "cutoff"
+        dac = p.add_box("dac~")
+        p.add_connection(sub_box, 0, dac, 0)
+        return p
+
+    def test_nested_facets(self):
+        result = self._synth().analyze()
+        signal = _section(result, "## Signal Flow")
+        assert "### [p synth]" in signal
+        assert "cycle~" in signal.split("### [p synth]", 1)[1]
+        control = _section(result, "## Control Flow")
+        assert "### [p synth]" in control
+        assert "loadbang" in control.split("### [p synth]", 1)[1]
+        params = _section(result, "## Parameters")
+        assert "- [p synth] cutoff (slider)" in params
+        inventory = _section(result, "## Object Inventory")
+        msp = [line for line in inventory.splitlines() if line.startswith("| MSP |")]
+        assert msp and int(msp[0].split("|")[2]) >= 3
+        assert "Counts include 1 subpatcher scope(s)." in inventory
+
+    def test_gen_counts_as_gen_no_signal_block(self):
+        p = Patcher()
+        p.add_gen("out1 = in1 * 0.5;", num_inputs=1, num_outputs=1)
+        result = p.analyze()
+        inventory = _section(result, "## Object Inventory")
+        assert any(line.startswith("| Gen |") for line in inventory.splitlines())
+        assert "###" not in _section(result, "## Signal Flow")
+
+    def test_flat_patch_has_no_nested_lines(self):
+        p = Patcher()
+        osc = p.add_box("cycle~", args=["440"])
+        dac = p.add_box("dac~")
+        p.add_connection(osc, 0, dac, 0)
+        result = p.analyze()
+        assert "###" not in result
+        assert "Counts include" not in result

@@ -163,9 +163,11 @@ class TestSignalPath:
 class TestSubpatcherCrossing:
     """Traversal crosses subpatcher boundaries via inner inlet objects."""
 
-    def test_downstream_includes_inner_inlets(self):
-        """downstream() from a box wired into a subpatcher includes the
-        inner inlet objects (accessed via get_inlets(), never box.text)."""
+    def test_downstream_enters_only_the_wired_inlet(self):
+        """downstream() from a box wired into subpatcher inlet 0 enters only
+        the inner inlet of x-rank 0 (accessed via get_inlets(), never
+        box.text) -- port-exact crossing (G9, Q20; inverted from the retired
+        every-inner-inlet behaviour)."""
         p = Patcher()
         osc = p.add_box("cycle~", args=["440"])
         sub_box, inner = p.add_subpatcher("proc", inlets=2, outlets=1)
@@ -176,8 +178,8 @@ class TestSubpatcherCrossing:
 
         result = p.downstream(osc)
         assert sub_box in result
-        for inlet_box in inlets:
-            assert inlet_box in result
+        assert inlets[0] in result
+        assert inlets[1] not in result
 
     def test_downstream_follows_inner_chain(self):
         """Traversal continues from inner inlets through inner boxes."""
@@ -261,3 +263,177 @@ class TestBuildAdjStaleLines:
         p.add_connection(a, 0, b, 0)
         p.lines.append(Patchline(a.id, 0, "obj-ghost-dst", 0))
         assert p.downstream(a) == [b]
+
+
+# ---------------------------------------------------------------------------
+# G9 (Q20): port-exact crossing, send/receive bridging, outlettype signal test,
+# adjacency built once per traversal
+# ---------------------------------------------------------------------------
+
+
+def _fx_patch():
+    """cycle~ -> p fx inlet 1; inside: inlet1 -> *~ -> outlet0, inlet0 -> print;
+    p outlet 0 -> dac~, p outlet 1 -> top-level print."""
+    p = Patcher()
+    osc = p.add_box("cycle~", args=["440"])
+    sub_box, inner = p.add_subpatcher("fx", inlets=2, outlets=2)
+    dac = p.add_box("dac~")
+    top_print = p.add_box("print", args=["top"])
+    inlets = inner.get_inlets()
+    outlets = inner.get_outlets()
+    gain = inner.add_box("*~", args=["0.5"])
+    inner_print = inner.add_box("print", args=["inner"])
+    inner.add_connection(inlets[1], 0, gain, 0)
+    inner.add_connection(gain, 0, outlets[0], 0)
+    inner.add_connection(inlets[0], 0, inner_print, 0)
+    p.add_connection(osc, 0, sub_box, 1)
+    p.add_connection(sub_box, 0, dac, 0)
+    p.add_connection(sub_box, 1, top_print, 0)
+    return p, osc, sub_box, inlets, outlets, gain, inner_print, dac, top_print
+
+
+class TestPortExactCrossing:
+    def test_downstream_enters_wired_inlet_and_leaves_matching_outlet(self):
+        p, osc, sub_box, inlets, outlets, gain, inner_print, dac, top_print = _fx_patch()
+        result = p.downstream(osc)
+        for want in (sub_box, inlets[1], gain, outlets[0], dac):
+            assert want in result
+        for unwanted in (inlets[0], inner_print, top_print):
+            assert unwanted not in result
+
+    def test_upstream_mirrors(self):
+        p, osc, sub_box, inlets, outlets, gain, inner_print, dac, top_print = _fx_patch()
+        result = p.upstream(dac)
+        for want in (sub_box, outlets[0], gain, inlets[1], osc):
+            assert want in result
+        assert inner_print not in result
+        assert inlets[0] not in result
+
+
+class TestSendReceiveBridging:
+    def test_signal_bus_into_subpatcher(self):
+        p = Patcher()
+        osc = p.add_box("cycle~", args=["440"])
+        snd = p.add_box("send~", args=["bus"])
+        sub_box, inner = p.add_subpatcher("rx", inlets=0, outlets=1)
+        dac = p.add_box("dac~")
+        rcv = inner.add_box("receive~", args=["bus"])
+        gain = inner.add_box("*~", args=["0.5"])
+        inner.add_connection(rcv, 0, gain, 0)
+        inner.add_connection(gain, 0, inner.get_outlets()[0], 0)
+        p.add_connection(osc, 0, snd, 0)
+        p.add_connection(sub_box, 0, dac, 0)
+
+        down = p.downstream(osc)
+        for want in (snd, rcv, gain, dac):
+            assert want in down
+        up = p.upstream(dac)
+        assert snd in up and osc in up
+        assert dac in p.downstream(osc, signal_only=True)
+
+    def test_control_send_receive_across_subpatchers(self):
+        p = Patcher()
+        metro = p.add_box("metro", args=["500"])
+        snd = p.add_box("s", args=["tick"])
+        p.add_connection(metro, 0, snd, 0)
+        sub_box, inner = p.add_subpatcher("listen", inlets=0, outlets=0)
+        rcv = inner.add_box("r", args=["tick"])
+        prn = inner.add_box("print")
+        inner.add_connection(rcv, 0, prn, 0)
+        assert prn in p.downstream(metro)
+        assert rcv not in p.downstream(metro, signal_only=True)
+
+    def test_send_receive_loop_terminates(self):
+        p = Patcher()
+        src = p.add_box("button")
+        s1 = p.add_box("s", args=["a"])
+        r1 = p.add_box("r", args=["a"])
+        s2 = p.add_box("s", args=["a"])
+        p.add_connection(src, 0, s1, 0)
+        p.add_connection(r1, 0, s2, 0)
+        result = p.downstream(src)
+        assert s1 in result and r1 in result and s2 in result
+        assert len(result) == len(set(id(b) for b in result))
+
+
+class TestOutlettypeSignal:
+    def test_signal_path_through_p(self):
+        """G9 repro: signal_path(cycle~) through p fx reaches the dac~."""
+        p = Patcher()
+        osc = p.add_box("cycle~", args=["440"])
+        sub_box, inner = p.add_subpatcher("fx", inlets=1, outlets=1)
+        gain = inner.add_box("*~", args=["0.5"])
+        inner.add_connection(inner.get_inlets()[0], 0, gain, 0)
+        inner.add_connection(gain, 0, inner.get_outlets()[0], 0)
+        dac = p.add_box("dac~")
+        p.add_connection(osc, 0, sub_box, 0)
+        p.add_connection(sub_box, 0, dac, 0)
+        path = p.signal_path(osc)
+        assert path != [osc]
+        for want in (sub_box, gain, dac):
+            assert want in path
+        assert path[0] is osc
+
+    def test_snapshot_to_number_not_signal(self):
+        p = Patcher()
+        osc = p.add_box("cycle~", args=["440"])
+        snap = p.add_box("snapshot~", args=["50"])
+        num = p.add_box("number")
+        p.add_connection(osc, 0, snap, 0)
+        p.add_connection(snap, 0, num, 0)
+        result = p.downstream(osc, signal_only=True)
+        assert snap in result
+        assert num not in result
+
+    def test_multichannel_cord_followed(self):
+        p = Patcher()
+        mc = p.add_box("mc.cycle~", args=["440"])
+        gain = p.add_box("mc.*~", args=["0.5"])
+        p.add_connection(mc, 0, gain, 0)
+        mc.outlettype = ["multichannelsignal"]  # MAX's saved form for mc outlets
+        assert gain in p.downstream(mc, signal_only=True)
+
+    def test_build_adj_signal_only(self):
+        p = Patcher()
+        osc = p.add_box("cycle~", args=["440"])
+        gain = p.add_box("*~", args=["0.5"])
+        prn = p.add_box("print")
+        p.add_connection(osc, 0, gain, 0)
+        p.add_connection(osc, 0, prn, 0)
+        forward, reverse, box_map = p._build_adj(signal_only=True)
+        assert forward[osc.id] == [(gain.id, 0)]
+        assert prn.id not in reverse
+
+
+class TestAdjacencyOnce:
+    def test_one_graph_no_build_adj(self, monkeypatch):
+        from src.maxpat.graph import GraphMixin, PatchGraph
+
+        p = Patcher()
+        prev = p.add_box("button")
+        first = prev
+        for _ in range(199):
+            nxt = p.add_box("t", args=["b"])
+            p.add_connection(prev, 0, nxt, 0)
+            prev = nxt
+
+        builds = []
+        real_build = PatchGraph.build.__func__
+
+        def spy_build(cls, *a, **k):
+            builds.append(1)
+            return real_build(cls, *a, **k)
+
+        adj_calls = []
+        real_adj = GraphMixin._build_adj
+
+        def spy_adj(self, *a, **k):
+            adj_calls.append(1)
+            return real_adj(self, *a, **k)
+
+        monkeypatch.setattr(PatchGraph, "build", classmethod(spy_build))
+        monkeypatch.setattr(GraphMixin, "_build_adj", spy_adj)
+        result = p.downstream(first)
+        assert len(result) == 199
+        assert len(builds) == 1
+        assert adj_calls == []

@@ -132,3 +132,56 @@ class TestSaveTestResults:
 
         assert result_path.is_file()
         assert result_path.read_text() == results_md
+
+
+class TestRecursiveChecklist:
+    """G10 (Q20): the checklist recurses and counts object boxes only."""
+
+    def test_g10_repro(self):
+        patch = {"patcher": {"boxes": [
+            {"box": {"id": "obj-1", "maxclass": "newobj", "text": "p synth", "patcher": {
+                "boxes": [{"box": {"id": "obj-1", "maxclass": "newobj", "text": "dac~"}}],
+                "lines": [],
+            }}},
+            {"box": {"id": "obj-2", "maxclass": "comment", "text": "metro speed and gen~ notes"}},
+        ], "lines": []}}
+        result = generate_test_checklist(patch, "G10")
+        assert "Audio Output" in result
+        assert "Turn on audio" in result
+        assert "Metro Timing" not in result
+        assert "gen~ Processing" not in result
+
+    def test_message_box_not_counted(self):
+        patch = {"patcher": {"boxes": [
+            {"box": {"id": "obj-1", "maxclass": "message", "text": "metro 500"}},
+        ], "lines": []}}
+        assert "Metro Timing" not in generate_test_checklist(patch, "msg")
+
+    def test_nested_ui_toggle_counted(self):
+        patch = {"patcher": {"boxes": [
+            {"box": {"id": "obj-1", "maxclass": "newobj", "text": "p ui", "patcher": {
+                "boxes": [{"box": {"id": "obj-1", "maxclass": "toggle"}}], "lines": [],
+            }}},
+        ], "lines": []}}
+        assert "Toggle Interaction" in generate_test_checklist(patch, "ui")
+
+    def test_gen_operator_ignored(self):
+        patch = {"patcher": {"boxes": [
+            {"box": {"id": "obj-1", "maxclass": "newobj", "text": "gen~", "patcher": {
+                "classnamespace": "dsp.gen",
+                "boxes": [{"box": {"id": "obj-1", "maxclass": "newobj", "text": "button"}}],
+                "lines": [],
+            }}},
+        ], "lines": []}}
+        result = generate_test_checklist(patch, "gen")
+        assert "Button Click" not in result
+        assert "gen~ Processing" in result
+
+    @pytest.mark.parametrize("text", ["", "   ", None, 5])
+    def test_odd_text_never_raises(self, text):
+        patch = {"patcher": {"boxes": [
+            {"box": {"id": "obj-1", "maxclass": "newobj", "text": text}},
+            {"box": {"id": "obj-2", "maxclass": "comment", "text": text}},
+            "junk",
+        ], "lines": []}}
+        assert "# Test Checklist" in generate_test_checklist(patch, "odd")

@@ -9,8 +9,29 @@ no critic re-parses lines or rebuilds adjacency. The graph is read-only: it
 never mutates the patch dict, and malformed boxes, lines, ids and ports are
 skipped rather than raising.
 
-:class:`GraphMixin` provides the BFS traversal methods mixed into Patcher
-(downstream/upstream queries, signal path tracing, connected components).
+:class:`PatchGraph` traversal (G9, Q20) -- ``downstream`` / ``upstream``:
+
+* **Port-exact crossing.** A cord into a ``p`` / embedded bpatcher (inner
+  context max or bpatcher) at inlet *i* enters only the inner ``inlet`` box
+  of x-rank *i* (rank by ``(patching_rect x, array index)``, as MAX numbers
+  ports); an inner ``outlet`` of rank *k* leaves only through the
+  container's outlet *k*. Upstream mirrors this. Gen, rnbo and poly
+  containers, and containers without an embedded patcher, are opaque: they
+  are expanded like ordinary boxes and never entered.
+* **Bridging.** ``send``/``s`` -> ``receive``/``r`` and ``send~``/``s~`` ->
+  ``receive~``/``r~`` are linked by channel name (first argument) across
+  every scope.
+* **Signal test.** With ``signal_only`` a cord is followed when the source
+  outlet's ``outlettype`` is signal / multichannelsignal (:func:`outlet_is_signal`)
+  and the destination accepts signal at that inlet (a container, or the
+  DB says so); never by the ``~`` name. Port boxes and crossing containers
+  are transparent.
+* **Adjacency once.** Scope adjacency is built once per graph; no traversal
+  rebuilds it per node.
+
+:class:`GraphMixin` provides the traversal methods mixed into Patcher
+(downstream/upstream queries, signal path tracing, connected components);
+downstream / upstream / signal_path run on one PatchGraph per call.
 """
 
 from __future__ import annotations
@@ -191,13 +212,18 @@ class PatchGraph:
     the top is an empty max scope with patcher ``{}``.
     """
 
-    __slots__ = ("scopes", "_by_ids")
+    __slots__ = ("scopes", "_by_ids", "_child_index", "_ranks", "_channels")
 
     def __init__(self, scopes: list):
         self.scopes = scopes
         self._by_ids = {}
+        self._child_index = {}
         for scope in scopes:
             self._by_ids.setdefault(scope._ids, scope)
+            if scope.parent is not None:
+                self._child_index.setdefault((id(scope.parent), scope.container), scope)
+        self._ranks: dict = {}
+        self._channels = None
 
     @classmethod
     def build(cls, patch, scope: "str | None" = None) -> "PatchGraph":
@@ -224,10 +250,7 @@ class PatchGraph:
 
     def child(self, scope: Scope, box_id) -> "Scope | None":
         """The scope embedded in *scope*'s box *box_id*, or None."""
-        for s in self.scopes:
-            if s.parent is scope and s.container == str(box_id):
-                return s
-        return None
+        return self._child_index.get((id(scope), str(box_id)))
 
     def subtree(self, scope: Scope, box_id) -> list:
         """The inner scope of container *box_id* in *scope* plus everything
@@ -245,11 +268,246 @@ class PatchGraph:
         return out
 
 
+
+    # -- traversal (G9, Q20) -------------------------------------------------
+
+    def _port_ranks(self, scope: Scope) -> dict:
+        """``{"inlet": {rank: id}, "outlet": {rank: id}, "rank": {id: rank}}``
+        for *scope*'s port boxes, ranked by ``(patching_rect x, array index)``."""
+        cached = self._ranks.get(id(scope))
+        if cached is not None:
+            return cached
+        out: dict = {"inlet": {}, "outlet": {}, "rank": {}}
+        for kind in ("inlet", "outlet"):
+            ports = []
+            for index, box in enumerate(scope.box_list):
+                if walk.box_maxclass(box) != kind:
+                    continue
+                rect = box.get("patching_rect")
+                try:
+                    x = float(rect[0])
+                except (TypeError, ValueError, IndexError, KeyError):
+                    x = 0.0
+                ports.append((x, index, box.get("id")))
+            ports.sort(key=lambda p: (p[0], p[1]))
+            for rank, (_x, _i, box_id) in enumerate(ports):
+                out[kind].setdefault(rank, box_id)
+                out["rank"].setdefault(box_id, rank)
+        self._ranks[id(scope)] = out
+        return out
+
+    def _crossing_child(self, scope: Scope, box_id) -> "Scope | None":
+        """The inner scope of a port-crossing container (max / bpatcher), or None."""
+        inner = self.child(scope, box_id)
+        if inner is not None and inner.context in _CROSSING_CONTEXTS:
+            return inner
+        return None
+
+    def _channel_maps(self) -> dict:
+        """``{(role, kind, channel): [(scope, id), ...]}`` over every scope."""
+        if self._channels is not None:
+            return self._channels
+        maps: dict = {}
+        for scope in self.scopes:
+            for box_id, box in scope.boxes.items():
+                name = walk.box_name(box)
+                role_kind = _BRIDGE_NAMES.get(name)
+                if role_kind is None:
+                    continue
+                args = walk.box_args(box)
+                if not args:
+                    continue
+                maps.setdefault(role_kind + (args[0],), []).append((scope, box_id))
+        self._channels = maps
+        return maps
+
+    def _bridged(self, scope: Scope, box_id, role: str, signal_only: bool) -> list:
+        """Partners of a sender (role ``send``) / receiver (role ``receive``)."""
+        box = scope.boxes.get(box_id)
+        role_kind = _BRIDGE_NAMES.get(walk.box_name(box)) if box is not None else None
+        if role_kind is None or role_kind[0] != role:
+            return []
+        kind = role_kind[1]
+        if signal_only and kind != "signal":
+            return []
+        args = walk.box_args(box)
+        if not args:
+            return []
+        other = "receive" if role == "send" else "send"
+        return self._channel_maps().get((other, kind, args[0]), [])
+
+    def _transparent(self, scope: Scope, box_id) -> bool:
+        box = scope.boxes.get(box_id)
+        if walk.box_maxclass(box) in ("inlet", "outlet"):
+            return True
+        return self._crossing_child(scope, box_id) is not None
+
+    def downstream(self, scope: Scope, box_id, *, signal_only: bool = False, db=None) -> list:
+        """``(scope, box_id)`` pairs reachable downstream of *box_id* in *scope*.
+
+        BFS discovery order, the start excluded. Neighbours of each node are
+        its out-edges stable-sorted by outlet. Crossing is port-exact,
+        send/receive pairs are bridged, and ``signal_only`` follows a cord
+        only when the source outlet is signal and the destination accepts
+        signal (permissive when *db* is None). See the module docstring.
+        """
+        return self._traverse(scope, box_id, downstream=True, signal_only=signal_only, db=db)
+
+    def upstream(self, scope: Scope, box_id, *, signal_only: bool = False, db=None) -> list:
+        """``(scope, box_id)`` pairs reachable upstream of *box_id* (mirror of
+        :meth:`downstream`: neighbours by in-edges stable-sorted by inlet)."""
+        return self._traverse(scope, box_id, downstream=False, signal_only=signal_only, db=db)
+
+    def _traverse(self, start_scope: Scope, start_id, *, downstream: bool,
+                  signal_only: bool, db) -> list:
+        result: list = []
+        visited = {(id(start_scope), start_id)}
+        crossed: set = set()
+        queue: deque = deque([(start_scope, start_id)])
+
+        def mark(scope, box_id) -> bool:
+            key = (id(scope), box_id)
+            if key in visited:
+                return False
+            visited.add(key)
+            result.append((scope, box_id))
+            return True
+
+        def reach(scope, box_id, port) -> None:
+            """Reach *box_id* through a cord at *port* (inlet downstream,
+            outlet upstream)."""
+            if box_id not in scope.boxes:
+                return
+            inner = self._crossing_child(scope, box_id)
+            if inner is None:
+                if mark(scope, box_id):
+                    queue.append((scope, box_id))
+                return
+            mark(scope, box_id)
+            key = (id(scope), box_id, downstream, port)
+            if key in crossed:
+                return
+            crossed.add(key)
+            port_id = self._port_ranks(inner)["inlet" if downstream else "outlet"].get(port)
+            if port_id is not None and port_id in inner.boxes:
+                if mark(inner, port_id):
+                    queue.append((inner, port_id))
+
+        while queue:
+            scope, box_id = queue.popleft()
+            box = scope.boxes.get(box_id)
+
+            # Leaving a crossing scope through a port box
+            exit_kind = "outlet" if downstream else "inlet"
+            if (
+                walk.box_maxclass(box) == exit_kind
+                and scope.parent is not None
+                and scope.context in _CROSSING_CONTEXTS
+            ):
+                parent = scope.parent
+                container = self._container_id(parent, scope.container)
+                rank = self._port_ranks(scope)["rank"].get(box_id)
+                if container is not None and rank is not None:
+                    key = (id(parent), container, not downstream, rank)
+                    if key not in crossed:
+                        crossed.add(key)
+                        if downstream:
+                            edges = [e for e in parent.out_edges.get(container, ()) if e.outlet == rank]
+                            for e in edges:
+                                reach(parent, e.dst, e.inlet)
+                        else:
+                            edges = [e for e in parent.in_edges.get(container, ()) if e.inlet == rank]
+                            for e in edges:
+                                reach(parent, e.src, e.outlet)
+
+            if downstream:
+                edges = sorted(scope.out_edges.get(box_id, ()), key=lambda e: e.outlet)
+            else:
+                edges = sorted(scope.in_edges.get(box_id, ()), key=lambda e: e.inlet)
+            for e in edges:
+                if signal_only:
+                    src_id = e.src
+                    if not self._transparent(scope, src_id):
+                        if not e.signal or not _accepts_signal(scope.boxes.get(e.dst), e.inlet, db):
+                            continue
+                if downstream:
+                    reach(scope, e.dst, e.inlet)
+                else:
+                    reach(scope, e.src, e.outlet)
+
+            for partner_scope, partner_id in self._bridged(
+                scope, box_id, "send" if downstream else "receive", signal_only
+            ):
+                if mark(partner_scope, partner_id):
+                    queue.append((partner_scope, partner_id))
+
+        return result
+
+    @staticmethod
+    def _container_id(parent: Scope, container_key):
+        """The raw box id in *parent* whose str is *container_key*."""
+        if container_key in parent.boxes:
+            return container_key
+        for box_id in parent.boxes:
+            if str(box_id) == container_key:
+                return box_id
+        return None
+
+
+# Contexts whose containers are crossed port-exactly (G9).
+_CROSSING_CONTEXTS = frozenset({"max", "bpatcher"})
+
+# Bridged object names -> (role, kind)
+_BRIDGE_NAMES = {
+    "send": ("send", "control"), "s": ("send", "control"),
+    "send~": ("send", "signal"), "s~": ("send", "signal"),
+    "receive": ("receive", "control"), "r": ("receive", "control"),
+    "receive~": ("receive", "signal"), "r~": ("receive", "signal"),
+}
+
+
+def _accepts_signal(box, inlet: int, db) -> bool:
+    """True when *box* accepts a signal cord at *inlet*.
+
+    A container (``validation._is_container_box``) always does; otherwise
+    ``validation._inlet_accepts_signal``. Permissive when *db* is None or
+    the box is missing.
+    """
+    if db is None or not isinstance(box, dict):
+        return True
+    from src.maxpat import validation
+
+    if validation._is_container_box(box):
+        return True
+    return validation._inlet_accepts_signal(box, inlet, db)
+
+
+def resolve_patcher(patcher, path: tuple):
+    """The Patcher at walk *path* below *patcher*, following ``_inner_patcher``
+    by box id; None when a step has no embedded Patcher (e.g. mc.gen~
+    ``data.patcher``)."""
+    current = patcher
+    for box_id, _label in path:
+        nxt = None
+        for box in getattr(current, "boxes", ()):
+            if str(getattr(box, "id", "")) == box_id and getattr(box, "_inner_patcher", None) is not None:
+                nxt = box._inner_patcher
+                break
+        if nxt is None:
+            return None
+        current = nxt
+    return current
+
+
 class GraphMixin:
     """Graph traversal methods mixed into Patcher.
 
     Expects ``self.boxes``, ``self.lines``, and ``self.db`` to be provided
-    by the host class (Patcher).
+    by the host class (Patcher). ``downstream`` / ``upstream`` /
+    ``signal_path`` build one :class:`PatchGraph` from ``self.to_dict()``
+    per call and run its port-exact, send/receive-bridged,
+    outlettype-signal traversal (G9, Q20); results are mapped back to Box
+    objects through :func:`resolve_patcher`.
     """
 
     def _build_adj(
@@ -258,8 +516,10 @@ class GraphMixin:
         """Build forward and reverse adjacency dicts from self.lines.
 
         Args:
-            signal_only: If True, skip connections where either source or
-                destination box name does not end with ``~``.
+            signal_only: If True, keep only cords whose source outlet carries
+                audio (``outlettype`` signal / multichannelsignal, via
+                :func:`outlet_is_signal`) and whose destination accepts
+                signal at that inlet (a container, or the DB says so; G9).
 
         Returns:
             (forward, reverse, box_map) where:
@@ -270,6 +530,9 @@ class GraphMixin:
         box_map: dict[str, Box] = {b.id: b for b in self.boxes}
         forward: dict[str, list[tuple[str, int]]] = {}
         reverse: dict[str, list[tuple[str, int]]] = {}
+        dicts: dict = {}
+        if signal_only:
+            dicts = PatchGraph.build(self.to_dict()).top.boxes
 
         for line in self.lines:
             src_id = line.source_id
@@ -277,9 +540,9 @@ class GraphMixin:
             if src_id not in box_map or dst_id not in box_map:
                 continue
             if signal_only:
-                src_box = box_map[src_id]
-                dst_box = box_map[dst_id]
-                if not src_box.name.endswith("~") or not dst_box.name.endswith("~"):
+                if not outlet_is_signal(dicts.get(src_id), line.source_outlet):
+                    continue
+                if not _accepts_signal(dicts.get(dst_id), line.dest_inlet, self.db):
                     continue
             forward.setdefault(src_id, []).append((dst_id, line.source_outlet))
             reverse.setdefault(dst_id, []).append((src_id, line.dest_inlet))
@@ -295,17 +558,20 @@ class GraphMixin:
     def downstream(self, box: "Box", *, signal_only: bool = False) -> "list[Box]":
         """Return all boxes reachable downstream from *box* (BFS, full chain).
 
-        Results are ordered by outlet index (left to right) for natural
-        signal-flow reading. The starting box is NOT included.
+        Results are in BFS discovery order, each node's neighbours ordered by
+        outlet index (left to right). The starting box is NOT included.
 
-        Traversal crosses subpatcher boundaries: when a downstream neighbor
-        has ``_inner_patcher``, the traversal follows through inlet objects
-        inside the subpatcher and continues out through outlet objects.
+        Traversal crosses subpatcher boundaries port-exactly: a cord into a
+        ``p`` / embedded bpatcher at inlet *i* enters only the inner inlet of
+        x-rank *i*, and an inner outlet of rank *k* continues only from the
+        container's outlet *k*. gen~ / rnbo~ / poly~ containers are opaque.
+        send/receive and send~/receive~ pairs are bridged by channel name.
 
         Args:
             box: Starting box.
-            signal_only: If True, only follow connections where both source
-                and destination box names end with ``~``.
+            signal_only: If True, follow only cords whose source outlet
+                carries audio (``outlettype``) into an inlet that accepts
+                signal; port boxes and crossing containers are transparent.
 
         Returns:
             List of downstream Box objects.
@@ -322,16 +588,16 @@ class GraphMixin:
     def upstream(self, box: "Box", *, signal_only: bool = False) -> "list[Box]":
         """Return all boxes reachable upstream from *box* (BFS, full chain).
 
-        Results are ordered by inlet index (left to right). The starting
-        box is NOT included.
+        Results are in BFS discovery order, each node's neighbours ordered by
+        inlet index (left to right). The starting box is NOT included.
 
-        Traversal crosses subpatcher boundaries by following outlet objects
-        inside subpatchers back to their sources.
+        Mirrors :meth:`downstream`: a cord from a ``p`` outlet *k* enters only
+        the inner outlet of x-rank *k*; an inner inlet of rank *i* continues
+        only from the container's inlet *i*. Receivers bridge to senders.
 
         Args:
             box: Starting box.
-            signal_only: If True, only follow connections where both source
-                and destination box names end with ``~``.
+            signal_only: Same rule as :meth:`downstream`.
 
         Returns:
             List of upstream Box objects.
@@ -352,148 +618,45 @@ class GraphMixin:
         direction: str,
         signal_only: bool = False,
     ) -> "list[Box]":
-        """BFS traversal in given direction, crossing subpatcher boundaries.
+        """One PatchGraph per call; ``(scope, id)`` pairs mapped back to Boxes.
 
-        Args:
-            start: The starting box.
-            direction: ``"downstream"`` or ``"upstream"``.
-            signal_only: Filter to signal-only connections.
-
-        Returns:
-            Ordered list of reachable Box objects (starting box excluded).
+        Pairs in scopes without a Patcher (mc.gen~ ``data.patcher``) are
+        dropped.
         """
+        graph = PatchGraph.build(self.to_dict())
+        top = graph.top
+        db = self.db if signal_only else None
+        if direction == "downstream":
+            pairs = graph.downstream(top, start.id, signal_only=signal_only, db=db)
+        else:
+            pairs = graph.upstream(top, start.id, signal_only=signal_only, db=db)
+
+        maps: dict = {}
         result: list[Box] = []
-        # visited tracks (id(patcher), box_id) to handle cross-patcher traversal
-        visited: set[tuple[int, str]] = set()
-        visited.add((id(self), start.id))
-
-        # Queue items: (patcher, box_id) -- the patcher that owns the box
-        queue: deque[tuple[GraphMixin, str]] = deque()
-
-        # Seed the queue with immediate neighbors in this patcher
-        self._enqueue_neighbors(
-            queue, visited, result, self, start, direction, signal_only
-        )
-
-        while queue:
-            patcher, box_id = queue.popleft()
-            box_map = {b.id: b for b in patcher.boxes}
-            current_box = box_map.get(box_id)
-            if current_box is None:
-                continue
-
-            # If this box has an inner patcher, cross the boundary
-            if current_box._inner_patcher is not None:
-                self._cross_subpatcher(
-                    queue, visited, result, patcher, current_box,
-                    direction, signal_only
-                )
-
-            # Enqueue neighbors of current_box within its own patcher
-            self._enqueue_neighbors(
-                queue, visited, result, patcher, current_box, direction, signal_only
-            )
-
+        for scope, box_id in pairs:
+            key = id(scope)
+            if key not in maps:
+                patcher = resolve_patcher(self, scope.path)
+                maps[key] = {} if patcher is None else {b.id: b for b in patcher.boxes}
+            found = maps[key].get(box_id)
+            if found is not None:
+                result.append(found)
         return result
 
-    def _enqueue_neighbors(
-        self,
-        queue: "deque[tuple[GraphMixin, str]]",
-        visited: set[tuple[int, str]],
-        result: "list[Box]",
-        patcher: "GraphMixin",
-        box: "Box",
-        direction: str,
-        signal_only: bool,
-    ) -> None:
-        """Add unvisited neighbors of *box* to the BFS queue and result."""
-        forward, reverse, box_map = patcher._build_adj(signal_only=signal_only)
-
-        if direction == "downstream":
-            neighbors = forward.get(box.id, [])
-        else:
-            neighbors = reverse.get(box.id, [])
-
-        for neighbor_id, _index in neighbors:
-            key = (id(patcher), neighbor_id)
-            if key in visited:
-                continue
-            visited.add(key)
-            neighbor_box = box_map.get(neighbor_id)
-            if neighbor_box is not None:
-                result.append(neighbor_box)
-                queue.append((patcher, neighbor_id))
-
-    def _cross_subpatcher(
-        self,
-        queue: "deque[tuple[GraphMixin, str]]",
-        visited: set[tuple[int, str]],
-        result: "list[Box]",
-        parent_patcher: "GraphMixin",
-        sub_box: "Box",
-        direction: str,
-        signal_only: bool,
-    ) -> None:
-        """Cross into a subpatcher boundary during traversal.
-
-        For downstream: find inlet/inlet~ objects inside and continue from them.
-        For upstream: find outlet/outlet~ objects inside and trace back from them.
-        """
-        inner = sub_box._inner_patcher
-        if inner is None:
-            return
-
-        if direction == "downstream":
-            # Find connections entering sub_box in parent, map to inner inlet objects
-            # Then find outlet/outlet~ objects in inner, map back to parent connections
-            # Step 1: find inlet objects inside
-            for inner_box in inner.boxes:
-                if inner_box.name in ("inlet", "inlet~"):
-                    key = (id(inner), inner_box.id)
-                    if key not in visited:
-                        visited.add(key)
-                        result.append(inner_box)
-                        queue.append((inner, inner_box.id))
-
-            # Step 2: find outlet objects that lead back to parent
-            for inner_box in inner.boxes:
-                if inner_box.name in ("outlet", "outlet~"):
-                    key = (id(inner), inner_box.id)
-                    if key not in visited:
-                        visited.add(key)
-                        result.append(inner_box)
-                        # Outlet objects map back to parent's sub_box outlets
-                        # Enqueue sub_box's downstream in parent (already handled
-                        # by normal traversal since sub_box is in the result path)
-        else:
-            # upstream: find outlet objects inside and trace backwards
-            for inner_box in inner.boxes:
-                if inner_box.name in ("outlet", "outlet~"):
-                    key = (id(inner), inner_box.id)
-                    if key not in visited:
-                        visited.add(key)
-                        result.append(inner_box)
-                        queue.append((inner, inner_box.id))
-
-            # Also expose inlet objects (they connect back to parent upstream)
-            for inner_box in inner.boxes:
-                if inner_box.name in ("inlet", "inlet~"):
-                    key = (id(inner), inner_box.id)
-                    if key not in visited:
-                        visited.add(key)
-                        result.append(inner_box)
-
     def signal_path(self, box: "Box") -> "list[Box]":
-        """Return the full signal chain passing through *box* (~ objects only).
+        """Return the full signal chain passing through *box*.
 
         Combines upstream signal sources (reversed) + box + downstream signal
-        sinks. Only includes boxes whose name ends with ``~``.
+        sinks, using the ``signal_only`` traversal (outlettype + destination
+        acceptance, crossing ``p`` boxes port-exactly). *box* itself is
+        included when its ``outlettype`` has a signal / multichannelsignal
+        entry, or, with no ``outlettype`` list, when its name ends in ``~``.
 
         Args:
             box: The box to trace the signal path through.
 
         Returns:
-            Ordered list of ~ boxes from source to sink.
+            Ordered list of boxes from source to sink.
 
         Raises:
             ValueError: If *box* is not in this patcher.
@@ -506,7 +669,11 @@ class GraphMixin:
         downstream_signal = self.downstream(box, signal_only=True)
         # Reverse upstream so sources come first
         upstream_signal = list(reversed(upstream_signal))
-        is_signal = box.name.endswith("~")
+        outlettype = getattr(box, "outlettype", None)
+        if isinstance(outlettype, list):
+            is_signal = any(t in SIGNAL_OUTLET_TYPES for t in outlettype if isinstance(t, str))
+        else:
+            is_signal = box.name.endswith("~")
         if is_signal:
             return upstream_signal + [box] + downstream_signal
         else:

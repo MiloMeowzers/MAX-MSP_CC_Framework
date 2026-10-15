@@ -25,9 +25,11 @@ Only embedded patcher dicts are walked: ``box["patcher"]``, or
 loaded. Everything here is pure: no mutation, no I/O, and malformed input
 yields less rather than raising.
 
-The remaining walkers and extractors (``hooks._iter_patchers``,
-``utils.get_box_name``, the critics, analysis, testing, graph, layout) move
-onto this module in Q20.
+The critics, the shared graph (:class:`src.maxpat.graph.PatchGraph`),
+analysis and the test checklist use this walker and these helpers (Q20).
+``hooks._iter_patchers`` (the save-gate cord/port walker, whose path labels
+differ), ``utils.get_box_name`` and the ``layout.py`` / ``aesthetics.py`` /
+``m4l_polish.py`` walkers keep their own code (follow-up).
 """
 
 from __future__ import annotations

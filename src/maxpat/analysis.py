@@ -3,6 +3,13 @@
 Provides structured Markdown analysis of patch contents: domain classification,
 section detection, complexity metrics, signal/control flow tracing, hierarchy,
 and parameter inventory. Extracted from patcher.py for maintainability.
+
+analyze() recurses into subpatchers (Q20): it enumerates
+``walk.iter_patchers(self.to_dict())`` (the single walker) and resolves each
+nested scope to its inner Patcher with ``graph.resolve_patcher``. The
+inventory counts every scope; Sections, Signal Flow, Control Flow and
+Parameters append a ``### [p synth]`` block per nested max / bpatcher / poly
+scope after the unchanged top-level content.
 """
 
 from __future__ import annotations
@@ -10,6 +17,8 @@ from __future__ import annotations
 from collections import Counter, deque
 from typing import TYPE_CHECKING
 
+from src.maxpat import walk
+from src.maxpat.graph import resolve_patcher
 from src.maxpat.maxclass_map import UI_MAXCLASSES
 
 if TYPE_CHECKING:
@@ -110,7 +119,45 @@ class AnalysisMixin:
     Expects ``self.boxes``, ``self.lines``, ``self.db``, and graph methods
     (``connected_components``, ``downstream``, ``_build_adj``,
     ``_resolve_send_receive_pairs``) to be provided by the host class.
+
+    Each facet has a body helper that describes one Patcher; analyze()
+    applies it to the top level and then to every nested scope (Q20).
     """
+
+    # -- nested scopes (Q20) --------------------------------------------------
+
+    def _nested_scopes(self) -> list:
+        """``(path, context, Patcher)`` for every nested scope, pre-order.
+
+        From ``walk.iter_patchers(self.to_dict())``; scopes that do not
+        resolve to an inner Patcher are skipped.
+        """
+        out = []
+        for path, _patcher, context in walk.iter_patchers(self.to_dict()):
+            if not path:
+                continue
+            inner = resolve_patcher(self, path)
+            if inner is None:
+                continue
+            out.append((path, context, inner))
+        return out
+
+    @staticmethod
+    def _nested_blocks(nested: list, body) -> list[str]:
+        """``### [label]`` + *body(patcher)* lines for each nested
+        max / bpatcher / poly scope whose facet has content."""
+        lines: list[str] = []
+        for path, context, inner in nested:
+            if context in ("gen", "rnbo"):
+                continue
+            body_lines = body(inner)
+            if not body_lines:
+                continue
+            lines.append("")
+            lines.append(f"### {walk.path_prefix(path).strip()}")
+            lines.append("")
+            lines.extend(body_lines)
+        return lines
 
     def _classify_domain(self, box: "Box") -> str:
         """Classify a box's domain using DB lookup with heuristic fallback.
@@ -258,6 +305,20 @@ class AnalysisMixin:
         Returns:
             Markdown string with "## Sections" header.
         """
+        return self._analyze_sections_nested([])
+
+    def _analyze_sections_nested(self, nested: list) -> str:
+        body = self._sections_body()
+        lines = ["## Sections", ""]
+        if not body:
+            lines.append("(no sections detected)")
+        else:
+            lines.extend(body)
+        lines.extend(self._nested_blocks(nested, lambda p: p._sections_body()))
+        return "\n".join(lines)
+
+    def _sections_body(self) -> list[str]:
+        """Section lines of this Patcher (``[]`` when none)."""
         components = self.connected_components()
 
         # Filter out comment/panel-only single-element groups
@@ -270,10 +331,9 @@ class AnalysisMixin:
         # Merge via send/receive pairs
         merged = self._merge_components_by_send_receive(filtered)
 
-        lines = ["## Sections", ""]
+        lines: list[str] = []
         if not merged:
-            lines.append("(no sections detected)")
-            return "\n".join(lines)
+            return lines
 
         section_counter = 1
         for comp in merged:
@@ -293,7 +353,7 @@ class AnalysisMixin:
             desc = ", ".join(unique_names)
             lines.append(f"- **{name}** ({obj_count} objects) -- {desc}")
 
-        return "\n".join(lines)
+        return lines
 
     # -- Complexity metrics ---------------------------------------------------
 
@@ -351,16 +411,31 @@ class AnalysisMixin:
 
     # -- Object inventory -----------------------------------------------------
 
-    def _analyze_inventory(self) -> str:
-        """Group top-level boxes by domain with counts and key objects.
+    def _analyze_inventory(self, nested: list | None = None) -> str:
+        """Group boxes by domain with counts and key objects.
+
+        Counts the top level and every scope in *nested* (Q20): gen-context
+        boxes count as ``Gen``, rnbo-context boxes as ``RNBO``, everything
+        else by :meth:`_classify_domain`. With nested scopes the table is
+        followed by ``Counts include N subpatcher scope(s).``
 
         Returns:
             Markdown string with "## Object Inventory" header and table.
         """
+        nested = nested or []
         domain_boxes: dict[str, list[str]] = {}
         for box in self.boxes:
             domain = self._classify_domain(box)
             domain_boxes.setdefault(domain, []).append(box.name)
+        for _path, context, inner in nested:
+            for box in inner.boxes:
+                if context == "gen":
+                    domain = "Gen"
+                elif context == "rnbo":
+                    domain = "RNBO"
+                else:
+                    domain = self._classify_domain(box)
+                domain_boxes.setdefault(domain, []).append(box.name)
 
         lines = ["## Object Inventory", ""]
         if not domain_boxes:
@@ -374,6 +449,9 @@ class AnalysisMixin:
             top_objs = Counter(names).most_common(5)
             key_str = ", ".join(f"{n}({c})" if c > 1 else n for n, c in top_objs)
             lines.append(f"| {domain} | {count} | {key_str} |")
+        if nested:
+            lines.append("")
+            lines.append(f"Counts include {len(nested)} subpatcher scope(s).")
 
         return "\n".join(lines)
 
@@ -388,18 +466,36 @@ class AnalysisMixin:
         Returns:
             Markdown string with "## Signal Flow" header.
         """
+        return self._analyze_signal_chains_nested([])
+
+    def _analyze_signal_chains_nested(self, nested: list) -> str:
+        body = self._signal_body()
+        blocks = self._nested_blocks(nested, lambda p: p._signal_body())
+        if not body:
+            text = "## Signal Flow\n\n(no signal objects detected)"
+        else:
+            text = "\n".join(["## Signal Flow", ""] + body)
+        if blocks:
+            text += "\n" + "\n".join(blocks)
+        return text
+
+    def _signal_body(self) -> list[str]:
+        """Signal-tree lines of this Patcher (``[]`` when no roots)."""
         forward, reverse, box_map = self._build_adj(signal_only=True)
 
-        # Find signal chain roots: ~ objects with no signal-rate inputs
+        # Find signal chain roots: boxes with no signal-rate inputs that are
+        # ~ objects or emit signal cords. Since Q20 the adjacency follows
+        # outlettype, so a p / bpatcher feeding a chain carries signal and
+        # must root it (otherwise the chain behind it would have no root).
         roots: list[str] = []
         for box in self.boxes:
-            if not box.name.endswith("~"):
+            if not box.name.endswith("~") and box.id not in forward:
                 continue
             if box.id not in reverse:
                 roots.append(box.id)
 
         if not roots:
-            return "## Signal Flow\n\n(no signal objects detected)"
+            return []
 
         # Build send~/receive~ mapping for wireless connections
         sr_pairs = self._resolve_send_receive_pairs()
@@ -411,7 +507,7 @@ class AnalysisMixin:
                 send_channels[sid] = channel
             recv_channels[channel] = receivers
 
-        lines = ["## Signal Flow", ""]
+        lines: list[str] = []
         visited_global: set[str] = set()
 
         def render_tree(box_id: str, indent: int, visited: set[str]) -> None:
@@ -450,7 +546,8 @@ class AnalysisMixin:
                 render_tree(root_id, 0, set())
                 lines.append("")
 
-        return "\n".join(lines).rstrip()
+        text = "\n".join(lines).rstrip()
+        return text.split("\n") if text else []
 
     # -- Control flow paths ---------------------------------------------------
 
@@ -463,6 +560,21 @@ class AnalysisMixin:
         Returns:
             Markdown string with "## Control Flow" header.
         """
+        return self._analyze_control_paths_nested([])
+
+    def _analyze_control_paths_nested(self, nested: list) -> str:
+        body = self._control_body()
+        blocks = self._nested_blocks(nested, lambda p: p._control_body())
+        if not body:
+            text = "## Control Flow\n\n(no notable control sources detected)"
+        else:
+            text = "\n".join(["## Control Flow", ""] + body)
+        if blocks:
+            text += "\n" + "\n".join(blocks)
+        return text
+
+    def _control_body(self) -> list[str]:
+        """Control-path lines of this Patcher (``[]`` when no origins)."""
         notable_origins = {"loadbang", "notein", "ctlin", "midiin", "metro", "counter"}
         forward, _reverse, box_map = self._build_adj(signal_only=False)
 
@@ -472,9 +584,9 @@ class AnalysisMixin:
                 origins.append(box)
 
         if not origins:
-            return "## Control Flow\n\n(no notable control sources detected)"
+            return []
 
-        lines = ["## Control Flow", ""]
+        lines: list[str] = []
         for origin in origins:
             # BFS to get first few downstream objects
             chain: list[str] = []
@@ -501,7 +613,7 @@ class AnalysisMixin:
             origin_label = origin.text if origin.text else origin.name
             lines.append(f"- **{origin_label}** -> {chain_str}")
 
-        return "\n".join(lines)
+        return lines
 
     # -- Subpatcher hierarchy -------------------------------------------------
 
@@ -540,15 +652,32 @@ class AnalysisMixin:
 
     # -- Parameters / UI Controls ---------------------------------------------
 
-    def _analyze_parameters(self) -> str:
+    def _analyze_parameters(self, nested: list | None = None) -> str:
         """List UI controls and parameter objects.
 
         Detects objects by maxclass against a known set of UI control types.
-        Uses varname from extra_attrs as label when available.
+        Uses varname from extra_attrs as label when available. Controls in
+        nested max / bpatcher / poly scopes follow as
+        ``- [p synth] label (maxclass)`` (Q20).
 
         Returns:
             Markdown string with "## Parameters / UI Controls" header.
         """
+        params = self._parameter_lines("")
+        for path, context, inner in nested or []:
+            if context in ("gen", "rnbo"):
+                continue
+            params.extend(inner._parameter_lines(walk.path_prefix(path)))
+
+        lines = ["## Parameters / UI Controls", ""]
+        if params:
+            lines.extend(params)
+        else:
+            lines.append("(none detected)")
+        return "\n".join(lines)
+
+    def _parameter_lines(self, prefix: str) -> list[str]:
+        """``- {prefix}label (maxclass)`` per UI control of this Patcher."""
         ui_controls = {
             "slider", "dial", "rslider", "multislider",
             "number", "flonum", "toggle", "button",
@@ -562,14 +691,8 @@ class AnalysisMixin:
             if box.maxclass in ui_controls:
                 varname = box.extra_attrs.get("varname", "")
                 label = varname if varname else box.maxclass
-                params.append(f"- {label} ({box.maxclass})")
-
-        lines = ["## Parameters / UI Controls", ""]
-        if params:
-            lines.extend(params)
-        else:
-            lines.append("(none detected)")
-        return "\n".join(lines)
+                params.append(f"- {prefix}{label} ({box.maxclass})")
+        return params
 
     # -- Public analyze method ------------------------------------------------
 
@@ -581,16 +704,22 @@ class AnalysisMixin:
         functional sections, signal flow chains, control flow paths,
         subpatcher hierarchy, and parameters.
 
+        Recursive (Q20): the inventory counts every scope, and Sections,
+        Signal Flow, Control Flow and Parameters add a ``### [p synth]``
+        block per nested max / bpatcher / poly scope after the unchanged
+        top-level content. Overview and Subpatchers were already recursive.
+
         Returns:
             Complete Markdown analysis string.
         """
+        nested = self._nested_scopes()
         complexity = self._analyze_complexity()
-        inventory = self._analyze_inventory()
-        sections = self._analyze_sections()
-        signal_chains = self._analyze_signal_chains()
-        control_paths = self._analyze_control_paths()
+        inventory = self._analyze_inventory(nested)
+        sections = self._analyze_sections_nested(nested)
+        signal_chains = self._analyze_signal_chains_nested(nested)
+        control_paths = self._analyze_control_paths_nested(nested)
         hierarchy = self._analyze_hierarchy()
-        parameters = self._analyze_parameters()
+        parameters = self._analyze_parameters(nested)
 
         parts = [
             "# Patch Analysis",

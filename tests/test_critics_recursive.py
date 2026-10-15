@@ -1039,3 +1039,55 @@ _CRITIC_RUNNERS = {
 def test_nested_junk_never_raises(critic, db):
     d = _patch([_plugout(), _container("obj-1", "p junk", _junk_scope())])
     assert isinstance(_CRITIC_RUNNERS[critic](d, db), list)
+
+
+# ===========================================================================
+# Task 3: no-crash sweep over the installed Max 9 bundle
+# ===========================================================================
+
+
+class TestBundleSweep:
+    @pytest.mark.requires_max
+    def test_bundle_sweep_never_raises(self, db):
+        import json
+        import warnings
+
+        from tests.conftest import MAX_APP_PATH
+        from src.maxpat.testing import generate_test_checklist
+
+        root = MAX_APP_PATH / "Contents" / "Resources" / "C74"
+        files = sorted(list(root.rglob("*.maxpat")) + list(root.rglob("*.maxhelp")))
+        assert files
+        raised = []
+        checked = 0
+        for f in files:
+            try:
+                d = json.loads(f.read_text(errors="replace"))
+            except (ValueError, OSError):
+                continue
+            if not isinstance(d, dict) or not isinstance(d.get("patcher"), dict):
+                continue
+            checked += 1
+            rel = str(f.relative_to(root))
+            step = "review_patch"
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    review_patch(d, db=db)
+                    step = "generate_test_checklist"
+                    generate_test_checklist(d, f.stem)
+                    step = "PatchGraph.build"
+                    g = PatchGraph.build(d)
+                    top = g.top
+                    start = next((bid for bid in top.boxes if top.out_edges.get(bid)), None)
+                    if start is not None:
+                        step = "downstream"
+                        g.downstream(top, start, db=db)
+                        step = "downstream(signal_only)"
+                        g.downstream(top, start, signal_only=True, db=db)
+                        step = "upstream"
+                        g.upstream(top, start, db=db)
+            except Exception as exc:  # noqa: BLE001 -- collect every crash
+                raised.append((rel, step, repr(exc)))
+        assert raised == []
+        assert checked > len(files) // 2

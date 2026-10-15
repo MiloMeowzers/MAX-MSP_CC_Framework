@@ -500,11 +500,11 @@ def _finding_key(result) -> tuple:
     - ids: sorted unique ``obj-N`` ids from the text, plus the source and
       destination ids of ``proposed_removal`` when set;
     - proposed_removal: the cord tuple, or None;
-    - path: ``ValidationResult.path`` (``""`` at the top level and for
-      critic findings). It keeps findings in identically labelled
-      subpatchers apart: ``[p voice]`` obj-1 and ``[p voice]`` obj-2 share
-      a template and inner ids, so without it a blocker moved from one to
-      the other would match the baseline (Q19).
+    - path: ``ValidationResult.path`` (Q19) or ``CriticResult.path``
+      (Q20); ``""`` at the top level. It keeps findings in identically
+      labelled subpatchers apart: ``[p voice]`` obj-1 and ``[p voice]``
+      obj-2 share a template and inner ids, so without it a blocker moved
+      from one to the other would match the baseline.
     """
     if isinstance(result, ValidationResult):
         origin: tuple = ("validate", result.layer, result.level)
