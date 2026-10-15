@@ -36,6 +36,9 @@ _PATCH_FILES = sorted(_REPO_ROOT.glob("patches/*/generated/*.maxpat"))
 # and missing reasons, and calibration-project patches may never appear here.
 # A NEW patch (path absent from the allowlist) or a NEW blocker (signature not
 # explicitly listed for its patch) is never exempted -- it still fails.
+# Keys include the CriticResult path (Q20): an entry's optional `path`
+# (default "", the top level) must equal the blocker's scope path, so a
+# nested blocker is never exempted by a top-level entry with the same id.
 _ALLOWLIST_PATH = Path(__file__).resolve().parent / "review_blocker_allowlist.json"
 with open(_ALLOWLIST_PATH) as _f:
     _ALLOWLIST = json.load(_f).get("patches", {})
@@ -85,16 +88,33 @@ def _entry_key(entry: dict):
     return None
 
 
-def _is_allowlisted(patch_rel: str, finding: str) -> bool:
+def _result_key(result):
+    """Signature key of a CriticResult blocker: finding key + scope path."""
+    key = _blocker_match_key(result.finding)
+    if key is None:
+        return None
+    return key + (getattr(result, "path", ""),)
+
+
+def _allow_key(entry: dict):
+    """Signature key of an allowlist entry: entry key + its `path` (default "")."""
+    key = _entry_key(entry)
+    if key is None:
+        return None
+    return key + (entry.get("path", ""),)
+
+
+def _is_allowlisted(patch_rel: str, result) -> bool:
     """True only if `patch_rel` has an allowlist list AND the blocker's
-    signature matches one of that patch's explicit entries."""
+    signature (including its CriticResult path) matches one of that patch's
+    explicit entries."""
     entries = _ALLOWLIST.get(patch_rel)
     if not entries:
         return False
-    key = _blocker_match_key(finding)
+    key = _result_key(result)
     if key is None:
         return False
-    return any(_entry_key(e) == key for e in entries)
+    return any(_allow_key(e) == key for e in entries)
 
 # Known issues: patches that fail specific tests with documented reasons.
 # Marked xfail(strict=True): when the blocker is fixed the case XPASSes and
@@ -178,7 +198,7 @@ def test_review_patch_no_blockers(patch_path: Path, db: ObjectDatabase) -> None:
     # current patch has an explicit allowlist entry matching its signature,
     # so new patches / new blockers still fail this test.
     patch_rel = patch_path.relative_to(_REPO_ROOT).as_posix()
-    remaining = [b for b in blockers if not _is_allowlisted(patch_rel, b.finding)]
+    remaining = [b for b in blockers if not _is_allowlisted(patch_rel, b)]
 
     assert not remaining, (
         f"{len(remaining)} unallowlisted blocker(s) in {patch_path.name}:\n"
@@ -220,16 +240,16 @@ def test_review_allowlist_entries_are_live() -> None:
             continue
         with open(path) as f:
             live = {
-                _blocker_match_key(r.finding)
+                _result_key(r)
                 for r in review_patch(json.load(f))
                 if r.severity == "blocker"
             }
         for entry in entries:
             reason = entry.get("reason")
             if not (isinstance(reason, str) and reason.strip()):
-                problems.append(f"{patch_rel}: no reason for {_entry_key(entry)}")
-            if _entry_key(entry) not in live:
-                problems.append(f"{patch_rel}: stale (does not fire) {_entry_key(entry)}")
+                problems.append(f"{patch_rel}: no reason for {_allow_key(entry)}")
+            if _allow_key(entry) not in live:
+                problems.append(f"{patch_rel}: stale (does not fire) {_allow_key(entry)}")
     assert not problems, (
         f"{len(problems)} allowlist problem(s):\n"
         + "\n".join(f"  - {p}" for p in problems)
@@ -268,3 +288,20 @@ def test_calibration_zero_blockers(patch_path: Path) -> None:
         f"{len(blockers)} blocker(s) in user-confirmed {patch_path.name}:\n"
         + "\n".join(f"  - {r}" for r in blockers)
     )
+
+
+def test_allowlist_key_includes_path() -> None:
+    """A nested blocker never matches a top-level allowlist entry (Q20)."""
+    from src.maxpat.critics.base import CriticResult
+
+    patch_rel = "patches/rhythmic-sampler/generated/slot.maxpat"
+    finding = (
+        "Fan-out without trigger: 'buffer~' (obj-1) outlet 1 connected to 2 "
+        "destinations ('message' (obj-27), 'message' (obj-28)) -- paths "
+        "reconverge on 'waveform~' (obj-4) at different inlets, so execution "
+        "order changes the result"
+    )
+    nested = CriticResult("blocker", "[p x] " + finding, "s", path="obj-9")
+    top = CriticResult("blocker", finding, "s")
+    assert not _is_allowlisted(patch_rel, nested)
+    assert _is_allowlisted(patch_rel, top)

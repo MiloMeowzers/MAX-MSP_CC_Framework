@@ -1,18 +1,248 @@
-"""Graph traversal mixin for Patcher.
+"""Patch graphs: the shared dict-level graph and the Patcher traversal mixin.
 
-Provides BFS-based graph traversal methods that operate on Patcher's boxes
-and lines, supporting downstream/upstream queries, signal path tracing,
-and connected component detection. Extracted from patcher.py for
-maintainability.
+:class:`PatchGraph` is the one shared graph of a .maxpat dict (S1, Q20). It
+is built in a single :func:`src.maxpat.walk.iter_patchers` pass and holds
+every scope (top level, ``p`` / embedded bpatcher / poly~ / gen~ / mc.gen~
+``data.patcher`` / rnbo~ patchers) with its boxes and parsed cords.
+``review_patch`` builds it once per call and passes it to every critic, so
+no critic re-parses lines or rebuilds adjacency. The graph is read-only: it
+never mutates the patch dict, and malformed boxes, lines, ids and ports are
+skipped rather than raising.
+
+:class:`GraphMixin` provides the BFS traversal methods mixed into Patcher
+(downstream/upstream queries, signal path tracing, connected components).
 """
 
 from __future__ import annotations
 
 from collections import deque
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
+
+from src.maxpat import walk
 
 if TYPE_CHECKING:
     from src.maxpat.patcher import Box, Patchline
+
+
+# ---------------------------------------------------------------------------
+# Shared dict-level graph (S1, Q20)
+# ---------------------------------------------------------------------------
+
+# Outlet types that carry audio.
+SIGNAL_OUTLET_TYPES = frozenset({"signal", "multichannelsignal"})
+
+
+def outlet_is_signal(box, outlet) -> bool:
+    """True when *box* outlet *outlet* carries audio (Q3 / E1).
+
+    Decided by the box's ``outlettype`` entry at that index (``signal`` or
+    ``multichannelsignal``). Only when the box has no entry there
+    (hand-built dicts) does it fall back to the ``~``-name test. A missing
+    or non-dict box is never signal.
+    """
+    if not isinstance(box, dict):
+        return False
+    outlettype = box.get("outlettype")
+    if (
+        isinstance(outlettype, list)
+        and isinstance(outlet, int)
+        and 0 <= outlet < len(outlettype)
+    ):
+        entry = outlettype[outlet]
+        return isinstance(entry, str) and entry in SIGNAL_OUTLET_TYPES
+    return walk.box_name(box).endswith("~")
+
+
+class Edge(NamedTuple):
+    """One well-formed cord of a scope: ``src`` outlet -> ``dst`` inlet.
+
+    ``signal`` is :func:`outlet_is_signal` of the source box at ``outlet``;
+    ``line`` is the raw patchline dict.
+    """
+
+    src: object
+    outlet: int
+    dst: object
+    inlet: int
+    signal: bool
+    line: dict
+
+
+def _valid_id(value) -> bool:
+    return (
+        isinstance(value, (str, int))
+        and not isinstance(value, bool)
+        and bool(value)
+    )
+
+
+def _valid_port(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _entry_box(entry):
+    """The box of a boxes-array entry: ``entry["box"]``, or a bare box dict."""
+    if not isinstance(entry, dict):
+        return None
+    box = entry.get("box")
+    if isinstance(box, dict):
+        return box
+    if "id" in entry:
+        return entry
+    return None
+
+
+def _parse_endpoint(value):
+    if not isinstance(value, (list, tuple)) or len(value) < 2:
+        return None
+    box_id, port = value[0], value[1]
+    if not isinstance(box_id, (str, int)) or isinstance(box_id, bool):
+        return None
+    if not _valid_port(port):
+        return None
+    return box_id, port
+
+
+class Scope:
+    """One patcher of a :class:`PatchGraph`.
+
+    Attributes:
+        path: the ``walk.iter_patchers`` path tuple (``()`` at the top).
+        key: ``walk.path_ids(path)`` (``obj-1/obj-2``; ``""`` at the top).
+        prefix: ``walk.path_prefix(path)`` (``[p synth > gen~] ``).
+        context: max / gen / rnbo / poly / bpatcher.
+        scope: ``walk.scope_of(context)`` (max / gen / rnbo).
+        patcher: the raw patcher dict (never mutated).
+        boxes: id -> box, in first-seen order; a duplicate id keeps its
+            first position and its last box.
+        box_list: every box with a valid id, in array order (duplicates kept).
+        edges: one :class:`Edge` per well-formed cord, in line order.
+        out_edges / in_edges: id -> edges leaving / entering it, line order.
+        parent: the enclosing Scope (None at the top).
+        container: the id of the box holding this patcher (None at the top).
+    """
+
+    __slots__ = (
+        "path", "key", "prefix", "context", "scope", "patcher", "boxes",
+        "box_list", "edges", "out_edges", "in_edges", "parent", "container",
+        "_ids",
+    )
+
+    def __init__(self, path: tuple, patcher, context: str, parent=None):
+        self.path = path
+        self.key = walk.path_ids(path)
+        self.prefix = walk.path_prefix(path)
+        self.context = context
+        self.scope = walk.scope_of(context)
+        self.patcher = patcher if isinstance(patcher, dict) else {}
+        self.parent = parent
+        self.container = path[-1][0] if path else None
+        self._ids = tuple(box_id for box_id, _ in path)
+
+        boxes: dict = {}
+        box_list: list = []
+        raw_boxes = self.patcher.get("boxes")
+        for entry in raw_boxes if isinstance(raw_boxes, list) else ():
+            box = _entry_box(entry)
+            if box is None:
+                continue
+            box_id = box.get("id")
+            if not _valid_id(box_id):
+                continue
+            boxes[box_id] = box
+            box_list.append(box)
+        self.boxes = boxes
+        self.box_list = box_list
+
+        edges: list = []
+        out_edges: dict = {}
+        in_edges: dict = {}
+        raw_lines = self.patcher.get("lines")
+        for entry in raw_lines if isinstance(raw_lines, list) else ():
+            if not isinstance(entry, dict):
+                continue
+            line = entry.get("patchline", entry)
+            if not isinstance(line, dict):
+                continue
+            src = _parse_endpoint(line.get("source"))
+            dst = _parse_endpoint(line.get("destination"))
+            if src is None or dst is None:
+                continue
+            edge = Edge(
+                src[0], src[1], dst[0], dst[1],
+                outlet_is_signal(boxes.get(src[0]), src[1]), line,
+            )
+            edges.append(edge)
+            out_edges.setdefault(edge.src, []).append(edge)
+            in_edges.setdefault(edge.dst, []).append(edge)
+        self.edges = edges
+        self.out_edges = out_edges
+        self.in_edges = in_edges
+
+    def __repr__(self) -> str:
+        return f"Scope({self.key or '<top>'!r}, {self.context})"
+
+
+class PatchGraph:
+    """Every scope of one patch dict, built once and shared (S1, Q20).
+
+    ``scopes`` is in ``walk.iter_patchers`` pre-order, top first. There is
+    always a top scope: when the walker yields nothing (no usable patcher)
+    the top is an empty max scope with patcher ``{}``.
+    """
+
+    __slots__ = ("scopes", "_by_ids")
+
+    def __init__(self, scopes: list):
+        self.scopes = scopes
+        self._by_ids = {}
+        for scope in scopes:
+            self._by_ids.setdefault(scope._ids, scope)
+
+    @classmethod
+    def build(cls, patch, scope: "str | None" = None) -> "PatchGraph":
+        """One ``walk.iter_patchers(patch, scope=scope)`` pass; read-only."""
+        scopes: list = []
+        by_ids: dict = {}
+        for path, patcher, context in walk.iter_patchers(patch, scope=scope):
+            ids = tuple(box_id for box_id, _ in path)
+            parent = by_ids.get(ids[:-1]) if ids else None
+            node = Scope(path, patcher, context, parent=parent)
+            by_ids.setdefault(ids, node)
+            scopes.append(node)
+        if not scopes:
+            scopes.append(Scope((), {}, "max"))
+        return cls(scopes)
+
+    @property
+    def top(self) -> Scope:
+        return self.scopes[0]
+
+    def children(self, scope: Scope) -> list:
+        """Scopes directly inside *scope*, in pre-order."""
+        return [s for s in self.scopes if s.parent is scope]
+
+    def child(self, scope: Scope, box_id) -> "Scope | None":
+        """The scope embedded in *scope*'s box *box_id*, or None."""
+        for s in self.scopes:
+            if s.parent is scope and s.container == str(box_id):
+                return s
+        return None
+
+    def subtree(self, scope: Scope, box_id) -> list:
+        """The inner scope of container *box_id* in *scope* plus everything
+        below it, in pre-order (``[]`` when the box holds no patcher)."""
+        root = self.child(scope, box_id)
+        if root is None:
+            return []
+        out = []
+        for s in self.scopes:
+            node = s
+            while node is not None and node is not root:
+                node = node.parent
+            if node is root:
+                out.append(s)
+        return out
 
 
 class GraphMixin:

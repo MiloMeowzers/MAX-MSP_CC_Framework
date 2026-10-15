@@ -22,6 +22,7 @@ from src.maxpat.critics.rnbo_critic import is_rnbo_box, review_rnbo
 from src.maxpat.critics.m4l_critic import detect_m4l_device_type, review_m4l
 from src.maxpat.critics.ext_critic import review_external
 from src.maxpat.critics.package_critic import review_packages
+from src.maxpat.graph import PatchGraph
 from src.maxpat.utils import get_box_name
 
 
@@ -94,15 +95,23 @@ def review_patch(
         ext_archetype: Archetype for external code review ("message", "dsp",
             "scheduler"). Only used when ext_code is provided.
         db: Keyword-only ObjectDatabase used for package detection and the
-            package critic. None (default) constructs one per call, as
-            before; the save gate passes one cached instance (Q7).
+            package critic. None (default) constructs exactly one per call;
+            the save gate passes one cached instance (Q7).
+
+    One shared :class:`src.maxpat.graph.PatchGraph` is built per call and
+    passed to the critics (S1, Q20).
 
     Returns:
         Combined list of CriticResult from all active critics.
     """
+    if db is None:
+        from src.maxpat.db_lookup import ObjectDatabase
+        db = ObjectDatabase()
+    graph = PatchGraph.build(patch_dict)
+
     results: list[CriticResult] = []
     results.extend(review_dsp(patch_dict, code_context=code_context))
-    results.extend(review_structure(patch_dict))
+    results.extend(review_structure(patch_dict, graph=graph))
     results.extend(review_layout(patch_dict))
 
     # RNBO critic: auto-invoke when rnbo~ boxes detected

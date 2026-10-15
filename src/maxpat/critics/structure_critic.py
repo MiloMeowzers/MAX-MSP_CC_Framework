@@ -7,6 +7,14 @@ not detect:
   - Hot/cold inlet ordering issues (stale value computation)
   - Redundant/duplicate patchlines
 
+Every scope of the shared :class:`src.maxpat.graph.PatchGraph` is reviewed
+on its own boxes and cords (Q20); nested findings carry
+``CriticResult.path`` and a ``[p synth] `` prefix. Gen scopes (including a
+top-level .gendsp) run only the duplicate-patchline check: Gen is
+synchronous per-sample dataflow, so Rule #3 ordering does not apply. A
+reconvergence walk ends at a Jitter attribute/method message (a setter
+message box cabled into a ``jit.*`` object), which emits nothing.
+
 NOTE: Does NOT duplicate validation.py checks. Focus is on architectural
 patterns a MAX expert would flag during code review.
 """
@@ -15,15 +23,16 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 
-from src.maxpat.critics.base import CriticResult
-from src.maxpat.utils import get_box_name
+from src.maxpat import walk
+from src.maxpat.critics.base import CriticResult, tag_results
+from src.maxpat.graph import SIGNAL_OUTLET_TYPES, PatchGraph, outlet_is_signal
 
 
 # Object names that provide explicit ordering (used by the hot/cold check)
 _TRIGGER_NAMES = frozenset({"trigger", "t"})
 
 # Outlet types that carry audio; fan-out from these is never flagged (Rule #3)
-_SIGNAL_OUTLET_TYPES = frozenset({"signal", "multichannelsignal"})
+_SIGNAL_OUTLET_TYPES = SIGNAL_OUTLET_TYPES
 
 # Display-only sinks: dropped from a fan-out when they have no outgoing cord
 # (Q3 / E1 -- e.g. minitaur scale/expr -> send + display flonum)
@@ -45,40 +54,36 @@ _ALL_HOT_NAMES = frozenset({
 })
 
 
-def review_structure(patch_dict: dict) -> list[CriticResult]:
-    """Review structural aspects of a patch.
+def review_structure(patch_dict: dict, *, graph: "PatchGraph | None" = None) -> list[CriticResult]:
+    """Review structural aspects of a patch, every scope (Q20).
 
-    Checks:
+    Checks, per scope of the shared graph:
       1. Fan-out without trigger (2+ non-display destinations from one
          control outlet; blocker only on reconvergence -- Q3 / E1)
       2. Hot/cold inlet ordering (multiple inlets fed without trigger ordering)
       3. Redundant/duplicate patchlines
 
+    Gen scopes run only check 3. Top-level results come first, nested
+    scopes follow in pre-order, tagged with their path.
+
     Args:
         patch_dict: A .maxpat-format dict.
+        graph: The shared PatchGraph of *patch_dict* (review_patch passes
+            it); built here when None.
 
     Returns:
         List of CriticResult findings.
     """
+    if graph is None:
+        graph = PatchGraph.build(patch_dict)
     results: list[CriticResult] = []
-
-    patcher = patch_dict.get("patcher", {})
-    boxes = patcher.get("boxes", [])
-    lines = patcher.get("lines", [])
-
-    # Build box lookup
-    box_lookup: dict[str, dict] = {}
-    for box_entry in boxes:
-        box = box_entry.get("box", {})
-        box_id = box.get("id")
-        if box_id:
-            box_lookup[box_id] = box
-
-    # Run checks
-    results.extend(_check_fan_out_without_trigger(box_lookup, lines))
-    results.extend(_check_hot_cold_ordering(box_lookup, lines))
-    results.extend(_check_redundant_connections(lines))
-
+    for scope in graph.scopes:
+        found: list[CriticResult] = []
+        if scope.context != "gen":
+            found.extend(_check_fan_out_without_trigger(scope.boxes, scope.edges))
+            found.extend(_check_hot_cold_ordering(scope.boxes, scope.edges))
+        found.extend(_check_redundant_connections(scope.edges))
+        results.extend(tag_results(found, scope.path))
     return results
 
 
@@ -88,13 +93,13 @@ def review_structure(patch_dict: dict) -> list[CriticResult]:
 
 def _is_trigger_object(box: dict) -> bool:
     """Check if a box is a trigger/t object."""
-    name = get_box_name(box)
+    name = walk.box_name(box)
     return name in _TRIGGER_NAMES
 
 
 def _is_signal_object(box: dict) -> bool:
     """Check if a box is a signal-rate (~) object."""
-    name = get_box_name(box)
+    name = walk.box_name(box)
     return name.endswith("~")
 
 
@@ -102,17 +107,67 @@ def _is_signal_object(box: dict) -> bool:
 # Check 1: Fan-out without trigger
 # ---------------------------------------------------------------------------
 
-def _outlet_is_signal(box: dict, outlet: int) -> bool:
-    """True when `box` outlet `outlet` carries audio (Q3 / E1).
+# Moved to src.maxpat.graph.outlet_is_signal (Q20); kept as an alias.
+_outlet_is_signal = outlet_is_signal
 
-    Decided by the box's ``outlettype`` entry at that index. Only when the
-    box has no entry there (hand-built dicts) does it fall back to the legacy
-    ``~``-name test.
+# Message selectors that make a Jitter object output (not attribute setters)
+_JIT_OUTPUT_SELECTORS = frozenset({
+    "bang", "outputmatrix", "jit_matrix", "jit_gl_texture",
+})
+
+
+def _is_number(token: str) -> bool:
+    try:
+        float(token)
+    except ValueError:
+        return False
+    return True
+
+
+def _is_setter_message(box) -> bool:
+    """True for a message box whose every segment starts with a symbol
+    selector (an attribute or method call, not output-triggering).
+
+    Segments are split at unescaped commas (a token that is ``,`` or ends
+    in ``,`` but not ``\\,``). A selector is a symbol when it is not a
+    number, does not start with ``$`` or ``;``, is not one of
+    ``_JIT_OUTPUT_SELECTORS`` and does not start with ``get``.
     """
-    outlettype = box.get("outlettype")
-    if isinstance(outlettype, list) and 0 <= outlet < len(outlettype):
-        return outlettype[outlet] in _SIGNAL_OUTLET_TYPES
-    return _is_signal_object(box)
+    if walk.box_maxclass(box) != "message":
+        return False
+    segments: list[list[str]] = [[]]
+    for token in walk.box_tokens(box):
+        if token == ",":
+            segments.append([])
+            continue
+        if token.endswith(",") and not token.endswith("\\,"):
+            segments[-1].append(token[:-1])
+            segments.append([])
+            continue
+        segments[-1].append(token)
+    selectors = [seg[0] for seg in segments if seg and seg[0]]
+    if not selectors:
+        return False
+    for sel in selectors:
+        if _is_number(sel) or sel.startswith(("$", ";")):
+            return False
+        if sel in _JIT_OUTPUT_SELECTORS or sel.startswith("get"):
+            return False
+    return True
+
+
+def _is_jitter_setter_hop(src_box, dst_box) -> bool:
+    """True when a cord from *src_box* into *dst_box* ends a reconvergence path.
+
+    A setter message (``exprfill 0 snorm[0]``, ``dim $1 $1``,
+    ``scale $1 $1 $1``) into a ``jit.*`` object is an attribute or method
+    call that emits nothing: the object needs a separate ``bang`` to
+    output. Evidence: the user-confirmed terrain-synth, whose
+    ``[p terrain-view-a]`` / ``[p terrain-source]`` fan-outs reach
+    jit.pack / jit.xfade only through such messages (Q20). A message
+    containing ``bang`` still propagates.
+    """
+    return walk.box_name(dst_box).startswith("jit.") and _is_setter_message(src_box)
 
 
 def _paths_reconverge(
@@ -128,17 +183,27 @@ def _paths_reconverge(
     reconverge when some box outside ``_ALL_HOT_NAMES`` is reached by both
     at different inlets (the stale-cold-value hazard). Returns the first
     such box in sorted id order, or None.
+
+    A Jitter setter hop (:func:`_is_jitter_setter_hop`), including the
+    first hop from the fan-out source, records the hit at the jit.* box
+    but does not expand past it (Q20).
     """
+    src_box = box_lookup.get(src_id)
     hit_maps: list[dict[str, set[int]]] = []
     for dst_id, dst_inlet in branches:
         hits: dict[str, set[int]] = defaultdict(set)
         hits[dst_id].add(dst_inlet)
         seen = {dst_id}
-        queue = deque([dst_id])
+        queue = deque()
+        if not _is_jitter_setter_hop(src_box, box_lookup.get(dst_id)):
+            queue.append(dst_id)
         while queue:
             node = queue.popleft()
+            node_box = box_lookup.get(node)
             for nxt, nxt_inlet in ctrl_adj.get(node, ()):
                 hits[nxt].add(nxt_inlet)
+                if _is_jitter_setter_hop(node_box, box_lookup.get(nxt)):
+                    continue
                 if nxt not in seen and nxt != src_id:
                     seen.add(nxt)
                     queue.append(nxt)
@@ -150,7 +215,7 @@ def _paths_reconverge(
             hits_k, hits_l = hit_maps[k], hit_maps[l]
             for box_id in hits_k.keys() & hits_l.keys():
                 box = box_lookup.get(box_id)
-                if box is not None and get_box_name(box) in _ALL_HOT_NAMES:
+                if box is not None and walk.box_name(box) in _ALL_HOT_NAMES:
                     continue
                 if any(a != b for a in hits_k[box_id] for b in hits_l[box_id]):
                     meeting.add(box_id)
@@ -159,7 +224,7 @@ def _paths_reconverge(
 
 def _check_fan_out_without_trigger(
     box_lookup: dict[str, dict],
-    lines: list[dict],
+    edges: list,
 ) -> list[CriticResult]:
     """Detect control outlets connected to 2+ destinations without trigger.
 
@@ -193,21 +258,11 @@ def _check_fan_out_without_trigger(
     ctrl_adj: dict[str, list[tuple[str, int]]] = defaultdict(list)
     fan_out: dict[tuple[str, int], list[tuple[str, int]]] = defaultdict(list)
 
-    for line_entry in lines:
-        patchline = line_entry.get("patchline", line_entry)
-        source = patchline.get("source", [])
-        destination = patchline.get("destination", [])
-        if len(source) < 2 or len(destination) < 2:
-            continue
-
-        src_id, src_outlet = source[0], source[1]
-        dst_id, dst_inlet = destination[0], destination[1]
-        has_outgoing.add(src_id)
-        fan_out[(src_id, src_outlet)].append((dst_id, dst_inlet))
-
-        src_box = box_lookup.get(src_id)
-        if src_box is None or not _outlet_is_signal(src_box, src_outlet):
-            ctrl_adj[src_id].append((dst_id, dst_inlet))
+    for edge in edges:
+        has_outgoing.add(edge.src)
+        fan_out[(edge.src, edge.outlet)].append((edge.dst, edge.inlet))
+        if not edge.signal:
+            ctrl_adj[edge.src].append((edge.dst, edge.inlet))
 
     for (src_id, src_outlet), dests in fan_out.items():
         if len(dests) < 2:
@@ -221,7 +276,7 @@ def _check_fan_out_without_trigger(
         if _outlet_is_signal(src_box, src_outlet):
             continue
 
-        src_name = get_box_name(src_box)
+        src_name = walk.box_name(src_box)
 
         # preset include/exclude/capture membership cords
         if src_name == "preset" and src_outlet in _PRESET_MEMBERSHIP_OUTLETS:
@@ -233,7 +288,7 @@ def _check_fan_out_without_trigger(
             dst_box = box_lookup.get(dst_id)
             if (
                 dst_box is not None
-                and get_box_name(dst_box) in _DISPLAY_SINK_NAMES
+                and walk.box_name(dst_box) in _DISPLAY_SINK_NAMES
                 and dst_id not in has_outgoing
             ):
                 continue
@@ -245,7 +300,7 @@ def _check_fan_out_without_trigger(
         for dst_id, _inlet in branches:
             dst_box = box_lookup.get(dst_id)
             if dst_box:
-                dst_names.append(f"'{get_box_name(dst_box)}' ({dst_id})")
+                dst_names.append(f"'{walk.box_name(dst_box)}' ({dst_id})")
             else:
                 dst_names.append(dst_id)
 
@@ -257,7 +312,7 @@ def _check_fan_out_without_trigger(
         meet_id = _paths_reconverge(src_id, branches, ctrl_adj, box_lookup)
         if meet_id is not None:
             meet_box = box_lookup.get(meet_id)
-            meet_name = get_box_name(meet_box) if meet_box else meet_id
+            meet_name = walk.box_name(meet_box) if meet_box else meet_id
             severity = "blocker"
             finding = (
                 f"{prefix} paths reconverge on '{meet_name}' ({meet_id}) at "
@@ -283,7 +338,7 @@ def _check_fan_out_without_trigger(
 
 def _check_hot_cold_ordering(
     box_lookup: dict[str, dict],
-    lines: list[dict],
+    edges: list,
 ) -> list[CriticResult]:
     """Detect hot/cold inlet ordering issues.
 
@@ -305,16 +360,8 @@ def _check_hot_cold_ordering(
         lambda: defaultdict(list)
     )
 
-    for line_entry in lines:
-        patchline = line_entry.get("patchline", line_entry)
-        source = patchline.get("source", [])
-        destination = patchline.get("destination", [])
-        if len(source) < 2 or len(destination) < 2:
-            continue
-
-        src_id, src_outlet = source[0], source[1]
-        dst_id, dst_inlet = destination[0], destination[1]
-        dst_inlets[dst_id][dst_inlet].append((src_id, src_outlet))
+    for edge in edges:
+        dst_inlets[edge.dst][edge.inlet].append((edge.src, edge.outlet))
 
     for dst_id, inlets_map in dst_inlets.items():
         dst_box = box_lookup.get(dst_id)
@@ -357,7 +404,7 @@ def _check_hot_cold_ordering(
 
         # Multiple separate sources feeding hot and cold inlets
         # without trigger-based ordering
-        dst_name = get_box_name(dst_box)
+        dst_name = walk.box_name(dst_box)
         cold_desc = ", ".join(str(idx) for idx in sorted(cold_inlet_indices))
 
         results.append(CriticResult(
@@ -378,27 +425,21 @@ def _check_hot_cold_ordering(
 # ---------------------------------------------------------------------------
 
 def _check_redundant_connections(
-    lines: list[dict],
+    edges: list,
 ) -> list[CriticResult]:
     """Detect duplicate patchlines (same source -> same destination)."""
     results: list[CriticResult] = []
 
     seen: set[tuple[str, int, str, int]] = set()
 
-    for line_entry in lines:
-        patchline = line_entry.get("patchline", line_entry)
-        source = patchline.get("source", [])
-        destination = patchline.get("destination", [])
-        if len(source) < 2 or len(destination) < 2:
-            continue
-
-        key = (source[0], source[1], destination[0], destination[1])
+    for edge in edges:
+        key = (edge.src, edge.outlet, edge.dst, edge.inlet)
 
         if key in seen:
             results.append(CriticResult(
                 "warning",
-                f"Duplicate patchline: {source[0]} outlet {source[1]} -> "
-                f"{destination[0]} inlet {destination[1]} appears multiple times",
+                f"Duplicate patchline: {edge.src} outlet {edge.outlet} -> "
+                f"{edge.dst} inlet {edge.inlet} appears multiple times",
                 "Remove the duplicate connection",
             ))
         else:
