@@ -925,17 +925,120 @@ def validate_file(path: str | Path) -> list[ValidationResult]:
     return validate_patch(data, scope=SCOPE_BY_SUFFIX.get(path.suffix))
 
 
-def validate_code_file(path: str | Path) -> list[ValidationResult]:
+_JS_ENGINE_NAMES = {"js": "js", "jsui": "js", "v8": "v8", "v8ui": "v8"}
+
+
+def _js_names_file(ref, path: Path) -> bool:
+    """True when the box reference *ref* names *path*: same stem, and a
+    suffix of "" or ".js"."""
+    if not isinstance(ref, str):
+        return False
+    ref = ref.strip().strip('"').strip("'")
+    if not ref:
+        return False
+    ref_path = Path(ref)
+    return ref_path.stem == path.stem and ref_path.suffix in ("", ".js")
+
+
+def _js_engines_in_boxes(boxes, path: Path, found: set, depth: int = 0) -> None:
+    if not isinstance(boxes, list) or depth > 64:
+        return
+    from src.maxpat.io_resolvers import split_box_text
+
+    for entry in boxes:
+        box = entry.get("box") if isinstance(entry, dict) else None
+        if not isinstance(box, dict):
+            continue
+        text = box.get("text")
+        if isinstance(text, str):
+            tokens = split_box_text(text)
+            if len(tokens) >= 2 and tokens[0] in _JS_ENGINE_NAMES:
+                if _js_names_file(tokens[1], path):
+                    found.add(_JS_ENGINE_NAMES[tokens[0]])
+        maxclass = box.get("maxclass")
+        if maxclass in ("jsui", "v8ui") and _js_names_file(box.get("filename"), path):
+            found.add(_JS_ENGINE_NAMES[maxclass])
+        data = box.get("data")
+        for inner in (box.get("patcher"), data.get("patcher") if isinstance(data, dict) else None):
+            if isinstance(inner, dict):
+                _js_engines_in_boxes(inner.get("boxes"), path, found, depth + 1)
+
+
+def _js_engine_for(path: str | Path) -> str | None:
+    """Resolve which MAX engine loads the .js file at *path* (Q22, D-02).
+
+    Scans .maxpat files for a ``js`` / ``jsui`` / ``v8`` / ``v8ui`` box
+    whose text (``js x.js 3``, ``js x``) or jsui/v8ui ``filename`` names the
+    file (same stem, suffix "" or ".js"), recursing into subpatchers
+    (``patcher`` and ``data.patcher``).
+
+    Scan rule: inside ``patches/<project>/`` (the first ancestor whose
+    parent is named ``patches``) every ``*.maxpat`` under the project is
+    scanned recursively; anywhere else only ``path.parent`` is scanned,
+    non-recursively, so a loose file in a large folder never triggers a
+    deep walk. Unreadable or non-dict files are skipped.
+
+    Returns:
+        "js" if any js/jsui box references the file, else "v8" if any
+        v8/v8ui box does, else None. Never raises.
+    """
+    try:
+        path = Path(path).resolve()
+        project_dir = None
+        for ancestor in path.parents:
+            if ancestor.parent.name == "patches" and ancestor.parent != ancestor:
+                project_dir = ancestor
+                break
+        if project_dir is not None:
+            candidates = project_dir.rglob("*.maxpat")
+        else:
+            candidates = path.parent.glob("*.maxpat")
+        found: set = set()
+        for patch_file in candidates:
+            try:
+                with open(patch_file, encoding="utf-8", errors="replace") as fh:
+                    data = json.load(fh)
+                if not isinstance(data, dict):
+                    continue
+                patcher = data.get("patcher")
+                if isinstance(patcher, dict):
+                    _js_engines_in_boxes(patcher.get("boxes"), path, found)
+            except Exception:
+                continue
+            if "js" in found:
+                return "js"
+        if "js" in found:
+            return "js"
+        if "v8" in found:
+            return "v8"
+    except Exception:
+        return None
+    return None
+
+
+def validate_code_file(
+    path: str | Path,
+    *,
+    engine: str | None = None,
+) -> list[ValidationResult]:
     """Validate a .gendsp or .js code file from disk.
 
     For .gendsp files: parses JSON, extracts codebox code attribute,
     and runs validate_genexpr on it.
 
     For .js files: reads content, uses detect_js_type to determine
-    if N4M or js object, and runs the appropriate validator.
+    if N4M or js object, and runs the appropriate validator. A js-object
+    file runs validate_js with an engine (Q22, D-01..D-03): the explicit
+    *engine* when given, otherwise the engine resolved from the project's
+    .maxpat files by ``_js_engine_for`` (js/jsui reference -> "js", else
+    v8/v8ui -> "v8", else None). ES6 syntax is then an error only for
+    js/jsui; an unreferenced file gets at most one info. Validation stays
+    report-only.
 
     Args:
         path: Path to the .gendsp or .js file.
+        engine: Optional explicit engine ("js", "jsui", "v8", "v8ui") for a
+            js-object file; overrides the project scan.
 
     Returns:
         List of ValidationResult from the code validator.
@@ -988,7 +1091,9 @@ def validate_code_file(path: str | Path) -> list[ValidationResult]:
         if js_type == "n4m":
             return validate_n4m(content)
         elif js_type == "js":
-            return validate_js(content)
+            if engine is None:
+                engine = _js_engine_for(path)
+            return validate_js(content, engine=engine)
         else:
             return [ValidationResult(
                 "code", "warning",
@@ -1007,6 +1112,8 @@ def validate_code_file(path: str | Path) -> list[ValidationResult]:
 def write_js(
     code: str,
     path: str | Path,
+    *,
+    engine: str | None = None,
 ) -> list[ValidationResult]:
     """Write JavaScript code to disk and run code validation.
 
@@ -1017,6 +1124,11 @@ def write_js(
     Args:
         code: JavaScript source code (N4M or js object).
         path: Output file path for the .js file.
+        engine: Optional engine of the box that will load the file ("js",
+            "jsui", "v8", "v8ui"), passed to validate_code_file (Q22, D-03).
+            When None the engine is resolved from the project's .maxpat
+            files -- which usually do not reference the file yet at write
+            time, so pass the engine to get ES5 errors for js/jsui.
 
     Returns:
         List of ValidationResult from code validation, as a JsWriteResult (a
@@ -1036,6 +1148,6 @@ def write_js(
     commit_hash = _auto_commit_saved_file(path)
 
     # Run validation on the written file
-    result = JsWriteResult(validate_code_file(path))
+    result = JsWriteResult(validate_code_file(path, engine=engine))
     result.commit_hash = commit_hash
     return result

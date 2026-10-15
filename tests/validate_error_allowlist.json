@@ -1,0 +1,23 @@
+{
+  "_doc": "Exempts specific validate_patch ERRORS in committed, frozen patches (never edited to satisfy validators) for tests/test_integration_patches.py::test_validate_patch_no_errors ONLY. Added by Q22 (quick 261015-du0), whose new validate_genexpr checks surface through Layer 5 (_validate_embedded_genexpr). review_blocker_allowlist.json is for critic blockers only, and review_patch never runs validate_genexpr, so validate errors get their own file. Entries are true positives only, and each must carry a `reason`. Matching key: genexpr_const_assign = container box_id + constant name + ValidationResult path (default \"\", the top level); line numbers are never part of the key. Only a level=error result with no proposed_removal can be exempted: proposed removals, warnings, new patches and new errors are never exempted. test_validate_allowlist_entries_are_live fails on stale entries, missing files and missing reasons. Calibration-project (user-confirmed) patches must not appear here.",
+  "patches": {
+    "patches/tape-wobble/generated/tape-wobble.maxpat": [
+      {
+        "severity": "error",
+        "kind": "genexpr_const_assign",
+        "box_id": "obj-3",
+        "name": "pi",
+        "path": "",
+        "reason": "True positive (fix-plan rule 3), surfaced by Q22 (quick 261015-du0): tape-wobble gen~ obj-3's codebox assigns the built-in constant pi (`pi = 3.14159265358979;` / `twopi = 2.0 * pi;`, lines 42-43). The built-in wins silently and the assigned values equal the built-ins, so behaviour is unchanged. The patch is frozen (never edited to satisfy validators); listed in the Q22 SUMMARY."
+      },
+      {
+        "severity": "error",
+        "kind": "genexpr_const_assign",
+        "box_id": "obj-3",
+        "name": "twopi",
+        "path": "",
+        "reason": "True positive (fix-plan rule 3), surfaced by Q22 (quick 261015-du0): tape-wobble gen~ obj-3's codebox assigns the built-in constant twopi (`pi = 3.14159265358979;` / `twopi = 2.0 * pi;`, lines 42-43). The built-in wins silently and the assigned values equal the built-ins, so behaviour is unchanged. The patch is frozen (never edited to satisfy validators); listed in the Q22 SUMMARY."
+      }
+    ]
+  }
+}
