@@ -496,6 +496,19 @@ class TestB7PortSync:
         assert (gbox.numinlets, gbox.numoutlets, list(gbox.outlettype)) == counts
         assert result.parent_orphaned == []
 
+    def test_replace_box_safe_auto_keeps_parent_orphaned(self):
+        """CR-01 (Q28 review): the auto-rewire path passes parent_orphaned through.
+
+        A loaded outlet box is 2 in / 0 out, like dac~, so this takes the
+        auto-rewire branch.
+        """
+        p, _, art, inner = self._articulation()
+        result = inner.replace_box_safe(_box(inner, "obj-4"), "dac~")
+        assert result.orphaned == []
+        assert result.parent_orphaned == [_orphan("obj-85", 1, "obj-73", 1)]
+        assert ("obj-85", 1, "obj-73", 1) not in _cords(p)
+        assert art.numoutlets == 1
+
     def test_remove_non_port_box_returns_empty_edit_result(self):
         p, _, _, inner = self._articulation()
         box = _box(inner, "obj-5")

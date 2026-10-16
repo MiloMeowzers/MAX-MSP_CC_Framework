@@ -1128,7 +1128,8 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         Returns:
             EditResult with the new box. ``orphaned`` is empty on
             successful auto-rewire; populated on manual mode or I/O
-            mismatch.
+            mismatch. ``parent_orphaned`` (parent-patcher cords removed
+            by a port resync) is always passed through from replace_box.
 
         Raises:
             ValueError: If ``old_box`` is not in this patcher (raised by
@@ -1171,7 +1172,13 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                 self.add_connection(
                     src_box, o["source_outlet"], dst_box, o["dest_inlet"]
                 )
-            return EditResult(box=result.box, orphaned=[])
+            # Parent-patcher cords dropped by the port resync are not
+            # rewired here (they live in the parent): pass them through.
+            return EditResult(
+                box=result.box,
+                orphaned=[],
+                parent_orphaned=result.parent_orphaned,
+            )
 
         # Mismatch: return orphans intact (caller handles rewiring).
         return result
