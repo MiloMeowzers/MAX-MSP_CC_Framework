@@ -6,10 +6,34 @@ normalized JSON object databases per domain (Max, MSP, Jitter, MC, Gen, M4L,
 Packages, RNBO).
 
 Usage:
-    python3 .claude/scripts/extract_objects.py                    # Extract all
-    python3 .claude/scripts/extract_objects.py --max-path /path   # Custom MAX path
-    python3 .claude/scripts/extract_objects.py --domain msp       # Single domain
     python3 .claude/scripts/extract_objects.py --dry-run           # Count files only
+    python3 .claude/scripts/extract_objects.py --package FluCoMa   # One community package
+    python3 .claude/scripts/extract_objects.py --output /tmp/db    # Extract all (new output)
+    python3 .claude/scripts/extract_objects.py --force             # Rebuild core files (!)
+    python3 .claude/scripts/extract_objects.py --domain msp --force
+
+The object DB is curated. To pick up objects from a Max update, use the sync
+tool instead: ``python3 tools/sync_max_bundle.py`` (dry-run report), then
+``--apply new|define --names ...``. Q30 / I4:
+
+* A run that would replace an existing core domain file
+  (``<output>/<domain>/objects.json`` for max, msp, jitter, mc, gen, m4l,
+  rnbo) is refused with exit code 2 and nothing written, unless ``--force``
+  is given. ``--force`` rebuilds those files from refpages alone and drops
+  every curated entry the refpages do not carry. Per-package files are
+  merged (curated entries kept), so ``--package`` and ``--domain packages``
+  need no ``--force``.
+* ``extraction-log.json`` is merged, never replaced: every run re-states the
+  counts from disk through the sync tool's ``restate_extraction_log``, keeps
+  every old key (the sync record, Max version, history), appends the
+  superseded state to ``history`` and records the run under
+  ``last_extraction``.
+* Documentation pages -- refpages whose name contains whitespace ("MC
+  Wrapper Features") -- are never extracted (the sync tool's
+  ``is_doc_page_name``); the run lists them under ``documentation_pages``.
+
+Exit codes: 0 done, 1 path not found, 2 refused (core overwrite without
+--force, or an unreadable extraction log).
 """
 
 import argparse
@@ -25,6 +49,43 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 DEFAULT_MAX_PATH = Path("/Applications/Max.app/Contents/Resources/C74")
+
+# Core domain files a run may only replace with --force (Q30 / I4).
+CORE_OUTPUT_DOMAINS = ("max", "msp", "jitter", "mc", "gen", "m4l", "rnbo")
+
+_SYNC_TOOL = None
+
+
+def _sync_tool():
+    """``tools/sync_max_bundle.py``, imported on first use (Q30 PD-7).
+
+    The sync tool loads this file by path at call time, so neither imports
+    the other at module load. Puts the repo root on sys.path first.
+    """
+    global _SYNC_TOOL
+    if _SYNC_TOOL is None:
+        repo_root = str(Path(__file__).resolve().parents[2])
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        from tools import sync_max_bundle
+
+        _SYNC_TOOL = sync_max_bundle
+    return _SYNC_TOOL
+
+
+class CoreOverwriteRefused(Exception):
+    """A run would replace existing core domain files without --force (Q30 / I4)."""
+
+    def __init__(self, files: list):
+        self.files = [str(f) for f in files]
+        super().__init__(
+            "refusing to overwrite existing core domain files without --force: "
+            + ", ".join(self.files)
+        )
+
+
+class ExtractionLogUnreadable(Exception):
+    """The existing extraction-log.json is not a JSON object; it is never replaced blindly."""
 
 # Maps source directory patterns to (module_hint, domain_hint)
 SOURCE_DIRS = [
@@ -943,7 +1004,9 @@ def extract_all(
         "empty_outlets_count": 0,
         "extraction_timestamp": datetime.now(timezone.utc).isoformat(),
         "max_installation_path": str(c74_root),
+        "documentation_pages": [],
     }
+    is_doc_page_name = _sync_tool().is_doc_page_name
 
     # Per-package buckets for per-package output routing
     package_buckets: dict[str, dict] = {}
@@ -967,6 +1030,10 @@ def extract_all(
 
         name = obj.get("name", "")
         if not name:
+            continue
+        # Q30 PD-7: a whitespace-named refpage documents a topic, not an object.
+        if is_doc_page_name(name):
+            stats["documentation_pages"].append(name)
             continue
 
         # Tag with package name if from a package
@@ -1015,18 +1082,69 @@ def extract_all(
     return {"domains": domain_buckets, "package_buckets": package_buckets, "log": stats}
 
 
-def write_output(result: dict, output_root: Path, domain_filter: str | None = None) -> None:
-    """Write domain JSON files and extraction log.
+def _core_targets(result: dict, output_root: Path, packages_only: bool) -> list[Path]:
+    """Existing core domain files this run would replace."""
+    if packages_only:
+        return []
+    return [
+        output_root / key / "objects.json"
+        for key, objects in result["domains"].items()
+        if objects and key in CORE_OUTPUT_DOMAINS and (output_root / key / "objects.json").exists()
+    ]
+
+
+def _run_record(result: dict, domain_filter: str | None) -> dict:
+    """This run, as recorded under ``last_extraction`` in the merged log."""
+    stats = result["log"]
+    run = result.get("run") or {}
+    return {
+        "tool": ".claude/scripts/extract_objects.py",
+        "mode": run.get("mode") or ("domain" if domain_filter else "full"),
+        "package": run.get("package"),
+        "source": run.get("source", stats.get("max_installation_path")),
+        "extraction_timestamp": stats.get("extraction_timestamp"),
+        "total_files_found": stats.get("total_files_found"),
+        "total_objects": stats.get("total_objects"),
+        "domain_counts": stats.get("domain_counts"),
+        "error_count": stats.get("error_count"),
+        "errors": stats.get("errors"),
+        "documentation_pages": stats.get("documentation_pages", []),
+    }
+
+
+def write_output(
+    result: dict, output_root: Path, domain_filter: str | None = None, force: bool = False
+) -> None:
+    """Write domain JSON files and merge the extraction log.
 
     When per-package routing is active (package_buckets non-empty) and the domain
     filter is 'packages', only per-package subdirectory files are written -- domain-level
     files are skipped to avoid overwriting complete domain databases with partial data
     from cross-domain package objects.
-    """
-    output_root.mkdir(parents=True, exist_ok=True)
 
+    Before anything is written: raises CoreOverwriteRefused if the run would
+    replace an existing core domain file and ``force`` is False, and
+    ExtractionLogUnreadable if the existing log is not a JSON object. After
+    the object files, the log is re-stated by the sync tool (old keys and
+    history kept, the run under ``last_extraction``).
+    """
     pkg_buckets = result.get("package_buckets", {})
-    packages_only = pkg_buckets and domain_filter and domain_filter.lower() == "packages"
+    packages_only = bool(pkg_buckets and domain_filter and domain_filter.lower() == "packages")
+
+    refused = _core_targets(result, output_root, packages_only)
+    if refused and not force:
+        raise CoreOverwriteRefused(refused)
+    log_path = output_root / "extraction-log.json"
+    old_log: dict = {}
+    if log_path.exists():
+        try:
+            old_log = json.loads(log_path.read_text())
+        except (json.JSONDecodeError, OSError) as exc:
+            raise ExtractionLogUnreadable(f"{log_path}: {exc}") from exc
+        if not isinstance(old_log, dict):
+            raise ExtractionLogUnreadable(f"{log_path} is not a JSON object")
+
+    output_root.mkdir(parents=True, exist_ok=True)
 
     if not packages_only:
         for domain_key, objects in result["domains"].items():
@@ -1090,12 +1208,16 @@ def write_output(result: dict, output_root: Path, domain_filter: str | None = No
         )
         print(f"  Wrote {len(objects)} objects to {json_path}")
 
-    # Write extraction log
-    log_path = output_root / "extraction-log.json"
-    log_path.write_text(
-        json.dumps(result["log"], indent=2, ensure_ascii=False) + "\n"
+    # Merge the extraction log (Q30 PD-7): never replace it with this run's stats.
+    sync = _sync_tool()
+    log = sync.restate_extraction_log(
+        output_root,
+        old_log,
+        datetime.now(timezone.utc),
+        extra={"last_extraction": _run_record(result, domain_filter)},
     )
-    print(f"  Wrote extraction log to {log_path}")
+    sync.write_extraction_log(output_root, log)
+    print(f"  Merged extraction log at {log_path} ({len(log['history'])} earlier states kept)")
 
 
 # ---------------------------------------------------------------------------
@@ -1211,7 +1333,30 @@ def update_package_registry(
 # CLI
 # ---------------------------------------------------------------------------
 
-def main():
+_REFUSAL_HINT = (
+    "  The object DB is curated: re-extracting refpages drops curated entries.\n"
+    "  To pick up new objects use the sync tool instead:\n"
+    "    python3 tools/sync_max_bundle.py                       # dry-run report\n"
+    "    python3 tools/sync_max_bundle.py --apply new|define --names NAME ...\n"
+    "  Use --force only to rebuild the core files from refpages (drops curated entries)."
+)
+
+
+def _write(result: dict, output: Path, domain_filter: str | None, force: bool) -> int:
+    """write_output with the refusals turned into exit code 2."""
+    try:
+        write_output(result, output, domain_filter=domain_filter, force=force)
+    except CoreOverwriteRefused as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        print(_REFUSAL_HINT, file=sys.stderr)
+        return 2
+    except ExtractionLogUnreadable as exc:
+        print(f"error: refusing to replace an unreadable extraction log: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Extract MAX/MSP object definitions from XML refpages"
     )
@@ -1250,7 +1395,15 @@ def main():
         default=None,
         help="Custom path to community package folder (use with --package).",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Replace existing core domain files (max, msp, jitter, mc, gen, m4l, rnbo). "
+            "Drops curated entries; prefer tools/sync_max_bundle.py."
+        ),
+    )
+    args = parser.parse_args(argv)
 
     # Community package extraction mode
     if args.package:
@@ -1262,7 +1415,7 @@ def main():
             for p in COMMUNITY_PACKAGE_SEARCH_PATHS:
                 print(f"    {p}", file=sys.stderr)
             print(f"  Use --path to specify a custom location.", file=sys.stderr)
-            sys.exit(1)
+            return 1
         pipeline = detect_pipeline(pkg_path)
         print(f"Package: {args.package}")
         print(f"  Path: {pkg_path}")
@@ -1289,7 +1442,10 @@ def main():
                     obj["domain"] = "Packages"
                 result["package_buckets"] = {args.package: all_objects}
                 result["domains"] = {}
-                write_output(result, args.output, domain_filter="packages")
+                result["run"] = {"mode": "package", "package": args.package, "source": str(pkg_path)}
+                code = _write(result, args.output, "packages", args.force)
+                if code:
+                    return code
                 update_package_registry(
                     args.output,
                     args.package,
@@ -1300,11 +1456,11 @@ def main():
             # Abstraction pipeline -- guide user to run extract_abstractions.py
             print(f"  Abstraction pipeline for {args.package} -- run extract_abstractions.py with --package-dir {pkg_path}")
             print(f"  Run: python .claude/scripts/extract_abstractions.py --package-dir \"{pkg_path}\" --package-name \"{args.package}\"")
-        sys.exit(0)
+        return 0
 
     if not args.max_path.exists():
         print(f"Error: MAX path not found: {args.max_path}", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
     print(f"MAX installation: {args.max_path}")
     result = extract_all(args.max_path, args.domain, args.dry_run)
@@ -1319,9 +1475,17 @@ def main():
         for domain, count in sorted(log["domain_counts"].items()):
             print(f"    {domain}: {count}")
 
-        write_output(result, args.output, domain_filter=args.domain)
+        result["run"] = {
+            "mode": "domain" if args.domain else "full",
+            "package": None,
+            "source": str(args.max_path),
+        }
+        code = _write(result, args.output, args.domain, args.force)
+        if code:
+            return code
         print(f"\nDone.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -311,8 +312,31 @@ def check_domain_values() -> ValidationResult:
     return r.passed("all domains valid")
 
 
+def _version_tuple(value):
+    """A min_version as its integer parts, or None (Q30 PD-3).
+
+    Accepts a number (the DB's historical form: 8 -> (8,), 8.1 -> (8, 1)) or
+    a version string (the sync tool's form: "9.10" -> (9, 10)). Anything
+    else -- booleans, None, "x" -- gives None.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        text = str(value)
+    elif isinstance(value, str):
+        text = value.strip()
+    else:
+        return None
+    if not re.fullmatch(r"\d+(\.\d+)?", text):
+        return None
+    return tuple(int(part) for part in text.split("."))
+
+
 def check_min_version_range() -> ValidationResult:
-    """min_version is a number >= 4 and < 10 (any Max 4-9 release, e.g. 8.1, 9.2)."""
+    """min_version is a version with major >= 4 and < 10 (any Max 4-9 release, e.g. 8.1, "9.2").
+
+    A number or a version string (Q30 PD-3), compared through _version_tuple.
+    """
     r = ValidationResult("min_version_range")
     errors = []
     for domain in CORE_DOMAIN_DIRS:
@@ -321,14 +345,15 @@ def check_min_version_range() -> ValidationResult:
             continue
         for name, obj in data.items():
             mv = obj.get("min_version")
+            parts = _version_tuple(mv)
             if mv is None:
                 errors.append(f"{domain}/{name}: min_version is None")
-            elif not isinstance(mv, (int, float)):
+            elif parts is None:
                 errors.append(f"{domain}/{name}: min_version type={type(mv).__name__}")
             else:
                 # Point releases are legal: 8.1 for MC objects, 9.2 for the
                 # objects new in Max 9.2 (quick-261001-hwb).
-                if mv < 4 or mv >= 10:
+                if parts[0] < 4 or parts[0] >= 10:
                     errors.append(f"{domain}/{name}: min_version={mv}")
     if errors:
         return r.failed(f"{len(errors)} out of range", errors[:10])
@@ -347,8 +372,9 @@ def check_max9_objects() -> ValidationResult:
         for name, obj in data.items():
             if any(name.startswith(p) for p in max9_prefixes):
                 mv = obj.get("min_version")
-                # Point releases count: objects new in 9.2 carry 9.2.
-                if not isinstance(mv, (int, float)) or not 9 <= mv < 10:
+                parts = _version_tuple(mv)
+                # Point releases count: objects new in 9.2 carry 9.2 (or "9.2").
+                if parts is None or parts[0] != 9:
                     errors.append(f"{domain}/{name}: min_version={mv} (expected 9.x)")
     if errors:
         return r.failed(f"{len(errors)} wrong version", errors[:10])

@@ -22,9 +22,13 @@ Sections
 ``install``             installed Max version + refpage roots (Info.plist)
 ``db_age``              extraction timestamp age + per-domain count drift
 ``missing_from_db``     refpage object names ObjectDatabase.lookup() misses,
-                        plus what filename keying would have reported
+                        plus what filename keying would have reported and
+                        (``objectfile_aliases``, not counted) the ``max
+                        objectfile`` names lookup() cannot resolve
 ``absent_from_bundle``  core-domain DB names with no installed refpage;
-                        ``max define`` aliases are listed apart, not counted
+                        ``max define`` and ``max objectfile`` aliases are
+                        listed apart (``define_mapped`` /
+                        ``objectfile_mapped``), not counted
 ``empty_io``            audit_empty_io() / audit_half_empty_io() + refpage flag
 ``patch_objects``       object resolution across committed .maxpat files
 ``ui_maxclasses_gap``   observed maxclasses not in UI_MAXCLASSES
@@ -221,6 +225,16 @@ def _define_aliases(install: dict) -> dict[str, str]:
         alias: define["target"]
         for alias, define in _sync().parse_define_mappings(c74).items()
     }
+
+
+def _objectfile_mappings(install: dict) -> dict:
+    """``max objectfile`` lines from every bundle init file (Q30 PD-6).
+
+    The sync tool's ``parse_objectfile_mappings``: both tools read the same
+    lines.
+    """
+    c74 = Path(install["app_path"]) / "Contents" / "Resources" / "C74"
+    return _sync().parse_objectfile_mappings(c74)
 
 
 def _split_short_version(raw: object) -> tuple[str | None, str | None]:
@@ -422,6 +436,7 @@ def build_refpage_index(install: dict) -> dict:
     files_scanned = 0
     name_differs = 0
     defines = _define_aliases(install)
+    objectfiles = _objectfile_mappings(install)
 
     for root in (Path(p) for p in install.get("refpage_roots", [])):
         try:
@@ -478,6 +493,7 @@ def build_refpage_index(install: dict) -> dict:
         "objects": objects,
         "stems": stems,
         "defines": defines,
+        "objectfiles": objectfiles,
     }
 
 
@@ -519,6 +535,9 @@ def audit_missing_from_db(refpages: dict, db: ObjectDatabase) -> dict:
     stem_resolved = _lookup_many(db, stems)
     unresolved_stems = sorted(s for s, obj in stem_resolved.items() if obj is None)
     phantom = [s for s in unresolved_stems if resolved.get(stems[s]) is not None]
+    objectfiles = refpages.get("objectfiles") or {"records": {}, "lines": 0}
+    of_resolved = _lookup_many(db, objectfiles["records"])
+    of_unresolved = sorted(n for n, obj in of_resolved.items() if obj is None)
     return {
         "available": True,
         "count": len(names),
@@ -533,6 +552,16 @@ def audit_missing_from_db(refpages: dict, db: ObjectDatabase) -> dict:
             "unresolved_count": len(unresolved_stems),
             "phantom_count": len(phantom),
             "phantom_stems": phantom,
+        },
+        # Q30 PD-6: names Max instantiates through `max objectfile` lines that
+        # lookup() cannot resolve. Reported, not added to `count` (they are
+        # not refpage names); the sync tool's objectfile_aliases section has
+        # the proposed targets.
+        "objectfile_aliases": {
+            "lines": objectfiles["lines"],
+            "names": len(objectfiles["records"]),
+            "unresolved_count": len(of_unresolved),
+            "unresolved": of_unresolved,
         },
     }
 
@@ -556,6 +585,8 @@ def audit_absent_from_bundle(db_root: str | Path, refpages: dict) -> dict:
     A name that is a ``max define`` alias in the bundle's objectmappings files
     has no refpage by design (Max instantiates the define target), so it is
     listed under ``define_mapped`` with its target and left out of ``count``.
+    Likewise a ``max objectfile`` name (not also a define alias) is listed
+    under ``objectfile_mapped`` with its file and class (Q30 PD-6).
     """
     if not refpages.get("available"):
         return _unavailable(refpages.get("reason", "refpage index unavailable"))
@@ -570,10 +601,16 @@ def audit_absent_from_bundle(db_root: str | Path, refpages: dict) -> dict:
         except (PermissionError, OSError, json.JSONDecodeError) as exc:
             read_errors.append({"file": str(path), "reason": str(exc)})
     defines = refpages.get("defines", {})
+    objectfiles = (refpages.get("objectfiles") or {}).get("records", {})
     without_refpage = sorted(n for n in db_names if n not in refpages["objects"])
-    absent = [n for n in without_refpage if n not in defines]
+    absent = [n for n in without_refpage if n not in defines and n not in objectfiles]
     define_mapped = [
         {"name": n, "target": defines[n]} for n in without_refpage if n in defines
+    ]
+    objectfile_mapped = [
+        {"name": n, "file": objectfiles[n]["file"], "class": objectfiles[n]["class"]}
+        for n in without_refpage
+        if n in objectfiles and n not in defines
     ]
     return {
         "available": True,
@@ -581,6 +618,8 @@ def audit_absent_from_bundle(db_root: str | Path, refpages: dict) -> dict:
         "names": absent,
         "define_mapped": define_mapped,
         "define_mapped_count": len(define_mapped),
+        "objectfile_mapped": objectfile_mapped,
+        "objectfile_mapped_count": len(objectfile_mapped),
         "db_names_checked": len(db_names),
         "scope": _ABSENT_SCOPE,
         "read_errors": read_errors,
@@ -904,7 +943,9 @@ def run_audit(
     # Index payload is large and redundant with the sections above; keep only
     # its provenance + self-check counters in the emitted document.
     refpage_meta = {
-        k: v for k, v in refpages.items() if k not in ("objects", "stems", "defines")
+        k: v
+        for k, v in refpages.items()
+        if k not in ("objects", "stems", "defines", "objectfiles")
     }
 
     return {
@@ -1005,13 +1046,20 @@ def format_summary(report: dict) -> str:
             s["missing_from_db"],
             lambda x: f"{x['count']} refpage names unresolved (keyed by filename: "
             f"{x['filename_keyed']['unresolved_count']} unresolved, "
-            f"{x['filename_keyed']['phantom_count']} phantom)",
+            f"{x['filename_keyed']['phantom_count']} phantom)"
+            + (
+                f"; {x['objectfile_aliases']['unresolved_count']} objectfile aliases unresolved"
+                if "objectfile_aliases" in x
+                else ""
+            ),
         ),
         "  absent from Max : "
         + _headline(
             s["absent_from_bundle"],
             lambda x: f"{x['count']} DB names with no refpage "
-            f"(+{x['define_mapped_count']} define-mapped aliases, no refpage by design)",
+            f"(+{x['define_mapped_count']} define-mapped aliases, "
+            f"+{x.get('objectfile_mapped_count', 0)} objectfile-mapped aliases, "
+            "no refpage by design)",
         ),
         "  empty I/O       : "
         + _headline(

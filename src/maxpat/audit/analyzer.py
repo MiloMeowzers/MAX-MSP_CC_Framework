@@ -15,9 +15,72 @@ from typing import Any, Callable
 from src.maxpat.audit import BoxInstance
 from src.maxpat.audit.parser import parse_object_text
 from src.maxpat.db_lookup import ObjectDatabase
+from src.maxpat.io_resolvers import normalize_args
 
 # Signal outlet type strings recognized in help patches
 SIGNAL_TYPES = {"signal", "multichannelsignal"}
+
+# Q30 / I5: unanimity over fewer instances than this is MEDIUM, never HIGH.
+MIN_HIGH_INSTANCES = 3
+
+# Candidate variable_io formulas, in the order they are tried (Q30 PD-9).
+# "fixed:N" is tried first with N = the count every instance shares.
+_CANDIDATE_FORMULAS = (
+    "first_arg",
+    "first_arg+1",
+    "second_arg",
+    "second_arg+1",
+    "second_arg+2",
+    "arg_count",
+    "arg_count+1",
+    "arg_count_or_default",
+)
+
+
+def _formula_count(formula: str, args: list[str], default: int) -> int | None:
+    """Evaluate a variable_io formula the way ObjectDatabase._apply_io_formula does.
+
+    Pure (no DB, no warnings). Identical results on integer arguments; None
+    where the formula would need to read a non-integer argument (the DB
+    would warn and fall back to the default).
+    """
+    if not formula:
+        return default
+    if formula.startswith("fixed:"):
+        return int(formula.split(":")[1])
+    if formula == "arg_count":
+        return len(args)
+    if formula == "arg_count+1":
+        return len(args) + 1
+    if formula == "arg_count_or_default":
+        return len(args) if args else default
+    if formula in ("first_arg", "first_arg+1"):
+        if not args:
+            return default
+        try:
+            return int(args[0]) + (1 if formula == "first_arg+1" else 0)
+        except ValueError:
+            return None
+    if formula in ("second_arg", "second_arg+1", "second_arg+2"):
+        if len(args) < 2:
+            return default
+        offset = {"second_arg": 0, "second_arg+1": 1, "second_arg+2": 2}[formula]
+        try:
+            return int(args[1]) + offset
+        except ValueError:
+            return None
+    return default
+
+
+def _fit_formula(samples: list[tuple[list[str], int]], default: int) -> str | None:
+    """The first formula that reproduces every (args, count) sample, or None."""
+    counts = {count for _, count in samples}
+    if len(counts) == 1:
+        return f"fixed:{next(iter(counts))}"
+    for formula in _CANDIDATE_FORMULAS:
+        if all(_formula_count(formula, args, default) == count for args, count in samples):
+            return formula
+    return None
 
 
 def classify_outlet_type(help_type: str) -> tuple[bool, str]:
@@ -47,8 +110,9 @@ def compute_confidence(
     """Aggregate instances using key_fn, count agreement, and return confidence.
 
     Confidence levels:
-        - HIGH: 100% agreement (ratio >= 1.0)
-        - MEDIUM: >= 75% agreement
+        - HIGH: 100% agreement (ratio >= 1.0) over at least
+          MIN_HIGH_INSTANCES (3) instances (Q30 / I5)
+        - MEDIUM: >= 75% agreement, or unanimity over 1-2 instances
         - LOW: >= 50% agreement
         - CONFLICT: < 50% agreement
         - NONE: empty input
@@ -68,7 +132,7 @@ def compute_confidence(
     most_common_value, most_common_count = counts.most_common(1)[0]
     ratio = most_common_count / len(instances)
 
-    if ratio >= 1.0:
+    if ratio >= 1.0 and len(instances) >= MIN_HIGH_INSTANCES:
         level = "HIGH"
     elif ratio >= 0.75:
         level = "MEDIUM"
@@ -94,7 +158,16 @@ class ObjectFindings:
     """Outlet type comparison: db_types, help_types, confidence, agreement, discrepancy_type."""
 
     io_count_finding: dict | None = None
-    """I/O count comparison: db_inlets, db_outlets, help_inlets, help_outlets, confidence, variable_io."""
+    """I/O count comparison: db_inlets, db_outlets, help_inlets, help_outlets, confidence, variable_io.
+
+    Q30 / I5 adds ``counts_follow_arguments`` (True when the help boxes'
+    counts differ but each distinct argument list has exactly one count
+    pair) and ``proposed_variable_io`` ({inlet_count, outlet_count,
+    default_inlets, default_outlets} or None). When counts follow the
+    arguments, help_inlets / help_outlets come only from argument-less
+    boxes and only when they differ from the DB default (else None), so an
+    argument-specific count is never proposed as a default.
+    """
 
     width_finding: dict | None = None
     """Box width data: widths, median_width, min_width, max_width, instance_count."""
@@ -272,7 +345,7 @@ class AuditAnalyzer:
         # Get DB default counts for summary
         db_inlets, db_outlets = self._db.compute_io_counts(name)
 
-        return {
+        finding = {
             "db_inlets": db_inlets,
             "db_outlets": db_outlets,
             "help_inlets": consensus[0] if consensus else None,
@@ -281,6 +354,52 @@ class AuditAnalyzer:
             "agreement": ratio,
             "variable_io": is_variable_io,
             "mismatches": mismatches,
+            "counts_follow_arguments": False,
+            "proposed_variable_io": None,
+        }
+        self._apply_argument_analysis(finding, instances, (db_inlets, db_outlets))
+        return finding
+
+    @staticmethod
+    def _apply_argument_analysis(
+        finding: dict, instances: list[BoxInstance], db_default: tuple[int, int]
+    ) -> None:
+        """Detect counts that follow the arguments (Q30 PD-9), in place.
+
+        Instances are grouped by normalized positional arguments. When the
+        count pairs are not all equal and every argument list maps to exactly
+        one pair, the counts follow the arguments: the default counts come
+        only from argument-less boxes (and only when they differ from the DB
+        default), and a variable_io rule is proposed per side -- the first
+        formula reproducing every instance, or None for a side with no fit.
+        """
+        by_args: dict[tuple[str, ...], set[tuple[int, int]]] = defaultdict(set)
+        samples: list[tuple[list[str], tuple[int, int]]] = []
+        for inst in instances:
+            _, args, _ = parse_object_text(inst.text)
+            key = tuple(normalize_args(args))
+            pair = (inst.numinlets, inst.numoutlets)
+            by_args[key].add(pair)
+            samples.append((list(key), pair))
+        pairs = {pair for _, pair in samples}
+        if len(pairs) < 2 or any(len(found) != 1 for found in by_args.values()):
+            return
+
+        argless = next(iter(by_args[()])) if () in by_args else None
+        finding["counts_follow_arguments"] = True
+        finding["distinct_arguments"] = len(by_args)
+        # Per side: the argument-less count, only where it differs from the DB default.
+        for side, index_ in (("help_inlets", 0), ("help_outlets", 1)):
+            differs = argless is not None and argless[index_] != db_default[index_]
+            finding[side] = argless[index_] if differs else None
+        default = argless if argless is not None else tuple(db_default)
+        inlet_rule = _fit_formula([(args, pair[0]) for args, pair in samples], default[0])
+        outlet_rule = _fit_formula([(args, pair[1]) for args, pair in samples], default[1])
+        finding["proposed_variable_io"] = {
+            "inlet_count": inlet_rule,
+            "outlet_count": outlet_rule,
+            "default_inlets": default[0],
+            "default_outlets": default[1],
         }
 
     def analyze_widths(

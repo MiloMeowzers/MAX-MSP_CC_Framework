@@ -3,6 +3,12 @@
 Transforms audit findings into proposed overrides.json entries that match
 the established format, while detecting conflicts with existing manually
 corrected entries and excluding low-confidence proposals.
+
+Q30 / I5: an I/O-count finding whose counts follow the arguments
+(``bucket 4`` -> 4 outlets) never becomes a default inlets/outlets proposal
+with the argument-specific count; its ``proposed_variable_io`` rule goes to
+``proposed["variable_io_rules"]`` for manual review (the merger never
+applies those).
 """
 
 from __future__ import annotations
@@ -73,13 +79,16 @@ class OverrideGenerator:
                 with objects that have empty I/O data and help patch coverage.
 
         Returns:
-            Dict with _comment, _audit_date, _audit_stats, objects, and conflicts.
+            Dict with _comment, _audit_date, objects, conflicts and
+            variable_io_rules (rule proposals for manual review; always
+            present, sorted).
         """
         proposed: dict[str, Any] = {
             "_comment": "Auto-generated proposed overrides from help patch audit. Review before merging.",
             "_audit_date": datetime.now(timezone.utc).isoformat(),
             "objects": {},
             "conflicts": {},
+            "variable_io_rules": {},
         }
 
         # Process outlet type findings
@@ -94,6 +103,7 @@ class OverrideGenerator:
         # Sort objects and conflicts alphabetically
         proposed["objects"] = dict(sorted(proposed["objects"].items()))
         proposed["conflicts"] = dict(sorted(proposed["conflicts"].items()))
+        proposed["variable_io_rules"] = dict(sorted(proposed["variable_io_rules"].items()))
 
         return proposed
 
@@ -158,6 +168,20 @@ class OverrideGenerator:
             return
 
         confidence = finding.get("confidence", "")
+        rule = finding.get("proposed_variable_io")
+        if rule is not None:
+            # Q30 PD-9: argument-dependent counts are a rule proposal, never a default.
+            proposed["variable_io_rules"][obj_name] = {
+                **rule,
+                "_audit": {
+                    "confidence": confidence,
+                    "instances": obj_findings.instance_count,
+                    "distinct_arguments": finding.get("distinct_arguments"),
+                    "source": "io_count_finding",
+                },
+                "existing_rule": self._existing_overrides.get("variable_io_rules", {}).get(obj_name),
+            }
+
         if confidence not in _ELIGIBLE_CONFIDENCE:
             return
 
