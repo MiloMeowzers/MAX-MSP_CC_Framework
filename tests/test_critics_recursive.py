@@ -830,10 +830,10 @@ class TestRnboNested:
         r = _rnbo("obj-2", [_box("obj-10", "out~ 1", 1, 0, outlettype=[])])
         d = _patch([_container("obj-1", "p synth", _inner([r]))])
         results = review_rnbo(d)
-        assert [(x.severity, x.path) for x in results] == [("blocker", "obj-1")]
+        assert [(x.severity, x.path) for x in results] == [("note", "obj-1")]
         assert results[0].finding == (
             "[p synth] rnbo~ 'obj-2' inner patcher has no in~ object -- "
-            "audio input will not work"
+            "it takes no audio input, which is expected for a generator"
         )
 
     def test_duplicate_params_across_inner_p(self):

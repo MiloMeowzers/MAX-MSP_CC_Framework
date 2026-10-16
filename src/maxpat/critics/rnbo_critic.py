@@ -3,9 +3,16 @@
 Catches RNBO-specific issues that the mechanical RNBO validation pipeline
 does not detect:
   - Param naming conventions (lowercase_with_underscores preferred)
-  - I/O completeness (inner patcher must have in~/out~)
+  - I/O completeness: a missing out~ is a blocker; a missing in~ is a note
+    (Q26 / E8) -- a generator takes no audio input, and MAX's own
+    rnbo_triangle~.maxhelp has none
   - Duplicate param names
   - Target fitness warnings (e.g., cpp with many params)
+
+Param names (Q26 / E8): the ``@name`` value wins when present; otherwise the
+first positional argument after ``param`` names it (``param freq 440``), unless
+it starts with ``@`` or is a number. Both forms are checked for naming and
+duplicates.
 
 NOTE: Overlaps intentionally with rnbo_validation.py at the semantic level.
 rnbo_validation checks structural correctness (is it valid?), while this
@@ -30,10 +37,8 @@ import re
 from src.maxpat import walk
 from src.maxpat.critics.base import CriticResult, tag_results
 from src.maxpat.graph import PatchGraph
+from src.maxpat.io_resolvers import split_box_text
 
-
-# Regex to extract param @name from box text like "param @name foo @min 0 @max 1"
-_PARAM_NAME_RE = re.compile(r"@name\s+(\S+)")
 
 # Regex for lowercase_with_underscores convention
 _LOWERCASE_UNDERSCORE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -71,7 +76,10 @@ def review_rnbo(
 
     Scans every scope for rnbo~ boxes and reviews their inner patchers
     for semantic issues: param naming, I/O completeness, duplicates,
-    and target fitness.
+    and target fitness. Params are named by ``@name`` or, failing that,
+    their first positional argument (Q26 / E8). A missing out~ is a
+    blocker; a missing in~ is a note, since a generator (MAX's own
+    rnbo_triangle~ help) has no audio input.
 
     Args:
         patch_dict: A .maxpat-format dict.
@@ -149,7 +157,11 @@ def _check_io_completeness(
     rnbo_box: dict,
     inner_boxes: list[dict],
 ) -> list[CriticResult]:
-    """Check that the inner RNBO patcher has at least one in~ and one out~."""
+    """Check the inner RNBO patcher for in~ and out~.
+
+    No out~ is a blocker (no audio output). No in~ is a note (Q26 / E8):
+    a generator takes no audio input by design.
+    """
     results: list[CriticResult] = []
 
     has_in = False
@@ -166,10 +178,11 @@ def _check_io_completeness(
 
     if not has_in:
         results.append(CriticResult(
-            "blocker",
+            "note",
             f"rnbo~ '{rnbo_id}' inner patcher has no in~ object -- "
-            f"audio input will not work",
-            "Add at least one 'in~' object to the inner RNBO patcher",
+            f"it takes no audio input, which is expected for a generator",
+            "If the patch should process audio input, add an 'in~ 1' object "
+            "to the inner RNBO patcher",
         ))
 
     if not has_out:
@@ -183,12 +196,35 @@ def _check_io_completeness(
     return results
 
 
-def _extract_param_name(text: str) -> str | None:
-    """Extract the param name from box text like 'param @name foo ...'."""
-    match = _PARAM_NAME_RE.search(text)
-    if match:
-        return match.group(1)
-    return None
+_NUMBER_RE = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$")
+
+
+def _is_number(token: str) -> bool:
+    """True for a MAX numeric atom (``5``, ``-3``, ``0.5``, ``1e3``)."""
+    return bool(_NUMBER_RE.match(token))
+
+
+def _extract_param_name(text) -> str | None:
+    """The param name of box text ``param ...`` (Q26 / E8), or None.
+
+    The ``@name`` value wins when present (``param @name foo @min 0``).
+    Otherwise the first argument after ``param`` names it
+    (``param freq 440``) unless it starts with ``@`` or parses as a
+    number. Non-str text gives None. Tokens come from the quote-aware
+    ``split_box_text``.
+    """
+    if not isinstance(text, str):
+        return None
+    tokens = split_box_text(text)
+    for i, tok in enumerate(tokens[:-1]):
+        if tok == "@name":
+            return tokens[i + 1]
+    if len(tokens) < 2 or tokens[0] != "param":
+        return None
+    first = tokens[1]
+    if first.startswith("@") or _is_number(first):
+        return None
+    return first
 
 
 def _check_param_naming(
