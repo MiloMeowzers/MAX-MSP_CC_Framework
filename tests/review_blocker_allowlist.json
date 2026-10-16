@@ -1,5 +1,5 @@
 {
-  "_doc": "Exempts specific blockers in committed, frozen patches (never edited to satisfy critics) for tests/test_integration_patches.py::test_review_patch_no_blockers ONLY. Until Q3 (quick 261012-di7, 2026-10-12) this file held 120 entries described as pre-existing 'debt'; most were critic false positives -- display-only sinks, preset membership cords, fan-outs whose branches never reconverge at different inlets, and Bach command messages. 51 were already stale and one named a deleted file. Q3 removed them when the critics stopped emitting them. Remaining entries are true positives and each must carry a `reason`. Matching keys: fanout = source_id + outlet; bach_llll = source_id + inlet + sorted destinations. New patches and new blockers are never exempted. test_review_allowlist_entries_are_live fails on stale entries, missing files and missing reasons. Calibration-project (user-confirmed) patches must not appear here; they must review with zero blockers.",
+  "_doc": "Exempts specific blockers in committed, frozen patches (never edited to satisfy critics) for tests/test_integration_patches.py::test_review_patch_no_blockers ONLY. Until Q3 (quick 261012-di7, 2026-10-12) this file held 120 entries described as pre-existing 'debt'; most were critic false positives -- display-only sinks, preset membership cords, fan-outs whose branches never reconverge at different inlets, and Bach command messages. 51 were already stale and one named a deleted file. Q3 removed them when the critics stopped emitting them. Remaining entries are true positives and each must carry a `reason`. Matching keys: fanout = source_id + outlet; bach_llll = source_id + inlet + sorted destinations; unsafe_gain = source_id + gain_id + inlet (Q26). New patches and new blockers are never exempted. test_review_allowlist_entries_are_live fails on stale entries, missing files and missing reasons. Calibration-project (user-confirmed) patches must not appear here; they must review with zero blockers.",
   "patches": {
     "patches/rhythmic-sampler/generated/slot.maxpat": [
       {
@@ -13,6 +13,15 @@
           "message"
         ],
         "reason": "True positive (fix-plan rule 3), surfaced by Q3 (quick 261012-di7) once signal-ness was read from outlettype instead of the `~` name: `buffer~ #1` obj-1 outlet 1 (bang after read) feeds `setbuffer #1` obj-27, which reaches waveform~ obj-4 inlets 2/3 via js slot-engine.js -> `t f f` -> expr -> `trigger f f`, and `set #1` obj-28, which reaches waveform~ obj-4 inlet 0. It works in MAX because fan-out fires right-to-left by box position (setbuffer at x=300 before set at x=110). The patch is frozen (never edited to satisfy critics); listed in the Q3 SUMMARY."
+      },
+      {
+        "severity": "blocker",
+        "kind": "unsafe_gain",
+        "source_id": "obj-54",
+        "gain_id": "obj-9",
+        "inlet": 1,
+        "path": "",
+        "reason": "True positive (fix-plan rule 3), surfaced by Q26 (E6) once dials and value bounds were read: vol dial obj-54 (floatoutput 1, size 121, mult 0.01, range 0 to 1.21) -> 't f f' obj-166 -> '$1 10' obj-155 -> line~ obj-156 -> '*~' obj-9 inlet 1, a deliberate +1.66 dB headroom on the slot volume. The patch is frozen (never edited to satisfy critics); listed in the Q26 SUMMARY."
       }
     ]
   }

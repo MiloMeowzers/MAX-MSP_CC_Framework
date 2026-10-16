@@ -7,7 +7,14 @@ not detect:
     add_gen write them as ``newobj``; mc.gen~'s gen patcher is read from
     ``data.patcher`` (MAX's mc wrapper) as well as ``patcher`` (Q4 / E3,
     quick 261012-egf).
-  - Missing gain staging before dac~/ezdac~
+  - Missing gain staging before an output terminal (Q26 / E6, PD-5): the
+    gain stages and output terminals come from :mod:`src.maxpat.dsp_roles`
+    (DB-driven, shared with validation.py): live.gain~ is a gain stage,
+    mc.dac~ and plugout~ are terminals
+  - Unsafe gain sources (Q26 / E6, PD-4): a bounds-propagating backward
+    trace into both inlets of every ``*~`` / ``mc.*~`` that reads comma
+    segments, line~ target/time pairs, ``* k`` / ``/ k`` / scale / zmap /
+    clip and each source's own range, and stops at unknown boxes
 
 The former control-rate-to-signal-rate check was removed by Q3 / E2 (quick
 261012-di7): it was ~100% noise (399 corpus hits, including the mandated
@@ -25,13 +32,15 @@ feedback loops). Focus is on semantic issues validation misses.
 
 from __future__ import annotations
 
+import math
 import re
 from collections import deque
 
-from src.maxpat import walk
+from src.maxpat import dsp_roles, walk
 from src.maxpat.critics.base import CriticResult, tag_results
 from src.maxpat.codegen import parse_genexpr_io
 from src.maxpat.graph import SIGNAL_OUTLET_TYPES, PatchGraph
+from src.maxpat.io_resolvers import split_box_text
 
 
 # Oscillator objects that need gain staging before dac~/ezdac~
@@ -40,13 +49,15 @@ _OSCILLATOR_NAMES = frozenset({
     "mc.cycle~", "mc.saw~", "mc.rect~", "mc.tri~",
 })
 
-# Gain objects that attenuate signal (includes MC variants)
-_GAIN_NAMES = frozenset({"*~", "gain~", "mc.*~", "mc.gain~"})
+# Back-compat exports (Q26 / E6, PD-5): the checks take their sets from
+# dsp_roles(db); these equal the repo-DB values and a test pins them equal.
+_GAIN_NAMES = frozenset({
+    "*~", "mc.*~", "gain~", "mc.gain~", "live.gain~", "mc.live.gain~",
+})
+_TERMINAL_NAMES = frozenset({"dac~", "mc.dac~", "ezdac~", "mc.ezdac~", "plugout~"})
 
-# Terminal signal objects
-_TERMINAL_NAMES = frozenset({"dac~", "ezdac~"})
-
-# Objects known to output MIDI-range (0-127) or UI-range values
+# Objects known to output MIDI-range (0-127) or UI-range values (back-compat;
+# the Q26 trace reads each source's own bounds, see _bounded_source)
 _MIDI_RANGE_SOURCES = frozenset({
     "ctlin", "notein", "slider", "kslider",
     "live.dial", "live.slider", "live.numbox",
@@ -72,6 +83,7 @@ def review_dsp(
     code_context: dict | None = None,
     *,
     graph: "PatchGraph | None" = None,
+    db=None,
 ) -> list[CriticResult]:
     """Review DSP aspects of a patch.
 
@@ -79,8 +91,11 @@ def review_dsp(
       1. gen~ I/O match between GenExpr code and wrapper box (gen~ and
          mc.gen~ detected by box name; mc.gen~ code read from data.patcher
          too -- Q4 / E3)
-      2. Gain staging: oscillators connected to dac~ without *~ or gain~
-      3. Unsafe gain sources (see _check_unsafe_gain_sources)
+      2. Gain staging: oscillators reaching an output terminal without a
+         gain stage; both sets come from ``dsp_roles(db)`` (Q26 / E6, PD-5)
+      3. Unsafe gain sources: a value range above 1.0 reaching either
+         inlet of a ``*~`` / ``mc.*~`` (Q26 / E6, PD-4; see
+         _check_unsafe_gain_sources)
 
     Args:
         patch_dict: A .maxpat-format dict.
@@ -89,6 +104,9 @@ def review_dsp(
             Format: {"gen~_code": {"obj-1": "out1 = in1 * 0.5;"}}
         graph: The shared PatchGraph of *patch_dict* (review_patch passes
             it); built here when None.
+        db: Keyword-only ObjectDatabase for the DB-driven gain-stage and
+            output-terminal sets (:mod:`src.maxpat.dsp_roles`). review_patch
+            passes its own; None uses dsp_roles' cached default DB.
 
     Returns:
         List of CriticResult findings, top level first, nested scopes in
@@ -96,6 +114,8 @@ def review_dsp(
     """
     if graph is None:
         graph = PatchGraph.build(patch_dict)
+    gain_names = dsp_roles.gain_stage_names(db)
+    terminal_names = dsp_roles.output_terminal_names(db)
     results: list[CriticResult] = []
     for scope in graph.scopes:
         if scope.context == "gen":
@@ -103,7 +123,7 @@ def review_dsp(
         ctx = code_context if scope.path == () else None
         found: list[CriticResult] = []
         found.extend(_check_gen_io_match(scope.boxes, ctx))
-        found.extend(_check_gain_staging(scope.boxes, scope.edges))
+        found.extend(_check_gain_staging(scope.boxes, scope.edges, gain_names, terminal_names))
         found.extend(_check_unsafe_gain_sources(scope.boxes, scope.edges))
         results.extend(tag_results(found, scope.path))
     return results
@@ -246,12 +266,21 @@ def _outlettype(box: dict) -> list:
 def _check_gain_staging(
     box_lookup: dict[str, dict],
     edges: list,
+    gain_names=None,
+    terminal_names=None,
 ) -> list[CriticResult]:
-    """Detect oscillators connected to dac~/ezdac~ without gain staging.
+    """Detect oscillators reaching an output terminal without gain staging.
 
-    Uses BFS from each oscillator. If it reaches dac~/ezdac~ without passing
-    through a gain object (*~ or gain~), emit a warning.
+    Uses BFS from each oscillator. If it reaches a terminal in
+    *terminal_names* without passing through a gain stage in *gain_names*,
+    emit a blocker. Both default to ``dsp_roles(None)`` (Q26 / E6, PD-5).
+    For plugout~ the suggestion names only ``*~``: the M4L critic forbids
+    gain~ / live.gain~ before plugout~.
     """
+    if gain_names is None:
+        gain_names = dsp_roles.gain_stage_names()
+    if terminal_names is None:
+        terminal_names = dsp_roles.output_terminal_names()
     results: list[CriticResult] = []
 
     # Build signal adjacency from the scope's edges
@@ -264,7 +293,7 @@ def _check_gain_staging(
         # Check if this is a signal connection (source outlettype only)
         src_outlettype = _outlettype(src_box)
         is_signal = (
-            edge.outlet < len(src_outlettype)
+            0 <= edge.outlet < len(src_outlettype)
             and src_outlettype[edge.outlet] in _SIGNAL_OUTLET_TYPES
         )
 
@@ -296,17 +325,27 @@ def _check_gain_staging(
                     continue
                 next_name = walk.box_name(next_box)
 
-                next_has_gain = has_gain or (next_name in _GAIN_NAMES)
+                next_has_gain = has_gain or (next_name in gain_names)
 
-                if next_name in _TERMINAL_NAMES:
+                if next_name in terminal_names:
                     if not next_has_gain:
+                        if next_name.endswith("plugout~"):
+                            suggestion = (
+                                f"Insert a '*~ 0.5' between '{osc_name}' and "
+                                f"'{next_name}' to control volume (no gain stage "
+                                f"object before plugout~ in Max for Live)"
+                            )
+                        else:
+                            suggestion = (
+                                f"Insert a '*~ 0.5' or 'gain~' between "
+                                f"'{osc_name}' and '{next_name}' to control volume"
+                            )
                         results.append(CriticResult(
                             "blocker",
                             f"Missing gain staging: '{osc_name}' ({osc_id}) "
                             f"connected to '{next_name}' ({next_id}) without "
                             f"passing through *~ or gain~",
-                            f"Insert a '*~ 0.5' or 'gain~' between "
-                            f"'{osc_name}' and '{next_name}' to control volume",
+                            suggestion,
                         ))
                     continue  # Don't traverse past dac~
 
@@ -348,6 +387,8 @@ def _parse_line_tilde_targets(text: str) -> list[float]:
     line~ message format: target1 time1 target2 time2 ...
     Values at even indices (0, 2, 4...) are target values.
     A single number with no time is also a valid target.
+    Kept for back-compat; the Q26 trace splits comma segments itself
+    (:func:`_message_segments`).
     """
     targets: list[float] = []
     parts = text.split()
@@ -360,146 +401,375 @@ def _parse_line_tilde_targets(text: str) -> list[float]:
     return targets
 
 
+# ---------------------------------------------------------------------------
+# Q26 / E6 (PD-4): bounds-propagating unsafe-gain trace
+# ---------------------------------------------------------------------------
+
+# Boxes whose two inlets are both traced (mc.gain~ / gain~ take slider
+# positions, not 0-1 gains, and are out of Q26 scope).
+_GAIN_INLET_NAMES = frozenset({"*~", "mc.*~"})
+
+_TRACE_HOP_LIMIT = 64
+_TRACE_STATE_CAP = 4096
+
+_DOLLAR_ATOM_RE = re.compile(r"^\$[1-9]$")
+_NUMBER_ATOM_RE = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$")
+
+_UNSAFE_GAIN_SUGGESTION = (
+    "Normalize before the gain input, e.g. 'scale 0 127 0. 1.' or '/ 127.' "
+    "for a 0-127 source, so the value stays within 0.0-1.0"
+)
+
+
+def _num(token) -> "float | None":
+    """A MAX numeric atom as float, else None (``5``, ``-0.5``, ``1e3``)."""
+    if not isinstance(token, str) or not _NUMBER_ATOM_RE.match(token):
+        return None
+    try:
+        value = float(token)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def _attr_num(value, default: float) -> float:
+    """A numeric box attribute (int/float, not bool, finite), else *default*."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return default
+    value = float(value)
+    return value if math.isfinite(value) else default
+
+
+def _message_segments(text) -> list:
+    """Comma segments of a message box's text, up to the first unescaped ``;``.
+
+    A comma is a ``,`` token or a token ending in an unescaped ``,`` (the
+    structure critic's ``_is_setter_message`` rule). Everything from the
+    first unescaped ``;`` on is a remote message and is ignored.
+    """
+    if not isinstance(text, str):
+        return []
+    segments: list = [[]]
+    for token in split_box_text(text):
+        semi = _unescaped_index(token, ";")
+        if semi is not None:
+            head = token[:semi]
+            if head:
+                segments[-1].append(head)
+            break
+        if token == ",":
+            segments.append([])
+            continue
+        if token.endswith(",") and not token.endswith("\\,"):
+            segments[-1].append(token[:-1])
+            segments.append([])
+            continue
+        segments[-1].append(token)
+    return [seg for seg in segments if seg]
+
+
+def _unescaped_index(token: str, char: str) -> "int | None":
+    for i, c in enumerate(token):
+        if c == char and (i == 0 or token[i - 1] != "\\"):
+            return i
+    return None
+
+
+def _bounded_source(box) -> "tuple | None":
+    """``(lo, hi)`` of a UI / MIDI source's output (PD-4 rule 2), else None."""
+    name = walk.box_name(box)
+    if name in ("slider", "dial"):
+        size = _attr_num(box.get("size"), 128.0)
+        mult = _attr_num(box.get("mult"), 1.0)
+        base = _attr_num(box.get("min"), 0.0)
+        top = size if box.get("floatoutput") in (1, True) else size - 1.0
+        a, b = base, top * mult + base
+        return (min(a, b), max(a, b))
+    if name in ("number", "flonum"):
+        lo = _attr_num(box.get("minimum"), 0.0)
+        hi = _attr_num(box.get("maximum"), 127.0)
+        return (min(lo, hi), max(lo, hi))
+    if name in ("live.dial", "live.slider", "live.numbox"):
+        saved = box.get("saved_attribute_attributes")
+        valueof = saved.get("valueof") if isinstance(saved, dict) else None
+        if not isinstance(valueof, dict):
+            valueof = {}
+        lo = _attr_num(valueof.get("parameter_mmin"), 0.0)
+        hi = _attr_num(valueof.get("parameter_mmax"), 127.0)
+        return (min(lo, hi), max(lo, hi))
+    if name in ("kslider", "ctlin", "notein"):
+        return (0.0, 127.0)
+    return None
+
+
+def _op_of(box) -> "tuple | None":
+    """The value op of a ``* k`` / ``/ k`` / scale / zmap / clip box, else None."""
+    name = walk.box_name(box)
+    args = [_num(t) for t in walk.box_args(box)]
+    if name in ("*", "/"):
+        if not args or args[0] is None:
+            return None
+        k = args[0]
+        if name == "/":
+            if k == 0:
+                return None
+            k = 1.0 / k
+        return ("mul", k)
+    if name in ("scale", "zmap"):
+        if len(args) < 4 or any(a is None for a in args[:4]):
+            return None
+        a, b, c, d = args[:4]
+        if a == b:
+            return None
+        return ("map", a, b, c, d, name == "zmap")
+    if name == "clip":
+        if len(args) < 2 or args[0] is None or args[1] is None:
+            return None
+        return ("clip", min(args[0], args[1]), max(args[0], args[1]))
+    return None
+
+
+def _apply_ops(interval: tuple, ops: tuple) -> "tuple | None":
+    """Apply *ops* (source -> gain order) to *interval*; None when not finite."""
+    lo, hi = interval
+    for op in ops:
+        if op[0] == "mul":
+            a, b = lo * op[1], hi * op[1]
+        elif op[0] == "map":
+            _, x0, x1, y0, y1, clamp = op
+            k = (y1 - y0) / (x1 - x0)
+            a, b = y0 + (lo - x0) * k, y0 + (hi - x0) * k
+            if clamp:
+                c_lo, c_hi = min(y0, y1), max(y0, y1)
+                a = min(max(a, c_lo), c_hi)
+                b = min(max(b, c_lo), c_hi)
+        else:  # clip
+            _, c_lo, c_hi = op
+            a = min(max(lo, c_lo), c_hi)
+            b = min(max(hi, c_lo), c_hi)
+        lo, hi = min(a, b), max(a, b)
+        if not (math.isfinite(lo) and math.isfinite(hi)):
+            return None
+    return (lo, hi)
+
+
+def _gain_source_label(box) -> str:
+    if walk.box_maxclass(box) == "message":
+        return f"message '{walk.box_text(box)}'"
+    return f"'{walk.box_name(box)}'"
+
+
+def _trigger_outlet_kind(box, outlet: int) -> "tuple | None":
+    """("value",) / ("const", x) / None for trigger outlet *outlet* (PD-4 rule 5)."""
+    letters = []
+    for token in walk.box_args(box):
+        if token.startswith("@"):
+            break
+        letters.append(token)
+    if not letters:
+        letters = ["i", "i"]
+    if not (0 <= outlet < len(letters)):
+        return None
+    token = letters[outlet]
+    if token in ("i", "f", "l"):
+        return ("value",)
+    value = _num(token)
+    if value is not None:
+        return ("const", value)
+    return None
+
+
 def _check_unsafe_gain_sources(
     box_lookup: dict[str, dict],
     edges: list,
 ) -> list[CriticResult]:
-    """Detect MIDI-range control sources feeding *~ gain inlet without normalization.
+    """Flag a value source that can drive a ``*~`` / ``mc.*~`` input above 1.0.
 
-    Traces backward from *~ inlet 1 (the gain/multiplier inlet) through
-    control-rate connections. If it reaches a MIDI-range source (ctlin, notein,
-    number, slider, etc.) without passing through a normalizer (scale, clip,
-    / 127.), emit a blocker.
+    Q26 / E6 (planner decision PD-4). For each ``*~`` / ``mc.*~`` box and
+    each of its two inlets, a backward BFS from the control cords into the
+    inlet -- and from the control cords into inlet 0 of a ``line~`` whose
+    signal feeds it -- carries an op chain of the value transforms passed:
 
-    Also traces through line~ (signal-rate) to detect >1.0 message values
-    and MIDI sources feeding the gain inlet indirectly.
+    1. message box: comma segments up to the first unescaped ``;``; a
+       segment starting with a symbol is a command (``set``, ``stop``) and
+       carries no value; a message feeding line~ directly contributes only
+       its even (target) positions, odd positions being ramp times; numbers
+       are a constant interval, each ``$N`` continues to the message's
+       inlet-0 feeders;
+    2. bounded sources (:func:`_bounded_source`): slider / dial
+       ``value * mult + min``, number / flonum ``minimum`` / ``maximum``
+       (missing sides 0 / 127), live.dial / live.slider / live.numbox
+       ``parameter_mmin`` / ``parameter_mmax``, kslider / ctlin / notein
+       0-127;
+    3. ``* k``, ``/ k``, ``scale`` / ``zmap a b c d`` and ``clip lo hi``
+       (:func:`_op_of`) prepend their op and continue to inlet-0 feeders;
+    4. an expr / vexpr matching :func:`_is_normalizer` is safe;
+    5. trigger value outlets (i, f, l) and f / float / i / int pass the
+       value on; numeric arguments are constant sources;
+    6. anything else stops with an unknown range and no finding.
+
+    For inlet 0 of a ``*~ k`` with nothing on inlet 1, the chain starts
+    with multiply-by-k (``line~`` -> ``*~ 0.01`` is judged as the product).
+    One blocker per (source, gain box, inlet) whose propagated range leaves
+    -1.0..1.0. A visited set, a 64-hop limit and a 4096-state cap per
+    (gain box, inlet) bound the walk.
     """
     results: list[CriticResult] = []
 
-    # Build control adjacency: for each (dst_id, dst_inlet) -> list of src_ids
-    # Only non-signal connections
-    ctrl_predecessors: dict[tuple[str, int], list[str]] = {}
-    # Build signal adjacency: for each (dst_id, dst_inlet) -> list of src_ids
-    sig_predecessors: dict[tuple[str, int], list[str]] = {}
-
+    # (dst_id, inlet) -> control edges into it
+    ctrl_in: dict = {}
     for edge in edges:
         src_box = box_lookup.get(edge.src)
-        if not src_box:
+        if not src_box or not isinstance(edge.outlet, int) or edge.outlet < 0:
             continue
-
         src_outlettype = _outlettype(src_box)
-        is_signal = (
-            edge.outlet < len(src_outlettype)
-            and src_outlettype[edge.outlet] in _SIGNAL_OUTLET_TYPES
-        )
+        if edge.outlet < len(src_outlettype) and src_outlettype[edge.outlet] in _SIGNAL_OUTLET_TYPES:
+            continue
+        ctrl_in.setdefault((edge.dst, edge.inlet), []).append(edge)
 
-        key = (edge.dst, edge.inlet)
-        if is_signal:
-            sig_predecessors.setdefault(key, []).append(edge.src)
+    # (dst_id, inlet) -> signal edges into it
+    sig_in: dict = {}
+    fed_inlets: set = set()
+    for edge in edges:
+        fed_inlets.add((edge.dst, edge.inlet))
+        src_box = box_lookup.get(edge.src)
+        if not src_box or not isinstance(edge.outlet, int) or edge.outlet < 0:
+            continue
+        src_outlettype = _outlettype(src_box)
+        if edge.outlet < len(src_outlettype) and src_outlettype[edge.outlet] in _SIGNAL_OUTLET_TYPES:
+            sig_in.setdefault((edge.dst, edge.inlet), []).append(edge)
+
+    for gain_id, gain_box in box_lookup.items():
+        gain_name = walk.box_name(gain_box)
+        if gain_name not in _GAIN_INLET_NAMES:
+            continue
+        for inlet in (0, 1):
+            base_ops: tuple = ()
+            if inlet == 0 and (gain_id, 1) not in fed_inlets:
+                args = walk.box_args(gain_box)
+                k = _num(args[0]) if args else None
+                if k is not None:
+                    base_ops = (("mul", k),)
+            seeds = []
+            for edge in ctrl_in.get((gain_id, inlet), ()):
+                seeds.append((edge.src, edge.outlet, base_ops, False, False))
+            for sig_edge in sig_in.get((gain_id, inlet), ()):
+                line_box = box_lookup.get(sig_edge.src)
+                if line_box is None or walk.box_name(line_box) != "line~":
+                    continue
+                for edge in ctrl_in.get((sig_edge.src, 0), ()):
+                    seeds.append((edge.src, edge.outlet, base_ops, True, True))
+            if seeds:
+                results.extend(_trace_gain_inlet(
+                    box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds,
+                ))
+    return results
+
+
+def _trace_gain_inlet(box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds) -> list:
+    """The PD-4 backward BFS for one (gain box, inlet); see the caller."""
+    # source id -> [lo, hi, via, order]
+    unsafe: dict = {}
+    seen: set = set()
+    queue = deque((state, 0) for state in seeds)
+    states = 0
+
+    def reach(src_id, interval, ops, crossed):
+        value = _apply_ops(interval, ops)
+        if value is None:
+            return
+        lo, hi = value
+        if max(abs(lo), abs(hi)) <= 1.0:
+            return
+        entry = unsafe.get(src_id)
+        if entry is None:
+            unsafe[src_id] = [lo, hi, crossed, len(unsafe)]
         else:
-            ctrl_predecessors.setdefault(key, []).append(edge.src)
+            entry[0] = min(entry[0], lo)
+            entry[1] = max(entry[1], hi)
+            entry[2] = entry[2] or crossed
 
-    # Also build general control backward adjacency (any inlet) for tracing
-    ctrl_backward: dict[str, list[str]] = {}
-    for edge in edges:
-        src_box = box_lookup.get(edge.src)
-        if not src_box:
+    def feeders(box_id, inlets, ops, into_line, crossed, hops):
+        for i in inlets:
+            for edge in ctrl_in.get((box_id, i), ()):
+                queue.append(((edge.src, edge.outlet, ops, into_line, crossed), hops + 1))
+
+    while queue:
+        state, hops = queue.popleft()
+        if state in seen or hops > _TRACE_HOP_LIMIT:
             continue
-
-        src_outlettype = _outlettype(src_box)
-        is_signal = (
-            edge.outlet < len(src_outlettype)
-            and src_outlettype[edge.outlet] in _SIGNAL_OUTLET_TYPES
-        )
-        if is_signal:
+        seen.add(state)
+        states += 1
+        if states > _TRACE_STATE_CAP:
+            break
+        box_id, outlet, ops, into_line, crossed = state
+        box = box_lookup.get(box_id)
+        if not isinstance(box, dict):
             continue
-
-        ctrl_backward.setdefault(edge.dst, []).append(edge.src)
-
-    # Names with a gain inlet at index 1 (mc.gain~ excluded: only 1 inlet)
-    _GAIN_INLET_1_NAMES = frozenset({"*~", "mc.*~"})
-
-    def _trace_ctrl_backward(start_ids: list[str], gain_name: str, gain_id: str):
-        """BFS backward from control sources to find MIDI-range origins."""
-        for start_src in start_ids:
-            queue = deque([start_src])
-            visited: set[str] = set()
-
-            while queue:
-                current_id = queue.popleft()
-                if current_id in visited:
-                    continue
-                visited.add(current_id)
-
-                current_box = box_lookup.get(current_id)
-                if not current_box:
-                    continue
-
-                current_name = walk.box_name(current_box)
-
-                # If we hit a normalizer, this path is safe -- stop tracing
-                if _is_normalizer(current_box):
-                    continue
-
-                # Check message boxes for >1.0 target values (line~ path)
-                if current_box.get("maxclass") == "message":
-                    targets = _parse_line_tilde_targets(
-                        walk.box_text(current_box),
-                    )
-                    if any(abs(t) > 1.0 for t in targets):
-                        results.append(CriticResult(
-                            "blocker",
-                            f"Unsafe gain source: message '{walk.box_text(current_box)}' "
-                            f"({current_id}) feeds '{gain_name}' ({gain_id}) "
-                            f"inlet 1 via line~ with value >1.0 "
-                            f"-- will cause dangerous audio levels",
-                            f"Keep message target values in 0.0-1.0 range "
-                            f"for gain control",
-                        ))
-                    continue
-
-                # If we hit a MIDI-range source, flag it
-                if current_name in _MIDI_RANGE_SOURCES:
-                    results.append(CriticResult(
-                        "blocker",
-                        f"Unsafe gain source: '{current_name}' ({current_id}) "
-                        f"feeds '{gain_name}' ({gain_id}) inlet 1 without "
-                        f"normalization -- raw MIDI/UI values (0-127) will "
-                        f"cause dangerous audio levels",
-                        f"Insert 'scale 0 127 0. 1.' or '/ 127.' before the "
-                        f"gain input",
-                    ))
-                    continue
-
-                # Continue tracing backward
-                for prev_id in ctrl_backward.get(current_id, []):
-                    queue.append(prev_id)
-
-    # Find all *~/mc.*~ boxes and check what feeds inlet 1
-    for box_id, box in box_lookup.items():
         name = walk.box_name(box)
-        if name not in _GAIN_INLET_1_NAMES:
+
+        if walk.box_maxclass(box) == "message":
+            numbers = []
+            follow = False
+            for seg in _message_segments(box.get("text")):
+                first = seg[0]
+                if _num(first) is None and not _DOLLAR_ATOM_RE.match(first):
+                    continue  # a command segment carries no value
+                atoms = seg[0::2] if into_line else seg
+                for atom in atoms:
+                    value = _num(atom)
+                    if value is not None:
+                        numbers.append(value)
+                    elif _DOLLAR_ATOM_RE.match(atom):
+                        follow = True
+            if numbers:
+                reach(box_id, (min(numbers), max(numbers)), ops, crossed)
+            if follow:
+                feeders(box_id, (0,), ops, False, crossed, hops)
             continue
 
-        # Get control sources feeding inlet 1 (gain inlet) -- direct control
-        inlet_1_ctrl = ctrl_predecessors.get((box_id, 1), [])
+        bounds = _bounded_source(box)
+        if bounds is not None:
+            reach(box_id, bounds, ops, crossed)
+            continue
 
-        # Get signal sources feeding inlet 1 -- check for line~
-        inlet_1_sig = sig_predecessors.get((box_id, 1), [])
-        line_tilde_ctrl_sources: list[str] = []
-        for sig_src_id in inlet_1_sig:
-            sig_src_box = box_lookup.get(sig_src_id)
-            if sig_src_box and walk.box_name(sig_src_box) == "line~":
-                # Trace backward from line~'s control inputs
-                line_ctrl = ctrl_backward.get(sig_src_id, [])
-                line_tilde_ctrl_sources.extend(line_ctrl)
+        op = _op_of(box)
+        if op is not None:
+            feeders(box_id, (0,), (op,) + ops, False, crossed, hops)
+            continue
 
-        # Trace from direct control sources
-        if inlet_1_ctrl:
-            _trace_ctrl_backward(inlet_1_ctrl, name, box_id)
+        if name in ("expr", "vexpr"):
+            continue  # a normalizer is safe; any other expr is unknown
 
-        # Trace from line~ control inputs (line~ acts as signal bridge)
-        if line_tilde_ctrl_sources:
-            _trace_ctrl_backward(line_tilde_ctrl_sources, name, box_id)
+        if name in ("trigger", "t"):
+            kind = _trigger_outlet_kind(box, outlet)
+            if kind is None:
+                continue
+            if kind[0] == "const":
+                reach(box_id, (kind[1], kind[1]), ops, crossed)
+                continue
+            feeders(box_id, (0,), ops, False, crossed, hops)
+            continue
 
+        if name in ("f", "float", "i", "int"):
+            args = walk.box_args(box)
+            value = _num(args[0]) if args else None
+            if value is not None:
+                reach(box_id, (value, value), ops, crossed)
+            feeders(box_id, (0, 1), ops, False, crossed, hops)
+            continue
+        # anything else: unknown range, the trace stops here (PD-4 rule 6)
+
+    results = []
+    for src_id, (lo, hi, crossed, _order) in sorted(unsafe.items(), key=lambda kv: kv[1][3]):
+        label = _gain_source_label(box_lookup.get(src_id))
+        via = " via line~" if crossed else ""
+        peak = max(abs(lo), abs(hi))
+        results.append(CriticResult(
+            "blocker",
+            f"Unsafe gain source: {label} ({src_id}) reaches '{gain_name}' "
+            f"({gain_id}) inlet {inlet}{via} with values up to {peak:g} "
+            f"(range {lo:g} to {hi:g}) -- gain inputs must stay within 0.0-1.0",
+            _UNSAFE_GAIN_SUGGESTION,
+        ))
     return results

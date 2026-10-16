@@ -101,7 +101,8 @@ def review_patch(
         ext_archetype: Archetype for external code review ("message", "dsp",
             "scheduler"). Only used when ext_code is provided.
         db: Keyword-only ObjectDatabase used for package detection, the
-            package critic and the structure critic's Q21 checks. None (default) constructs exactly one per call;
+            package critic, the structure critic's Q21 checks and the DSP
+            critic's DB-driven gain-stage / output-terminal sets (Q26 / E6). None (default) constructs exactly one per call;
             the save gate passes one cached instance (Q7).
         is_new: Keyword-only. True for a new patch: the structure critic's
             Q24 uninitialized-state findings (a UI value holder reaching
@@ -121,7 +122,7 @@ def review_patch(
     graph = PatchGraph.build(patch_dict)
 
     results: list[CriticResult] = []
-    results.extend(review_dsp(patch_dict, code_context=code_context, graph=graph))
+    results.extend(review_dsp(patch_dict, code_context=code_context, graph=graph, db=db))
     results.extend(review_structure(patch_dict, graph=graph, db=db, is_new=is_new))
     results.extend(review_layout(patch_dict, graph=graph))
 

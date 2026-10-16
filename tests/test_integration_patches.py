@@ -47,6 +47,9 @@ with open(_ALLOWLIST_PATH) as _f:
 #   Fan-out:  "Fan-out without trigger: '<name>' (<source_id>) outlet <N> ..."
 #   Bach-llll: "Bach llll type mismatch: '<name>' (<source_id>) connected to
 #               '<dst>' (<dst_id>) inlet <N> which expects llll data ..."
+#   Unsafe gain (Q26 / E6): "Unsafe gain source: '<name>' (<source_id>) |
+#               message '<text>' (<source_id>) reaches '<gain>' (<gain_id>)
+#               inlet <N> ..."
 _FANOUT_RE = re.compile(
     r"Fan-out without trigger: '[^']*' \(([^)]+)\) outlet (\d+) "
     r"connected to \d+ destinations \((.*?)\) --"
@@ -54,6 +57,10 @@ _FANOUT_RE = re.compile(
 _BACH_RE = re.compile(
     r"Bach llll type mismatch: '[^']*' \(([^)]+)\) connected to "
     r"'([^']*)' \([^)]+\) inlet (\d+)"
+)
+_UNSAFE_GAIN_RE = re.compile(
+    r"Unsafe gain source: (?:message )?'[^']*' \(([^)]+)\) reaches '[^']*' "
+    r"\(([^)]+)\) inlet (\d+)"
 )
 _DST_NAME_RE = re.compile(r"'([^']*)' \([^)]+\)")
 
@@ -65,6 +72,7 @@ def _blocker_match_key(finding: str):
     Keys mirror the allowlist entry keys:
       fan-out   -> ("fanout", source_id, outlet)
       Bach-llll -> ("bach_llll", source_id, inlet, (sorted destinations))
+      unsafe gain -> ("unsafe_gain", source_id, gain_id, inlet)  (Q26)
     """
     m = _FANOUT_RE.search(finding)
     if m:
@@ -74,6 +82,10 @@ def _blocker_match_key(finding: str):
     if mb:
         source_id, dst, inlet = mb.groups()
         return ("bach_llll", source_id, int(inlet), (dst,))
+    mg = _UNSAFE_GAIN_RE.search(finding)
+    if mg:
+        source_id, gain_id, inlet = mg.groups()
+        return ("unsafe_gain", source_id, gain_id, int(inlet))
     return None
 
 
@@ -85,6 +97,8 @@ def _entry_key(entry: dict):
     if kind == "bach_llll":
         dsts = tuple(sorted(entry.get("destinations", [])))
         return ("bach_llll", entry["source_id"], int(entry["inlet"]), dsts)
+    if kind == "unsafe_gain":
+        return ("unsafe_gain", entry["source_id"], entry["gain_id"], int(entry["inlet"]))
     return None
 
 

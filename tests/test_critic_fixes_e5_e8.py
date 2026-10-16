@@ -400,3 +400,324 @@ class TestHotColdSharedAncestor:
         before = copy.deepcopy(d)
         _structure(d, db)
         assert d == before
+
+
+# ---------------------------------------------------------------------------
+# E6 -- gain safety and DB-driven DSP roles
+# ---------------------------------------------------------------------------
+
+
+_UG = "Unsafe gain source: "
+
+
+def _dsp(d, db=None):
+    from src.maxpat.critics.dsp_critic import review_dsp
+    return review_dsp(d, db=db)
+
+
+def _ug(results):
+    return [r for r in results if _UG in r.finding]
+
+
+def _mul(box_id="obj-9", text="*~", name=None):
+    return _box(box_id, text, 2, 1, outlettype=["signal"])
+
+
+def _line_tilde(box_id="obj-8"):
+    return _box(box_id, "line~", 2, 2, outlettype=["signal", "bang"])
+
+
+def _msg(box_id, text):
+    return _box(box_id, text, 2, 1, maxclass="message", outlettype=[""])
+
+
+def _ctlin(box_id="obj-1"):
+    return _box(box_id, "ctlin", 1, 3, outlettype=["int", "int", "int"])
+
+
+def _osc(box_id="obj-7"):
+    return _box(box_id, "cycle~ 440", 2, 1, outlettype=["signal"])
+
+
+def _msg_line_gain(text, feeders=(), feeder_lines=()):
+    """message obj-2 -> line~ obj-8 -> *~ obj-9 inlet 1 (cycle~ obj-7 on inlet 0)."""
+    boxes = [_msg("obj-2", text), _line_tilde(), _mul(), _osc()] + list(feeders)
+    lines = [
+        _line("obj-2", 0, "obj-8", 0),
+        _line("obj-8", 0, "obj-9", 1),
+        _line("obj-7", 0, "obj-9", 0),
+    ] + list(feeder_lines)
+    return _patch(boxes, lines)
+
+
+def _chain_gain(*middle, source=None):
+    """source obj-1 -> middle boxes obj-2.. -> *~ obj-9 inlet 1 (cycle~ on inlet 0)."""
+    source = source if source is not None else _ctlin()
+    boxes = [source]
+    ids = ["obj-1"]
+    for n, text in enumerate(middle, start=2):
+        boxes.append(_box(f"obj-{n}", text, 2, 1, outlettype=[""]))
+        ids.append(f"obj-{n}")
+    boxes += [_mul(), _osc()]
+    lines = [_line(a, 0, b, 0) for a, b in zip(ids, ids[1:])]
+    lines += [_line(ids[-1], 0, "obj-9", 1), _line("obj-7", 0, "obj-9", 0)]
+    return _patch(boxes, lines)
+
+
+class TestGainMessageParsing:
+    def test_comma_segments_ramp_times_ignored(self, db):
+        assert _ug(_dsp(_msg_line_gain("0, 0.8 2000"), db)) == []
+
+    def test_comma_segment_target_over_one(self, db):
+        ug = _ug(_dsp(_msg_line_gain("0.5, 100 500"), db))
+        assert [r.finding for r in ug] == [
+            "Unsafe gain source: message '0.5, 100 500' (obj-2) reaches '*~' (obj-9) "
+            "inlet 1 via line~ with values up to 100 (range 0.5 to 100) -- gain "
+            "inputs must stay within 0.0-1.0"
+        ]
+        assert ug[0].severity == "blocker"
+        assert ug[0].suggestion == (
+            "Normalize before the gain input, e.g. 'scale 0 127 0. 1.' or '/ 127.' "
+            "for a 0-127 source, so the value stays within 0.0-1.0"
+        )
+
+    def test_dollar_continues_to_feeder(self, db):
+        d = _msg_line_gain("$1 20", [_ctlin("obj-1")], [_line("obj-1", 0, "obj-2", 0)])
+        ug = _ug(_dsp(d, db))
+        assert len(ug) == 1
+        assert ug[0].finding.startswith("Unsafe gain source: 'ctlin' (obj-1) reaches '*~' (obj-9) inlet 1 via line~")
+        assert "(range 0 to 127)" in ug[0].finding
+
+    def test_pack_fed_ramp_message_stops(self, db):
+        feeders = [
+            _box("obj-1", None, 1, 1, maxclass="dial", outlettype=["float"]),
+            _box("obj-3", "pack f f f", 3, 1, outlettype=[""]),
+        ]
+        d = _msg_line_gain("$1 $2 0. $3", feeders,
+                           [_line("obj-1", 0, "obj-3", 1), _line("obj-3", 0, "obj-2", 0)])
+        assert _ug(_dsp(d, db)) == []
+
+    def test_constant_through_multiply_safe(self, db):
+        d = _chain_gain("* 0.01", source=_msg("obj-1", "64"))
+        assert _ug(_dsp(d, db)) == []
+
+    def test_constant_through_multiply_unsafe_no_via(self, db):
+        d = _chain_gain("* 0.01", source=_msg("obj-1", "200"))
+        ug = _ug(_dsp(d, db))
+        assert len(ug) == 1
+        assert "via line~" not in ug[0].finding
+        assert ug[0].finding.startswith("Unsafe gain source: message '200' (obj-1) reaches '*~' (obj-9) inlet 1 with values up to 2 ")
+
+    def test_command_message_no_value(self, db):
+        assert _ug(_dsp(_chain_gain(source=_msg("obj-1", "set 5")), db)) == []
+
+    def test_remote_part_ignored(self, db):
+        assert _ug(_dsp(_chain_gain(source=_msg("obj-1", "; foo 100")), db)) == []
+        assert _ug(_dsp(_chain_gain(source=_msg("obj-1", "0.5; foo 100")), db)) == []
+
+
+def _flonum(**attrs):
+    return _box("obj-1", None, 1, 2, maxclass="flonum", outlettype=["", "bang"], **attrs)
+
+
+class TestGainBounds:
+    def test_flonum_zero_one_safe(self, db):
+        assert _ug(_dsp(_chain_gain(source=_flonum(minimum=0.0, maximum=1.0)), db)) == []
+
+    def test_flonum_max_one_only_safe(self, db):
+        assert _ug(_dsp(_chain_gain(source=_flonum(maximum=1.0)), db)) == []
+
+    def test_number_no_limits_unsafe(self, db):
+        src = _box("obj-1", None, 1, 2, maxclass="number", outlettype=["", "bang"])
+        ug = _ug(_dsp(_chain_gain(source=src), db))
+        assert len(ug) == 1
+        assert "(range 0 to 127)" in ug[0].finding
+
+    def test_scale_to_unit_safe(self, db):
+        assert _ug(_dsp(_chain_gain("scale 0 127 0. 1."), db)) == []
+
+    def test_scale_to_four_unsafe(self, db):
+        ug = _ug(_dsp(_chain_gain("scale 0 127 0. 4."), db))
+        assert len(ug) == 1
+        assert "(range 0 to 4)" in ug[0].finding
+
+    def test_zmap_to_two_unsafe(self, db):
+        assert len(_ug(_dsp(_chain_gain("zmap 0 127 0. 2."), db))) == 1
+
+    def test_clip_safe(self, db):
+        assert _ug(_dsp(_chain_gain("clip 0. 0.5"), db)) == []
+
+    def test_divide_safe(self, db):
+        assert _ug(_dsp(_chain_gain("/ 127."), db)) == []
+
+    def _live_dial(self, valueof):
+        extra = {} if valueof is None else {"saved_attribute_attributes": {"valueof": valueof}}
+        return _box("obj-1", None, 1, 2, maxclass="live.dial", outlettype=["", "float"], **extra)
+
+    def test_live_dial_unit_range_safe(self, db):
+        src = self._live_dial({"parameter_mmin": 0.0, "parameter_mmax": 1.0})
+        assert _ug(_dsp(_chain_gain(source=src), db)) == []
+
+    def test_live_dial_default_range_unsafe(self, db):
+        assert len(_ug(_dsp(_chain_gain(source=self._live_dial(None)), db))) == 1
+
+    def test_float_dial_size_121_mult_001(self, db):
+        src = _box("obj-1", None, 1, 1, maxclass="dial", outlettype=["float"],
+                   floatoutput=1, size=121.0, mult=0.01)
+        ug = _ug(_dsp(_chain_gain(source=src), db))
+        assert len(ug) == 1
+        assert "with values up to 1.21 (range 0 to 1.21)" in ug[0].finding
+
+    def test_trigger_bang_outlet_stops(self, db):
+        boxes = [_ctlin(), _box("obj-2", "t b f", 1, 2, outlettype=["bang", "float"]), _mul(), _osc()]
+        lines = [_line("obj-1", 0, "obj-2", 0), _line("obj-2", 0, "obj-9", 1), _line("obj-7", 0, "obj-9", 0)]
+        assert _ug(_dsp(_patch(boxes, lines), db)) == []
+
+    def test_trigger_value_outlet_passes(self, db):
+        assert len(_ug(_dsp(_chain_gain("t f"), db))) == 1
+
+    def test_unknown_box_stops(self, db):
+        assert _ug(_dsp(_chain_gain("dbtoa"), db)) == []
+        assert _ug(_dsp(_chain_gain("scale 0 127 -20. 20.", "dbtoa"), db)) == []
+
+
+class TestGainBothInlets:
+    def test_control_into_inlet_0(self, db):
+        boxes = [_ctlin(), _mul(), _osc()]
+        lines = [_line("obj-1", 0, "obj-9", 0), _line("obj-7", 0, "obj-9", 1)]
+        ug = _ug(_dsp(_patch(boxes, lines), db))
+        assert len(ug) == 1
+        assert "reaches '*~' (obj-9) inlet 0 " in ug[0].finding
+
+    def test_line_into_inlet_0_with_unit_arg(self, db):
+        boxes = [_msg("obj-2", "100 500"), _line_tilde(), _mul(text="*~ 1.")]
+        lines = [_line("obj-2", 0, "obj-8", 0), _line("obj-8", 0, "obj-9", 0)]
+        ug = _ug(_dsp(_patch(boxes, lines), db))
+        assert len(ug) == 1
+        assert "inlet 0 via line~" in ug[0].finding
+
+    def test_line_into_inlet_0_scaled_by_arg_safe(self, db):
+        boxes = [_msg("obj-2", "100"), _line_tilde(), _mul(text="*~ 0.01")]
+        lines = [_line("obj-2", 0, "obj-8", 0), _line("obj-8", 0, "obj-9", 0)]
+        assert _ug(_dsp(_patch(boxes, lines), db)) == []
+
+    def test_mc_multiply_same_as_multiply(self, db):
+        boxes = [_ctlin(), _box("obj-9", "mc.*~", 2, 1, outlettype=["multichannelsignal"]),
+                 _box("obj-7", "mc.cycle~ 440", 2, 1, outlettype=["multichannelsignal"])]
+        lines = [_line("obj-1", 0, "obj-9", 0), _line("obj-7", 0, "obj-9", 1)]
+        ug = _ug(_dsp(_patch(boxes, lines), db))
+        assert len(ug) == 1
+        assert "reaches 'mc.*~' (obj-9) inlet 0" in ug[0].finding
+        d = _chain_gain("scale 0 127 0. 4.")
+        d["patcher"]["boxes"][2]["box"]["text"] = "mc.*~"
+        assert len(_ug(_dsp(d, db))) == 1
+
+    def test_junk_never_raises_and_pure(self, db):
+        boxes = [
+            _box("obj-1", None, 1, 1, maxclass="dial", outlettype=["float"], size="x",
+                 saved_attribute_attributes=5),
+            _box("obj-2", None, 1, 1, maxclass="live.dial", outlettype=["", ""],
+                 saved_attribute_attributes={"valueof": 3}),
+            {"box": {"id": "obj-3", "maxclass": "message", "text": 7, "outlettype": [""]}},
+            _box("obj-4", "scale 0 127", 2, 1, outlettype=[""]),
+            _box("obj-5", "* 2", 2, 1, outlettype=[""]),
+            _box("obj-6", "* 2", 2, 1, outlettype=[""]),
+            _mul(),
+            _box("obj-10", "flonum", 1, 2, maxclass="flonum", outlettype=["", ""],
+                 minimum="lo", maximum=True),
+        ]
+        lines = [
+            _line("obj-1", 0, "obj-9", 1),
+            _line("obj-2", 0, "obj-9", 1),
+            _line("obj-3", 0, "obj-9", 1),
+            _line("obj-4", 0, "obj-9", 1),
+            _line("obj-5", 0, "obj-6", 0),
+            _line("obj-6", 0, "obj-5", 0),
+            _line("obj-6", 0, "obj-9", 1),
+            _line("obj-10", 0, "obj-9", 0),
+            _line("obj-1", "x", "obj-9", 1),
+            _line("obj-99", 0, "obj-9", 1),
+            _line("obj-1", 0, "obj-98", 1),
+            _line("obj-1", -3, "obj-9", 1),
+        ]
+        d = _patch(boxes, lines)
+        before = copy.deepcopy(d)
+        _dsp(d, db)
+        assert d == before
+
+
+_GAIN_STAGES = frozenset({"*~", "mc.*~", "gain~", "mc.gain~", "live.gain~", "mc.live.gain~"})
+_OUTPUTS = frozenset({"dac~", "mc.dac~", "ezdac~", "mc.ezdac~", "plugout~"})
+_CHAIN_TERMINALS = _OUTPUTS | {"send~", "mc.send~", "out~", "mc.out~"}
+
+
+class _NoMcLiveGain:
+    """A DB double whose lookup has no mc.live.gain~."""
+
+    def __init__(self, db):
+        self._db = db
+
+    def lookup(self, name):
+        return None if name == "mc.live.gain~" else self._db.lookup(name)
+
+    def get_effective_restrictions(self, name):
+        return self._db.get_effective_restrictions(name)
+
+
+def _osc_to(dst_text, n_in=2, db=None):
+    boxes = [_osc("obj-1"), _box("obj-2", dst_text, n_in, 0, outlettype=[])]
+    return _patch(boxes, [_line("obj-1", 0, "obj-2", 0)])
+
+
+class TestDspRoles:
+    def test_sets_under_repo_db(self, db):
+        from src.maxpat import dsp_roles
+        assert dsp_roles.gain_stage_names(db) == _GAIN_STAGES
+        assert dsp_roles.output_terminal_names(db) == _OUTPUTS
+        assert dsp_roles.chain_terminal_names(db) == _CHAIN_TERMINALS
+        assert dsp_roles.gain_stage_names() == _GAIN_STAGES
+
+    def test_db_double_drops_missing_variant(self, db):
+        from src.maxpat import dsp_roles
+        assert dsp_roles.gain_stage_names(_NoMcLiveGain(db)) == _GAIN_STAGES - {"mc.live.gain~"}
+
+    def test_back_compat_exports_pinned(self, db):
+        from src.maxpat import dsp_roles
+        from src.maxpat.critics.dsp_critic import _GAIN_NAMES, _TERMINAL_NAMES
+        assert _GAIN_NAMES == dsp_roles.gain_stage_names(db)
+        assert _TERMINAL_NAMES == dsp_roles.output_terminal_names(db)
+
+    def test_live_gain_is_a_gain_stage(self, db):
+        boxes = [_osc("obj-1"), _box("obj-2", "live.gain~", 2, 5, outlettype=["signal", "signal", "", "", ""]),
+                 _box("obj-3", "dac~", 2, 0, outlettype=[])]
+        lines = [_line("obj-1", 0, "obj-2", 0), _line("obj-2", 0, "obj-3", 0)]
+        assert not [r for r in _dsp(_patch(boxes, lines), db) if "Missing gain staging" in r.finding]
+
+    def test_mc_dac_is_output(self, db):
+        found = [r for r in _dsp(_osc_to("mc.dac~"), db) if "Missing gain staging" in r.finding]
+        assert len(found) == 1
+
+    def test_plugout_is_output_suggests_multiply_only(self, db):
+        found = [r for r in _dsp(_osc_to("plugout~"), db) if "Missing gain staging" in r.finding]
+        assert len(found) == 1
+        assert "*~" in found[0].suggestion
+        assert "gain~" not in found[0].suggestion
+
+    def test_m4l_gen_synth_not_unterminated(self, db):
+        from src.maxpat.patcher import Patcher
+        from src.maxpat.validation import validate_patch
+        p = Patcher()
+        p.add_m4l_gen_synth([("freq", 100.0, 1000.0), ("amp", 0.0, 1.0)])
+        res = validate_patch(p.to_dict(), db)
+        assert not [r for r in res if "Unterminated signal chain" in r.message]
+
+    def test_validation_uses_monkeypatchable_roles(self, db, monkeypatch):
+        from src.maxpat import dsp_roles
+        from src.maxpat.validation import validate_patch
+        d = _patch([_box("obj-1", "adc~", 1, 2, outlettype=["signal", "signal"])])
+        before = [r for r in validate_patch(copy.deepcopy(d), db) if "Unterminated signal chain" in r.message]
+        assert len(before) == 1
+        real = dsp_roles.chain_terminal_names
+        monkeypatch.setattr(dsp_roles, "chain_terminal_names", lambda db=None: real(db) | {"adc~"})
+        after = [r for r in validate_patch(copy.deepcopy(d), db) if "Unterminated signal chain" in r.message]
+        assert after == []

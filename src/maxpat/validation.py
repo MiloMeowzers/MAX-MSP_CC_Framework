@@ -38,7 +38,7 @@ import re as _re
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from src.maxpat import walk
+from src.maxpat import dsp_roles, walk
 from src.maxpat.db_lookup import DOMAIN_SCOPES, ObjectDatabase, detect_patcher_scope
 from src.maxpat.maxclass_map import is_ui_object, UI_MAXCLASSES
 
@@ -58,11 +58,8 @@ _OSCILLATOR_NAMES = frozenset({
     "cycle~", "saw~", "rect~", "tri~", "noise~", "pink~",
 })
 
-# Gain objects that attenuate signal
-_GAIN_NAMES = frozenset({"*~", "gain~"})
-
-# Terminal signal objects (signal chain ends here, not unterminated)
-_TERMINAL_NAMES = frozenset({"dac~", "ezdac~", "send~", "out~"})
+# Gain stages, output terminals and chain terminals come from
+# src.maxpat.dsp_roles (DB-driven, shared with the DSP critic; Q26 / E6).
 
 # Objects that provide delay in a feedback loop
 _DELAY_NAMES = frozenset({"tapin~", "tapout~", "gen~"})
@@ -1355,10 +1352,15 @@ def _validate_domain_rules(
     results.extend(_check_compound_argument_substitution(box_lookup))
 
     # --- Rule: Unterminated signal chains ---
-    results.extend(_check_unterminated_chains(box_lookup, has_signal_out))
+    results.extend(_check_unterminated_chains(
+        box_lookup, has_signal_out, dsp_roles.chain_terminal_names(db),
+    ))
 
     # --- Rule: Missing gain staging ---
-    results.extend(_check_gain_staging(box_lookup, signal_adj))
+    results.extend(_check_gain_staging(
+        box_lookup, signal_adj,
+        dsp_roles.gain_stage_names(db), dsp_roles.output_terminal_names(db),
+    ))
 
     # --- Rule: Unsafe gain values ---
     results.extend(_check_unsafe_gain_values(box_lookup))
@@ -1569,11 +1571,14 @@ def _check_compound_argument_substitution(
 def _check_unterminated_chains(
     box_lookup: dict[str, dict],
     has_signal_out: set[str],
+    terminal_names=frozenset(),
 ) -> list[ValidationResult]:
     """Find MSP objects with signal outlets but no downstream signal connection.
 
-    Exceptions: dac~, ezdac~, send~, out~ (terminals), and objects that
-    do have a downstream signal connection.
+    Exceptions: the chain terminals in *terminal_names* (from
+    ``dsp_roles.chain_terminal_names(db)``: dac~, ezdac~, plugout~, send~,
+    out~ and their mc.* variants; Q26 / E6), and objects that do have a
+    downstream signal connection.
     """
     results: list[ValidationResult] = []
 
@@ -1585,7 +1590,7 @@ def _check_unterminated_chains(
             continue
 
         # Skip terminal objects
-        if name in _TERMINAL_NAMES:
+        if name in terminal_names:
             continue
 
         # Check if this object has signal outlets
@@ -1610,11 +1615,16 @@ def _check_unterminated_chains(
 def _check_gain_staging(
     box_lookup: dict[str, dict],
     signal_adj: dict[str, list[str]],
+    gain_names=frozenset(),
+    terminal_names=frozenset(),
 ) -> list[ValidationResult]:
-    """Detect direct connections from oscillators to dac~/ezdac~ without gain.
+    """Detect oscillators reaching an output terminal without gain.
 
-    Uses BFS from each oscillator. If it reaches a dac~/ezdac~ without passing
-    through a gain object (*~, gain~), emit a warning.
+    Uses BFS from each oscillator. If it reaches an output terminal in
+    *terminal_names* without passing through a gain stage in *gain_names*,
+    emit a warning. Both sets come from ``dsp_roles(db)`` (Q26 / E6): the
+    gain stages include live.gain~ and the mc.* variants, the terminals
+    mc.dac~ and plugout~.
     """
     results: list[ValidationResult] = []
 
@@ -1645,10 +1655,10 @@ def _check_gain_staging(
                     continue
                 next_name = walk.box_name(next_box)
 
-                next_has_gain = has_gain or (next_name in _GAIN_NAMES)
+                next_has_gain = has_gain or (next_name in gain_names)
 
-                # Reached dac~/ezdac~
-                if next_name in ("dac~", "ezdac~"):
+                # Reached an output terminal
+                if next_name in terminal_names:
                     if not next_has_gain:
                         results.append(ValidationResult(
                             "domain", "warning",

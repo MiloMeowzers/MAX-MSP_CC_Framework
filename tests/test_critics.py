@@ -1694,8 +1694,9 @@ class TestDSPCriticGainSafety:
         blockers = [r for r in results if r.severity == "blocker" and "unsafe gain" in r.finding.lower()]
         assert len(blockers) == 0, f"Expected no blocker for normalized MIDI through line~, got: {results}"
 
-    def test_line_tilde_to_signal_inlet_no_flag(self):
-        """message '100 500' -> line~ -> *~ inlet 0 = no unsafe gain blocker."""
+    def test_line_tilde_to_inlet_0_is_traced(self):
+        """message '100 500' -> line~ -> *~ 1. inlet 0 (inlet 1 empty): one
+        blocker naming inlet 0 -- both *~ inlets are traced (Q26 / E6)."""
         boxes = [
             {
                 "id": "obj-1",
@@ -1724,12 +1725,13 @@ class TestDSPCriticGainSafety:
         ]
         lines = [
             {"source": ["obj-1", 0], "destination": ["obj-2", 0]},
-            {"source": ["obj-2", 0], "destination": ["obj-3", 0]},  # inlet 0 = audio, not gain
+            {"source": ["obj-2", 0], "destination": ["obj-3", 0]},  # inlet 0, *~ 1. -> output = line~
         ]
         patch = _make_patch(boxes, lines)
         results = review_dsp(patch)
         blockers = [r for r in results if r.severity == "blocker" and "unsafe gain" in r.finding.lower()]
-        assert len(blockers) == 0, f"Expected no unsafe gain blocker for line~ to inlet 0, got: {results}"
+        assert len(blockers) == 1, f"Expected one unsafe gain blocker for line~ to inlet 0, got: {results}"
+        assert "reaches '*~' (obj-3) inlet 0 via line~" in blockers[0].finding
 
     def test_comment_and_panel_excluded_from_overlap(self):
         """Comment and panel boxes are excluded from overlap checks."""
