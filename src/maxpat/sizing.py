@@ -9,9 +9,26 @@ Values sourced from 02-RESEARCH.md Example 1, audit data, and MAX 9 default beha
 """
 
 import json
+import math
+import re
 from pathlib import Path
+from typing import Any
 
-from src.maxpat.defaults import CHAR_WIDTH, PADDING, MIN_BOX_WIDTH, DEFAULT_HEIGHT
+from src.maxpat.defaults import (
+    CHAR_WIDTH,
+    COMMENT_BASE_HEIGHT,
+    COMMENT_CHAR_WIDTH,
+    COMMENT_LINE_HEIGHT,
+    COMMENT_TEXT_PAD,
+    COMMENT_WRAP_RATIO,
+    DEFAULT_HEIGHT,
+    DEFAULT_PATCHER_PROPS,
+    FONT_SIZE,
+    MESSAGE_CHAR_WIDTH,
+    MESSAGE_CHROME,
+    MIN_BOX_WIDTH,
+    PADDING,
+)
 
 
 def _load_width_overrides() -> dict[str, dict[str, float]]:
@@ -223,3 +240,112 @@ def calculate_box_size(text: str, maxclass: str) -> tuple[float, float]:
         height = DEFAULT_HEIGHT
 
     return (width, height)
+
+
+# ---------------------------------------------------------------------------
+# Rendered geometry (Q27 / F5): one model for layout, add_box and the critic
+# ---------------------------------------------------------------------------
+
+_LINE_SPLIT = re.compile(r"\r\n|\r|\n")
+
+# Comment keys that make MAX paint a fill behind the text: such a comment
+# covers at least its stored rect.
+_COMMENT_FILL_KEYS = ("bgcolor", "bgfillcolor", "grad1")
+
+
+def _is_number(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _box_fields(box: Any) -> tuple[Any, Any, Any, Any, dict]:
+    """Return (maxclass, text, patching_rect, fontsize, attrs) of a Box or a
+    raw box dict (a ``{"box": {...}}`` wrapper is unwrapped)."""
+    if isinstance(box, dict):
+        inner = box.get("box")
+        if isinstance(inner, dict) and "patching_rect" not in box:
+            box = inner
+        return (box.get("maxclass"), box.get("text"), box.get("patching_rect"),
+                box.get("fontsize"), box)
+    attrs = getattr(box, "extra_attrs", None)
+    if not isinstance(attrs, dict):
+        attrs = {}
+    return (getattr(box, "maxclass", None), getattr(box, "text", None),
+            getattr(box, "patching_rect", None), getattr(box, "fontsize", None),
+            attrs)
+
+
+def rendered_rect(box: Any, *, max_saved: bool = False) -> list[float] | None:
+    """Return the rect a box actually covers in MAX as a new [x, y, w, h].
+
+    The single rendered-geometry model shared by apply_layout, the add_box
+    overlap check and the layout critic's overlap check (Q27 / F5).
+
+    - **message**: ``max(stored w, longest line * 8 + 25)`` (CLAUDE.md
+      Rule #4), lines split on ``\\r`` / ``\\n``. With ``max_saved=True`` the
+      stored width is kept: MAX normalises message geometry when it saves.
+    - **comment**: the text extent. Each paragraph is ``len * 5.6 * fs/12 +
+      10`` px; one at or above 1.6x the stored width wraps at the stored
+      width (``ceil(text / w)`` lines), otherwise it overflows as one line.
+      Height is ``6 + 14 * fs/12`` per line. A comment that paints a fill
+      (``bgcolor`` / ``bgfillcolor`` / ``grad1``) or a bubble covers at least
+      its stored rect.
+    - every other box: the stored rect, copied.
+
+    Accepts a :class:`Box` or a raw box dict and never mutates it. Returns
+    None when the rect is not at least 4 numbers. Non-str text reads as "",
+    and a fontsize that is not a positive number reads as 12.
+    """
+    maxclass, text, rect, fontsize, attrs = _box_fields(box)
+    if not isinstance(rect, (list, tuple)) or len(rect) < 4:
+        return None
+    if not all(_is_number(v) for v in rect[:4]):
+        return None
+    x, y, w, h = (float(v) for v in rect[:4])
+    if not isinstance(text, str):
+        text = ""
+    fs = fontsize if _is_number(fontsize) and fontsize > 0 else FONT_SIZE
+    scale = float(fs) / FONT_SIZE
+
+    if maxclass == "message":
+        if not max_saved:
+            longest = max(len(line) for line in _LINE_SPLIT.split(text))
+            w = max(w, longest * MESSAGE_CHAR_WIDTH + MESSAGE_CHROME)
+        return [x, y, w, h]
+
+    if maxclass == "comment":
+        width = 0.0
+        lines = 0
+        for para in _LINE_SPLIT.split(text):
+            tw = len(para) * COMMENT_CHAR_WIDTH * scale + COMMENT_TEXT_PAD
+            if w <= 0 or tw < COMMENT_WRAP_RATIO * w:
+                n, pw = 1, tw
+            else:
+                n, pw = int(math.ceil(tw / w)), w
+            width = max(width, pw)
+            lines += n
+        height = COMMENT_BASE_HEIGHT + COMMENT_LINE_HEIGHT * scale * lines
+        filled = any(attrs.get(k) is not None for k in _COMMENT_FILL_KEYS)
+        if filled or attrs.get("bubble") == 1:
+            width = max(width, w)
+            height = max(height, h)
+        return [x, y, width, height]
+
+    return [x, y, w, h]
+
+
+def is_max_saved(props: Any) -> bool:
+    """True when a patcher was last saved by MAX rather than the generator.
+
+    *props* is a ``Patcher.props`` dict or a raw patcher dict. The generator
+    always writes ``DEFAULT_PATCHER_PROPS["appversion"]`` (9.0.0); any other
+    (major, minor, revision) means MAX re-saved it. A missing or non-dict
+    appversion reads as False.
+    """
+    if not isinstance(props, dict):
+        return False
+    app = props.get("appversion")
+    if not isinstance(app, dict):
+        return False
+    ref = DEFAULT_PATCHER_PROPS["appversion"]
+    keys = ("major", "minor", "revision")
+    return tuple(app.get(k) for k in keys) != tuple(ref[k] for k in keys)

@@ -40,7 +40,7 @@ CONTENT_DEFINED_NAMES = frozenset({
 from src.maxpat.maxclass_map import resolve_maxclass, is_ui_object, UI_MAXCLASSES
 from src.maxpat.graph import GraphMixin
 from src.maxpat.analysis import AnalysisMixin, SECTION_SIGNATURES, _SECTION_NAME_PRIORITY
-from src.maxpat.sizing import calculate_box_size
+from src.maxpat.sizing import calculate_box_size, is_max_saved, rendered_rect
 from src.maxpat.db_lookup import (
     DOMAIN_SCOPES,
     ObjectDatabase,
@@ -979,6 +979,9 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
 
         Nudges down by 15px on collision to preserve horizontal signal flow.
         Wraps to the next column (x += 15, y resets) when y > 2400.
+        Existing boxes are measured by ``sizing.rendered_rect`` (a message
+        box covers ``len*8+25`` px unless this patcher was MAX-saved; Q27 /
+        F5), falling back to the stored rect when it is invalid.
 
         Args:
             x: Starting x position.
@@ -995,12 +998,18 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         y = round(y / 15.0) * 15.0
         start_y = y
 
+        max_saved = is_max_saved(self.props)
+        rects = []
+        for box in self.boxes:
+            if box is exclude_box:
+                continue
+            r = rendered_rect(box, max_saved=max_saved)
+            rects.append(r if r is not None else box.patching_rect)
+
         for _ in range(200):
             collision = False
-            for box in self.boxes:
-                if box is exclude_box:
-                    continue
-                bx, by, bw, bh = box.patching_rect
+            for rect in rects:
+                bx, by, bw, bh = rect[:4]
                 # Check overlap with COLLISION_PAD on both rects
                 if not (
                     x + w + COLLISION_PAD <= bx - COLLISION_PAD
@@ -1040,8 +1049,8 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             ideal_x = self.props["rect"][2] / 2.0
             ideal_y = self.props["rect"][3] / 2.0
 
-        w = box.patching_rect[2]
-        h = box.patching_rect[3]
+        r = rendered_rect(box, max_saved=is_max_saved(self.props))
+        w, h = (r[2], r[3]) if r is not None else (box.patching_rect[2], box.patching_rect[3])
         new_x, new_y = self._find_clear_position(ideal_x, ideal_y, w, h)
         box.patching_rect[0] = new_x
         box.patching_rect[1] = new_y

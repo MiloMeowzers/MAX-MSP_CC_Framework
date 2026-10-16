@@ -13,6 +13,20 @@ PADDING = 16.0          # Left + right padding inside a box
 MIN_BOX_WIDTH = 40.0    # Minimum box width for very short objects
 DEFAULT_HEIGHT = 22.0   # Standard text box height (newobj, message)
 
+# Rendered-geometry constants (12 pt; used by sizing.rendered_rect, Q27 / F5).
+# Message boxes render wider than their stored width (CLAUDE.md Rule #4):
+# longest line * MESSAGE_CHAR_WIDTH + MESSAGE_CHROME.
+MESSAGE_CHAR_WIDTH = 8.0
+MESSAGE_CHROME = 25.0
+# Comments (measured in Max 9.2): ~5.6 px per char plus padding; a paragraph
+# wraps at the box width only once its text is >= 1.6x that width,
+# otherwise it overflows as one line.
+COMMENT_CHAR_WIDTH = 5.6
+COMMENT_TEXT_PAD = 10.0
+COMMENT_WRAP_RATIO = 1.6
+COMMENT_LINE_HEIGHT = 14.0
+COMMENT_BASE_HEIGHT = 6.0
+
 # Layout spacing constants
 V_SPACING = 20          # Vertical gap between rows (~16-20px matches real MAX patches)
 H_GUTTER = 15           # Horizontal gap between objects in a row

@@ -22,12 +22,18 @@ from src.maxpat import walk
 from src.maxpat.critics.base import CriticResult, tag_results
 from src.maxpat.graph import PatchGraph
 from src.maxpat.defaults import AESTHETIC_PALETTE, HORIZONTAL_THRESHOLD, UPWARD_BUS_THRESHOLD
+from src.maxpat.sizing import is_max_saved, rendered_rect
 
 # Collision padding from Phase 15-02 decision: 5px around all boxes
 COLLISION_PAD = 5.0
 
 # Decorative/background maxclasses excluded from overlap checks
 _DECORATIVE_MAXCLASSES = frozenset({"comment", "panel"})
+
+# A box with ignoreclick=1 whose stored rect lies inside another box's
+# stored rect (within this tolerance) is a deliberate overlay readout
+# (add_overlay_readout; Q27 / F5), not an accidental overlap.
+_OVERLAY_TOLERANCE = 2.0
 
 # Margin from box edge to first/last inlet/outlet center (matches layout.py)
 _IO_MARGIN = 7.0
@@ -37,7 +43,10 @@ def review_layout(patch_dict: dict, *, graph: "PatchGraph | None" = None) -> lis
     """Review physical layout of a patch for readability issues.
 
     Checks:
-      1. Overlapping boxes (with COLLISION_PAD, excluding comments/panels)
+      1. Overlapping boxes (rendered rects with COLLISION_PAD, excluding
+         comments/panels and deliberate ignoreclick overlays; message widths
+         follow ``sizing.rendered_rect``, with stored widths when the
+         top-level patcher was MAX-saved)
       2. Missing cable midpoints on offset/upward cables
       3. Out-of-bounds placement (negative x or y)
 
@@ -53,10 +62,12 @@ def review_layout(patch_dict: dict, *, graph: "PatchGraph | None" = None) -> lis
     if graph is None:
         graph = PatchGraph.build(patch_dict)
     results: list[CriticResult] = []
+    top = patch_dict.get("patcher") if isinstance(patch_dict, dict) else None
+    max_saved = is_max_saved(top)
     for scope in graph.scopes:
         box_list = scope.box_list
         found: list[CriticResult] = []
-        found.extend(_check_overlapping_boxes(box_list))
+        found.extend(_check_overlapping_boxes(box_list, max_saved=max_saved))
         found.extend(_check_missing_midpoints(scope.boxes, scope.edges))
         found.extend(_check_out_of_bounds(box_list))
         found.extend(_check_text_contrast(box_list, scope.patcher))
@@ -137,45 +148,83 @@ def _box_label(box: dict) -> str:
 # Check 1: Overlapping boxes
 # ---------------------------------------------------------------------------
 
-def _check_overlapping_boxes(box_list: list[dict]) -> list[CriticResult]:
+def _stored_rect(box: dict) -> list[float] | None:
+    """The box's stored patching_rect as 4 floats, or None when invalid."""
+    rect = box.get("patching_rect")
+    if not isinstance(rect, (list, tuple)) or len(rect) < 4:
+        return None
+    vals = rect[:4]
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in vals):
+        return None
+    return [float(v) for v in vals]
+
+
+def _inside(inner: list[float], outer: list[float], tol: float) -> bool:
+    """True when *inner* lies inside *outer*, within *tol* px on every edge."""
+    return (
+        inner[0] >= outer[0] - tol
+        and inner[1] >= outer[1] - tol
+        and inner[0] + inner[2] <= outer[0] + outer[2] + tol
+        and inner[1] + inner[3] <= outer[1] + outer[3] + tol
+    )
+
+
+def _is_deliberate_overlay(box_a: dict, rect_a, box_b: dict, rect_b) -> bool:
+    """An ignoreclick=1 box inside the other's stored rect is an overlay
+    readout (add_overlay_readout's recipe), never a warning."""
+    if rect_a is None or rect_b is None:
+        return False
+    if box_a.get("ignoreclick") == 1 and _inside(rect_a, rect_b, _OVERLAY_TOLERANCE):
+        return True
+    if box_b.get("ignoreclick") == 1 and _inside(rect_b, rect_a, _OVERLAY_TOLERANCE):
+        return True
+    return False
+
+
+def _check_overlapping_boxes(
+    box_list: list[dict], *, max_saved: bool = False,
+) -> list[CriticResult]:
     """Detect overlapping boxes (O(n^2) sweep, excluding decorative elements).
 
+    Compares ``sizing.rendered_rect`` rects (a message box covers
+    ``len*8+25`` px unless *max_saved*; Q27 / F5) with COLLISION_PAD.
     Skips comment and panel boxes since they are background elements
-    that intentionally overlap content.
+    that intentionally overlap content, boxes with an invalid rect, and
+    deliberate overlays (an ``ignoreclick`` box inside the other's stored
+    rect, as add_overlay_readout builds them).
     """
     results: list[CriticResult] = []
 
-    # Filter to non-decorative boxes only
-    check_boxes = [
-        b for b in box_list
-        if walk.box_maxclass(b) not in _DECORATIVE_MAXCLASSES
-    ]
-
-    for i in range(len(check_boxes)):
-        box_a = check_boxes[i]
-        rect_a = box_a.get("patching_rect")
-        if not rect_a or len(rect_a) < 4:
+    # Filter to non-decorative boxes with a valid rect
+    checked = []
+    for b in box_list:
+        if not isinstance(b, dict) or walk.box_maxclass(b) in _DECORATIVE_MAXCLASSES:
             continue
+        rect = rendered_rect(b, max_saved=max_saved)
+        if rect is None:
+            continue
+        checked.append((b, rect, _stored_rect(b)))
 
-        for j in range(i + 1, len(check_boxes)):
-            box_b = check_boxes[j]
-            rect_b = box_b.get("patching_rect")
-            if not rect_b or len(rect_b) < 4:
+    for i in range(len(checked)):
+        box_a, rect_a, stored_a = checked[i]
+        for j in range(i + 1, len(checked)):
+            box_b, rect_b, stored_b = checked[j]
+            if not _rects_overlap(rect_a, rect_b, COLLISION_PAD):
                 continue
-
-            if _rects_overlap(rect_a, rect_b, COLLISION_PAD):
-                id_a = box_a.get("id", "?")
-                id_b = box_b.get("id", "?")
-                label_a = _box_label(box_a)
-                label_b = _box_label(box_b)
-                results.append(CriticResult(
-                    "warning",
-                    f"Overlapping boxes: '{label_a}' ({id_a}) and "
-                    f"'{label_b}' ({id_b}) patching_rects overlap "
-                    f"(within {COLLISION_PAD}px padding)",
-                    "Adjust box positions to maintain at least "
-                    f"{COLLISION_PAD}px clearance between objects",
-                ))
+            if _is_deliberate_overlay(box_a, stored_a, box_b, stored_b):
+                continue
+            id_a = box_a.get("id", "?")
+            id_b = box_b.get("id", "?")
+            label_a = _box_label(box_a)
+            label_b = _box_label(box_b)
+            results.append(CriticResult(
+                "warning",
+                f"Overlapping boxes: '{label_a}' ({id_a}) and "
+                f"'{label_b}' ({id_b}) patching_rects overlap "
+                f"(within {COLLISION_PAD}px padding)",
+                "Adjust box positions to maintain at least "
+                f"{COLLISION_PAD}px clearance between objects",
+            ))
 
     return results
 
@@ -256,8 +305,8 @@ def _check_out_of_bounds(box_list: list[dict]) -> list[CriticResult]:
     results: list[CriticResult] = []
 
     for box in box_list:
-        rect = box.get("patching_rect")
-        if not rect or len(rect) < 4:
+        rect = _stored_rect(box) if isinstance(box, dict) else None
+        if rect is None:
             continue
 
         x, y = rect[0], rect[1]
