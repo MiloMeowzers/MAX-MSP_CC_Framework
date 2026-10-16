@@ -33,23 +33,27 @@ _FLAG_TO_DIMENSION = {
 def _run_merge(args: argparse.Namespace) -> int:
     """Run the merge workflow (separate from the full audit pipeline).
 
-    Reads proposed-overrides.json from the output directory, detects conflicts,
-    prints conflict summary, and merges non-conflict entries into overrides.json.
+    Reads proposed-overrides.json from the output directory, recomputes
+    conflicts against the live overrides.json, prints the conflict summary,
+    and merges non-conflict entries into overrides.json (``--overrides`` names
+    another file, e.g. a scratch copy). ``variable_io_rules`` proposals are
+    counted for manual review and never merged.
 
     Args:
-        args: Parsed CLI arguments (needs output_dir and dry_run).
+        args: Parsed CLI arguments (needs output_dir, overrides and dry_run).
 
     Returns:
         0 on success, 1 on error.
     """
     from src.maxpat.audit.merger import OverrideMerger
 
+    from src.maxpat.audit.merger import OverridesChangedError
+
     proposed_path = args.output_dir / "proposed-overrides.json"
     overrides_path = (
-        Path(__file__).resolve().parents[3]
-        / ".claude"
-        / "max-objects"
-        / "overrides.json"
+        Path(args.overrides)
+        if getattr(args, "overrides", None)
+        else Path(__file__).resolve().parents[3] / ".claude" / "max-objects" / "overrides.json"
     )
 
     # Validate inputs
@@ -97,6 +101,13 @@ def _run_merge(args: argparse.Namespace) -> int:
                 print(f"    Audit outlets: {audit_types}")
         print("\n  Conflicts are skipped (not auto-resolved). Review manually.")
 
+    pending_rules = merger.pending_variable_io_rules()
+    if pending_rules:
+        print(
+            f"\n  variable_io_rules proposals awaiting manual review (never merged): "
+            f"{len(pending_rules)} ({', '.join(sorted(pending_rules))})"
+        )
+
     # ---- Merge (conflicts not resolved in CLI) ----
     merged = merger.merge(conflict_resolutions=None)
 
@@ -108,6 +119,7 @@ def _run_merge(args: argparse.Namespace) -> int:
     print(f"\nMerge summary:")
     print(f"  Total entries in merged overrides: {len(obj_names)}")
     print(f"  Conflicts skipped: {len(conflicts)}")
+    print(f"  variable_io_rules proposals pending review: {len(pending_rules)}")
     print(f"  Domain groups: {len(domain_headers)}")
     for header_key in domain_headers:
         domain_name = header_key.replace("_domain_", "")
@@ -123,8 +135,15 @@ def _run_merge(args: argparse.Namespace) -> int:
 
     # ---- Write ----
     if not args.dry_run:
-        merger.write(merged)
-        print(f"\n  Merged overrides written to: {overrides_path}")
+        try:
+            written = merger.write(merged)
+        except OverridesChangedError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+        if written:
+            print(f"\n  Merged overrides written to: {overrides_path}")
+        else:
+            print(f"\n  No change -- {overrides_path} left byte-identical.")
     else:
         print(f"\n  Dry run -- no files written.")
 
@@ -185,6 +204,15 @@ def main(argv: list[str] | None = None) -> int:
         "--merge",
         action="store_true",
         help="Merge proposed overrides into production overrides.json",
+    )
+    parser.add_argument(
+        "--overrides",
+        type=Path,
+        default=None,
+        help=(
+            "overrides.json the --merge targets (default: the repo's "
+            ".claude/max-objects/overrides.json); use a copy to rehearse a merge"
+        ),
     )
     parser.add_argument(
         "--dry-run",

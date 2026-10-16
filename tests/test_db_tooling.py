@@ -768,3 +768,364 @@ class TestI4RealDbCopyRefused:
         )
         assert code == 2
         assert _tree_bytes(copy_root) == before
+
+
+# ══ I5: audit merger, confidence and variable_io proposals ══
+
+
+def _audit_entry(**fields) -> dict:
+    entry = dict(fields)
+    entry["_audit"] = {"confidence": "HIGH", "instances": 5, "agreement": 1.0, "source": "io_count_finding"}
+    return entry
+
+
+def _port(idx: int) -> dict:
+    return {"id": idx, "type": "", "signal": False, "digest": ""}
+
+
+def _write_json(path: Path, data: dict, *, ensure_ascii: bool = False, newline: bool = True) -> Path:
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=ensure_ascii) + ("\n" if newline else ""))
+    return path
+
+
+def _proposal(tmp_path: Path, objects: dict | None = None, conflicts: dict | None = None) -> Path:
+    return _write_json(
+        tmp_path / "proposed-overrides.json",
+        {"_comment": "proposed", "objects": objects or {}, "conflicts": conflicts or {}},
+    )
+
+
+def _overrides(tmp_path: Path, objects: dict | None = None, **style) -> Path:
+    return _write_json(
+        tmp_path / "overrides.json",
+        {
+            "_comment": "Expert corrections.",
+            "objects": objects or {},
+            "version_map": {},
+            "variable_io_rules": {"pack": {"inlet_count": "arg_count"}},
+        },
+        **style,
+    )
+
+
+@pytest.fixture(scope="module")
+def real_db():
+    from src.maxpat.db_lookup import ObjectDatabase
+
+    return ObjectDatabase()
+
+
+_MANUAL_COLL = {"inlets": [_port(0), _port(1)], "_note": "expert entry"}
+
+
+class TestI5MergeTimeConflicts:
+    def test_a_manual_entry_added_after_the_audit_survives(self, tmp_path: Path, real_db) -> None:
+        from src.maxpat.audit.merger import OverrideMerger
+
+        proposed = _proposal(tmp_path, objects={"coll": _audit_entry(inlets=[_port(0)])})
+        overrides = _overrides(tmp_path, objects={"coll": _MANUAL_COLL})
+        merger = OverrideMerger(proposed, overrides, real_db)
+        merged = merger.merge()
+        assert merged["objects"]["coll"] == _MANUAL_COLL
+        conflicts = merger.detect_conflicts()
+        assert conflicts["coll"]["reason"] == "CONFLICT_WITH_MANUAL"
+        assert conflicts["coll"]["existing_manual"] == _MANUAL_COLL
+
+    def test_adopt_fields_resolve_a_merge_time_conflict(self, tmp_path: Path, real_db) -> None:
+        from src.maxpat.audit.merger import OverrideMerger
+
+        proposed = _proposal(tmp_path, objects={"coll": _audit_entry(inlets=[_port(0)])})
+        overrides = _overrides(tmp_path, objects={"coll": _MANUAL_COLL})
+        merged = OverrideMerger(proposed, overrides, real_db).merge({"coll": {"adopt_fields": ["inlets"]}})
+        coll = merged["objects"]["coll"]
+        assert coll["inlets"] == [_port(0)]
+        assert coll["_note"] == "expert entry"
+        assert coll["_manual_original"] == _MANUAL_COLL
+
+    def test_a_conflict_whose_manual_entry_was_removed_lands(self, tmp_path: Path, real_db) -> None:
+        from src.maxpat.audit.merger import OverrideMerger
+
+        audit = _audit_entry(inlets=[_port(0), _port(1)])
+        proposed = _proposal(
+            tmp_path,
+            conflicts={
+                "line~": {"audit_proposed": audit, "existing_manual": {"x": 1}, "reason": "CONFLICT_WITH_MANUAL"}
+            },
+        )
+        overrides = _overrides(tmp_path)
+        merger = OverrideMerger(proposed, overrides, real_db)
+        merged = merger.merge()
+        assert merged["objects"]["line~"] == audit
+        assert merger.detect_conflicts() == {}
+
+    def test_merge_rereads_the_live_file(self, tmp_path: Path, real_db) -> None:
+        from src.maxpat.audit.merger import OverrideMerger
+
+        proposed = _proposal(tmp_path, objects={"coll": _audit_entry(inlets=[_port(0)])})
+        overrides = _overrides(tmp_path)
+        merger = OverrideMerger(proposed, overrides, real_db)
+        _overrides(tmp_path, objects={"coll": _MANUAL_COLL})  # manual edit after construction
+        assert merger.merge()["objects"]["coll"] == _MANUAL_COLL
+
+
+class TestI5MergerWrite:
+    def test_a_no_op_merge_of_the_real_file_is_byte_identical(self, tmp_path: Path, real_db) -> None:
+        from src.maxpat.audit.merger import OverrideMerger
+
+        copy_path = tmp_path / "overrides.json"
+        copy_path.write_bytes((REAL_DB / "overrides.json").read_bytes())
+        before = copy_path.read_bytes()
+        merger = OverrideMerger(_proposal(tmp_path), copy_path, real_db)
+        assert merger.write(merger.merge()) is False
+        assert copy_path.read_bytes() == before
+
+    def test_new_proposal_appends_to_its_group_and_only_adds_lines(self, tmp_path: Path, real_db) -> None:
+        import difflib
+
+        from src.maxpat.audit.merger import OverrideMerger
+
+        objects = {
+            "_domain_max": "--- Max Objects ---",
+            "zl": {"_note": "café"},
+            "counter": {"_note": "unsorted on purpose"},
+            "_domain_msp": "--- MSP Objects ---",
+            "adsr~": {"_note": "msp"},
+        }
+        overrides = _overrides(tmp_path, objects=objects, ensure_ascii=True, newline=False)
+        old_text = overrides.read_text()
+        proposed = _proposal(tmp_path, objects={"coll": _audit_entry(inlets=[_port(0)])})
+        merger = OverrideMerger(proposed, overrides, real_db)
+        merged = merger.merge()
+        assert list(merged["objects"]) == ["_domain_max", "zl", "counter", "coll", "_domain_msp", "adsr~"]
+        assert merger.write(merged) is True
+        new_text = overrides.read_text()
+        assert not new_text.endswith("\n")
+        assert new_text.isascii()
+        removed = [
+            line for line in difflib.unified_diff(old_text.splitlines(), new_text.splitlines(), lineterm="")
+            if line.startswith("-") and not line.startswith("---")
+        ]
+        assert removed == []
+
+    def test_write_keeps_mode_through_atomic_write_bytes(
+        self, tmp_path: Path, real_db, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import src.maxpat.audit.merger as merger_mod
+
+        overrides = _overrides(tmp_path)
+        os.chmod(overrides, 0o640)
+        calls = []
+        real_writer = merger_mod.atomic_write_bytes if hasattr(merger_mod, "atomic_write_bytes") else None
+
+        def spy(path, payload):
+            calls.append(Path(path))
+            return real_writer(path, payload)
+
+        monkeypatch.setattr(merger_mod, "atomic_write_bytes", spy, raising=False)
+        merger = merger_mod.OverrideMerger(
+            _proposal(tmp_path, objects={"adsr~": _audit_entry(inlets=[_port(0)])}), overrides, real_db
+        )
+        assert merger.write(merger.merge()) is True
+        assert calls == [overrides]
+        assert _mode(overrides) == 0o640
+
+    def test_stale_guard_refuses_to_clobber_a_newer_edit(self, tmp_path: Path, real_db) -> None:
+        import src.maxpat.audit.merger as merger_mod
+
+        overrides = _overrides(tmp_path)
+        merger = merger_mod.OverrideMerger(
+            _proposal(tmp_path, objects={"adsr~": _audit_entry(inlets=[_port(0)])}), overrides, real_db
+        )
+        merged = merger.merge()
+        _overrides(tmp_path, objects={"coll": _MANUAL_COLL})  # someone edits the file
+        edited = overrides.read_bytes()
+        with pytest.raises(merger_mod.OverridesChangedError):
+            merger.write(merged)
+        assert overrides.read_bytes() == edited
+
+    def test_a_new_domain_group_lands_in_domain_order(self, tmp_path: Path, real_db) -> None:
+        """Green guard: msp goes between the max and jitter groups."""
+        from src.maxpat.audit.merger import OverrideMerger
+
+        objects = {
+            "_domain_max": "--- Max Objects ---",
+            "zl": {"_note": "max"},
+            "_domain_jitter": "--- Jitter Objects ---",
+            "jit.matrix": {"_note": "jit"},
+        }
+        overrides = _overrides(tmp_path, objects=objects)
+        proposed = _proposal(tmp_path, objects={"adsr~": _audit_entry(inlets=[_port(0)])})
+        merged = OverrideMerger(proposed, overrides, real_db).merge()
+        headers = [k for k in merged["objects"] if k.startswith("_domain_")]
+        assert headers == ["_domain_max", "_domain_msp", "_domain_jitter"]
+
+
+def _box(name: str, text: str, numinlets: int, numoutlets: int, box_id: str = "obj-1"):
+    from src.maxpat.audit import BoxInstance
+
+    return BoxInstance(
+        name=name,
+        text=text,
+        numinlets=numinlets,
+        numoutlets=numoutlets,
+        outlettype=[""] * numoutlets,
+        patching_rect=[0.0, 0.0, 50.0, 22.0],
+        box_id=box_id,
+        depth=0,
+        is_connected=True,
+        connections=[],
+        source_file=f"{name}.maxhelp",
+    )
+
+
+def _mock_db(defaults=(1, 1), outlet_types=None):
+    from unittest.mock import MagicMock
+
+    db = MagicMock()
+    db.compute_io_counts.return_value = defaults
+    db.get_outlet_types.return_value = outlet_types if outlet_types is not None else [""]
+    db.lookup.return_value = {"inlets": [{"id": 0}], "outlets": [{"id": 0}], "variable_io": False}
+    db._aliases = {}
+    return db
+
+
+class TestI5ConfidenceThreshold:
+    def test_high_needs_three_instances(self) -> None:
+        from src.maxpat.audit import analyzer
+
+        assert analyzer.MIN_HIGH_INSTANCES == 3
+        assert analyzer.compute_confidence([1], lambda x: x)[0] == "MEDIUM"
+        assert analyzer.compute_confidence([1, 1], lambda x: x)[0] == "MEDIUM"
+        assert analyzer.compute_confidence([1, 1, 1], lambda x: x)[0] == "HIGH"
+
+    def test_one_mismatching_instance_is_medium(self) -> None:
+        from src.maxpat.audit.analyzer import AuditAnalyzer
+
+        db = _mock_db(outlet_types=["signal"])
+        finding = AuditAnalyzer(db).analyze_outlet_types("thing~", [_box("thing~", "thing~", 1, 1)])
+        assert finding is not None
+        assert finding["confidence"] == "MEDIUM"
+
+
+class TestI5VariableIoProposal:
+    def _bucket(self):
+        return [
+            _box("bucket", "bucket", 1, 1, "obj-1"),
+            _box("bucket", "bucket 4", 1, 4, "obj-2"),
+            _box("bucket", "bucket 4", 1, 4, "obj-3"),
+            _box("bucket", "bucket 4", 1, 4, "obj-4"),
+        ]
+
+    def test_argument_dependent_counts_become_a_rule(self) -> None:
+        from src.maxpat.audit.analyzer import AuditAnalyzer
+
+        finding = AuditAnalyzer(_mock_db()).analyze_io_counts("bucket", self._bucket())
+        assert finding["counts_follow_arguments"] is True
+        assert finding["help_outlets"] is None
+        assert finding["help_inlets"] is None
+        assert finding["proposed_variable_io"] == {
+            "inlet_count": "fixed:1",
+            "outlet_count": "first_arg",
+            "default_inlets": 1,
+            "default_outlets": 1,
+        }
+
+    def test_generator_proposes_a_rule_never_a_default_count(self, tmp_path: Path) -> None:
+        from src.maxpat.audit.analyzer import AuditAnalyzer, ObjectFindings
+        from src.maxpat.audit.overrides import OverrideGenerator
+
+        db = _mock_db()
+        finding = AuditAnalyzer(db).analyze_io_counts("bucket", self._bucket())
+        overrides = _overrides(tmp_path)
+        proposed = OverrideGenerator(db, overrides_path=overrides).generate_proposed_overrides(
+            {"bucket": ObjectFindings("bucket", 4, io_count_finding=finding)}
+        )
+        assert len(proposed["objects"].get("bucket", {}).get("outlets", [])) != 4
+        rule = proposed["variable_io_rules"]["bucket"]
+        assert (rule["inlet_count"], rule["outlet_count"]) == ("fixed:1", "first_arg")
+        assert rule["_audit"]["instances"] == 4
+        assert rule["_audit"]["distinct_arguments"] == 2
+        assert rule["_audit"]["source"] == "io_count_finding"
+        assert rule["existing_rule"] is None
+
+    def test_second_arg_plus_one(self) -> None:
+        from src.maxpat.audit.analyzer import AuditAnalyzer
+
+        instances = [_box("x", "x 2 3", 2, 4, "obj-1"), _box("x", "x 2 5", 2, 6, "obj-2")]
+        finding = AuditAnalyzer(_mock_db()).analyze_io_counts("x", instances)
+        assert finding["counts_follow_arguments"] is True
+        assert finding["proposed_variable_io"]["outlet_count"] == "second_arg+1"
+        assert finding["proposed_variable_io"]["inlet_count"] == "fixed:2"
+
+    def test_one_args_key_with_two_count_pairs_is_todays_finding(self) -> None:
+        """Green guard."""
+        from src.maxpat.audit.analyzer import AuditAnalyzer
+
+        instances = [_box("y", "y 3", 1, 2, "obj-1"), _box("y", "y 3", 1, 3, "obj-2")]
+        finding = AuditAnalyzer(_mock_db()).analyze_io_counts("y", instances)
+        assert finding.get("counts_follow_arguments", False) is False
+        assert finding.get("proposed_variable_io") is None
+        assert finding["help_outlets"] in (2, 3)
+
+    def test_all_equal_counts_are_todays_finding(self) -> None:
+        """Green guard."""
+        from src.maxpat.audit.analyzer import AuditAnalyzer
+
+        instances = [_box("z", "z", 1, 2, "obj-1"), _box("z", "z 4", 1, 2, "obj-2")]
+        finding = AuditAnalyzer(_mock_db()).analyze_io_counts("z", instances)
+        assert finding.get("counts_follow_arguments", False) is False
+        assert finding["help_outlets"] == 2
+
+
+_FORMULAS = (
+    "fixed:3", "first_arg", "first_arg+1", "second_arg", "second_arg+1", "second_arg+2",
+    "arg_count", "arg_count+1", "arg_count_or_default",
+)
+
+
+class TestI5FormulaParity:
+    @pytest.mark.parametrize("formula", _FORMULAS)
+    @pytest.mark.parametrize("args", [[], ["3"], ["3", "5"], ["1", "2", "4"]])
+    def test_matches_object_database(self, real_db, formula: str, args: list) -> None:
+        from src.maxpat.audit.analyzer import _formula_count
+
+        assert _formula_count(formula, args, 2) == real_db._apply_io_formula(formula, args, 2)
+
+    def test_non_integer_arguments_give_none(self) -> None:
+        from src.maxpat.audit.analyzer import _formula_count
+
+        assert _formula_count("first_arg", ["x"], 2) is None
+        assert _formula_count("second_arg+1", ["1", "y"], 2) is None
+        assert _formula_count("arg_count", ["x"], 2) == 1
+
+
+class TestI5CliOverridesPath:
+    def _setup(self, tmp_path: Path) -> tuple[Path, Path]:
+        out = tmp_path / "audit"
+        out.mkdir()
+        _proposal(out, objects={
+            "coll": _audit_entry(inlets=[_port(0)]),
+            "adsr~": _audit_entry(inlets=[_port(0)]),
+        })
+        copy_path = _overrides(tmp_path, objects={"coll": _MANUAL_COLL})
+        return out, copy_path
+
+    def test_merge_writes_only_the_named_copy(self, tmp_path: Path) -> None:
+        from src.maxpat.audit.cli import main
+
+        real = REAL_DB / "overrides.json"
+        real_sha = hashlib.sha256(real.read_bytes()).hexdigest()
+        out, copy_path = self._setup(tmp_path)
+        assert main(["--merge", "--output-dir", str(out), "--overrides", str(copy_path)]) == 0
+        merged = json.loads(copy_path.read_text())["objects"]
+        assert merged["coll"] == _MANUAL_COLL
+        assert "adsr~" in merged
+        assert hashlib.sha256(real.read_bytes()).hexdigest() == real_sha
+
+    def test_dry_run_leaves_the_copy_alone(self, tmp_path: Path) -> None:
+        from src.maxpat.audit.cli import main
+
+        out, copy_path = self._setup(tmp_path)
+        before = copy_path.read_bytes()
+        assert main(["--merge", "--output-dir", str(out), "--overrides", str(copy_path), "--dry-run"]) == 0
+        assert copy_path.read_bytes() == before
