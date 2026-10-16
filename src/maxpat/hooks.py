@@ -163,8 +163,8 @@ def finalize_patch(
         Never clears existing cable midpoints (Q6 / B1). It routes only
         cords that have no midpoints AND are new or touch a box added or
         moved in this edit, recursively through subpatchers, and fills
-        empty inlet/outlet assistance comments (written to ``_raw`` so they
-        reach disk). Existing objects are never repositioned. A moved box's
+        empty inlet/outlet assistance comments (change tracking carries them
+        to disk, Q28). Existing objects are never repositioned. A moved box's
         already-routed cords keep their midpoints.
 
     Args:

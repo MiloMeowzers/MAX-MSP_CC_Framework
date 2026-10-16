@@ -580,17 +580,14 @@ def resolve_effective_background(
 
 
 def _set_textcolor(box: Box, color: list[float]) -> None:
-    """Write a resolved textcolor to BOTH destinations a Box can serialize from.
+    """Write a resolved textcolor to the box's ``extra_attrs``.
 
-    ``extra_attrs`` alone is not enough. For a round-tripped box (``_raw`` is
-    populated) ``Patcher.to_dict()`` starts from ``_raw`` and overlays only
-    text / rects / IO / inner-patcher -- generic ``extra_attrs`` entries are
-    silently dropped (CLAUDE.md Rule #5). Writing only ``extra_attrs`` would
-    make every in-memory assertion pass while nothing lands on disk.
+    New boxes serialize ``extra_attrs`` directly; on a round-tripped box
+    (``_raw`` populated) ``Patcher.to_dict()`` writes back every
+    ``extra_attrs`` key changed since load, so the colour reaches disk on
+    both paths (Q28; CLAUDE.md Rule #5).
     """
     box.extra_attrs["textcolor"] = list(color)
-    if box._raw is not None:
-        box._raw["textcolor"] = list(color)
 
 
 def _apply_text_contrast(patcher: Patcher) -> int:

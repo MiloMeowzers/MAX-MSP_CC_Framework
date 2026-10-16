@@ -84,6 +84,13 @@ _PROJECT_PATCHES = [
     "granularsynthtest/generated/granularsynthtest.maxpat",
 ]
 
+# Every committed patch file under patches/ (Q28 round-trip guard).
+_ALL_REPO_PATCH_FILES = sorted(
+    str(f.relative_to(PATCHES_DIR))
+    for ext in ("*.maxpat", "*.maxhelp", "*.gendsp")
+    for f in PATCHES_DIR.rglob(ext)
+)
+
 # ---------------------------------------------------------------------------
 # TestFromDict -- RW-01: Basic from_dict loading of valid .maxpat JSON
 # ---------------------------------------------------------------------------
@@ -375,6 +382,27 @@ class TestRoundTripIdentity:
         assert result == original, (
             f"Round-trip mismatch for {relpath}."
         )
+
+    def test_repo_file_list_is_complete(self):
+        """The all-files guard cannot pass vacuously on a broken glob (Q28)."""
+        assert len(_ALL_REPO_PATCH_FILES) >= 69
+
+    @pytest.mark.parametrize("relpath", _ALL_REPO_PATCH_FILES)
+    def test_round_trip_identity_all_repo_files(self, relpath):
+        """Every repo patch file round-trips losslessly, input untouched (Q28).
+
+        Dict equality, json.dumps string identity (key order and int/float
+        kept) and no mutation of the caller's dict.
+        """
+        with open(PATCHES_DIR / relpath, "r") as f:
+            data = json.load(f)
+        pristine = copy.deepcopy(data)
+        result = Patcher.from_dict(data).to_dict()
+        assert result == pristine, f"Round-trip mismatch for {relpath}."
+        assert json.dumps(result) == json.dumps(pristine), (
+            f"Round-trip key order / representation changed for {relpath}."
+        )
+        assert data == pristine, f"from_dict mutated its input for {relpath}."
 
 
 # ---------------------------------------------------------------------------

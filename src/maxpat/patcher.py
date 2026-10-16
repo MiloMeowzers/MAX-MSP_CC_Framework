@@ -37,6 +37,44 @@ CONTENT_DEFINED_NAMES = frozenset({
     "mc.poly~", "js", "jsui", "v8", "v8ui", "node.script",
 })
 
+# Box keys from_dict maps onto model fields (everything else is extra_attrs).
+# The round-trip extra_attrs diff skips them: their own overlays write them.
+_BOX_HANDLED_KEYS = frozenset({
+    "id", "maxclass", "text", "numinlets", "numoutlets",
+    "outlettype", "patching_rect", "fontname", "fontsize",
+    "presentation", "presentation_rect", "patcher",
+    "saved_object_attributes",
+})
+
+# Patchline keys from_dict maps onto model fields.
+_LINE_HANDLED_KEYS = frozenset({
+    "source", "destination", "order", "hidden", "midpoints", "color",
+})
+
+
+def _apply_extra_attrs_diff(
+    d: dict, current: dict, old: dict, handled: frozenset
+) -> None:
+    """Write extra_attrs changes since load into a round-trip dict (Q28 / B5).
+
+    ``old`` is the deep-copied load snapshot. A key in ``old`` missing from
+    ``current`` is popped from ``d``. A key of ``current`` not in
+    ``handled`` that is new, or whose value differs from the snapshot
+    (in-place edits included), is written with ``d[key] = value``: an
+    existing key keeps its position, a new key appends. Unchanged values
+    keep their file representation (12 vs 12.0) because they are compared
+    with the snapshot, never written.
+    """
+    for k in old:
+        if k not in current:
+            d.pop(k, None)
+    for k, v in current.items():
+        if k in handled:
+            continue
+        if k not in old or old[k] != v:
+            d[k] = v
+
+
 from src.maxpat.maxclass_map import resolve_maxclass, is_ui_object, UI_MAXCLASSES
 from src.maxpat.graph import GraphMixin
 from src.maxpat.analysis import AnalysisMixin, SECTION_SIGNATURES, _SECTION_NAME_PRIORITY
@@ -82,13 +120,30 @@ class Patchline:
         self.color = color
         self.extra_attrs = extra_attrs if extra_attrs is not None else {}
         self._raw = _raw
+        # Load snapshot (Q28 / B5): taken whenever the line comes from a
+        # file dict. to_dict writes back only the fields that differ from it.
+        if _raw is not None:
+            self._loaded: dict | None = {
+                "order": order,
+                "hidden": bool(hidden),
+                "midpoints": copy.deepcopy(midpoints),
+                "color": copy.deepcopy(color),
+                "extra_attrs": copy.deepcopy(self.extra_attrs),
+            }
+        else:
+            self._loaded = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to .maxpat patchline JSON structure.
 
         Uses dual-path serialization:
-        - Round-trip path (self._raw exists): start from original dict, overlay
-          mutable fields for lossless preservation of unknown keys and key order.
+        - Round-trip path (self._raw exists): start from the original dict
+          (unknown keys and key order kept), overlay source/destination,
+          then write back every field that changed since load (Q28 / B5):
+          order (0 included), hidden (True -> ``1``, False -> key removed),
+          midpoints and color (empty/None -> key removed) and extra_attrs
+          (added, changed and deleted keys). Unchanged fields come from
+          ``_raw``, so a direct ``_raw`` key write still lands.
         - Creation path (no _raw): build dict from scratch for new connections.
         """
         if self._raw is not None:
@@ -96,6 +151,29 @@ class Patchline:
             d = dict(self._raw)
             d["source"] = [self.source_id, self.source_outlet]
             d["destination"] = [self.dest_id, self.dest_inlet]
+            snap = getattr(self, "_loaded", None)
+            if snap is not None:
+                _apply_extra_attrs_diff(
+                    d, self.extra_attrs, snap["extra_attrs"], _LINE_HANDLED_KEYS
+                )
+                if self.order != snap["order"]:
+                    d["order"] = self.order
+                if bool(self.hidden) != snap["hidden"]:
+                    if self.hidden:
+                        d["hidden"] = 1
+                    else:
+                        d.pop("hidden", None)
+                if self.midpoints != snap["midpoints"]:
+                    if self.midpoints:
+                        d["midpoints"] = list(self.midpoints)
+                    else:
+                        d.pop("midpoints", None)
+                if self.color != snap["color"]:
+                    if self.color is not None:
+                        d["color"] = self.color
+                    else:
+                        d.pop("color", None)
+                return {"patchline": d}
             # Update color if changed from what was in _raw
             if self.color is not None:
                 d["color"] = self.color
@@ -249,6 +327,10 @@ class Box:
         # The edit-path finalize compares x/y with it to detect moved boxes.
         self._loaded_rect: tuple | None = None
 
+        # Load snapshot of the tracked fields (fontname, fontsize, a deep
+        # copy of extra_attrs), set by from_dict; None for new boxes (Q28).
+        self._loaded: dict | None = None
+
     @property
     def right_edge(self) -> float:
         """X coordinate of the box's right edge (x + width)."""
@@ -278,8 +360,14 @@ class Box:
         """Serialize to .maxpat box JSON structure.
 
         Uses dual-path serialization:
-        - Round-trip path (self._raw exists): start from original dict, overlay
-          mutable fields for lossless preservation of unknown keys and key order.
+        - Round-trip path (self._raw exists): start from the original dict
+          (unknown keys and key order kept). First write back every tracked
+          field that changed since load (Q28 / B5): extra_attrs keys added,
+          changed (in-place edits included) or deleted, and fontname /
+          fontsize. Then overlay the structural fields (rect, I/O, text,
+          outlettype, presentation, inner patcher, saved_object_attributes),
+          which always win. Unchanged fields come from ``_raw``, so a direct
+          ``_raw`` key write still lands while its field is unchanged.
         - Creation path (no _raw): build dict from scratch for new boxes.
 
         Returns:
@@ -289,6 +377,20 @@ class Box:
             # === ROUND-TRIP PATH ===
             # Start from original dict, overlay any mutations
             d = dict(self._raw)
+
+            # Tracked fields changed since load (Q28), before the overlays
+            snap = getattr(self, "_loaded", None)
+            if snap is not None:
+                _apply_extra_attrs_diff(
+                    d, self.extra_attrs, snap["extra_attrs"], _BOX_HANDLED_KEYS
+                )
+                for fld in ("fontname", "fontsize"):
+                    cur = getattr(self, fld, None)
+                    if cur != snap[fld]:
+                        if cur is None:
+                            d.pop(fld, None)
+                        else:
+                            d[fld] = cur
 
             # Overlay mutable fields that Python code may have changed
             d["patching_rect"] = self.patching_rect
@@ -441,7 +543,7 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
 
         Sets ``presentation=1`` and ``presentation_rect`` on the box. Works
         on both new and round-tripped boxes (presentation is a model field,
-        overlaid onto ``_raw`` at serialize -- unlike generic ``extra_attrs``).
+        overlaid onto ``_raw`` at serialize).
 
         When ``rect`` is omitted, the box is placed at x=15 just below the
         current presentation extent, sized from its patching_rect. Prefer an
@@ -636,7 +738,11 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
           changes: no I/O recompute, no resize, no cord change.
 
         Loaded boxes have text, I/O, outlettype and patching_rect synced to
-        ``_raw`` so the change reaches disk.
+        ``_raw``. ``color`` and ``extra_attrs`` reach disk through change
+        tracking (Q28); only keys model fields own (``_BOX_HANDLED_KEYS``,
+        e.g. fontsize, presentation) are still copied into ``_raw``, and
+        ``fontname`` / ``fontsize`` / ``presentation`` /
+        ``presentation_rect`` are synced onto the box fields.
 
         Args:
             box: The box to modify (must be in this patcher).
@@ -722,21 +828,29 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                 box._raw["patching_rect"] = box.patching_rect
 
         if color is not None:
+            # Change tracking carries it to disk on loaded boxes (Q28).
             box.extra_attrs["bgcolor"] = color
-            if box._raw is not None:
-                box._raw["bgcolor"] = color
 
         if extra_attrs is not None:
-            # Sync presentation attrs to Python fields so to_dict()
-            # round-trip path (which reads box.presentation /
-            # box.presentation_rect) stays consistent with _raw.
+            # Sync model-field attrs to the Python fields the to_dict()
+            # round-trip path reads (box.presentation / presentation_rect,
+            # and the tracked fontname / fontsize).
             if "presentation" in extra_attrs:
                 box.presentation = bool(extra_attrs["presentation"])
             if "presentation_rect" in extra_attrs:
                 box.presentation_rect = list(extra_attrs["presentation_rect"])
+            if "fontname" in extra_attrs:
+                box.fontname = extra_attrs["fontname"]
+            if "fontsize" in extra_attrs:
+                box.fontsize = extra_attrs["fontsize"]
             box.extra_attrs.update(extra_attrs)
             if box._raw is not None:
-                box._raw.update(extra_attrs)
+                # The extra_attrs diff skips model-field keys; keep their
+                # pre-Q28 raw write. Every other key reaches disk through
+                # change tracking.
+                for k, v in extra_attrs.items():
+                    if k in _BOX_HANDLED_KEYS:
+                        box._raw[k] = v
 
         return EditResult(box=box, orphaned=orphaned)
 
@@ -1231,8 +1345,8 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         - Skips inlet/outlet objects that already have non-empty comments.
         - Recurses into nested subpatchers.
 
-        On loaded boxes (with ``_raw``) the comment is also written to
-        ``_raw["comment"]`` so it serializes to disk (Q6).
+        On loaded boxes the comment reaches disk through change tracking
+        (Q6, Q28).
 
         Returns:
             self for method chaining.
@@ -1242,14 +1356,12 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
 
     @staticmethod
     def _set_assistance_comment(box: Box, text: str) -> None:
-        """Set an inferred assistance comment so it reaches disk.
+        """Set an inferred assistance comment.
 
-        Writes extra_attrs (creation path) and, for loaded boxes, ``_raw``
-        (the round-trip path Box.to_dict serializes from).
+        Writes extra_attrs only: the creation path serializes it directly
+        and, on loaded boxes, change tracking writes it back (Q28).
         """
         box.extra_attrs["comment"] = text
-        if box._raw is not None:
-            box._raw["comment"] = text
 
     @staticmethod
     def _populate_comments_recursive(patcher: "Patcher") -> None:
@@ -1327,6 +1439,8 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         Takes the full {"patcher": {...}} structure and rebuilds a Patcher
         with boxes and lines populated from the JSON. Boxes are created via
         Box.__new__(Box) to bypass DB validation (we are loading, not creating).
+        The input is deep-copied first, so the Patcher never shares a nested
+        object with the caller's dict (Q28 / B6).
 
         Args:
             data: A raw .maxpat dict with top-level "patcher" key.
@@ -1339,6 +1453,26 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
 
         Returns:
             Reconstructed Patcher instance.
+        """
+        return cls._from_owned_dict(
+            copy.deepcopy(data), db, domain_context=domain_context
+        )
+
+    @classmethod
+    def _from_owned_dict(
+        cls,
+        data: dict[str, Any],
+        db: "ObjectDatabase | None" = None,
+        *,
+        domain_context: str | None = None,
+    ) -> "Patcher":
+        """from_dict body for a dict this Patcher may own (already copied).
+
+        Model fields, extra_attrs and ``_raw`` alias ``data``'s nested
+        objects (so in-place edits reach both); each box and line also gets
+        a separate deep-copied load snapshot (``_loaded``) that to_dict
+        diffs against (Q28). Inner patchers recurse here, not through
+        from_dict, so nested dicts are copied once.
         """
         # Fail fast on structural errors (per CONTEXT.md locked decision)
         if "patcher" not in data and "boxes" not in data:
@@ -1420,21 +1554,22 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
 
             # Reconstruct inner patcher if present
             if "patcher" in box_data:
-                box._inner_patcher = Patcher.from_dict(
+                box._inner_patcher = Patcher._from_owned_dict(
                     {"patcher": box_data["patcher"]},
                     db=p.db,
                     domain_context=inner_patcher_scope(box_data, p.domain_context),
                 )
 
             # Extra attrs: everything not already handled
-            _handled_keys = {
-                "id", "maxclass", "text", "numinlets", "numoutlets",
-                "outlettype", "patching_rect", "fontname", "fontsize",
-                "presentation", "presentation_rect", "patcher",
-                "saved_object_attributes",
-            }
             box.extra_attrs = {
-                k: v for k, v in box_data.items() if k not in _handled_keys
+                k: v for k, v in box_data.items() if k not in _BOX_HANDLED_KEYS
+            }
+            # Load snapshot for change tracking (Q28): a separate deep copy,
+            # so in-place edits of extra_attrs values show up as changes.
+            box._loaded = {
+                "fontname": box.fontname,
+                "fontsize": box.fontsize,
+                "extra_attrs": copy.deepcopy(box.extra_attrs),
             }
 
             # Preserve raw box dict for lossless round-trip
@@ -1458,12 +1593,11 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                 pass
 
         # Rebuild lines with color, extra attrs, and raw dict preservation
-        _handled_line_keys = {"source", "destination", "order", "hidden", "midpoints", "color"}
         for line_entry in patcher_data.get("lines", []):
             line_data = line_entry.get("patchline", {})
             src = line_data.get("source", ["", 0])
             dst = line_data.get("destination", ["", 0])
-            pl_extra = {k: v for k, v in line_data.items() if k not in _handled_line_keys}
+            pl_extra = {k: v for k, v in line_data.items() if k not in _LINE_HANDLED_KEYS}
             pl = Patchline(
                 source_id=src[0],
                 source_outlet=src[1],
