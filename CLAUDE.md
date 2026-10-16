@@ -103,7 +103,7 @@ Manual banks: `orientation: 0`, `contdata: 1`, `setstyle: 1`, height = size * 24
 
 ### Rule #5: No Generator Scripts
 
-Never create `generate.py` or similar scripts that regenerate `.maxpat` files from scratch (regeneration overwrites manual edits). The Patcher API (`src.maxpat`) is the only sanctioned way to create and edit patches: build in memory during `/max-build` or `/max-iterate`, write via `save_patch_roundtrip()`.
+Never create `generate.py` or similar scripts that regenerate `.maxpat` files from scratch (regeneration overwrites manual edits). The Patcher API (`src.maxpat`) is the only sanctioned way to create and edit patches: build in memory during `/max-build` or `/max-iterate`, write via `save_patch_roundtrip()`. Saves keep the file's JSON layout (MAX 9 inline arrays, or the framework's expanded arrays), so a no-op save is byte-identical; `write_gendsp()` edits an existing `.gendsp` in place (codebox code and in/out ports) instead of regenerating it.
 
 `Patcher.from_dict` -> `Patcher.to_dict()` round-trips are lossless; the standalone `Box.to_dict()` is lossy -- never serialize a single Box. **Edits to loaded boxes and cords reach disk**: `from_dict` deep-copies its input and snapshots each box's `extra_attrs` and font and each cord's order, hidden, midpoints, color and `extra_attrs`; `to_dict` writes back every field that changed, in-place list edits included. A direct `box._raw` key write still lands while its field is unchanged; verify the attribute on disk after save. Investigate a suspected `.maxpat` regression by diffing committed objects (`git show A:file` vs `git show B:file`), never the working tree.
 
@@ -126,7 +126,7 @@ Every patch save MUST be committed to git: `save_patch_roundtrip()`, `write_gend
 
 `Patcher.replace_box(old, new_name, args=...)` does NOT preserve connections: every line touching the old box is returned in `EditResult.orphaned` and removed. After every `replace_box` call, iterate `result.orphaned` and re-add each connection via `add_connection(...)`, mapping indices through when the I/O layout matches and rewiring by hand when it differs. **Never assume connections survive a replace.**
 
-**Prefer `Patcher.replace_box_safe(old, new_name, args=..., rewire="auto")` for new code.** It auto-rewires by index when inlet AND outlet counts match (`orphaned` comes back empty) and otherwise returns the orphans; `rewire="manual"` opts out. Use plain `replace_box` when you need to inspect or transform orphans.
+**Prefer `Patcher.replace_box_safe(old, new_name, args=..., rewire="auto")` for new code.** It rewires every cord whose outlet/inlet index still exists on the new box (midpoints, order and colour kept) and returns the rest in `result.orphaned`: indices the new box lacks, and signal cords that would land on a control-only inlet. `rewire="manual"` opts out. Both calls keep the box's identity: its place in the boxes list (z-order), presentation rect, `varname`, colours and parameter blocks. Use plain `replace_box` when you need to inspect or transform orphans.
 
 ### Rule #9: Presentation Mode Parity
 

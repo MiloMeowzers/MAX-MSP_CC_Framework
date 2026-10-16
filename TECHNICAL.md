@@ -303,7 +303,7 @@ After generation, the router passes output through the critic loop before writin
 |--------|---------|
 | `from_dict(data)` | Load a `.maxpat` JSON dict into Patcher/Box/Patchline objects (recursive subpatchers) |
 | `to_dict()` | Serialize to complete `.maxpat` JSON structure (round-trip safe) |
-| `add_box(name, args, x, y)` | Create and add a Box (auto-generates ID, validates against DB) |
+| `add_box(name, args, x, y)` | Create and add a Box (auto-generates ID, validates against DB); keeps an explicit position unless the box truly overlaps another, then moves it down and warns `BoxMovedWarning` (`box.nudged_from` holds the requested position) |
 | `add_comment(text, x, y)` | Create comment box |
 | `add_message(text, x, y)` | Create message box |
 | `add_connection(src, outlet, dst, inlet)` | Create patchline between boxes (with bounds checking) |
@@ -332,7 +332,7 @@ After generation, the router passes output through the critic loop before writin
 |--------|---------|
 | `add_overlay_readout(target, *, format="%.2f", type="flonum", editable=False, offset_x=0.0, offset_y=0.0) -> Box` | Overlay a readout on an interactive control (Rule #6 recipe: `bring_to_front` + `ignoreclick` click pass-through) |
 | `add_labeled_param_bank(params, x, y, *, label_side="left", extra_attrs=None) -> (multislider, [comment, ...])` | Build a labeled multislider parameter bank (size×24 height, `contdata=1`, `setstyle=1`, `orientation=0`) with aligned comment labels |
-| `replace_box_safe(old_box, new_name, *, args=None, rewire="auto") -> EditResult` | Replace a box and auto-rewire orphaned connections by index when the new I/O layout matches |
+| `replace_box_safe(old_box, new_name, *, args=None, rewire="auto") -> EditResult` | Replace a box keeping its identity (list position, presentation rect, varname, colours, parameter blocks) and rewire every cord whose index still exists on the new box; the rest come back in `orphaned` |
 | `add_m4l_gen_synth(params, *, gen_varname="synth", gen_code=None) -> (gen_obj, [live_dial, ...], plugout_obj)` | Build a Live-ready M4L gen-synth skeleton (`live.dial`↔`Param` via `param_connect`; no `gain~` before `plugout~`). **Experimental:** not yet confirmed in MAX or Live. |
 
 Patcher internals are decomposed into mixins for maintainability: `GraphMixin` (`graph.py`) handles adjacency/traversal and `AnalysisMixin` (`analysis.py`) handles patch analysis. `utils.py` provides shared helpers like `get_box_name()`. The public API is unchanged.
@@ -354,7 +354,7 @@ Patcher internals are decomposed into mixins for maintainability: `GraphMixin` (
 | Function | Purpose |
 |----------|---------|
 | `read_patch(path)` | Load a `.maxpat` file from disk into a Patcher (returns Patcher + raw JSON string) |
-| `save_patch_roundtrip(patch_dict, path, original_text=None, *, force=False)` | Write back with lossless preservation (key order, numeric precision, trailing newline); pass `patcher.to_dict()` |
+| `save_patch_roundtrip(patch_dict, path, original_text=None, *, force=False)` | Write back with lossless preservation (key order, numeric precision, trailing newline) and the file's JSON layout (MAX 9 inline arrays or expanded; `format_patch_text`), so a no-op save is byte-identical; pass `patcher.to_dict()` |
 
 ### Patch Analysis (`analysis.py`)
 
@@ -466,7 +466,7 @@ Additional validation for RNBO export patches (`src/maxpat/rnbo_validation.py`):
 | Function | Validates | Blocks on Error |
 |----------|-----------|----------------|
 | `save_patch_roundtrip(patch_dict, path, original_text=None, *, force=False)` | Stale-file check, then the save gate: `validate_patch` (on a deepcopy) + `review_patch` with one cached DB, cord-removal warning, port x-rank check; auto-commits to git via `auto_commit_patch()` | New blockers / port reorder (`force=True` overrides) |
-| `write_gendsp(code, path, ..., *, force=False)` | The same save gate; auto-commits to git | New blockers / port reorder (`force=True` overrides) |
+| `write_gendsp(code, path, ..., *, force=False)` | Edits an existing file in place (codebox code, in/out ports) through `save_patch_roundtrip`, or generates a new one; the same save gate; auto-commits to git | New blockers / port reorder (`force=True` overrides) |
 | `write_js(code, path)` | Code validation (report-only); auto-commits to git | No |
 
 The gate compares blocking findings with a baseline: `original_text`, else `git show HEAD:<path>`, else the file on disk. With no baseline the file is new and every blocker refuses. Findings are matched by rule template plus box ids (not message text), as a multiset, so only blockers the save introduces raise `PatchValidationError`. Findings that existed before the save never block, which is why third-party objects in user patches don't reject load-edit-save cycles. Cords present in HEAD (and in `original_text`) but missing from the new patch, walked recursively through subpatchers, emit one `SaveGateWarning`. A changed x-rank of any inlet/outlet present in both versions (subpatchers and abstraction top levels) blocks, because parent cords address ports by x-rank; a port appended rightmost does not. `force=True` saves anyway with a `SaveGateWarning` listing what was bypassed. `PatchValidationError` carries `findings` (the new ValidationResult/CriticResult objects), `port_changes` and `path`. Nothing is written or committed before the gate passes. `validate_file()` remains on demand.

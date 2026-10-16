@@ -235,7 +235,7 @@ yourself or use `add_overlay_readout` explicitly.
 - `patcher.find_boxes(name=..., maxclass=..., text=...)` -- search for multiple objects
 - `patcher.modify_box(box, args=..., position=..., color=...)` -- in-place attribute editing
 - `patcher.insert_into_connection(src, dst, name, args)` -- insert a new object between two connected boxes (returns an EditResult)
-- `patcher.replace_box_safe(box, new_name, args=[...])` -- swap object type; auto-rewires by index only when the new object's inlet AND outlet counts match, otherwise returns `result.orphaned` for you to rewire (CLAUDE.md Rule #8). Plain `replace_box(box, new_name, args=...)` orphans every connection.
+- `patcher.replace_box_safe(box, new_name, args=[...])` -- swap object type keeping the box's identity (list position, presentation rect, varname, colours, parameter blocks); rewires every cord whose outlet/inlet index still exists on the new box and returns the rest in `result.orphaned` (CLAUDE.md Rule #8). Plain `replace_box(box, new_name, args=...)` keeps the identity too but orphans every connection.
 - `patcher.remove_box(box)` -- remove object and clean up connections
 - `patcher.connected_components()` -- identify groups for section rebuild scope
 - `save_patch_roundtrip(patcher.to_dict(), path, original_text)` -- save preserving positions

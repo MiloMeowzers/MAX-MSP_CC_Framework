@@ -36,7 +36,7 @@ Before any generation:
 
 ### Key Functions
 - `Patcher()` -- create a new patch
-- `Patcher.add_box(name, args=None, x=0.0, y=0.0)` -- create a DB-validated box and add it to the patch (returns the Box)
+- `Patcher.add_box(name, args=None, x=0.0, y=0.0)` -- create a DB-validated box and add it to the patch (returns the Box). An explicit position is kept unless the box would truly overlap another; then it moves down in 15px steps and a `BoxMovedWarning` names the move (`box.nudged_from` holds the requested position).
 - `Patcher.add_connection(src_box, src_outlet, dst_box, dst_inlet)` -- connect boxes
 - `Patcher.add_subpatcher(name, inlets=1, outlets=1, x=0.0, y=0.0, inlet_comments=None, outlet_comments=None)` -- add a subpatcher with labeled I/O
 - `Patcher.populate_assistance_comments()` -- auto-fill empty inlet/outlet comments from connection context

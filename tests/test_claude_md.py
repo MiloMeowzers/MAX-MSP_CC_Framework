@@ -163,7 +163,7 @@ RULE_ANCHORS = [
     "generate.py", "box._raw", "Box.to_dict()", "Patcher.to_dict()", "git show A:file",
     "add_overlay_readout", "bring_to_front", "send_to_back", "set_z_index", "ignoreclick=1", "background=1",
     "auto_commit_patch()", "StaleFileError", "PatchValidationError", "SaveGateWarning", "force=True", "git stash", "git add -A", "patches/<project>/", "git stash list",
-    "replace_box_safe", "result.orphaned", 'rewire="auto"',
+    "replace_box_safe", "result.orphaned", 'rewire="auto"', "keep the box's identity", "a no-op save is byte-identical", "edits an existing `.gendsp` in place",
     "add_to_presentation", "presentation_rect", "Presentation coverage", "Low contrast text", "set_canvas_background()", "context.md", "`bgcolor`",
     "dac~", "*~ 0.", "scale 0 127 0. 1.", "scale 0. 127. 0. 1.", "slider position", "snapshot~", "meter~", "mc.pack~", "line~", "space-delimited list",
     "fluid.buf2list", "jit.buffer~", "peek~", "uzi", "replacechannel", "min(max(x, lo), hi)", "trunc~", "floor~", '"items": ["LP", ","',
