@@ -721,3 +721,185 @@ class TestDspRoles:
         monkeypatch.setattr(dsp_roles, "chain_terminal_names", lambda db=None: real(db) | {"adc~"})
         after = [r for r in validate_patch(copy.deepcopy(d), db) if "Unterminated signal chain" in r.message]
         assert after == []
+
+
+# ---------------------------------------------------------------------------
+# E7 -- theme-aware text contrast
+# ---------------------------------------------------------------------------
+
+
+_LC = "Low contrast text: "
+_DARK = [0.20, 0.20, 0.25, 1.0]
+
+
+def _layout(d):
+    from src.maxpat.critics.layout_critic import review_layout
+    return review_layout(d)
+
+
+def _lc(results, severity="warning"):
+    return [r for r in results if _LC in r.finding and r.severity == severity]
+
+
+def _comment(box_id="obj-1", text="label", rect=(50.0, 50.0, 100.0, 20.0), **extra):
+    return {"box": dict({
+        "id": box_id, "maxclass": "comment", "text": text,
+        "patching_rect": list(rect), "numinlets": 1, "numoutlets": 0,
+    }, **extra)}
+
+
+def _panel_box(box_id, rect=(0.0, 0.0, 400.0, 400.0), **extra):
+    return {"box": dict({
+        "id": box_id, "maxclass": "panel", "patching_rect": None if rect is None else list(rect),
+        "numinlets": 1, "numoutlets": 0,
+    }, **extra)}
+
+
+def _gray(v, a=1.0):
+    return [v, v, v, a]
+
+
+class TestThemeAwareContrast:
+    @pytest.mark.parametrize("keys", [{}, {"editing_bgcolor": _gray(0.333)}, {"bgcolor": _gray(0.235)}])
+    def test_missing_textcolor_is_theme_text(self, keys):
+        assert _lc(_layout(_patch([_comment()], [], **keys))) == []
+
+    def test_theme_canvas_fallback(self):
+        c = _comment(textcolor=_gray(0.7))
+        assert _lc(_layout(_patch([c], []))) == []
+        warn = _lc(_layout(_patch([copy.deepcopy(c)], [], editing_bgcolor=_gray(0.333))))
+        assert len(warn) == 1 and "3.54:1" in warn[0].finding
+
+    @pytest.mark.parametrize("grad1, ratio", [([0.537, 0.537, 0.776, 1.0], "2.30:1"), (_gray(0.94), "1.24:1")])
+    def test_e7_evidence_background_panels(self, grad1, ratio):
+        panel = _panel_box("obj-2", background=1, grad1=grad1, presentation=1,
+                           presentation_rect=[0.0, 0.0, 300.0, 200.0])
+        c = _comment(rect=(900.0, 900.0, 100.0, 20.0), presentation=1,
+                     presentation_rect=[40.0, 40.0, 100.0, 20.0])
+        warn = _lc(_layout(_patch([c, panel], [], bgcolor=_gray(0.235))))
+        assert len(warn) == 1
+        assert ratio in warn[0].finding
+
+    def test_first_containing_panel_wins(self):
+        dark = _panel_box("obj-2", background=1, bgcolor=_gray(0.1))
+        light = _panel_box("obj-3", background=1, bgcolor=_gray(0.94))
+        c = _comment(textcolor=_DARK)
+        assert len(_lc(_layout(_patch([c, dark, light], [])))) == 1
+        assert _lc(_layout(_patch([copy.deepcopy(c), copy.deepcopy(light), copy.deepcopy(dark)], []))) == []
+
+    def test_foreground_panel_beats_background_layer(self):
+        dark_bg_layer = _panel_box("obj-2", background=1, bgcolor=_gray(0.1))
+        light_fg = _panel_box("obj-3", background=0, bgcolor=_gray(0.94))
+        c = _comment(textcolor=_DARK)
+        assert _lc(_layout(_patch([c, dark_bg_layer, light_fg], []))) == []
+
+    @pytest.mark.parametrize("fill", [_gray(0.0, 0.0), _gray(1.0, 0.2)])
+    def test_low_alpha_panel_skipped(self, fill):
+        panel = _panel_box("obj-2", background=1, bgcolor=fill)
+        assert _lc(_layout(_patch([_comment(), panel], [], bgcolor=_gray(0.235)))) == []
+
+    def test_low_alpha_own_fill_falls_through(self):
+        light = _panel_box("obj-2", background=1, bgcolor=_gray(0.94))
+        c = _comment(textcolor=_DARK, bgcolor=_gray(0.0, 0.0))
+        assert _lc(_layout(_patch([c, light], []))) == []
+
+    def test_opaque_own_fill_is_background(self):
+        dark = _panel_box("obj-2", background=1, bgcolor=_gray(0.1))
+        c = _comment(textcolor=_DARK, bgcolor=_gray(0.94))
+        assert _lc(_layout(_patch([c, dark], []))) == []
+
+    def test_message_without_fill_reads_against_theme_box_fill(self):
+        light = _panel_box("obj-2", background=1, bgcolor=_gray(0.94))
+        m = {"box": {"id": "obj-1", "maxclass": "message", "text": "start",
+                     "textcolor": [0.2, 0.2, 0.25, 1.0], "patching_rect": [50.0, 50.0, 60.0, 22.0],
+                     "numinlets": 2, "numoutlets": 1, "outlettype": [""]}}
+        warn = _lc(_layout(_patch([m, light], [])))
+        assert len(warn) == 1 and "1.12:1" in warn[0].finding
+        m2 = copy.deepcopy(m)
+        m2["box"]["bgfillcolor"] = {"type": "color", "color": _gray(0.9)}
+        assert _lc(_layout(_patch([m2, copy.deepcopy(light)], []))) == []
+
+    def test_junk_never_raises_and_pure(self):
+        boxes = [
+            _comment("obj-1", textcolor="x"),
+            _comment("obj-2", textcolor=[0.1], bgcolor=[1]),
+            _panel_box("obj-3", background="yes", bgcolor=[1]),
+            _panel_box("obj-4", rect=None, bgcolor=_gray(0.9)),
+            {"box": {"id": "obj-5", "maxclass": "panel", "patching_rect": [0, 0],
+                     "presentation": 1, "presentation_rect": [1], "bgcolor": _gray(0.9)}},
+            {"box": {"id": "obj-6", "maxclass": "panel", "patching_rect": [0, 0, 500, 500],
+                     "presentation": 1, "presentation_rect": None, "grad1": ["q", 0, 0, 1]}},
+            _comment("obj-7", rect=(1.0, 2.0, 3.0, 4.0), presentation=1, presentation_rect=[0, "z"]),
+            {"box": {"id": "obj-8", "maxclass": "comment", "patching_rect": None, "textcolor": [0, 0, 0, 1]}},
+            {"box": {"id": "obj-9", "maxclass": "message", "patching_rect": [5, 5, 10, 10],
+                     "textcolor": [0, 0, 0], "bgfillcolor": {"color": "x"}}},
+        ]
+        d = _patch(boxes, [], bgcolor=[1], editing_bgcolor="x")
+        before = copy.deepcopy(d)
+        _layout(d)
+        assert d == before
+
+
+class TestContrastGenerator:
+    def test_section_header_keeps_header_color(self):
+        from src.maxpat.aesthetics import ensure_text_contrast, repair_text_contrast, set_canvas_background
+        from src.maxpat.defaults import AESTHETIC_PALETTE
+        from src.maxpat.patcher import Patcher
+        p = Patcher()
+        set_canvas_background(p)
+        h = p.add_section_header("Header")
+        assert repair_text_contrast(p) == 0
+        ensure_text_contrast(p)
+        assert h.extra_attrs["textcolor"] == AESTHETIC_PALETTE["header_color"]
+
+    def test_explicit_light_text_on_dark_canvas_kept(self):
+        from src.maxpat.aesthetics import repair_text_contrast, set_canvas_background
+        from src.maxpat.patcher import Patcher
+        p = Patcher()
+        set_canvas_background(p)
+        c = p.add_comment("light", 50.0, 50.0)
+        c.extra_attrs["textcolor"] = [0.9, 0.9, 0.9, 1.0]
+        assert repair_text_contrast(p) == 0
+        assert c.extra_attrs["textcolor"] == [0.9, 0.9, 0.9, 1.0]
+
+    def test_mid_gray_panel_falls_back_to_black(self):
+        from src.maxpat.aesthetics import contrast_ratio, ensure_text_contrast, set_canvas_background
+        from src.maxpat.defaults import MIN_CONTRAST_RATIO
+        from src.maxpat.patcher import Patcher
+        p = Patcher()
+        set_canvas_background(p)
+        panel = p.add_panel(0, 0, 300, 300, gradient=False)
+        panel.extra_attrs["bgcolor"] = _gray(0.5)
+        c = p.add_comment("on mid gray", 50.0, 50.0)
+        ensure_text_contrast(p)
+        assert c.extra_attrs["textcolor"] == [0.0, 0.0, 0.0, 1.0]
+        assert contrast_ratio(c.extra_attrs["textcolor"], _gray(0.5)) >= MIN_CONTRAST_RATIO
+
+    def test_missing_textcolor_still_filled(self):
+        from src.maxpat.aesthetics import ensure_text_contrast
+        from src.maxpat.patcher import Patcher
+        p = Patcher()
+        c = p.add_comment("plain", 50.0, 50.0)
+        assert "textcolor" not in c.extra_attrs
+        ensure_text_contrast(p)
+        assert isinstance(c.extra_attrs.get("textcolor"), list)
+
+    def test_generator_and_critic_agree(self):
+        from src.maxpat.aesthetics import ensure_text_contrast, set_canvas_background
+        from src.maxpat.critics.layout_critic import review_layout
+        from src.maxpat.patcher import Patcher
+        p = Patcher()
+        set_canvas_background(p)
+        dark = p.add_panel(0, 0, 400, 400, gradient=False)
+        dark.extra_attrs["bgcolor"] = _gray(0.1)
+        light = p.add_panel(0, 0, 200, 200, gradient=False)
+        light.extra_attrs["bgcolor"] = _gray(0.94)
+        ghost = p.add_panel(500, 0, 200, 200, gradient=False)
+        ghost.extra_attrs["bgcolor"] = [1.0, 1.0, 1.0, 0.2]
+        p.add_comment("on both", 50.0, 50.0)
+        p.add_comment("on dark only", 300.0, 300.0)
+        p.add_comment("on ghost", 550.0, 50.0)
+        p.add_section_header("Header")
+        p.add_annotation("note")
+        ensure_text_contrast(p)
+        assert [r.finding for r in review_layout(p.to_dict()) if _LC in r.finding and r.severity == "warning"] == []

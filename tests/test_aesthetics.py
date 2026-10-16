@@ -780,21 +780,26 @@ class TestEnsureTextContrast:
         set_canvas_background(p)
         h = p.add_section_header("Header")
         ensure_text_contrast(p)
-        assert h.extra_attrs["textcolor"] == [0.20, 0.20, 0.25, 1.0]
+        # Q26 / E7: a passing explicit color is kept (8.04:1 on header_bgcolor)
+        assert h.extra_attrs["textcolor"] == AESTHETIC_PALETTE["header_color"]
         assert contrast_ratio(
             h.extra_attrs["textcolor"], h.extra_attrs["bgcolor"]
         ) >= MIN_CONTRAST_RATIO
 
     def test_section_header_on_light_panel(self):
-        """Section header on light panel gets dark text."""
-        from src.maxpat.aesthetics import ensure_text_contrast
+        """Section header on light panel keeps its passing header color (Q26 / E7)."""
+        from src.maxpat.aesthetics import contrast_ratio, ensure_text_contrast
+        from src.maxpat.defaults import MIN_CONTRAST_RATIO
         p = Patcher()
         set_canvas_background(p)
         p.add_panel(0, 0, 400, 400)
         h = p.add_section_header("Header")
         h.patching_rect = [50.0, 50.0, h.patching_rect[2], h.patching_rect[3]]
         ensure_text_contrast(p)
-        assert h.extra_attrs["textcolor"] == [0.20, 0.20, 0.25, 1.0]
+        assert h.extra_attrs["textcolor"] == AESTHETIC_PALETTE["header_color"]
+        assert contrast_ratio(
+            h.extra_attrs["textcolor"], h.extra_attrs["bgcolor"]
+        ) >= MIN_CONTRAST_RATIO
 
     def test_annotation_on_dark_canvas(self):
         """Annotation on dark canvas gets light text."""

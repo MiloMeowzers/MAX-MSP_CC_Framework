@@ -148,20 +148,24 @@ What MAX 9 draws when a box or patcher does not set its own color. Values come f
 | Window background | `bgcolor` | 0.125 |
 
 - A box with no `textcolor` renders its text at the theme text color, 0.85 (light gray), not black.
-- The contrast critic (`layout_critic.py`) and `aesthetics.py` still assume the legacy defaults (black text when `textcolor` is missing, a 0.333 canvas) until Q26 (review E7) makes them theme-aware. So before recoloring a box that has no `textcolor` because of a "Low contrast text" warning, check the warning against these values: 0.85 text on a 0.235 canvas is readable.
+- `defaults.py` encodes these values as `MAX_THEME_TEXT` (0.85), `MAX_THEME_CANVAS_BG` (0.235) and `MAX_THEME_BOX_FILL` (0.172) (Q26, review E7). The contrast critic (`layout_critic.py`) and `ensure_text_contrast` / `repair_text_contrast` (`aesthetics.py`) both use them: a missing `textcolor` is read as 0.85, a patcher with no bg key as the 0.235 canvas, and an untinted object / message / umenu box as the 0.172 box fill.
 
 ## Text Contrast Resolution
 
-The full algorithm behind CLAUDE.md Rule #4 "Text Contrast: Resolve Against the Displayed Surface". The contrast code still assumes the legacy defaults described in "Max 9 Theme Defaults" above until Q26.
+The full algorithm behind CLAUDE.md Rule #4 "Text Contrast: Resolve Against the Displayed Surface".
 
 Text color is NEVER chosen against the editing background alone. Resolve it against the **effective background in whichever coordinate space the text is displayed in**, and judge it by WCAG contrast ratio (minimum 4.5:1, `MIN_CONTRAST_RATIO` in `defaults.py`), not by a `luminance > 0.5` flip.
 
 Precedence when resolving the effective background:
 
-1. **A box's own `bgcolor` wins over any panel beneath it.** A box that paints its own background IS its own background. `add_section_header` pairs a light `header_bgcolor` with its text; the reader sees that pairing, not the dark canvas behind it.
-2. **Presentation coordinates, when the box is in presentation** — the box's `presentation_rect` center against the `presentation_rect` of panels that are themselves in presentation. Presentation is the user-facing surface, so it decides on conflict; the layout critic emits a `note` naming the box when patching mode is the compromised space.
-3. **Patching coordinates** — `patching_rect` center against panels' `patching_rect`s.
-4. **Patcher background** as fallback.
+1. **A box's own visible fill wins over any panel beneath it.** A box that paints its own background (`bgfillcolor` `color1`/`color`, `grad1` or `bgcolor`) IS its own background. `add_section_header` pairs a light `header_bgcolor` with its text; the reader sees that pairing, not the dark canvas behind it. Transparent fills (alpha below `MIN_VISIBLE_FILL_ALPHA`, 0.5) are ignored and the surface beneath shows through. A newobj / message / umenu box with no fill attribute at all reads against the 0.172 theme box fill.
+2. **Presentation coordinates, when the box is in presentation** — the box's `presentation_rect` center against the `presentation_rect` of panels that are themselves in presentation. The FIRST (topmost) containing panel wins: foreground-layer panels come before `background: 1` panels, in box order within each layer (index 0 is topmost, CLAUDE.md Rule #6), and low-alpha panels are skipped. Presentation is the user-facing surface, so it decides on conflict; the layout critic emits a `note` naming the box when patching mode is the compromised space.
+3. **Patching coordinates** — `patching_rect` center against panels' `patching_rect`s, with the same topmost-first panel rule.
+4. **Patcher background** as fallback: `bgcolor` > `editing_bgcolor` > `locked_bgcolor` > the 0.235 theme canvas.
+
+`build_panel_layers` and `resolve_patcher_background` in `aesthetics.py` implement steps 2-4 once for both the critic and the generator.
+
+A box with no `textcolor` is judged as the 0.85 theme text color. The generator keeps an explicit `textcolor` that already passes against the resolved background, and fills a missing one. Black and white are tried only when both the dark and the light candidate fail (e.g. a mid-gray 0.5 panel gets black).
 
 Panels encode their fill three different ways and all three must be read: `bgfillcolor` dict (`color1`, else `color`), a flat top-level `grad1`, or `bgcolor`. A panel with none of them is genuinely indeterminate — MAX ships no discoverable default — so treat it as *assumed* and pick the text color that maximizes the MINIMUM contrast across the plausible surfaces rather than betting on a guess.
 

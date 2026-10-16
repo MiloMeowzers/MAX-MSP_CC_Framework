@@ -167,3 +167,20 @@ MIN_CONTRAST_RATIO = 4.5
 # the candidate maximizing the MINIMUM contrast ratio across both. The layout
 # critic likewise downgrades such findings from `warning` to `note`.
 MAX_DEFAULT_PANEL_BG = [0.85, 0.85, 0.85, 1.0]
+
+# Max 9 default-theme colors (Q26 / review E7). PROVENANCE: the `styledefaults`
+# of /Applications/Max.app/Contents/Resources/C74/interfaces/themes/
+# default.maxtheme in Max 9.2.0 -- `textcolor` (0.85), `editing_bgcolor` and
+# `locked_bgcolor` (0.235), `bgfillcolor_color` / `bgfillcolor_color1` /
+# `bgfillcolor_color2` (0.172). These are what MAX draws when a box or patcher
+# sets no color of its own; the contrast critic and ensure_text_contrast read a
+# missing textcolor, a patcher with no bg key and an untinted object / message /
+# umenu box against them.
+MAX_THEME_TEXT = [0.85, 0.85, 0.85, 1.0]
+MAX_THEME_CANVAS_BG = [0.235, 0.235, 0.235, 1.0]
+MAX_THEME_BOX_FILL = [0.172, 0.172, 0.172, 1.0]
+
+# A fill whose alpha is below this is treated as transparent: the surface
+# beneath it shows through (35 corpus flonums and 10 number boxes carry
+# [0, 0, 0, 0]).
+MIN_VISIBLE_FILL_ALPHA = 0.5

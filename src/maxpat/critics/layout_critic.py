@@ -10,7 +10,8 @@ Every scope of the shared :class:`src.maxpat.graph.PatchGraph` is checked
 on its own boxes and cords, gen scopes included (Q20); nested findings carry
 ``CriticResult.path`` and a ``[p synth] `` prefix. Text contrast resolves
 against each scope's own patcher background (``bgcolor`` /
-``editing_bgcolor`` / ``locked_bgcolor``, else the palette canvas), and
+``editing_bgcolor`` / ``locked_bgcolor``, else the Max 9 theme canvas 0.235)
+and reads a missing textcolor as the theme text color 0.85 (Q26 / E7), and
 presentation coverage is active per scope when that scope has a
 presentation box.
 """
@@ -327,12 +328,15 @@ def _check_presentation_coverage(box_list: list[dict]) -> list[CriticResult]:
 
 
 def _resolve_patcher_bg(patcher_props: dict) -> list[float]:
-    """Patcher background, preferring the key MAX honors in locked mode."""
-    for key in ("bgcolor", "editing_bgcolor", "locked_bgcolor"):
-        value = patcher_props.get(key)
-        if isinstance(value, list) and value:
-            return list(value)
-    return list(AESTHETIC_PALETTE["canvas_bg"])
+    """Patcher background, preferring the key MAX honors in locked mode.
+
+    Delegates to :func:`src.maxpat.aesthetics.resolve_patcher_background`
+    (the generator's helper), so a patcher with no bg key reads as the
+    Max 9 theme canvas 0.235 in both (Q26 / E7).
+    """
+    from src.maxpat.aesthetics import resolve_patcher_background
+
+    return resolve_patcher_background(patcher_props)
 
 
 def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[CriticResult]:
@@ -342,7 +346,12 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
     beneath it in whichever coordinate space the text is displayed in, else the
     patcher background -- rather than comparing against the palette canvas
     constant. The resolution logic is imported from src.maxpat.aesthetics so
-    the critic and the generator cannot drift apart.
+    the critic and the generator cannot drift apart: one helper each builds
+    the panel layers (:func:`build_panel_layers`, topmost visible panel
+    first) and the patcher background. A missing or invalid textcolor is
+    the Max 9 theme text color MAX_THEME_TEXT (0.85); an untinted
+    object / message / umenu box reads against the theme box fill 0.172
+    (Q26 / E7).
 
     Severity:
       - ``warning`` when the background is KNOWN and the ratio falls short.
@@ -352,25 +361,22 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
         mode is the compromised space.
     """
     from src.maxpat.aesthetics import (
+        build_panel_layers,
         contrast_ratio,
         is_text_contrast_target,
+        is_valid_color,
         resolve_effective_background,
-        resolve_panel_background,
     )
-    from src.maxpat.defaults import MIN_CONTRAST_RATIO
+    from src.maxpat.defaults import MAX_THEME_TEXT, MIN_CONTRAST_RATIO
 
     results: list[CriticResult] = []
     patcher_bg = _resolve_patcher_bg(patcher_props)
 
     panels = [b for b in box_list if b.get("maxclass") == "panel"]
-    patching_layers = [
-        (b.get("patching_rect"), resolve_panel_background(b)) for b in panels
-    ]
-    presentation_layers = [
-        (b.get("presentation_rect"), resolve_panel_background(b))
+    patching_layers, presentation_layers = build_panel_layers(
+        (b, b.get("patching_rect"), bool(b.get("presentation")), b.get("presentation_rect"))
         for b in panels
-        if b.get("presentation") and b.get("presentation_rect")
-    ]
+    )
 
     for box in box_list:
         if box.get("maxclass") == "panel":
@@ -379,8 +385,8 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
             continue
 
         textcolor = box.get("textcolor")
-        if not isinstance(textcolor, list) or len(textcolor) < 3:
-            textcolor = [0.0, 0.0, 0.0, 1.0]
+        if not is_valid_color(textcolor):
+            textcolor = list(MAX_THEME_TEXT)
 
         resolution = resolve_effective_background(
             box,
@@ -390,6 +396,7 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
             patching_layers,
             presentation_layers,
             patcher_bg,
+            maxclass=walk.box_maxclass(box) or None,
         )
 
         text = walk.box_text(box)

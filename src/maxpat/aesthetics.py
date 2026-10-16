@@ -12,7 +12,10 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from src.maxpat.defaults import (
     AESTHETIC_PALETTE,
     MAX_DEFAULT_PANEL_BG,
+    MAX_THEME_BOX_FILL,
+    MAX_THEME_CANVAS_BG,
     MIN_CONTRAST_RATIO,
+    MIN_VISIBLE_FILL_ALPHA,
 )
 
 if TYPE_CHECKING:
@@ -25,6 +28,14 @@ if TYPE_CHECKING:
 TEXT_COLOR_CANDIDATES: tuple[list[float], ...] = (
     [0.20, 0.20, 0.25, 1.0],   # dark
     [0.80, 0.80, 0.82, 1.0],   # light
+)
+
+# Tried only when both TEXT_COLOR_CANDIDATES fail MIN_CONTRAST_RATIO (Q26 /
+# E7): on a mid-gray surface neither the dark nor the light candidate reaches
+# 4.5:1, but pure black or white may.
+FALLBACK_TEXT_CANDIDATES: tuple[list[float], ...] = (
+    [0.0, 0.0, 0.0, 1.0],      # black
+    [1.0, 1.0, 1.0, 1.0],      # white
 )
 
 
@@ -96,6 +107,36 @@ def best_text_color(
             best_score = score
             best = cand
     return list(best)
+
+
+def choose_text_color(current, backgrounds: list[list[float]]) -> tuple[list[float], bool]:
+    """The generator's text color for one box: ``(color, kept)`` (Q26 / E7).
+
+    * An explicit *current* color that already reaches MIN_CONTRAST_RATIO
+      against every background is kept (``kept`` True), so a deliberate
+      palette color such as ``header_color`` survives.
+    * Otherwise ``best_text_color(backgrounds)`` over TEXT_COLOR_CANDIDATES
+      (dark / light), when that passes.
+    * Only when both fail, the best of dark, light, black and white
+      (FALLBACK_TEXT_CANDIDATES), e.g. black on a mid-gray 0.5 panel.
+
+    A missing or invalid *current* is always filled.
+    """
+    if not backgrounds:
+        if is_valid_color(current):
+            return list(current), True
+        return list(TEXT_COLOR_CANDIDATES[0]), False
+
+    def score(color) -> float:
+        return min(contrast_ratio(color, bg) for bg in backgrounds)
+
+    if is_valid_color(current) and score(current) >= MIN_CONTRAST_RATIO:
+        return list(current), True
+    best = best_text_color(backgrounds)
+    if score(best) >= MIN_CONTRAST_RATIO:
+        return best, False
+    every = tuple(TEXT_COLOR_CANDIDATES) + tuple(FALLBACK_TEXT_CANDIDATES)
+    return best_text_color(backgrounds, every), False
 
 
 def contrast_text_color(bg_color: list[float] | None) -> list[float]:
@@ -221,8 +262,46 @@ def apply_auto_styling(patcher: Patcher) -> None:
 
 def _point_in_rect(px: float, py: float, rect: list[float]) -> bool:
     """Check if point (px, py) is inside [x, y, w, h] rect."""
-    x, y, w, h = rect
+    x, y, w, h = rect[:4]
     return x <= px <= x + w and y <= py <= y + h
+
+
+def _is_num(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _valid_rect(rect) -> bool:
+    """True for an ``[x, y, w, h]`` list of numbers (extra entries ignored)."""
+    return isinstance(rect, (list, tuple)) and len(rect) >= 4 and all(_is_num(v) for v in rect[:4])
+
+
+def is_valid_color(color) -> bool:
+    """True for an RGB(A) list whose first three entries are numbers."""
+    return (
+        isinstance(color, (list, tuple))
+        and len(color) >= 3
+        and all(_is_num(v) for v in color[:3])
+    )
+
+
+def fill_is_visible(color) -> bool:
+    """True when *color* is a valid fill with alpha >= MIN_VISIBLE_FILL_ALPHA.
+
+    A missing alpha counts as opaque. Transparent or invalid fills let the
+    surface beneath show through (Q26 / E7).
+    """
+    if not is_valid_color(color):
+        return False
+    alpha = color[3] if len(color) >= 4 and _is_num(color[3]) else 1.0
+    return alpha >= MIN_VISIBLE_FILL_ALPHA
+
+
+# Fill attribute keys a box may carry (resolve_fill_color's encodings).
+_FILL_KEYS = ("bgfillcolor", "grad1", "bgcolor")
+
+# Classes whose refpages document ``bgfillcolor``, the theme's box-fill key: a
+# box of one of these with NO fill attribute renders on MAX_THEME_BOX_FILL.
+THEME_FILL_MAXCLASSES = frozenset({"newobj", "message", "umenu"})
 
 
 class ResolvedBackground(NamedTuple):
@@ -288,18 +367,69 @@ def _get_panel_bgcolor(panel: Box) -> ResolvedBackground:
     return resolve_panel_background(panel.extra_attrs)
 
 
-def _resolve_patcher_bg(patcher: Patcher) -> list[float]:
-    """Effective patcher background, preferring the key MAX actually honors.
+def resolve_patcher_background(props) -> list[float]:
+    """Effective patcher background from a patcher props / patcher dict.
 
-    ``bgcolor`` is what MAX uses for locked/presentation mode; the two
-    editing-specific keys are fallbacks for patches written before
-    set_canvas_background() started emitting bgcolor.
+    ``bgcolor`` (what MAX honors in locked and presentation mode), then
+    ``editing_bgcolor``, then ``locked_bgcolor``; with none of them valid,
+    the Max 9 theme canvas MAX_THEME_CANVAS_BG (0.235; Q26 / E7). One
+    helper serves the critic and the generator.
     """
-    for key in ("bgcolor", "editing_bgcolor", "locked_bgcolor"):
-        value = patcher.props.get(key)
-        if value:
-            return list(value)
-    return list(AESTHETIC_PALETTE["canvas_bg"])
+    if isinstance(props, dict):
+        for key in ("bgcolor", "editing_bgcolor", "locked_bgcolor"):
+            value = props.get(key)
+            if is_valid_color(value):
+                return list(value)
+    return list(MAX_THEME_CANVAS_BG)
+
+
+def _resolve_patcher_bg(patcher: Patcher) -> list[float]:
+    """Effective patcher background of a Patcher (resolve_patcher_background)."""
+    return resolve_patcher_background(patcher.props)
+
+
+def build_panel_layers(entries) -> tuple[list, list]:
+    """Z-ordered panel layers for contrast resolution (Q26 / E7, PD-6).
+
+    *entries* is an iterable of ``(attrs, patching_rect, presentation,
+    presentation_rect)`` for every panel, in box-array order. Returns
+    ``(patching_layers, presentation_layers)``: lists of ``(rect,
+    ResolvedBackground)`` topmost first. Foreground-layer panels
+    (``background`` != 1) come before ``background: 1`` panels; within each
+    layer box-array order holds, index 0 topmost (CLAUDE.md Rule #6). A
+    panel whose found fill is invisible (alpha below MIN_VISIBLE_FILL_ALPHA,
+    or malformed) is left out; an uncolored panel keeps the assumed
+    MAX_DEFAULT_PANEL_BG handling. Only panels in presentation with a
+    presentation_rect enter the presentation layer; invalid rects are
+    dropped.
+    """
+    front: list = []
+    back: list = []
+    for entry in entries:
+        try:
+            attrs, patching_rect, presentation, presentation_rect = entry
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(attrs, dict):
+            continue
+        found = resolve_fill_color(attrs)
+        if found is not None:
+            if not fill_is_visible(found):
+                continue
+            bg = ResolvedBackground(list(found), False)
+        else:
+            bg = ResolvedBackground(list(MAX_DEFAULT_PANEL_BG), True)
+        layer = back if attrs.get("background") == 1 else front
+        layer.append((patching_rect, presentation, presentation_rect, bg))
+    ordered = front + back
+    patching_layers = [
+        (list(r[:4]), bg) for r, _, _, bg in ordered if _valid_rect(r)
+    ]
+    presentation_layers = [
+        (list(pr[:4]), bg) for _, pres, pr, bg in ordered
+        if pres and _valid_rect(pr)
+    ]
+    return patching_layers, presentation_layers
 
 
 def _bg_under_rect(
@@ -309,21 +439,21 @@ def _bg_under_rect(
 ) -> ResolvedBackground | None:
     """Background visible beneath the center of ``rect`` in one coordinate space.
 
-    ``panel_layers`` is a list of (panel_rect, ResolvedBackground) in patcher
-    box order; the LAST containing panel wins. Returns None when ``rect`` is
-    None (the box is absent from that space).
+    ``panel_layers`` is a list of (panel_rect, ResolvedBackground) topmost
+    first (:func:`build_panel_layers`); the FIRST containing panel wins
+    (Q26 / E7). Returns None when ``rect`` is not a valid rect (the box is
+    absent from that space).
     """
-    if rect is None:
+    if not _valid_rect(rect):
         return None
     cx = rect[0] + rect[2] * 0.5
     cy = rect[1] + rect[3] * 0.5
-    result = ResolvedBackground(list(fallback), False)
     for panel_rect, panel_bg in panel_layers:
-        if panel_rect is None:
+        if not _valid_rect(panel_rect):
             continue
         if _point_in_rect(cx, cy, panel_rect):
-            result = ResolvedBackground(list(panel_bg.color), panel_bg.assumed)
-    return result
+            return ResolvedBackground(list(panel_bg.color), panel_bg.assumed)
+    return ResolvedBackground(list(fallback), False)
 
 
 class BackgroundResolution(NamedTuple):
@@ -357,23 +487,38 @@ def resolve_effective_background(
     patching_layers: list[tuple[list[float] | None, ResolvedBackground]],
     presentation_layers: list[tuple[list[float] | None, ResolvedBackground]],
     patcher_bg: list[float],
+    *,
+    maxclass: str | None = None,
 ) -> BackgroundResolution:
     """Resolve the background a box's text actually renders over.
 
     Precedence:
-      1. D-2 -- the box's OWN background, if it paints one. A box that paints
-         its own background IS its own background, in both coordinate spaces.
+      1. D-2 -- the box's OWN background, if it paints a visible one
+         (alpha >= MIN_VISIBLE_FILL_ALPHA; Q26 / E7). A box that paints its
+         own background IS its own background, in both coordinate spaces. A
+         *maxclass* in THEME_FILL_MAXCLASSES (newobj, message, umenu) with
+         NO fill attribute at all paints the theme box fill
+         MAX_THEME_BOX_FILL (0.172). A transparent fill falls through.
       2. Presentation space, when the box is in presentation (D-1: presentation
          is the user-facing surface, so it decides on conflict).
       3. Patching space.
 
-    When the winning background was assumed rather than found, the canvas is
-    added as a second candidate so ``best_text_color`` can maximize the worst
-    case across both plausible surfaces.
+    Layers come from :func:`build_panel_layers` (topmost first; the first
+    containing panel wins). When the winning background was assumed rather
+    than found, the canvas is added as a second candidate so
+    ``best_text_color`` can maximize the worst case across both plausible
+    surfaces.
     """
     own = resolve_fill_color(attrs)
-    if own is not None:
-        return BackgroundResolution(own, False, "own", [own], own)
+    if own is not None and fill_is_visible(own):
+        return BackgroundResolution(list(own), False, "own", [list(own)], list(own))
+    if (
+        own is None
+        and maxclass in THEME_FILL_MAXCLASSES
+        and not any(key in attrs for key in _FILL_KEYS)
+    ):
+        fill = list(MAX_THEME_BOX_FILL)
+        return BackgroundResolution(fill, False, "own", [list(fill)], list(fill))
 
     patching_bg = _bg_under_rect(patching_rect, patching_layers, patcher_bg)
 
@@ -417,17 +562,19 @@ def _set_textcolor(box: Box, color: list[float]) -> None:
 def _apply_text_contrast(patcher: Patcher) -> int:
     """Shared engine behind ensure_text_contrast() and repair_text_contrast().
 
-    Returns the number of boxes whose textcolor changed.
+    Panel layers and the patcher background come from the same helpers the
+    layout critic uses (:func:`build_panel_layers`,
+    :func:`resolve_patcher_background`; Q26 / E7). Each box's color comes
+    from :func:`choose_text_color`; only changed colors are written and
+    counted. Returns the number of boxes whose textcolor changed.
     """
     panels = [b for b in patcher.boxes if b.maxclass == "panel"]
     patcher_bg = _resolve_patcher_bg(patcher)
 
-    patching_layers = [(p.patching_rect, _get_panel_bgcolor(p)) for p in panels]
-    presentation_layers = [
-        (p.presentation_rect, _get_panel_bgcolor(p))
+    patching_layers, presentation_layers = build_panel_layers(
+        (p.extra_attrs, p.patching_rect, p.presentation, p.presentation_rect)
         for p in panels
-        if p.presentation and p.presentation_rect
-    ]
+    )
 
     changed = 0
     for box in patcher.boxes:
@@ -444,10 +591,13 @@ def _apply_text_contrast(patcher: Patcher) -> int:
             patching_layers,
             presentation_layers,
             patcher_bg,
+            maxclass=box.maxclass,
         )
-        color = best_text_color(resolution.candidates)
-        if box.extra_attrs.get("textcolor") != color:
-            changed += 1
+        current = box.extra_attrs.get("textcolor")
+        color, _kept = choose_text_color(current, resolution.candidates)
+        if current == color:
+            continue
+        changed += 1
         _set_textcolor(box, color)
 
     return changed
@@ -467,8 +617,16 @@ def ensure_text_contrast(patcher: Patcher) -> None:
       ``patching_rect``.
 
     Backgrounds fall back to the patcher background (``bgcolor``, then the two
-    editing-specific keys, then the palette canvas) when no panel contains the
-    box.
+    editing-specific keys, then the Max 9 theme canvas 0.235) when no panel
+    contains the box. Panels are read topmost first: foreground-layer panels
+    before ``background: 1`` panels, box order within each layer; the first
+    containing panel wins and fills with alpha below MIN_VISIBLE_FILL_ALPHA
+    are skipped (Q26 / E7).
+
+    An explicit textcolor that already passes MIN_CONTRAST_RATIO against the
+    resolved background is kept; a missing one is always filled; black and
+    white are tried only when both the dark and the light candidate fail
+    (:func:`choose_text_color`).
 
     When a box exists in both spaces and the two demand opposite text colors,
     the PRESENTATION result wins (locked decision D-1): presentation is the
@@ -476,9 +634,9 @@ def ensure_text_contrast(patcher: Patcher) -> None:
     of the trade. The layout critic surfaces that compromise as a ``note`` so
     it is visible rather than silent.
 
-    Colors are chosen by WCAG contrast ratio via ``best_text_color()``, not by
-    a luminance>0.5 flip. Overrides semantic tier colors (header, subsection,
-    annotation) because readability trumps cosmetic coloring.
+    Colors are chosen by WCAG contrast ratio, not by a luminance>0.5 flip. A
+    semantic tier color (header, subsection, annotation) is replaced only
+    when it fails, because readability trumps cosmetic coloring.
 
     Args:
         patcher: The Patcher instance to process.
@@ -497,6 +655,9 @@ def repair_text_contrast(patcher: Patcher) -> int:
 
     Args:
         patcher: A Patcher, typically from ``Patcher.from_dict(read_patch(...))``.
+
+    Same resolution as ensure_text_contrast (Q26 / E7): passing explicit
+    colors are kept, so a patch whose text already reads returns 0.
 
     Returns:
         Number of boxes whose textcolor changed. Idempotent: a second call on
