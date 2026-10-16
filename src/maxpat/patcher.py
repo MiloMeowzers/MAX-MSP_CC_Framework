@@ -655,14 +655,15 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         Removing an inlet/outlet box inside a ``p``/``patcher`` subpatcher
         or a bpatcher resyncs the parent box (Q28 / B7): its numinlets /
         numoutlets become the exact inner port count, a removed outlet's
-        outlettype entry is deleted, and parent cords whose port index is
-        now out of range are removed from the PARENT patcher and returned.
+        outlettype entry is deleted, and parent cords on the removed port
+        (or left out of range) are removed from the PARENT patcher and
+        returned in ``parent_orphaned``.
 
-        Ports are indexed by x-rank, so removing a non-rightmost port
-        shifts the ports above it. Only out-of-range cords are orphaned:
-        cords to the shifted ports stay on their old indices in memory,
-        and the save gate refuses that save (port x-rank change) unless
-        forced, so nothing misnumbered reaches disk silently.
+        Ports are indexed by x-rank and renumber like MAX: removing the
+        port at rank k orphans the parent cords on port k and shifts the
+        parent cords on ports > k down by one. The save gate still
+        reports the surviving ports' x-rank change and refuses an
+        unforced save of an existing file.
 
         Args:
             box: The box to remove.
@@ -689,12 +690,7 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         surviving = []
         for pl in self.lines:
             if pl.source_id == box.id or pl.dest_id == box.id:
-                orphaned.append({
-                    "source_id": pl.source_id,
-                    "source_outlet": pl.source_outlet,
-                    "dest_id": pl.dest_id,
-                    "dest_inlet": pl.dest_inlet,
-                })
+                orphaned.append(self._orphan_dict(pl))
             else:
                 surviving.append(pl)
         self.lines = surviving
@@ -746,33 +742,60 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                 return parent
         return None
 
-    def _sync_parent_ports_after_add(self, box: Box) -> list[dict]:
-        """Grow the parent's port count after a port box was added.
+    @staticmethod
+    def _orphan_dict(pl: Patchline) -> dict:
+        return {
+            "source_id": pl.source_id,
+            "source_outlet": pl.source_outlet,
+            "dest_id": pl.dest_id,
+            "dest_inlet": pl.dest_inlet,
+        }
 
-        Grow only: an inlet raises numinlets to the inner inlet count; an
-        outlet, when the inner count exceeds numoutlets, inserts ``""``
-        into outlettype at the new box's x-rank. Never shrinks a count or
-        removes a cord (an embedded bpatcher declares its counts before
-        its inner ports exist). Returns [] (nothing is ever orphaned).
+    def _sync_parent_ports_after_add(self, box: Box) -> list[dict]:
+        """Grow the parent's ports after a port box was added.
+
+        Grow only: the parent changes only when the inner port count now
+        exceeds the parent's count. Then the new port is inserted at its
+        x-rank k the way MAX renumbers on load: an inlet raises numinlets
+        and shifts parent cords into inlets >= k up by one; an outlet
+        inserts ``""`` into outlettype at k, raises numoutlets and shifts
+        parent cords from outlets >= k up by one.
+
+        When the parent already declares at least as many ports as the
+        inner patcher now has (an embedded bpatcher declares its counts
+        before its inner ports exist), the new box fills a declared port
+        rather than inserting one, so nothing changes and no cord moves.
+        Returns [] (nothing is ever orphaned).
         """
         if box.maxclass not in ("inlet", "outlet"):
             return []
         parent = self._port_sync_parent()
         if parent is None:
             return []
+        outer = self._parent_patcher
+        rank = self._port_rank(box)
         if box.maxclass == "inlet":
             n = len(self.get_inlets())
-            if n > parent.numinlets:
-                parent.numinlets = n
+            if n <= parent.numinlets:
+                return []
+            parent.numinlets = n
+            if rank is not None:
+                for pl in outer.lines:
+                    if pl.dest_id == parent.id and pl.dest_inlet >= rank:
+                        pl.dest_inlet += 1
         else:
             n = len(self.get_outlets())
-            if n > parent.numoutlets:
-                rank = self._port_rank(box)
-                types = list(parent.outlettype or [])
-                pos = len(types) if rank is None else min(rank, len(types))
-                types.insert(pos, "")
-                parent.outlettype = (types + [""] * n)[:n]
-                parent.numoutlets = n
+            if n <= parent.numoutlets:
+                return []
+            types = list(parent.outlettype or [])
+            pos = len(types) if rank is None else min(rank, len(types))
+            types.insert(pos, "")
+            parent.outlettype = (types + [""] * n)[:n]
+            parent.numoutlets = n
+            if rank is not None:
+                for pl in outer.lines:
+                    if pl.source_id == parent.id and pl.source_outlet >= rank:
+                        pl.source_outlet += 1
         return []
 
     def _sync_parent_ports_after_remove(
@@ -780,39 +803,57 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
     ) -> list[dict]:
         """Resync the parent's ports exactly after a port box was removed.
 
-        ``rank`` is the removed box's x-rank, computed before removal. An
-        inlet sets numinlets to the inner count; an outlet deletes its
-        outlettype entry (when the list is longer than the new count) and
-        sets numoutlets. Parent-patcher cords now out of range are removed
-        and returned as orphan dicts.
+        ``rank`` is the removed box's x-rank k, computed before removal.
+        Ports renumber the way MAX renumbers on load: when k was one of
+        the parent's counted ports, parent cords on port k are orphaned
+        and cords on ports > k shift down by one; an outlet also deletes
+        outlettype[k]. The count then becomes the exact inner port count
+        (outlettype padded/truncated to match), and any parent cord still
+        out of range is orphaned too. Orphans are removed from the PARENT
+        patcher and returned as orphan dicts carrying their pre-removal
+        indices.
         """
         parent = self._port_sync_parent()
         if parent is None:
             return []
         outer = self._parent_patcher
         if kind == "inlet":
-            parent.numinlets = len(self.get_inlets())
+            counted = rank is not None and rank < parent.numinlets
+            n = len(self.get_inlets())
+            parent.numinlets = n
         else:
+            counted = rank is not None and rank < parent.numoutlets
             n = len(self.get_outlets())
             types = list(parent.outlettype or [])
-            if rank is not None and len(types) > n and 0 <= rank < len(types):
+            if counted and rank < len(types):
                 del types[rank]
             parent.outlettype = (types + [""] * n)[:n]
             parent.numoutlets = n
         orphaned: list[dict] = []
         surviving = []
         for pl in outer.lines:
-            if ((pl.dest_id == parent.id and pl.dest_inlet >= parent.numinlets)
-                    or (pl.source_id == parent.id
-                        and pl.source_outlet >= parent.numoutlets)):
-                orphaned.append({
-                    "source_id": pl.source_id,
-                    "source_outlet": pl.source_outlet,
-                    "dest_id": pl.dest_id,
-                    "dest_inlet": pl.dest_inlet,
-                })
+            if kind == "inlet" and pl.dest_id == parent.id:
+                idx = pl.dest_inlet
+            elif kind == "outlet" and pl.source_id == parent.id:
+                idx = pl.source_outlet
             else:
                 surviving.append(pl)
+                continue
+            new_idx = idx
+            if counted:
+                if idx == rank:
+                    orphaned.append(self._orphan_dict(pl))
+                    continue
+                if idx > rank:
+                    new_idx = idx - 1
+            if new_idx >= n:
+                orphaned.append(self._orphan_dict(pl))
+                continue
+            if kind == "inlet":
+                pl.dest_inlet = new_idx
+            else:
+                pl.source_outlet = new_idx
+            surviving.append(pl)
         outer.lines = surviving
         return orphaned
 

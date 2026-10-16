@@ -9,7 +9,8 @@ Findings (``.planning/reviews/2026-10-11-repo-review.md``):
 - S4: the change-tracking semantics (load snapshot + diff at serialize) and
   the retired manual ``_raw`` copies.
 - B7: adding or removing an inlet/outlet box inside a subpatcher resyncs
-  the parent box's port counts; out-of-range parent cords are returned.
+  the parent box's ports and renumbers parent cords like MAX (x-rank);
+  parent cords on a removed port are returned in parent_orphaned.
 
 Committed patches are only read (``json.load`` / ``read_patch``), never
 written. The tracer save goes to ``tmp_path`` with GIT_DIR / GIT_WORK_TREE
@@ -439,17 +440,127 @@ class TestB7PortSync:
         assert art.numoutlets == 2
         assert art.outlettype == ["", ""]
 
-    def test_middle_removal_orphans_out_of_range_only_and_gate_refuses(self):
+    def test_middle_removal_renumbers_like_max(self):
+        """CR-02 (Q28 review): removing inlet rank 0 orphans the cord on port 0
+        and shifts the cord on port 1 down to 0, as MAX renumbers on load.
+
+        The save gate is unchanged: the surviving inlet's x-rank changed
+        (1 -> 0), so the gate still reports a port change and refuses an
+        unforced save. That is current gate behaviour, kept on purpose.
+        """
         from src.maxpat import hooks
 
         p, data, art, inner = self._articulation()
         base = copy.deepcopy(data)
         result = inner.remove_box(_box(inner, "obj-1"))
         assert art.numinlets == 1
-        assert result.parent_orphaned == [_orphan("obj-69", 0, "obj-85", 1)]
-        assert ("obj-86", 0, "obj-85", 0) in _cords(p)
+        assert result.parent_orphaned == [_orphan("obj-86", 0, "obj-85", 0)]
+        to_art = [c for c in _cords(p) if c[2] == "obj-85"]
+        assert to_art == [("obj-69", 0, "obj-85", 0)]
         report = hooks._gate_report(p.to_dict(), base, [base])
         assert report.port_changes
+
+    def test_middle_outlet_removal_renumbers_cords_and_types(self):
+        """CR-02: outlet removal keeps outlettype and cords aligned."""
+        p, _, art, inner = self._articulation()
+        art.outlettype = ["bang", "signal"]
+        result = inner.remove_box(_box(inner, "obj-3"))
+        assert art.numoutlets == 1
+        assert art.outlettype == ["signal"]
+        assert result.parent_orphaned == [_orphan("obj-85", 0, "obj-4", 0)]
+        from_art = [c for c in _cords(p) if c[0] == "obj-85"]
+        assert from_art == [("obj-85", 0, "obj-73", 1)]
+
+    def test_middle_of_three_removal(self):
+        """CR-02: ports below k keep their index, ports above k shift down."""
+        p = Patcher()
+        sub, inner = p.add_subpatcher("s", inlets=3, outlets=1)
+        srcs = [p.add_box("button") for _ in range(3)]
+        for i, b in enumerate(srcs):
+            p.add_connection(b, 0, sub, i)
+        mid = inner.get_inlets()[1]
+        result = inner.remove_box(mid)
+        assert sub.numinlets == 2
+        assert result.parent_orphaned == [_orphan(srcs[1].id, 0, sub.id, 1)]
+        assert [c for c in _cords(p) if c[2] == sub.id] == [
+            (srcs[0].id, 0, sub.id, 0), (srcs[2].id, 0, sub.id, 1)]
+
+    def test_replace_port_with_non_port_renumbers(self):
+        """CR-02: replace_box's different-kind path uses the old port's rank."""
+        p, _, art, inner = self._articulation()
+        result = inner.replace_box(_box(inner, "obj-1"), "print")
+        assert art.numinlets == 1
+        assert result.parent_orphaned == [_orphan("obj-86", 0, "obj-85", 0)]
+        assert [c for c in _cords(p) if c[2] == "obj-85"] == [
+            ("obj-69", 0, "obj-85", 0)]
+
+    def test_add_inlet_left_shifts_parent_cords_up(self):
+        """WR-02 (Q28 review): a new inlet at rank 0 shifts cords on ports >= 0."""
+        p, _, art, inner = self._articulation()
+        inner.add_box("inlet", x=0, y=20, skip_overlap_check=True)
+        assert art.numinlets == 3
+        assert [c for c in _cords(p) if c[2] == "obj-85"] == [
+            ("obj-86", 0, "obj-85", 1), ("obj-69", 0, "obj-85", 2)]
+
+    def test_add_inlet_middle_shifts_only_ports_at_or_above_rank(self):
+        """WR-02: a new inlet at rank 1 leaves port 0 and shifts port 1 up."""
+        p, _, art, inner = self._articulation()
+        inner.add_box("inlet", x=200, y=20, skip_overlap_check=True)
+        assert [c for c in _cords(p) if c[2] == "obj-85"] == [
+            ("obj-86", 0, "obj-85", 0), ("obj-69", 0, "obj-85", 2)]
+
+    def test_add_outlet_left_shifts_cords_and_types(self):
+        """WR-02: outlettype and cords stay aligned after a left insert."""
+        p, _, art, inner = self._articulation()
+        art.outlettype = ["bang", "signal"]
+        inner.add_box("outlet", x=0, y=200, skip_overlap_check=True)
+        assert art.numoutlets == 3
+        assert art.outlettype == ["", "bang", "signal"]
+        assert [c for c in _cords(p) if c[0] == "obj-85"] == [
+            ("obj-85", 1, "obj-4", 0), ("obj-85", 2, "obj-73", 1)]
+
+    def test_add_then_remove_left_port_restores_cords(self):
+        """WR-02 + CR-02: add at rank 0 then remove it is a no-op on the parent."""
+        p, _, art, inner = self._articulation()
+        before = _cords(p)
+        new_inlet = inner.add_box("inlet", x=0, y=20, skip_overlap_check=True)
+        result = inner.remove_box(new_inlet)
+        assert result.parent_orphaned == []
+        assert _cords(p) == before
+        assert art.numinlets == 2
+
+    def test_embedded_bpatcher_declared_ports_not_shifted(self):
+        """WR-02: ports the bpatcher declared before its inner ports existed are
+        filled in, not inserted, so their cords keep their index. Once an add
+        grows the count past the declared one, it is a real insert and shifts.
+        """
+        p = Patcher()
+        bp, inner = p.add_bpatcher(embedded=True, numinlets=2, numoutlets=1)
+        a = p.add_box("button")
+        b = p.add_box("button")
+        p.add_connection(a, 0, bp, 0)
+        p.add_connection(b, 0, bp, 1)
+        inner.add_box("inlet", x=100, y=20, skip_overlap_check=True)
+        inner.add_box("inlet", x=10, y=20, skip_overlap_check=True)
+        assert bp.numinlets == 2
+        assert [c for c in _cords(p) if c[2] == bp.id] == [
+            (a.id, 0, bp.id, 0), (b.id, 0, bp.id, 1)]
+        inner.add_box("inlet", x=0, y=20, skip_overlap_check=True)
+        assert bp.numinlets == 3
+        assert [c for c in _cords(p) if c[2] == bp.id] == [
+            (a.id, 0, bp.id, 1), (b.id, 0, bp.id, 2)]
+
+    def test_replace_left_port_with_port_does_not_shift(self):
+        """Same-kind port replacement at the same x keeps every parent cord."""
+        p, _, art, inner = self._articulation()
+        before = _cords(p)
+        result = inner.replace_box(_box(inner, "obj-1"), "inlet")
+        assert art.numinlets == 2
+        assert _cords(p) == before
+        assert result.parent_orphaned == []
+        res2 = inner.replace_box(_box(inner, "obj-3"), "outlet")
+        assert _cords(p) == before
+        assert res2.parent_orphaned == []
 
     def test_api_built_subpatcher(self):
         p = Patcher()

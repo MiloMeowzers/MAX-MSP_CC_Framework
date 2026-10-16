@@ -92,7 +92,7 @@ class BuildersMixin:
 
         self.boxes.append(box)
         # A port box inside a subpatcher/bpatcher grows the parent box's
-        # port count (Q28 / B7).
+        # port count and shifts parent cords at or above its x-rank (Q28 / B7).
         if (box.maxclass in ("inlet", "outlet")
                 and not getattr(self, "_port_sync_suspended", False)):
             self._sync_parent_ports_after_add(box)
