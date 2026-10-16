@@ -10,7 +10,7 @@ Provides Patcher model, direct read/write, validation, and code generation for .
 
 from __future__ import annotations
 
-from src.maxpat.patcher import Patcher, Box, Patchline, EditResult
+from src.maxpat.patcher import Patcher, Box, Patchline, EditResult, BoxMovedWarning
 from src.maxpat.validation import (
     validate_patch,
     has_blocking_errors,
@@ -88,6 +88,7 @@ __all__ = [
     "Box",
     "Patchline",
     "EditResult",
+    "BoxMovedWarning",
     # File I/O
     "write_gendsp",
     "write_js",

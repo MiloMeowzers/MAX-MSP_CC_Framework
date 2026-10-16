@@ -1449,8 +1449,8 @@ class TestReplaceBoxSafe:
         }
         assert actual == expected
 
-    def test_auto_mismatched_io_falls_back_to_orphans(self):
-        """Auto mode + mismatched I/O: orphans returned, no auto-rewire."""
+    def test_auto_mismatched_io_rewires_in_range_cords(self):
+        """Auto mode + mismatched I/O: every in-range cord is rewired (Q29 / B4)."""
         from src.maxpat.patcher import EditResult
         p = Patcher()
         # cycle~: 2 in / 1 out. pack 0 0 0: 3 in / 1 out -- numinlets mismatch.
@@ -1464,13 +1464,16 @@ class TestReplaceBoxSafe:
 
         assert isinstance(result, EditResult)
         assert result.box.name == "pack"
-        assert len(result.orphaned) == 2
-        # No connections to or from the new box on the patcher.
-        assert all(
-            pl.source_id != result.box.id and pl.dest_id != result.box.id
+        assert result.orphaned == []
+        # Both cords now on the new box.
+        actual = {
+            (pl.source_id, pl.source_outlet, pl.dest_id, pl.dest_inlet)
             for pl in p.lines
-        )
-        assert len(p.lines) == 0
+        }
+        assert actual == {
+            (src.id, 0, result.box.id, 0),
+            (result.box.id, 0, dst.id, 0),
+        }
 
     def test_manual_mode_skips_rewire_even_on_match(self):
         """Manual mode: orphans returned even when I/O would have matched."""
@@ -1653,13 +1656,13 @@ class TestAddBoxOverlapDetection:
         # Ascending y order (each nudged further down)
         assert y_positions == sorted(y_positions)
 
-    def test_add_box_snaps_to_grid(self):
-        """add_box snaps position to 15px grid via overlap detection."""
+    def test_add_box_keeps_requested_position(self):
+        """add_box keeps an explicit position with no overlap (Q29 / B10)."""
         p = Patcher()
         box = p.add_box("toggle", x=67.0, y=53.0)
-        # Should snap to nearest 15px grid
-        assert box.patching_rect[0] % 15 == 0
-        assert box.patching_rect[1] % 15 == 0
+        assert box.patching_rect[0] == 67.0
+        assert box.patching_rect[1] == 53.0
+        assert getattr(box, "nudged_from", None) is None
 
     def test_find_clear_position_nudges_down_not_right(self):
         """_find_clear_position nudges DOWN first (y += 15), not right."""

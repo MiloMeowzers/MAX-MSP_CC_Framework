@@ -14,6 +14,7 @@ The methods reference sibling Patcher helpers (``_gen_id``, ``_auto_position``,
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 from src.maxpat.defaults import (
@@ -53,14 +54,24 @@ class BuildersMixin:
             args: Object arguments (e.g., ["440"]).
             x: Horizontal position (default 0, set by layout engine later).
             y: Vertical position (default 0, set by layout engine later).
-            skip_overlap_check: If False (default), automatically nudges the
-                box to avoid overlapping pre-existing boxes, measuring both the
-                new and the existing boxes by ``sizing.rendered_rect`` (Q27 /
-                F5). Set True when the caller handles its own positioning
-                (e.g., replace_box, insert_into_connection, add_subpatcher).
+            skip_overlap_check: If False (default), the requested position
+                is kept unless the box truly overlaps (positive-area
+                intersection) an existing box, both measured by
+                ``sizing.rendered_rect`` (Q27 / F5) -- companion layouts
+                such as a ``meter~`` 5px right of a ``gain~`` stay put and
+                nothing snaps to a grid (Q29 / B10). On a real overlap the
+                box moves down in 15px steps (a column right after y 2400)
+                to at least 5px clearance, ``box.nudged_from`` records the
+                requested (x, y), and a ``BoxMovedWarning`` names the box,
+                both positions and the box it overlapped -- except for the
+                default origin (0, 0), which means "let layout place it".
+                Set True when the caller handles its own positioning (e.g.,
+                replace_box, insert_into_connection, add_subpatcher); the
+                box is then never moved.
 
         Returns:
-            The created Box instance.
+            The created Box instance (``nudged_from`` is None unless it was
+            moved).
 
         Raises:
             ValueError: If object not found in database (Rule #1); if
@@ -76,6 +87,7 @@ class BuildersMixin:
         self._require_buildable(name)
         self._require_domain_scope(name)
         box_id = self._gen_id()
+        x, y = float(x), float(y)
         box = Box(name=name, args=args, box_id=box_id, db=self.db, x=x, y=y,
                   allowed_packages=self.allowed_packages)
 
@@ -85,10 +97,23 @@ class BuildersMixin:
                 w, h = r[2], r[3]
             else:
                 w, h = box.patching_rect[2], box.patching_rect[3]
-            new_x, new_y = self._find_clear_position(x, y, w, h)
+            # Move only on a real overlap, and report it (Q29 / B10)
+            new_x, new_y, hit = self._nudge_off_overlap(x, y, w, h)
             if new_x != x or new_y != y:
                 box.patching_rect[0] = new_x
                 box.patching_rect[1] = new_y
+                box.nudged_from = (x, y)
+                if (x, y) != (0.0, 0.0):
+                    from src.maxpat.patcher import BoxMovedWarning
+                    hit_id = hit.id if hit is not None else None
+                    warnings.warn(
+                        BoxMovedWarning(
+                            f"add_box moved {box.text or name!r} ({box.id}) from "
+                            f"({x:g}, {y:g}) to ({new_x:g}, {new_y:g}): it "
+                            f"overlapped {hit_id}"
+                        ),
+                        stacklevel=2,
+                    )
 
         self.boxes.append(box)
         # A port box inside a subpatcher/bpatcher grows the parent box's

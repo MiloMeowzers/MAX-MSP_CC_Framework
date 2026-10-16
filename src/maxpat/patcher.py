@@ -225,6 +225,19 @@ class EditResult:
     parent_orphaned: list[dict] = field(default_factory=list)
 
 
+class BoxMovedWarning(UserWarning):
+    """add_box moved a box off its requested position to clear a real overlap (Q29 / B10)."""
+
+
+# Box attributes replace_box carries to the new box whatever its class (Q29 /
+# B4): varname plus MAX's common box attributes (jbox.maxref.xml).
+_IDENTITY_ALWAYS = (
+    "varname", "color", "textcolor", "background", "hidden", "ignoreclick",
+    "hint", "annotation",
+)
+_PARAMETER_KEYS = ("parameter_enable", "parameter_mappable")
+
+
 class Box:
     """A single MAX object box in a patcher.
 
@@ -322,6 +335,11 @@ class Box:
 
         # Comment association: layout-time only, not serialized to .maxpat
         self.target_id: str | None = None
+
+        # Requested (x, y) when add_box moved the box off a real overlap
+        # (Q29 / B10); None when it was placed where asked. Not serialized.
+        # Builder boxes come from Box.__new__: read with getattr(..., None).
+        self.nudged_from: tuple[float, float] | None = None
 
         # Internal: track if this is a subpatcher/bpatcher with embedded patcher
         self._inner_patcher: Patcher | None = None
@@ -1067,7 +1085,18 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
 
         Creates a new box at the old box's position, removes the old box,
         and returns ALL old connections as orphaned (no auto-remap per
-        CONTEXT.md locked decision). The caller handles rewiring.
+        CONTEXT.md locked decision). The caller handles rewiring
+        (``replace_box_safe`` rewires the in-range ones).
+
+        The new box keeps the old box's identity (Q29 / B4;
+        ``_carry_box_identity``): its index in the boxes list (z-order),
+        presentation flag and presentation_rect, ``varname`` and MAX's
+        common box attributes (color, textcolor, background, hidden,
+        ignoreclick, hint, annotation), colour attributes valid on the new
+        object, and the parameter blocks (parameter_enable /
+        parameter_mappable, ``saved_attribute_attributes.valueof``) when the
+        new object is parameter-capable. Fonts, size, arguments, I/O and
+        other class settings are not carried.
 
         Inside a ``p``/``patcher`` subpatcher or bpatcher, replacing a port
         box with a port of the same kind leaves the parent box's ports and
@@ -1083,7 +1112,8 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             args: Optional arguments for the new object.
 
         Returns:
-            EditResult with the new box and all old connections as orphaned.
+            EditResult with the new box (at the old box's list index) and
+            all old connections as orphaned.
 
         Raises:
             ValueError: If old_box is not in this patcher; if new_name is
@@ -1118,6 +1148,18 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         old_x = old_box.patching_rect[0]
         old_y = old_box.patching_rect[1]
 
+        # Identity snapshot (Q29 / B4), taken before remove_box
+        old_index = self.boxes.index(old_box)
+        old_maxclass = old_box.maxclass
+        identity = {
+            "extra_attrs": copy.deepcopy(old_box.extra_attrs),
+            "presentation": bool(old_box.presentation),
+            "presentation_rect": (
+                list(old_box.presentation_rect)
+                if old_box.presentation_rect is not None else None
+            ),
+        }
+
         old_kind = old_box.maxclass if old_box.maxclass in ("inlet", "outlet") else None
         old_rank = self._port_rank(old_box) if old_kind is not None else None
 
@@ -1143,7 +1185,93 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             if new_kind is not None:
                 self._sync_parent_ports_after_add(new_box)
 
+        self._carry_box_identity(old_box, new_box, old_index, old_maxclass, identity)
+
         return EditResult(box=new_box, orphaned=orphaned, parent_orphaned=parent_orphaned)
+
+    def _carry_box_identity(
+        self,
+        old_box: Box,
+        new_box: Box,
+        old_index: int,
+        old_maxclass: str,
+        identity: dict | None = None,
+    ) -> None:
+        """Give a replacement box the old box's identity (Q29 / B4).
+
+        ``identity`` is the snapshot replace_box took before removing the old
+        box (deep-copied extra_attrs, presentation, presentation_rect); when
+        None it is read from ``old_box``. Carried:
+
+        - z-order: the new box moves to ``old_index`` in the boxes list;
+        - presentation: flag and a copy of presentation_rect, verbatim;
+        - always: ``varname`` and MAX's common box attributes
+          (``_IDENTITY_ALWAYS``);
+        - colour keys (name contains "color", or a non-``valueof`` key of the
+          old ``saved_attribute_attributes``) when the key is a DB attribute
+          of the new object, the maxclass is unchanged, or the new box is a
+          newobj and the key is ``bgcolor``;
+        - parameter_enable / parameter_mappable when the new object is
+          parameter-capable (its DB attributes include either);
+        - ``saved_attribute_attributes``: entries of carried keys, plus
+          ``valueof`` when the new object is parameter-capable; set only
+          when non-empty.
+
+        Values are deep copies. Fonts, size, args/text and I/O are not
+        carried. Writes only model fields (``extra_attrs``, presentation),
+        never a raw dict.
+        """
+        if identity is None:
+            identity = {
+                "extra_attrs": copy.deepcopy(old_box.extra_attrs),
+                "presentation": bool(old_box.presentation),
+                "presentation_rect": (
+                    list(old_box.presentation_rect)
+                    if old_box.presentation_rect is not None else None
+                ),
+            }
+
+        self.set_z_index(new_box, old_index)
+
+        if identity["presentation"]:
+            new_box.presentation = True
+            rect = identity["presentation_rect"]
+            new_box.presentation_rect = list(rect) if rect is not None else None
+
+        old_attrs = identity["extra_attrs"]
+        attrs: set = set()
+        if self.db is not None:
+            attrs = set((self.db.attributes(new_box.name) or {}).keys())
+        capable = any(k in attrs for k in _PARAMETER_KEYS)
+        old_saa = old_attrs.get("saved_attribute_attributes")
+        saa_keys = (
+            {k for k in old_saa if k != "valueof"}
+            if isinstance(old_saa, dict) else set()
+        )
+        same_class = new_box.maxclass == old_maxclass
+
+        carried: dict = {}
+        for key, value in old_attrs.items():
+            if key == "saved_attribute_attributes":
+                continue
+            if key in _IDENTITY_ALWAYS:
+                carried[key] = copy.deepcopy(value)
+            elif "color" in key.lower() or key in saa_keys:
+                if (key in attrs or same_class
+                        or (new_box.maxclass == "newobj" and key == "bgcolor")):
+                    carried[key] = copy.deepcopy(value)
+            elif key in _PARAMETER_KEYS and capable:
+                carried[key] = copy.deepcopy(value)
+
+        if isinstance(old_saa, dict):
+            saa = {
+                k: copy.deepcopy(v) for k, v in old_saa.items()
+                if k in carried or (k == "valueof" and capable)
+            }
+            if saa:
+                carried["saved_attribute_attributes"] = saa
+
+        new_box.extra_attrs.update(carried)
 
     def replace_box_safe(
         self,
@@ -1153,17 +1281,28 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         args: list[str] | None = None,
         rewire: str = "auto",
     ) -> EditResult:
-        """Replace a box and auto-rewire connections when I/O layout matches.
+        """Replace a box, keep its identity and rewire every in-range cord.
 
         Safer default alternative to ``replace_box``. Delegates to
-        ``replace_box`` internally to capture orphans, then in ``"auto"``
-        mode reconnects every orphan by index when the new box has the
-        same inlet AND outlet count as the old box. On match, the returned
-        ``EditResult.orphaned`` is empty -- connections are preserved
-        transparently. On I/O mismatch the orphans are returned unchanged
-        (no exception), so callers always have something to act on.
+        ``replace_box`` (so the new box keeps the old box's identity: list
+        index / z-order, presentation rect, varname, colours, parameter
+        blocks; Q29 / B4), then in ``"auto"`` mode rewires every orphan
+        whose outlet and inlet indices exist on the new box, whatever the
+        I/O counts: ``pack 0 0`` -> ``pack 0 0 0`` keeps all its cords.
+        Rewired cords keep their midpoints, order, colour, hidden flag and
+        extra attributes (they are appended to ``lines``).
+
+        Returned in ``orphaned`` (the caller rewires them by hand):
+
+        - cords whose outlet/inlet index the new box lacks;
+        - signal cords that would land on a control-only inlet -- the
+          cords validation flags as "Signal outlet to control-only inlet"
+          (a signal outlet of a source that is not an unverified,
+          non-overridden MSP object, into an inlet that does not accept
+          signal), so a rewire never creates a cord the save gate refuses.
+
         Use ``rewire="manual"`` to opt back into the explicit-orphan
-        workflow of ``replace_box`` regardless of I/O match.
+        workflow of ``replace_box``.
 
         Mirrors P1-1 in 260427-hox FINDINGS. Use this in preference to
         ``replace_box`` for new code; ``replace_box`` is preserved for
@@ -1173,16 +1312,15 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             old_box: The box to replace (must be in this patcher).
             new_name: Name of the replacement object (e.g., "saw~").
             args: Optional arguments for the new object.
-            rewire: ``"auto"`` (default) auto-reconnects orphans by index
-                when I/O counts match; on mismatch falls back to returning
-                orphans. ``"manual"`` always returns orphans without
-                rewiring (same shape as ``replace_box``).
+            rewire: ``"auto"`` (default) rewires every in-range orphan that
+                passes the signal type check. ``"manual"`` always returns
+                orphans without rewiring (same shape as ``replace_box``).
 
         Returns:
-            EditResult with the new box. ``orphaned`` is empty on
-            successful auto-rewire; populated on manual mode or I/O
-            mismatch. ``parent_orphaned`` (parent-patcher cords removed
-            by a port resync) is always passed through from replace_box.
+            EditResult with the new box. ``orphaned`` holds only the cords
+            not rewired (all of them in manual mode). ``parent_orphaned``
+            (parent-patcher cords removed by a port resync) is always passed
+            through from replace_box.
 
         Raises:
             ValueError: If ``old_box`` is not in this patcher (raised by
@@ -1194,47 +1332,83 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                 f"rewire must be 'auto' or 'manual', got {rewire!r}"
             )
 
-        # Capture old box I/O counts BEFORE delegating, since replace_box
-        # removes the old box and we need the counts to compare against
-        # the new box's I/O.
-        old_numinlets = old_box.numinlets
-        old_numoutlets = old_box.numoutlets
         old_id = old_box.id
+        # The old cords, keyed like the orphan dicts, so a rewire keeps
+        # their attributes (replace_box removes them).
+        old_lines = {
+            (pl.source_id, pl.source_outlet, pl.dest_id, pl.dest_inlet): pl
+            for pl in self.lines
+            if pl.source_id == old_id or pl.dest_id == old_id
+        }
 
-        # Delegate -- handles validation, orphan capture, removal, and
-        # creating the new box at the old position.
+        # Delegate -- handles validation, orphan capture, removal, identity
+        # and creating the new box at the old position.
         result = self.replace_box(old_box, new_name, args=args)
 
         if rewire == "manual":
             return result
 
-        # Auto mode: rewire only when I/O layout matches exactly.
-        if (
-            result.box.numinlets == old_numinlets
-            and result.box.numoutlets == old_numoutlets
-        ):
-            # Build an id->box map once for O(1) resolution. The new box
-            # stands in for the old id on either side of every orphan
-            # (handles self-loops naturally).
-            box_by_id = {b.id: b for b in self.boxes}
-            for o in result.orphaned:
-                src_id = o["source_id"]
-                dst_id = o["dest_id"]
-                src_box = result.box if src_id == old_id else box_by_id[src_id]
-                dst_box = result.box if dst_id == old_id else box_by_id[dst_id]
-                self.add_connection(
-                    src_box, o["source_outlet"], dst_box, o["dest_inlet"]
-                )
-            # Parent-patcher cords dropped by the port resync are not
-            # rewired here (they live in the parent): pass them through.
-            return EditResult(
-                box=result.box,
-                orphaned=[],
-                parent_orphaned=result.parent_orphaned,
-            )
+        from src.maxpat import walk
+        from src.maxpat.validation import _inlet_accepts_signal
 
-        # Mismatch: return orphans intact (caller handles rewiring).
-        return result
+        new_box = result.box
+        box_by_id = {b.id: b for b in self.boxes}
+        remaining: list[dict] = []
+        for o in result.orphaned:
+            src_id, so = o["source_id"], o["source_outlet"]
+            dst_id, di = o["dest_id"], o["dest_inlet"]
+            # The new box stands in for the old id on either side (self-loops too).
+            src = new_box if src_id == old_id else box_by_id.get(src_id)
+            dst = new_box if dst_id == old_id else box_by_id.get(dst_id)
+            if (src is None or dst is None
+                    or not 0 <= so < src.numoutlets
+                    or not 0 <= di < dst.numinlets):
+                remaining.append(o)
+                continue
+            if self._rewire_type_gated(src, so, dst, di, walk, _inlet_accepts_signal):
+                remaining.append(o)
+                continue
+            old = old_lines.get((src_id, so, dst_id, di))
+            if old is None:
+                self.add_connection(src, so, dst, di)
+                continue
+            pl = self.add_connection(
+                src, so, dst, di,
+                order=old.order,
+                hidden=bool(old.hidden),
+                midpoints=copy.deepcopy(old.midpoints),
+            )
+            pl.color = copy.deepcopy(old.color)
+            pl.extra_attrs = copy.deepcopy(old.extra_attrs)
+
+        # Parent-patcher cords dropped by the port resync are not rewired
+        # here (they live in the parent): pass them through.
+        return EditResult(
+            box=new_box,
+            orphaned=remaining,
+            parent_orphaned=result.parent_orphaned,
+        )
+
+    def _rewire_type_gated(self, src: Box, so: int, dst: Box, di: int,
+                           walk, inlet_accepts_signal) -> bool:
+        """True when validation would flag src:so -> dst:di as signal into control-only.
+
+        Mirrors validation's "Signal outlet to control-only inlet" removal
+        proposal (Q29 / B4): a signal outlet, from a source that is not a
+        lenient (non-overridden ``~``) MSP object, into an inlet that does
+        not accept signal.
+        """
+        types = src.outlettype or []
+        if so >= len(types) or types[so] != "signal":
+            return False
+        if self.db is None:
+            return False
+        name = walk.object_name({"maxclass": src.maxclass, "text": src.text})
+        if name and name.endswith("~") and not self.db.is_overridden(name):
+            return False
+        return not inlet_accepts_signal(
+            {"maxclass": dst.maxclass, "text": dst.text}, di, self.db
+        )
 
     def insert_into_connection(
         self,
@@ -1377,6 +1551,61 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                 y = start_y
                 x += 15.0
         return (x, y)
+
+    def _nudge_off_overlap(
+        self, x: float, y: float, w: float, h: float
+    ) -> tuple[float, float, Box | None]:
+        """Move a requested rect off a real overlap (Q29 / B10).
+
+        Existing boxes are measured like ``_find_clear_position``
+        (``sizing.rendered_rect``, falling back to patching_rect). When no
+        existing rect truly overlaps the candidate (a positive-area
+        intersection; touching or nearby edges do not count), the requested
+        position is returned unchanged -- no grid snap. Otherwise the
+        candidate steps down 15px from the requested y (after y > 2400, y
+        resets and x steps 15px right) until no rect is within
+        COLLISION_PAD of it on any side, for at most 400 steps.
+
+        Returns:
+            (x, y, overlapped) -- overlapped is the first box the requested
+            rect overlapped, or None when the position was kept.
+        """
+        max_saved = is_max_saved(self.props)
+        rects: list[tuple[Box, list]] = []
+        for box in self.boxes:
+            r = rendered_rect(box, max_saved=max_saved)
+            rects.append((box, r if r is not None else box.patching_rect))
+
+        overlapped = None
+        for box, rect in rects:
+            bx, by, bw, bh = rect[:4]
+            if x < bx + bw and bx < x + w and y < by + bh and by < y + h:
+                overlapped = box
+                break
+        if overlapped is None:
+            return (x, y, None)
+
+        start_y = y
+        cx, cy = x, y
+        for _ in range(400):
+            cy += 15.0
+            if cy > 2400:
+                cy = start_y
+                cx += 15.0
+            clear = True
+            for _box, rect in rects:
+                bx, by, bw, bh = rect[:4]
+                if not (
+                    cx + w + COLLISION_PAD <= bx
+                    or bx + bw + COLLISION_PAD <= cx
+                    or cy + h + COLLISION_PAD <= by
+                    or by + bh + COLLISION_PAD <= cy
+                ):
+                    clear = False
+                    break
+            if clear:
+                break
+        return (cx, cy, overlapped)
 
     def _auto_position(self, box: Box, near_box: Box | None = None) -> None:
         """Position a box automatically, avoiding collisions.
