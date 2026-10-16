@@ -516,7 +516,7 @@ class TestApplyNew:
         after = json.loads(raw)
         entry = after["newthing"]
         assert list(entry) == list(before["old"])  # same keys, same order
-        assert entry["min_version"] == 9.7
+        assert entry["min_version"] == "9.7"
         assert entry["rnbo_compatible"] is False
         assert entry["name"] == "newthing"
         assert list(after) == sorted(after)
@@ -1022,7 +1022,7 @@ class TestApplyDefine:
         )
         assert entry["description"] == ""
         assert entry["maxclass"] == "newobj"
-        assert entry["min_version"] == 9.7
+        assert entry["min_version"] == "9.7"
         assert entry["rnbo_compatible"] is False
         assert (entry["domain"], entry["module"]) == ("Jitter", "jit")
         assert after["jit.old"] == target
@@ -1117,12 +1117,13 @@ class TestApplyDefine:
         )
         assert code == 0
         entry = _load(world, "jitter/objects.json")["jit.gl.fresh"]
-        assert entry["min_version"] == 8 and isinstance(entry["min_version"], int)
+        assert entry["min_version"] == "8"
         assert "explicit --min-version" in results["jit.gl.fresh"]["notes"]["min_version"]
 
-    def test_min_version_flag_keeps_a_point_release_as_a_float(self) -> None:
-        assert sync.parse_min_version("9.1") == 9.1
-        assert sync.parse_min_version("9") == 9
+    def test_min_version_flag_keeps_a_point_release_as_a_string(self) -> None:
+        assert sync.parse_min_version("9.1") == "9.1"
+        assert sync.parse_min_version("9") == "9"
+        assert sync.parse_min_version("9.10") == "9.10"
 
     @pytest.mark.parametrize("bad", ["10", "3", "nine", "9.x", "-8"])
     def test_min_version_flag_rejects_out_of_range_values(self, bad: str) -> None:
@@ -1157,7 +1158,7 @@ class TestPackageDestinations:
         assert list(entry) == list(neighbour)
         assert entry["package"] == "FakePkg"
         assert entry["domain"] == "Packages"
-        assert entry["min_version"] == 9.7
+        assert entry["min_version"] == "9.7"
         assert [o["type"] for o in entry["outlets"]] == ["matrix", "control"]
         assert objects["pkg.old"] == neighbour
         info = _load(world, "package_info.json")

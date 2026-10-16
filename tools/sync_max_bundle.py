@@ -26,6 +26,17 @@ What this is, and is not
   refuses any path inside ``patches/`` or the DB tree, and
   :func:`write_extraction_log` (``--refresh-log``), which can only replace
   ``<db-root>/extraction-log.json``.
+* Atomic and mode-preserving (Q30 / I6). Every DB-tree writer goes through
+  ``src/maxpat/atomic_io.py``: a temp file beside the target, fsync, the
+  target's existing mode (a new file gets the umask default), then
+  ``os.replace``. A multi-file apply (``--apply new / define / deltas /
+  inherited``) is one transaction: :func:`write_db_files` prepares and checks
+  every file (package_info.json counts included) before writing any, then
+  replaces all of them or, if a replace fails, restores the ones already
+  replaced.
+* Versions are strings (Q30 / I6): the installed major.minor (``"9.2"``,
+  ``"9.10"``) and ``--min-version`` land as ``min_version`` strings; a float
+  would turn 9.10 into 9.1. The DB's existing numeric values are untouched.
 * It never writes ``src/maxpat/maxclass_map.py`` or ``src/maxpat/sizing.py``;
   the ``ui_maxclasses`` section only reports against them.
 
@@ -88,11 +99,9 @@ import datetime as _dt
 import hashlib
 import importlib.util
 import json
-import os
 import re
 import statistics
 import sys
-import tempfile
 import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -103,6 +112,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # Allow `from src.maxpat...` / `from tools.audit_db ...`
 sys.path.insert(0, str(ROOT))
 
+from src.maxpat.atomic_io import atomic_write_bytes, atomic_write_many, json_style  # noqa: E402
 from src.maxpat.db_lookup import ObjectDatabase  # noqa: E402
 from src.maxpat.maxclass_map import UI_MAXCLASSES  # noqa: E402
 from tools.audit_db import (  # noqa: E402
@@ -208,17 +218,23 @@ def parse_refpage(ref: dict) -> dict | None:
 # ---------------------------------------------------------------------------
 
 
-def _major_minor(short_version: str | None) -> float | None:
-    """'9.2.0' -> 9.2 (C5). None when the version string is unusable."""
+def _major_minor(short_version: str | None) -> str | None:
+    """'9.2.0' -> '9.2', '9.10.0' -> '9.10' (C5; Q30 PD-3). None when unusable.
+
+    A string, never a float: 9.10 as a float is 9.1. Each part goes through
+    int(), so '09.2' -> '9.2'; a '.0' minor is kept ('9.0.0' -> '9.0').
+    """
     if not short_version:
         return None
     match = re.match(r"^(\d+)\.(\d+)", short_version)
     if not match:
         return None
-    return float(f"{match.group(1)}.{match.group(2)}")
+    return f"{int(match.group(1))}.{int(match.group(2))}"
 
 
-_DEFINE_RE = re.compile(r"^\s*max\s+define\s+(\S+)\s+(\S+)\s*(.*?)\s*;?\s*$")
+# Q30 PD-2: alias and target exclude `;`, so an argument-less line
+# (`max define A B;`) yields target "B", not "B;".
+_DEFINE_RE = re.compile(r"^\s*max\s+define\s+([^\s;]+)\s+([^\s;]+)\s*(.*?)\s*;?\s*$")
 
 
 def parse_define_mappings(c74: Path) -> dict[str, dict]:
@@ -1687,15 +1703,15 @@ def detect_style(raw: bytes, data) -> tuple[bool, bool]:
     DB files are indent-2 JSON that differ in escaping and trailing newline;
     normalising either would rewrite thousands of unrelated lines. A pure-ASCII
     file reproduces both ways, in which case UTF-8 output is preferred.
+    Delegates to :func:`src.maxpat.atomic_io.json_style` (shared with the
+    audit merger) and raises StyleUnreproducible when it finds no style.
     """
-    for ensure_ascii in (False, True):
-        body = json.dumps(data, indent=2, ensure_ascii=ensure_ascii)
-        for trailing_newline in (True, False):
-            if (body + ("\n" if trailing_newline else "")).encode("utf-8") == raw:
-                return ensure_ascii, trailing_newline
-    raise StyleUnreproducible(
-        "no (indent=2, ensure_ascii, trailing newline) combination reproduces the file"
-    )
+    style = json_style(raw, data)
+    if style is None:
+        raise StyleUnreproducible(
+            "no (indent=2, ensure_ascii, trailing newline) combination reproduces the file"
+        )
+    return style
 
 
 def _same(a, b) -> bool:
@@ -1752,13 +1768,14 @@ def check_additive(old: dict, new: dict, rel: str) -> None:
         raise AdditiveViolation(f"{rel}: the package set would change")
 
 
-def write_db_file(path: str | Path, new_data: dict, db_root: str | Path) -> bool:
-    """Write one DB file. THE ONLY place this tool writes into the DB tree.
+def prepare_db_file(path: str | Path, new_data: dict, db_root: str | Path) -> bytes | None:
+    """Every check of a DB object-file write, without writing (Q30 PD-5).
 
-    Refuses anything off the allow-list, preserves the file's serialization
-    style byte-for-byte, keeps sorted files sorted, runs the additive
-    self-check, and replaces the file atomically. Returns False (and writes
-    nothing) when the output would be byte-identical.
+    Refuses anything off the allow-list (WriteRefused), reproduces the file's
+    serialization style (StyleUnreproducible), runs the additive self-check
+    (AdditiveViolation), keeps a sorted file sorted and appends new keys to an
+    unsorted one. Returns the payload, or None when the output would be
+    byte-identical.
     """
     rel = allowed_db_target(path, db_root)
     target = Path(path)
@@ -1777,17 +1794,44 @@ def write_db_file(path: str | Path, new_data: dict, db_root: str | Path) -> bool
     text = json.dumps(ordered, indent=2, ensure_ascii=ensure_ascii)
     payload = (text + ("\n" if trailing_newline else "")).encode("utf-8")
     if payload == raw:
-        return False
+        return None
+    return payload
 
-    handle, tmp_name = tempfile.mkstemp(prefix=".sync-", suffix=".tmp", dir=str(target.parent))
-    try:
-        with os.fdopen(handle, "wb") as fh:
-            fh.write(payload)
-        os.replace(tmp_name, target)
-    finally:
-        if os.path.exists(tmp_name):
-            os.unlink(tmp_name)
+
+def write_db_file(path: str | Path, new_data: dict, db_root: str | Path) -> bool:
+    """Write one DB object file: :func:`prepare_db_file`, then an atomic replace.
+
+    The replace keeps the file's mode (Q30 PD-4). Returns False (and writes
+    nothing) when the output would be byte-identical.
+    """
+    payload = prepare_db_file(path, new_data, db_root)
+    if payload is None:
+        return False
+    atomic_write_bytes(Path(path), payload)
     return True
+
+
+def write_db_files(items: list[tuple[str | Path, dict]], db_root: str | Path) -> list[str]:
+    """Write several DB object files all-or-nothing (Q30 PD-5).
+
+    Every item is prepared first, so any WriteRefused, StyleUnreproducible or
+    AdditiveViolation raises before a byte is written. The payloads then go
+    through one :func:`src.maxpat.atomic_io.atomic_write_many`: a failed
+    replace restores the files already replaced (bytes and mode). Returns the
+    DB-relative paths written, in item order (byte-identical items skipped).
+    """
+    root = Path(db_root).resolve()
+    staged: list[tuple[Path, bytes]] = []
+    written: list[str] = []
+    for path, data in items:
+        payload = prepare_db_file(path, data, db_root)
+        if payload is None:
+            continue
+        staged.append((Path(path), payload))
+        written.append(Path(path).resolve().relative_to(root).as_posix())
+    if staged:
+        atomic_write_many(staged)
+    return written
 
 
 def check_groups_additive(old: dict, new: dict) -> None:
@@ -1820,7 +1864,8 @@ def write_groups_file(path: str | Path, data: dict, db_root: str | Path) -> bool
 
     Refuses any other path, refuses an existing file that is not in the
     canonical serialization, runs :func:`check_groups_additive`, and replaces
-    the file atomically. Returns False (writes nothing) on identical bytes.
+    the file atomically, keeping its mode (a new file gets the umask default).
+    Returns False (writes nothing) on identical bytes.
     """
     root = Path(db_root).resolve()
     target = Path(path).resolve()
@@ -1835,14 +1880,7 @@ def write_groups_file(path: str | Path, data: dict, db_root: str | Path) -> bool
         check_groups_additive(old, data)
         if payload == raw:
             return False
-    handle, tmp_name = tempfile.mkstemp(prefix=".sync-", suffix=".tmp", dir=str(target.parent))
-    try:
-        with os.fdopen(handle, "wb") as fh:
-            fh.write(payload)
-        os.replace(tmp_name, target)
-    finally:
-        if os.path.exists(tmp_name):
-            os.unlink(tmp_name)
+    atomic_write_bytes(target, payload)
     return True
 
 
@@ -2081,37 +2119,50 @@ def build_define_entry(
     return result, rel
 
 
-def update_package_counts(db_root: Path, packages: set[str]) -> list[str]:
-    """Set `object_count` in package_info.json to each touched file's length."""
+def stage_package_counts(
+    db_root: Path, staged: dict[str, dict], packages: set[str]
+) -> tuple[dict | None, list[str]]:
+    """package_info.json with `object_count` set from the STAGED package files (Q30 PD-5).
+
+    `staged` maps DB-relative paths to the data about to be written; counts
+    come from it, not from re-reading disk, so the object files and the count
+    update land in one :func:`write_db_files` transaction. Returns
+    ``(new_info, changed_packages)``; new_info is None when nothing changes or
+    there is no package_info.json.
+    """
     info_path = db_root / "package_info.json"
     if not info_path.exists():
-        return []
+        return None, []
     info = json.loads(info_path.read_text())
     changed: list[str] = []
     for package in sorted(packages):
         row = info.get(package)
         if not isinstance(row, dict) or "object_count" not in row:
             continue
-        count = len(json.loads((db_root / "packages" / package / "objects.json").read_text()))
+        rel = f"packages/{package}/objects.json"
+        data = staged.get(rel)
+        if data is None:
+            data = json.loads((db_root / rel).read_text())
+        count = len(data)
         if row["object_count"] != count:
             row["object_count"] = count
             changed.append(package)
-    if changed:
-        write_db_file(info_path, info, db_root)
-    return changed
+    return (info if changed else None), changed
 
 
-def parse_min_version(text: str) -> int | float:
-    """`--min-version` value: a Max major (`8`) or major.minor (`9.2`), 4 <= v < 10.
+def parse_min_version(text: str) -> str:
+    """`--min-version` value: a Max major (`8`) or major.minor (`9.2`), 4 <= major < 10.
 
-    Whole numbers stay ints, matching how the DB stores them.
+    Returns the canonical version STRING (Q30 PD-3): "8", "9.1", "9.10" --
+    a float would turn 9.10 into 9.1. Each part goes through int().
     """
-    if not re.fullmatch(r"\d+(\.\d+)?", text.strip()):
+    text = text.strip()
+    if not re.fullmatch(r"\d+(\.\d+)?", text):
         raise argparse.ArgumentTypeError(f"not a Max version: {text!r}")
-    value = float(text)
-    if not 4 <= value < 10:
+    parts = [int(part) for part in text.split(".")]
+    if not 4 <= parts[0] < 10:
         raise argparse.ArgumentTypeError(f"outside the supported range 4 <= v < 10: {text!r}")
-    return int(value) if value == int(value) else value
+    return ".".join(str(part) for part in parts)
 
 
 def apply_objects(
@@ -2119,14 +2170,17 @@ def apply_objects(
     names: list[str],
     index: dict,
     db_root: Path,
-    min_version: int | float | None = None,
+    min_version: str | None = None,
 ) -> list[dict]:
     """--apply new / --apply define: land explicitly named objects only.
 
-    `min_version` replaces C5's default (the installed major.minor) on every
-    object landed by this call. It exists for objects the bundle has shipped
-    since an earlier release and the DB only now picks up: tagging those with
-    the installed version would claim they need it.
+    `min_version` (a version string) replaces C5's default (the installed
+    major.minor) on every object landed by this call. It exists for objects
+    the bundle has shipped since an earlier release and the DB only now picks
+    up: tagging those with the installed version would claim they need it.
+
+    Every destination file and the package_info.json count update are written
+    in ONE :func:`write_db_files` call: all of them or none (Q30 PD-5).
     """
     db = load_db(db_root)
     raw_db = load_raw_db(db_root)
@@ -2171,18 +2225,27 @@ def apply_objects(
         built["io"] = [len(entry["inlets"]), len(entry["outlets"])]
         results.append(built)
 
+    staged: dict[str, dict] = {}
     for rel, entries in pending.items():
         data = dict(raw_db[rel])
         data.update(entries)
-        write_db_file(db_root / rel, data, db_root)
+        staged[rel] = data
     touched_packages = {rel.split("/")[1] for rel in pending if rel.startswith("packages/")}
+    items = [(db_root / rel, data) for rel, data in staged.items()]
     if touched_packages:
-        update_package_counts(db_root, touched_packages)
+        info, _changed = stage_package_counts(db_root, staged, touched_packages)
+        if info is not None:
+            items.append((db_root / "package_info.json", info))
+    if items:
+        write_db_files(items, db_root)
     return results
 
 
 def apply_deltas(index: dict, db_root: Path, names: list[str] | None) -> dict:
-    """--apply deltas: append the documented messages / attributes."""
+    """--apply deltas: append the documented messages / attributes.
+
+    Every touched file is written in one all-or-nothing :func:`write_db_files` call.
+    """
     db = load_db(db_root)
     raw_db = load_raw_db(db_root)
     classified = classify_refs(index, db, db_root)
@@ -2201,17 +2264,19 @@ def apply_deltas(index: dict, db_root: Path, names: list[str] | None) -> dict:
         applied["objects"] += 1
         applied["messages"] += len(item["messages"])
         applied["attributes"] += len(item["attributes"])
-    for rel, data in touched.items():
-        if write_db_file(db_root / rel, data, db_root):
-            applied["files"].append(rel)
-    applied["files"].sort()
+    applied["files"] = sorted(
+        write_db_files([(db_root / rel, data) for rel, data in touched.items()], db_root)
+    )
     return applied
 
 
 def apply_inherited(
     index: dict, db_root: Path, attributes: list[str], names: list[str] | None
 ) -> dict:
-    """--apply inherited: add the NAMED group-page attributes where refpages list them."""
+    """--apply inherited: add the NAMED group-page attributes where refpages list them.
+
+    Every touched file is written in one all-or-nothing :func:`write_db_files` call.
+    """
     db = load_db(db_root)
     raw_db = load_raw_db(db_root)
     classified = classify_refs(index, db, db_root)
@@ -2230,10 +2295,9 @@ def apply_inherited(
         data[item["name"]]["attributes"].update(chosen)
         applied["objects"].append(item["name"])
         applied["attributes"] += len(chosen)
-    for rel, data in touched.items():
-        if write_db_file(db_root / rel, data, db_root):
-            applied["files"].append(rel)
-    applied["files"].sort()
+    applied["files"] = sorted(
+        write_db_files([(db_root / rel, data) for rel, data in touched.items()], db_root)
+    )
     return applied
 
 
@@ -2339,17 +2403,13 @@ def build_extraction_log(db_root: Path, report: dict, old: dict, now: _dt.dateti
 
 
 def write_extraction_log(db_root: Path, log: dict) -> Path:
-    """Replace <db-root>/extraction-log.json atomically. The path is not a parameter."""
+    """Replace <db-root>/extraction-log.json atomically. The path is not a parameter.
+
+    The replace keeps an existing log's mode; a new log gets the umask default.
+    """
     target = Path(db_root) / EXTRACTION_LOG
     payload = (json.dumps(log, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-    handle, tmp_name = tempfile.mkstemp(prefix=".sync-", suffix=".tmp", dir=str(target.parent))
-    try:
-        with os.fdopen(handle, "wb") as fh:
-            fh.write(payload)
-        os.replace(tmp_name, target)
-    finally:
-        if os.path.exists(tmp_name):
-            os.unlink(tmp_name)
+    atomic_write_bytes(target, payload)
     return target
 
 
@@ -2602,7 +2662,7 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 if "groups" in modes:
                     applied["groups"] = apply_groups(index, db_root)
-            except (WriteRefused, AdditiveViolation, StyleUnreproducible) as exc:
+            except (WriteRefused, AdditiveViolation, StyleUnreproducible, OSError) as exc:
                 print(f"error: {type(exc).__name__}: {exc}", file=sys.stderr)
                 return 2
 
