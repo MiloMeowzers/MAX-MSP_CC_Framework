@@ -8,6 +8,8 @@ Findings (``.planning/reviews/2026-10-11-repo-review.md``):
   edits wrote through to it.
 - S4: the change-tracking semantics (load snapshot + diff at serialize) and
   the retired manual ``_raw`` copies.
+- B7: adding or removing an inlet/outlet box inside a subpatcher resyncs
+  the parent box's port counts; out-of-range parent cords are returned.
 
 Committed patches are only read (``json.load`` / ``read_patch``), never
 written. The tracer save goes to ``tmp_path`` with GIT_DIR / GIT_WORK_TREE
@@ -378,3 +380,125 @@ class TestRawCopiesRetired:
         box = _box(p, "obj-4")
         p.modify_box(box, extra_attrs={"fontsize": 20})
         assert box._raw["fontsize"] == 20
+
+
+# ---------------------------------------------------------------------------
+# B7: parent port sync
+# ---------------------------------------------------------------------------
+
+
+def _orphan(src, src_out, dst, dst_in) -> dict:
+    return {"source_id": src, "source_outlet": src_out,
+            "dest_id": dst, "dest_inlet": dst_in}
+
+
+def _cords(p: Patcher) -> list[tuple]:
+    return [(pl.source_id, pl.source_outlet, pl.dest_id, pl.dest_inlet)
+            for pl in p.lines]
+
+
+class TestB7PortSync:
+    """Port boxes added/removed inside a subpatcher resync the parent box."""
+
+    def _articulation(self):
+        p, data = _load_bassoon()
+        art = _box(p, "obj-85")
+        return p, data, art, art._inner_patcher
+
+    def test_add_inlet_grows_parent_and_connects(self):
+        p, _, art, inner = self._articulation()
+        inner.add_box("inlet", x=600, y=20, skip_overlap_check=True)
+        assert art.numinlets == 3
+        btn = p.add_box("button")
+        p.add_connection(btn, 0, art, 2)
+        assert _out_boxes(p.to_dict())["obj-85"]["numinlets"] == 3
+
+    def test_add_outlet_grows_parent(self):
+        _, _, art, inner = self._articulation()
+        inner.add_box("outlet", x=600, y=200, skip_overlap_check=True)
+        assert art.numoutlets == 3
+        assert art.outlettype == ["", "", ""]
+
+    def test_remove_added_inlet_returns_parent_cord(self):
+        p, _, art, inner = self._articulation()
+        new_inlet = inner.add_box("inlet", x=600, y=20, skip_overlap_check=True)
+        btn = p.add_box("button")
+        p.add_connection(btn, 0, art, 2)
+        result = inner.remove_box(new_inlet)
+        expected = [_orphan(btn.id, 0, "obj-85", 2)]
+        assert result.orphaned == expected
+        assert result.parent_orphaned == expected
+        assert (btn.id, 0, "obj-85", 2) not in _cords(p)
+        assert art.numinlets == 2
+
+    def test_remove_added_outlet(self):
+        _, _, art, inner = self._articulation()
+        new_outlet = inner.add_box("outlet", x=600, y=200, skip_overlap_check=True)
+        inner.remove_box(new_outlet)
+        assert art.numoutlets == 2
+        assert art.outlettype == ["", ""]
+
+    def test_middle_removal_orphans_out_of_range_only_and_gate_refuses(self):
+        from src.maxpat import hooks
+
+        p, data, art, inner = self._articulation()
+        base = copy.deepcopy(data)
+        result = inner.remove_box(_box(inner, "obj-1"))
+        assert art.numinlets == 1
+        assert result.parent_orphaned == [_orphan("obj-69", 0, "obj-85", 1)]
+        assert ("obj-86", 0, "obj-85", 0) in _cords(p)
+        report = hooks._gate_report(p.to_dict(), base, [base])
+        assert report.port_changes
+
+    def test_api_built_subpatcher(self):
+        p = Patcher()
+        parent, inner = p.add_subpatcher("s", inlets=1, outlets=1)
+        i2 = inner.add_box("inlet", x=300, y=30, skip_overlap_check=True)
+        o2 = inner.add_box("outlet", x=300, y=250, skip_overlap_check=True)
+        assert (parent.numinlets, parent.numoutlets) == (2, 2)
+        assert parent.outlettype == ["", ""]
+        inner.remove_box(i2)
+        inner.remove_box(o2)
+        assert (parent.numinlets, parent.numoutlets) == (1, 1)
+        assert parent.outlettype == [""]
+
+    def test_embedded_bpatcher_grow_only(self):
+        p = Patcher()
+        bp, inner = p.add_bpatcher(embedded=True, numinlets=2, numoutlets=1)
+        src = p.add_box("button")
+        p.add_connection(src, 0, bp, 1)
+        inner.add_box("inlet", x=30, y=20, skip_overlap_check=True)
+        assert bp.numinlets == 2
+        assert (src.id, 0, bp.id, 1) in _cords(p)
+
+    def test_replace_port_with_port_keeps_parent(self):
+        p, _, art, inner = self._articulation()
+        before = [c for c in _cords(p) if c[2] == "obj-85"]
+        result = inner.replace_box(_box(inner, "obj-2"), "inlet")
+        assert art.numinlets == 2
+        assert [c for c in _cords(p) if c[2] == "obj-85"] == before
+        assert result.parent_orphaned == []
+
+    def test_top_level_port_box_no_sync(self):
+        p, _ = _load_bassoon()
+        before = p.to_dict()
+        b = p.add_box("inlet", x=2000, y=2000, skip_overlap_check=True)
+        result = p.remove_box(b)
+        assert result.orphaned == [] and result.parent_orphaned == []
+        assert p.to_dict() == before
+
+    def test_gen_subpatcher_no_sync(self):
+        p = Patcher()
+        gbox, ginner = p.add_gen("out1 = in1 * in2;")
+        counts = (gbox.numinlets, gbox.numoutlets, list(gbox.outlettype))
+        in_box = next(b for b in ginner.boxes if (b.text or "").startswith("in "))
+        result = ginner.remove_box(in_box)
+        assert (gbox.numinlets, gbox.numoutlets, list(gbox.outlettype)) == counts
+        assert result.parent_orphaned == []
+
+    def test_remove_non_port_box_returns_empty_edit_result(self):
+        p, _, _, inner = self._articulation()
+        box = _box(inner, "obj-5")
+        result = inner.remove_box(box)
+        assert result.box is box
+        assert result.orphaned == [] and result.parent_orphaned == []

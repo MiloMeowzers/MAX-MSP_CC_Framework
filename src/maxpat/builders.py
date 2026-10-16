@@ -91,6 +91,11 @@ class BuildersMixin:
                 box.patching_rect[1] = new_y
 
         self.boxes.append(box)
+        # A port box inside a subpatcher/bpatcher grows the parent box's
+        # port count (Q28 / B7).
+        if (box.maxclass in ("inlet", "outlet")
+                and not getattr(self, "_port_sync_suspended", False)):
+            self._sync_parent_ports_after_add(box)
         return box
 
     def _require_buildable(self, name: str) -> None:
@@ -830,6 +835,11 @@ class BuildersMixin:
         parent_box._bpatcher_attrs = None
         parent_box._raw = None
 
+        # Back-refs for the parent port sync, set after the inner ports
+        # exist so building them does not resync (Q28 / B7).
+        inner._parent_box = parent_box
+        inner._parent_patcher = self
+
         self.boxes.append(parent_box)
         return (parent_box, inner)
 
@@ -938,6 +948,9 @@ class BuildersMixin:
                             domain_context=getattr(self, "domain_context", "max"))
             inner.props["rect"] = [0.0, 0.0, width, height]
             bpatch_box._inner_patcher = inner
+            # Back-refs for the parent port sync (Q28 / B7)
+            inner._parent_box = bpatch_box
+            inner._parent_patcher = self
             self.boxes.append(bpatch_box)
             return (bpatch_box, inner)
         else:

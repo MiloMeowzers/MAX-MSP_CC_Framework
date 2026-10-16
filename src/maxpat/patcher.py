@@ -208,13 +208,21 @@ class Patchline:
 class EditResult:
     """Result of an edit operation with orphaned connection tracking.
 
-    Returned by modify_box() and replace_box() to provide the caller with
-    the edited/created box and any connections that were orphaned during
-    the operation (e.g., due to I/O count shrink or object replacement).
+    Returned by modify_box(), replace_box() and remove_box() to provide the
+    caller with the edited/created/removed box and any connections that were
+    orphaned during the operation (e.g., due to I/O count shrink or object
+    replacement).
+
+    ``parent_orphaned`` lists cords removed in the PARENT patcher when a
+    port (inlet/outlet) box change inside a subpatcher shrank the parent
+    box's port count (Q28 / B7). remove_box returns them in both fields;
+    replace_box only in ``parent_orphaned`` (its ``orphaned`` stays the
+    cords of this patcher, which replace_box_safe rewires by id).
     """
     box: Box
     orphaned: list[dict] = field(default_factory=list)
     # Each orphaned entry: {"source_id", "source_outlet", "dest_id", "dest_inlet"}
+    parent_orphaned: list[dict] = field(default_factory=list)
 
 
 class Box:
@@ -528,6 +536,12 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         self.props = copy.deepcopy(DEFAULT_PATCHER_PROPS)
         self._next_id = 1
         self._is_subpatcher = is_subpatcher
+        # Parent box / patcher of an embedded inner patcher (set by
+        # add_subpatcher, embedded add_bpatcher and from_dict). Port boxes
+        # added or removed here resync the parent's ports (Q28 / B7).
+        self._parent_box: Box | None = None
+        self._parent_patcher: Patcher | None = None
+        self._port_sync_suspended = False
 
         if is_subpatcher:
             self.props["rect"] = list(SUBPATCHER_RECT)
@@ -635,11 +649,28 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
     # Mutation / removal
     # ------------------------------------------------------------------
 
-    def remove_box(self, box: Box) -> None:
+    def remove_box(self, box: Box) -> EditResult:
         """Remove a box and all patchlines connected to it.
+
+        Removing an inlet/outlet box inside a ``p``/``patcher`` subpatcher
+        or a bpatcher resyncs the parent box (Q28 / B7): its numinlets /
+        numoutlets become the exact inner port count, a removed outlet's
+        outlettype entry is deleted, and parent cords whose port index is
+        now out of range are removed from the PARENT patcher and returned.
+
+        Ports are indexed by x-rank, so removing a non-rightmost port
+        shifts the ports above it. Only out-of-range cords are orphaned:
+        cords to the shifted ports stay on their old indices in memory,
+        and the save gate refuses that save (port x-rank change) unless
+        forced, so nothing misnumbered reaches disk silently.
 
         Args:
             box: The box to remove.
+
+        Returns:
+            EditResult with the removed box. ``orphaned`` and
+            ``parent_orphaned`` both hold the parent-patcher cords removed
+            by the port resync (empty for any other box).
 
         Raises:
             ValueError: If the box is not in this patcher.
@@ -648,12 +679,130 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             raise ValueError(
                 f"Box {box.id} not found in this patcher"
             )
+        kind = box.maxclass if box.maxclass in ("inlet", "outlet") else None
+        rank = self._port_rank(box) if kind is not None else None
         # Filter out all patchlines referencing this box (build new list)
         self.lines = [
             pl for pl in self.lines
             if pl.source_id != box.id and pl.dest_id != box.id
         ]
         self.boxes.remove(box)
+        parent_orphaned: list[dict] = []
+        if kind is not None:
+            parent_orphaned = self._sync_parent_ports_after_remove(kind, rank)
+        return EditResult(
+            box=box,
+            orphaned=[dict(o) for o in parent_orphaned],
+            parent_orphaned=parent_orphaned,
+        )
+
+    # ------------------------------------------------------------------
+    # Parent port sync (Q28 / B7)
+    # ------------------------------------------------------------------
+
+    def _port_rank(self, box: Box) -> int | None:
+        """x-rank of a port box among this patcher's inlets or outlets."""
+        ports = self.get_inlets() if box.maxclass == "inlet" else self.get_outlets()
+        for i, b in enumerate(ports):
+            if b is box:
+                return i
+        return None
+
+    def _port_sync_parent(self) -> Box | None:
+        """The parent box whose ports mirror this patcher's port boxes.
+
+        None (no sync) when sync is suspended, this patcher has no parent
+        back-ref, the parent box is no longer in its patcher, or the parent
+        is neither a bpatcher nor a ``p``/``patcher`` newobj (gen~, rnbo~,
+        poly~ and friends define their ports differently).
+        """
+        if getattr(self, "_port_sync_suspended", False):
+            return None
+        parent = getattr(self, "_parent_box", None)
+        outer = getattr(self, "_parent_patcher", None)
+        if parent is None or outer is None:
+            return None
+        if getattr(parent, "_inner_patcher", None) is not self:
+            return None
+        if not any(b is parent for b in outer.boxes):
+            return None
+        if parent.maxclass == "bpatcher":
+            return parent
+        if parent.maxclass == "newobj":
+            first = (parent.text or "").split()[:1]
+            if first and first[0] in ("p", "patcher"):
+                return parent
+        return None
+
+    def _sync_parent_ports_after_add(self, box: Box) -> list[dict]:
+        """Grow the parent's port count after a port box was added.
+
+        Grow only: an inlet raises numinlets to the inner inlet count; an
+        outlet, when the inner count exceeds numoutlets, inserts ``""``
+        into outlettype at the new box's x-rank. Never shrinks a count or
+        removes a cord (an embedded bpatcher declares its counts before
+        its inner ports exist). Returns [] (nothing is ever orphaned).
+        """
+        if box.maxclass not in ("inlet", "outlet"):
+            return []
+        parent = self._port_sync_parent()
+        if parent is None:
+            return []
+        if box.maxclass == "inlet":
+            n = len(self.get_inlets())
+            if n > parent.numinlets:
+                parent.numinlets = n
+        else:
+            n = len(self.get_outlets())
+            if n > parent.numoutlets:
+                rank = self._port_rank(box)
+                types = list(parent.outlettype or [])
+                pos = len(types) if rank is None else min(rank, len(types))
+                types.insert(pos, "")
+                parent.outlettype = (types + [""] * n)[:n]
+                parent.numoutlets = n
+        return []
+
+    def _sync_parent_ports_after_remove(
+        self, kind: str, rank: int | None
+    ) -> list[dict]:
+        """Resync the parent's ports exactly after a port box was removed.
+
+        ``rank`` is the removed box's x-rank, computed before removal. An
+        inlet sets numinlets to the inner count; an outlet deletes its
+        outlettype entry (when the list is longer than the new count) and
+        sets numoutlets. Parent-patcher cords now out of range are removed
+        and returned as orphan dicts.
+        """
+        parent = self._port_sync_parent()
+        if parent is None:
+            return []
+        outer = self._parent_patcher
+        if kind == "inlet":
+            parent.numinlets = len(self.get_inlets())
+        else:
+            n = len(self.get_outlets())
+            types = list(parent.outlettype or [])
+            if rank is not None and len(types) > n and 0 <= rank < len(types):
+                del types[rank]
+            parent.outlettype = (types + [""] * n)[:n]
+            parent.numoutlets = n
+        orphaned: list[dict] = []
+        surviving = []
+        for pl in outer.lines:
+            if ((pl.dest_id == parent.id and pl.dest_inlet >= parent.numinlets)
+                    or (pl.source_id == parent.id
+                        and pl.source_outlet >= parent.numoutlets)):
+                orphaned.append({
+                    "source_id": pl.source_id,
+                    "source_outlet": pl.source_outlet,
+                    "dest_id": pl.dest_id,
+                    "dest_inlet": pl.dest_inlet,
+                })
+            else:
+                surviving.append(pl)
+        outer.lines = surviving
+        return orphaned
 
     def remove_connection(
         self,
@@ -867,6 +1016,14 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         and returns ALL old connections as orphaned (no auto-remap per
         CONTEXT.md locked decision). The caller handles rewiring.
 
+        Inside a ``p``/``patcher`` subpatcher or bpatcher, replacing a port
+        box with a port of the same kind leaves the parent box's ports and
+        cords unchanged. Replacing it with a non-port or the other kind
+        applies the remove_box resync for the old kind, then the add_box
+        growth for the new one (Q28 / B7); parent cords that resync removes
+        are returned ONLY in ``parent_orphaned`` (``orphaned`` stays this
+        patcher's cords).
+
         Args:
             old_box: The box to replace (must be in this patcher).
             new_name: Name of the replacement object (e.g., "saw~").
@@ -908,13 +1065,32 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         old_x = old_box.patching_rect[0]
         old_y = old_box.patching_rect[1]
 
-        # Remove old box and its patchlines
-        self.remove_box(old_box)
+        old_kind = old_box.maxclass if old_box.maxclass in ("inlet", "outlet") else None
+        old_rank = self._port_rank(old_box) if old_kind is not None else None
 
-        # Create replacement box at old position (skip overlap -- intentional placement)
-        new_box = self.add_box(new_name, args=args, x=old_x, y=old_y, skip_overlap_check=True)
+        # Suspend the parent port sync so a port-for-port replacement is
+        # not seen as a remove (which would drop the top port's parent
+        # cords) followed by an add (Q28 / B7).
+        prev_suspended = getattr(self, "_port_sync_suspended", False)
+        self._port_sync_suspended = True
+        try:
+            # Remove old box and its patchlines
+            self.remove_box(old_box)
 
-        return EditResult(box=new_box, orphaned=orphaned)
+            # Create replacement box at old position (skip overlap -- intentional placement)
+            new_box = self.add_box(new_name, args=args, x=old_x, y=old_y, skip_overlap_check=True)
+        finally:
+            self._port_sync_suspended = prev_suspended
+
+        new_kind = new_box.maxclass if new_box.maxclass in ("inlet", "outlet") else None
+        parent_orphaned: list[dict] = []
+        if old_kind != new_kind:
+            if old_kind is not None:
+                parent_orphaned = self._sync_parent_ports_after_remove(old_kind, old_rank)
+            if new_kind is not None:
+                self._sync_parent_ports_after_add(new_box)
+
+        return EditResult(box=new_box, orphaned=orphaned, parent_orphaned=parent_orphaned)
 
     def replace_box_safe(
         self,
@@ -1502,6 +1678,9 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         p.boxes = []
         p.lines = []
         p._is_subpatcher = False
+        p._parent_box = None
+        p._parent_patcher = None
+        p._port_sync_suspended = False
 
         # Rebuild props preserving key order (include boxes/lines placeholders)
         p.props = {}
@@ -1559,6 +1738,9 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                     db=p.db,
                     domain_context=inner_patcher_scope(box_data, p.domain_context),
                 )
+                # Back-refs for the parent port sync (Q28 / B7)
+                box._inner_patcher._parent_box = box
+                box._inner_patcher._parent_patcher = p
 
             # Extra attrs: everything not already handled
             box.extra_attrs = {
