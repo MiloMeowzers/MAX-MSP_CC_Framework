@@ -193,7 +193,7 @@ RULE_ANCHORS = [
     "Add `comment` objects on non-obvious connections", "Prefer named `send`/`receive`",
     "Use `patcher` (subpatchers)", "`patching_rect`", "as fallback", "all three must be read",
     "orientation: 0", "size * 24", "contdata: 1", "setstyle: 1", "named subpatchers",
-    "silently dropped at serialize", "index 0 = topmost", "overlapping the dial",
+    "Edits to loaded boxes and cords reach disk", "index 0 = topmost", "overlapping the dial",
     "re-read after every save", "commit your current work first",
     "does NOT preserve connections", "must-fix before save",
     "never connect raw oscillators to `dac~` at full volume", "process at audio rate",

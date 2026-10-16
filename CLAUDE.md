@@ -105,7 +105,7 @@ Manual banks: `orientation: 0`, `contdata: 1`, `setstyle: 1`, height = size * 24
 
 Never create `generate.py` or similar scripts that regenerate `.maxpat` files from scratch (regeneration overwrites manual edits). The Patcher API (`src.maxpat`) is the only sanctioned way to create and edit patches: build in memory during `/max-build` or `/max-iterate`, write via `save_patch_roundtrip()`.
 
-`Patcher.from_dict` -> `Patcher.to_dict()` round-trips are lossless; the standalone `Box.to_dict()` is lossy -- never serialize a single Box. **On round-tripped (pre-existing) boxes, `extra_attrs` mutations are silently dropped at serialize**: mutate `box._raw["<attr>"]` (e.g. a codebox's `code`, a umenu's `items`) and verify the attribute on disk after save; `extra_attrs` works on new boxes. Investigate a suspected `.maxpat` regression by diffing committed objects (`git show A:file` vs `git show B:file`), never the working tree.
+`Patcher.from_dict` -> `Patcher.to_dict()` round-trips are lossless; the standalone `Box.to_dict()` is lossy -- never serialize a single Box. **Edits to loaded boxes and cords reach disk**: `from_dict` deep-copies its input and snapshots each box's `extra_attrs` and font and each cord's order, hidden, midpoints, color and `extra_attrs`; `to_dict` writes back every field that changed, in-place list edits included. A direct `box._raw` key write still lands while its field is unchanged; verify the attribute on disk after save. Investigate a suspected `.maxpat` regression by diffing committed objects (`git show A:file` vs `git show B:file`), never the working tree.
 
 ### Rule #6: Z-Order Awareness
 
