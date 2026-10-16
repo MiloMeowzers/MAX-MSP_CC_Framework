@@ -245,19 +245,23 @@ _AUTO_HIGHLIGHT = {
 }
 
 
-def apply_auto_styling(patcher: Patcher) -> None:
+def apply_auto_styling(patcher: Patcher, *, contrast: bool = True) -> None:
     """Apply default aesthetic styling to a patcher.
 
     Sets the canvas background color and highlights special objects
     (dac~, ezdac~, loadbang) with subtle palette colors. Skips boxes
-    that already have a user-set bgcolor.
+    that already have a user-set bgcolor. Then runs ensure_text_contrast
+    unless *contrast* is False: finalize_patch(is_new=True) passes False
+    and resolves contrast once, after layout has moved panels and labels
+    onto their final surfaces (Q27 / F3).
     """
     set_canvas_background(patcher)
     for box in patcher.boxes:
         palette_key = _AUTO_HIGHLIGHT.get(box.name)
         if palette_key and "bgcolor" not in box.extra_attrs:
             set_object_bgcolor(box, palette_key=palette_key)
-    ensure_text_contrast(patcher)
+    if contrast:
+        ensure_text_contrast(patcher)
 
 
 def _point_in_rect(px: float, py: float, rect: list[float]) -> bool:
@@ -318,6 +322,32 @@ class ResolvedBackground(NamedTuple):
     assumed: bool
 
 
+def _unwrap_fill(value):
+    """A list/tuple whose first element is a dict (MAX's list-wrapped fill,
+    e.g. ``generic_editor.maxpat``) unwraps to that dict (Q27 / F6)."""
+    if isinstance(value, (list, tuple)) and value and isinstance(value[0], dict):
+        return value[0]
+    return value
+
+
+def _fill_from_value(value) -> list[float] | None:
+    """A valid color from one fill attribute value, or None.
+
+    A dict (plain or list-wrapped) reads ``color1``, else ``color``; a plain
+    list must itself be a valid color.
+    """
+    value = _unwrap_fill(value)
+    if isinstance(value, dict):
+        for key in ("color1", "color"):
+            found = value.get(key)
+            if is_valid_color(found):
+                return list(found)
+        return None
+    if is_valid_color(value):
+        return list(value)
+    return None
+
+
 def resolve_fill_color(attrs: dict) -> list[float] | None:
     """Read a fill color out of a plain MAX attribute dict, or None.
 
@@ -330,21 +360,25 @@ def resolve_fill_color(attrs: dict) -> list[float] | None:
       1. ``bgfillcolor`` dict -- ``color1``, else ``color``   (2 panels)
       2. flat top-level ``grad1``                             (37 panels)
       3. ``bgcolor``                                          (19 panels)
+
+    A list-wrapped dict (``[{"type": "color", "color": [...]}]``, as in
+    MAX's ``generic_editor.maxpat``) unwraps to that dict under any of the
+    three keys, and a dict under ``grad1`` / ``bgcolor`` reads the same way
+    (Q27 / F6). Only valid colors (:func:`is_valid_color`) are returned: an
+    invalid value falls through to the next key, then None.
     """
-    bgfill = attrs.get("bgfillcolor")
+    if not isinstance(attrs, dict):
+        return None
+    bgfill = _unwrap_fill(attrs.get("bgfillcolor"))
     if isinstance(bgfill, dict):
-        for key in ("color1", "color"):
-            value = bgfill.get(key)
-            if isinstance(value, list) and value:
-                return list(value)
+        found = _fill_from_value(bgfill)
+        if found is not None:
+            return found
 
-    grad1 = attrs.get("grad1")
-    if isinstance(grad1, list) and grad1:
-        return list(grad1)
-
-    bgcolor = attrs.get("bgcolor")
-    if isinstance(bgcolor, list) and bgcolor:
-        return list(bgcolor)
+    for key in ("grad1", "bgcolor"):
+        found = _fill_from_value(attrs.get(key))
+        if found is not None:
+            return found
 
     return None
 

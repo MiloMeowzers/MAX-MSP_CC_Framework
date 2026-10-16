@@ -138,12 +138,26 @@ def _write_and_sync(path: Path, content: str) -> None:
         os.fsync(f.fileno())
 
 
-def finalize_patch(patcher: "Patcher", is_new: bool = True) -> None:
+def finalize_patch(
+    patcher: "Patcher",
+    is_new: bool = True,
+    *,
+    force_layout: bool = False,
+) -> None:
     """Single-call layout cleanup hook for new and edited patches.
 
-    For new patches (is_new=True):
-        Applies auto-styling, full topological layout, assistance comments,
-        and midpoint generation for all patchers and subpatchers.
+    For new patches (is_new=True), in this order:
+        1. auto-styling (canvas background, dac~/loadbang highlights) with
+           text contrast deferred;
+        2. full topological layout and midpoint generation for all patchers
+           and subpatchers (``apply_layout``; panels, headers and labels
+           move with the boxes they belong to);
+        3. text contrast, once, against the final surfaces (Q27 / F3:
+           choosing colours before layout put labels on the wrong panel);
+        4. assistance comments.
+        ``apply_layout`` refuses a MAX-saved or >120-box patcher with
+        LayoutRefusedError before changing anything; ``force_layout=True``
+        lays it out anyway.
 
     For edited patches (is_new=False):
         Never clears existing cable midpoints (Q6 / B1). It routes only
@@ -156,17 +170,19 @@ def finalize_patch(patcher: "Patcher", is_new: bool = True) -> None:
     Args:
         patcher: The Patcher instance to finalize.
         is_new: True for newly created patches, False for loaded/edited patches.
+        force_layout: Passed to ``apply_layout(force=...)`` when is_new.
     """
-    from src.maxpat.aesthetics import apply_auto_styling
-    from src.maxpat.layout import apply_layout, _generate_midpoints
+    from src.maxpat import aesthetics
+    from src.maxpat import layout
 
     if is_new:
-        apply_auto_styling(patcher)
-        apply_layout(patcher)
+        aesthetics.apply_auto_styling(patcher, contrast=False)
+        layout.apply_layout(patcher, force=force_layout)
+        aesthetics.ensure_text_contrast(patcher)
         patcher.populate_assistance_comments()
     else:
         patcher.populate_assistance_comments()
-        _finalize_midpoints_recursive(patcher, _generate_midpoints)
+        _finalize_midpoints_recursive(patcher, layout._generate_midpoints)
 
 
 def _box_added_or_moved(box) -> bool:

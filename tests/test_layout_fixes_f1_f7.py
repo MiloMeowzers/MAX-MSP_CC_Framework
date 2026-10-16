@@ -614,3 +614,229 @@ class TestF5AddBoxNewBoxRenderedDims:
         t = p.add_box("toggle", x=105.0, y=30.0, skip_overlap_check=True)
         m = p.add_box("message", x=30.0, y=30.0)
         assert not _intersect(rendered_rect(m), t.patching_rect)
+
+
+# ---------------------------------------------------------------------------
+# F3: contrast after layout; panels, headers and labels move with their boxes
+# ---------------------------------------------------------------------------
+
+def _evidence_patch():
+    from src.maxpat.aesthetics import auto_size_panel
+
+    p = Patcher()
+    osc = p.add_box("cycle~", ["440"], x=60.0, y=60.0)
+    mul = p.add_box("*~", ["0.5"], x=60.0, y=120.0)
+    dac = p.add_box("ezdac~", x=60.0, y=180.0)
+    p.add_connection(osc, 0, mul, 0)
+    p.add_connection(mul, 0, dac, 0)
+    x, y, w, h = auto_size_panel([osc, mul, dac], padding=18)
+    panel = p.add_panel(x, y, w + 80, h, gradient=False)
+    panel.extra_attrs["bgcolor"] = [0.94, 0.94, 0.94, 1.0]
+    gain = p.add_comment(
+        "gain", x=mul.patching_rect[0] + mul.patching_rect[2] + 8, y=120.0)
+    met = p.add_box("metro", ["100"], x=400.0, y=60.0)
+    out = p.add_box("print", x=400.0, y=120.0)
+    p.add_connection(met, 0, out, 0)
+    tick = p.add_comment(
+        "tick", x=out.patching_rect[0] + out.patching_rect[2] + 8, y=120.0)
+    header = p.add_section_header("SYNTH", x, y - 30)
+    return p, dict(osc=osc, mul=mul, dac=dac, panel=panel, gain=gain,
+                   met=met, out=out, tick=tick, header=header)
+
+
+def _contains(outer, inner):
+    return (outer[0] <= inner[0] and outer[1] <= inner[1]
+            and inner[0] + inner[2] <= outer[0] + outer[2]
+            and inner[1] + inner[3] <= outer[1] + outer[3])
+
+
+class TestF3DecorationsAndContrastOrder:
+
+    def test_evidence_patch(self):
+        from src.maxpat.hooks import finalize_patch
+
+        p, b = _evidence_patch()
+        header_off = (b["header"].patching_rect[0] - b["osc"].patching_rect[0],
+                      b["header"].patching_rect[1] - b["osc"].patching_rect[1])
+        assert header_off == (-18.0, -48.0)
+        finalize_patch(p, is_new=True)
+
+        panel = b["panel"].patching_rect
+        for key in ("osc", "mul", "dac"):
+            assert _contains(panel, rendered_rect(b[key])), key
+        assert _contains(panel, rendered_rect(b["gain"]))
+        for key in ("met", "out"):
+            assert not _intersect(panel, rendered_rect(b[key])), key
+
+        for label, anchor in (("gain", "mul"), ("tick", "out")):
+            lr, ar = b[label].patching_rect, b[anchor].patching_rect
+            assert lr[0] - ar[0] == pytest.approx(ar[2] + 8, abs=0.01)
+            assert lr[1] - ar[1] == pytest.approx(0.0, abs=0.01)
+        hr, orr = b["header"].patching_rect, b["osc"].patching_rect
+        assert (hr[0] - orr[0], hr[1] - orr[1]) == pytest.approx((-18.0, -48.0))
+
+        for box in p.boxes:
+            assert box.patching_rect[0] >= 0 and box.patching_rect[1] >= 0
+
+        findings = [r.finding for r in review_layout(p.to_dict())]
+        assert not [f for f in findings if "Low contrast text" in f], findings
+        assert not [f for f in findings if "Out-of-bounds placement" in f], findings
+
+    def test_contrast_runs_after_layout_once(self, monkeypatch):
+        import src.maxpat.aesthetics as aesthetics
+        import src.maxpat.layout as layout_mod
+        from src.maxpat.hooks import finalize_patch
+
+        calls = []
+        real_layout = layout_mod.apply_layout
+        real_contrast = aesthetics.ensure_text_contrast
+
+        def rec_layout(patcher, *a, **k):
+            calls.append("layout")
+            return real_layout(patcher, *a, **k)
+
+        def rec_contrast(patcher, *a, **k):
+            calls.append("contrast")
+            return real_contrast(patcher, *a, **k)
+
+        monkeypatch.setattr(layout_mod, "apply_layout", rec_layout)
+        monkeypatch.setattr(aesthetics, "ensure_text_contrast", rec_contrast)
+        p, _ = _evidence_patch()
+        finalize_patch(p, is_new=True)
+        assert calls == ["layout", "contrast"]
+
+    def test_apply_auto_styling_contrast_flag(self):
+        from src.maxpat.aesthetics import apply_auto_styling
+
+        p = Patcher()
+        c = p.add_comment("hello", 30.0, 30.0)
+        apply_auto_styling(p, contrast=False)
+        assert "textcolor" not in c.extra_attrs
+        apply_auto_styling(p)
+        assert "textcolor" in c.extra_attrs
+
+    def test_row_reserves_label_width(self):
+        p = Patcher()
+        osc = p.add_box("cycle~", ["440"], x=60.0, y=60.0)
+        a = p.add_box("*~", ["0.5"], x=60.0, y=120.0)
+        b2 = p.add_box("*~", ["0.3"], x=240.0, y=120.0)
+        p.add_connection(osc, 0, a, 0)
+        p.add_connection(osc, 0, b2, 0)
+        lbl = p.add_comment("amp", x=a.patching_rect[0] + a.patching_rect[2] + 8, y=120.0)
+        apply_layout(p)
+        lr = rendered_rect(lbl)
+        anchor, other = (a, b2) if a.patching_rect[0] < b2.patching_rect[0] else (b2, a)
+        assert lbl.patching_rect[0] == pytest.approx(
+            a.patching_rect[0] + a.patching_rect[2] + 8)
+        if anchor is a:
+            assert other.patching_rect[0] >= lr[0] + lr[2] + H_GUTTER - 1e-9
+        assert not _intersect(lr, other.patching_rect)
+
+    def test_panel_anchored_note_keeps_offset(self):
+        p = Patcher()
+        src = p.add_box("loadbang", x=60.0, y=60.0)
+        dst = p.add_box("print", x=60.0, y=120.0)
+        p.add_connection(src, 0, dst, 0)
+        panel = p.add_panel(40.0, 40.0, 400.0, 220.0, gradient=False)
+        note = p.add_comment("note", x=300.0, y=220.0)
+        far = p.add_comment("far away", x=900.0, y=900.0)
+        off = (note.patching_rect[0] - panel.patching_rect[0],
+               note.patching_rect[1] - panel.patching_rect[1])
+        apply_layout(p)
+        assert (note.patching_rect[0] - panel.patching_rect[0],
+                note.patching_rect[1] - panel.patching_rect[1]) == pytest.approx(off)
+        assert far.patching_rect[:2] != [900.0, 900.0]
+        assert far.patching_rect[0] >= panel.patching_rect[0] + panel.patching_rect[2]
+
+    def test_panel_is_not_a_routing_obstacle(self):
+        from src.maxpat.layout import _generate_midpoints
+
+        def build(with_panel):
+            p = Patcher()
+            a = p.add_box("loadbang", x=30, y=30, skip_overlap_check=True)
+            b = p.add_box("print", x=30, y=200, skip_overlap_check=True)
+            p.add_box("metro", ["100"], x=20, y=110, skip_overlap_check=True)
+            p.add_connection(a, 0, b, 0)
+            if with_panel:
+                p.add_panel(0, 0, 400, 300, gradient=False)
+            _generate_midpoints(p)
+            return p.lines[0].midpoints
+
+        plain = build(False)
+        assert plain
+        assert build(True) == plain
+
+    def test_finalize_refuses_max_saved_unless_forced(self):
+        from src.maxpat.hooks import finalize_patch
+
+        p = _saved_patch({"major": 9, "minor": 1, "revision": 5})
+        with pytest.raises(_layout.LayoutRefusedError):
+            finalize_patch(p, is_new=True)
+        p = _saved_patch({"major": 9, "minor": 1, "revision": 5})
+        finalize_patch(p, is_new=True, force_layout=True)
+
+
+# ---------------------------------------------------------------------------
+# F6: list-wrapped fill dicts
+# ---------------------------------------------------------------------------
+
+_DARK_WRAPPED = [{"type": "color", "color": [0.13, 0.13, 0.13, 1.0]}]
+_LIGHT_WRAPPED = [{"type": "color", "color": [0.94, 0.94, 0.94, 1.0]}]
+
+
+class TestF6ListWrappedFill:
+
+    def test_unwraps_bgcolor(self):
+        from src.maxpat.aesthetics import resolve_fill_color
+
+        assert resolve_fill_color({"bgcolor": _DARK_WRAPPED}) == [0.13, 0.13, 0.13, 1.0]
+
+    def test_unwraps_bgfillcolor_color1(self):
+        from src.maxpat.aesthetics import resolve_fill_color
+
+        attrs = {"bgfillcolor": [{"type": "gradient", "color1": [0.5, 0.5, 0.5, 1.0],
+                                  "color": [0.1, 0.1, 0.1, 1.0]}]}
+        assert resolve_fill_color(attrs) == [0.5, 0.5, 0.5, 1.0]
+
+    def test_no_color_gives_none(self):
+        from src.maxpat.aesthetics import resolve_fill_color
+
+        assert resolve_fill_color({"bgcolor": [{"type": "color"}]}) is None
+        assert resolve_fill_color({"bgcolor": ["a", "b", "c"]}) is None
+
+    def test_contrast_ratio_does_not_raise(self):
+        from src.maxpat.aesthetics import contrast_ratio, resolve_panel_background
+
+        bg = resolve_panel_background({"bgcolor": _DARK_WRAPPED}).color
+        assert contrast_ratio([1.0, 1.0, 1.0, 1.0], bg) > 4.5
+
+    def _panel_patch(self):
+        return _make_patch([
+            {"id": "obj-1", "maxclass": "comment", "text": "hello",
+             "textcolor": [0.8, 0.8, 0.8, 1.0], "patching_rect": [20, 20, 100, 20]},
+            {"id": "obj-2", "maxclass": "panel", "background": 1,
+             "bgcolor": copy.deepcopy(_LIGHT_WRAPPED),
+             "patching_rect": [0, 0, 300, 200]},
+        ])
+
+    def test_light_wrapped_panel_low_contrast_warning(self):
+        res = [r for r in review_layout(self._panel_patch())
+               if r.finding.startswith("Low contrast text") and r.severity == "warning"]
+        assert len(res) == 1
+
+    def test_generic_editor_shape_never_raises(self):
+        from src.maxpat.aesthetics import ensure_text_contrast
+
+        patch = self._panel_patch()
+        patch["patcher"]["boxes"][1]["box"].pop("background")
+        review_layout(copy.deepcopy(patch))
+        ensure_text_contrast(Patcher.from_dict(copy.deepcopy(patch)))
+
+    def test_junk_never_raises(self):
+        from src.maxpat.aesthetics import resolve_fill_color, resolve_panel_background
+
+        for v in (None, "red", 5, [], [[]], [[{}]], [None], [{}], [{"color": "x"}],
+                  {"color1": None}, ["a"], [[1, 2, 3]], ({"color": [1, 1, 1]},)):
+            for key in ("bgfillcolor", "grad1", "bgcolor"):
+                resolve_fill_color({key: v})
+                resolve_panel_background({key: v})

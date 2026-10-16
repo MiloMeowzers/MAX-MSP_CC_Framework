@@ -153,6 +153,13 @@ def _ceil_grid(v: float, grid: float | None) -> float:
     return math.ceil(v / grid - 1e-9) * grid
 
 
+def _floor_grid(v: float, grid: float | None) -> float:
+    """Round *v* down to the grid (no-op when grid is None or <= 0)."""
+    if not grid or grid <= 0:
+        return v
+    return math.floor(v / grid + 1e-9) * grid
+
+
 def _rdims(box: Box) -> tuple[float, float]:
     """Rendered (width, height) of a box, falling back to its stored rect."""
     r = rendered_rect(box)
@@ -179,6 +186,202 @@ def _translate(boxes: list[Box], dx: float, dy: float) -> None:
     for b in boxes:
         b.patching_rect[0] += dx
         b.patching_rect[1] += dy
+
+
+# ---------------------------------------------------------------------------
+# Decorations: panels, headers and labels move with their boxes (Q27 / F3)
+# ---------------------------------------------------------------------------
+
+# Largest rendered-rect gap at which a label/header/step marker belongs to a
+# content box (rider) rather than floating free.
+_ANCHOR_GAP = 40.0
+
+
+def _rrect(box: Box) -> list[float] | None:
+    """Rendered rect of a Box (layout passes max_saved=False: it only runs on
+    generator-written patches unless forced)."""
+    return rendered_rect(box)
+
+
+def _rect_center_in(rect: list[float], outer: list[float]) -> bool:
+    cx = rect[0] + rect[2] * 0.5
+    cy = rect[1] + rect[3] * 0.5
+    return (outer[0] <= cx <= outer[0] + outer[2]
+            and outer[1] <= cy <= outer[1] + outer[3])
+
+
+def _axis_gaps(a: list[float], b: list[float]) -> tuple[float, float]:
+    """(horizontal gap, vertical gap) between two rects, 0 when overlapping."""
+    hg = max(0.0, b[0] - (a[0] + a[2]), a[0] - (b[0] + b[2]))
+    vg = max(0.0, b[1] - (a[1] + a[3]), a[1] - (b[1] + b[3]))
+    return hg, vg
+
+
+class _Decorations:
+    """Pre-layout anchors of a patcher's decorations (Q27 / F3).
+
+    Decorations are cordless panels, untargeted comments (labels, headers)
+    and other ``background: 1`` boxes (step markers). Each non-panel
+    decoration rides the nearest content box within ``_ANCHOR_GAP`` px
+    (``box_riders``), else the smallest membered panel its center lies in
+    (``panel_riders``); a panel with members is refit around them plus its
+    box riders, keeping its original pads. Everything else stays an
+    unanchored decoration for the disconnected placement.
+    """
+
+    def __init__(self) -> None:
+        self.box_riders: dict[str, list[tuple[Box, float, float]]] = {}
+        self.panel_riders: dict[str, list[tuple[Box, float, float]]] = {}
+        # (panel, member ids, tracked boxes, pads (left, top, right, bottom))
+        self.panels: list[tuple[Box, set[str], list[Box], tuple[float, float, float, float]]] = []
+        self.anchored: set[str] = set()
+
+    def riders_of(self, box_id: str) -> list[tuple[Box, float, float]]:
+        return self.box_riders.get(box_id, [])
+
+
+def _capture_decorations(patcher: Patcher) -> _Decorations:
+    """Record every decoration's anchor and offset before layout moves boxes."""
+    deco = _Decorations()
+    boxes = patcher.boxes
+    ids = {b.id for b in boxes}
+    corded: set[str] = set()
+    for line in patcher.lines:
+        if line.source_id in ids and line.dest_id in ids:
+            corded.add(line.source_id)
+            corded.add(line.dest_id)
+
+    def is_decoration(b: Box) -> bool:
+        if b.id in corded:
+            return False
+        if b.maxclass == "panel":
+            return True
+        if b.maxclass == "comment" and not getattr(b, "target_id", None):
+            return True
+        return b.extra_attrs.get("background") == 1
+
+    decos = [b for b in boxes if is_decoration(b)]
+    deco_ids = {b.id for b in decos}
+    content = []
+    for b in boxes:
+        if b.id in deco_ids or b.maxclass == "comment":
+            continue
+        r = _rrect(b)
+        if r is not None:
+            content.append((b, r))
+
+    # Panel members: content boxes whose rendered center lies inside.
+    panels = []
+    for b in decos:
+        if b.maxclass != "panel":
+            continue
+        rect = b.patching_rect
+        if _rrect(b) is None:
+            continue
+        members = [c for c, r in content if _rect_center_in(r, rect)]
+        if members:
+            panels.append((b, members))
+
+    # Box anchors, else panel anchors, for non-panel decorations.
+    for d in decos:
+        if d.maxclass == "panel":
+            continue
+        dr = _rrect(d)
+        if dr is None:
+            continue
+        best = None
+        best_key = None
+        for idx, (c, cr) in enumerate(content):
+            hg, vg = _axis_gaps(dr, cr)
+            key = (max(hg, vg), min(hg, vg), idx)
+            if best_key is None or key < best_key:
+                best, best_key = c, key
+        if best is not None and best_key[0] <= _ANCHOR_GAP:
+            deco.box_riders.setdefault(best.id, []).append(
+                (d, d.patching_rect[0] - best.patching_rect[0],
+                 d.patching_rect[1] - best.patching_rect[1]))
+            deco.anchored.add(d.id)
+            continue
+        holders = [p for p, _ in panels if _rect_center_in(dr, p.patching_rect)]
+        if holders:
+            p = min(holders, key=lambda q: q.patching_rect[2] * q.patching_rect[3])
+            deco.panel_riders.setdefault(p.id, []).append(
+                (d, d.patching_rect[0] - p.patching_rect[0],
+                 d.patching_rect[1] - p.patching_rect[1]))
+            deco.anchored.add(d.id)
+
+    # Membered panels: tracked set = members + their box riders.
+    for p, members in panels:
+        tracked = list(members)
+        for m in members:
+            tracked.extend(r for r, _, _ in deco.riders_of(m.id))
+        left, top, right, bottom = _block_bbox(tracked)
+        px, py, pw, ph = p.patching_rect[:4]
+        pads = (max(0.0, left - px), max(0.0, top - py),
+                max(0.0, px + pw - right), max(0.0, py + ph - bottom))
+        deco.panels.append((p, {m.id for m in members}, tracked, pads))
+        deco.anchored.add(p.id)
+    return deco
+
+
+def _place_decorations(
+    deco: _Decorations,
+    box_map: dict[str, Box],
+    within: set[str] | None = None,
+) -> list[Box]:
+    """Place riders at anchor + offset and refit panels around their
+    tracked set + pads. Idempotent; never grid-snapped.
+
+    *within* limits the pass to riders whose anchor is in it and panels
+    whose members all are (the provisional per-component pass). Returns the
+    decorations placed.
+    """
+    placed: list[Box] = []
+    for anchor_id, riders in deco.box_riders.items():
+        if within is not None and anchor_id not in within:
+            continue
+        anchor = box_map.get(anchor_id)
+        if anchor is None:
+            continue
+        for rider, dx, dy in riders:
+            rider.patching_rect[0] = anchor.patching_rect[0] + dx
+            rider.patching_rect[1] = anchor.patching_rect[1] + dy
+            placed.append(rider)
+    for panel, member_ids, tracked, pads in deco.panels:
+        if within is not None and not member_ids <= within:
+            continue
+        left, top, right, bottom = _block_bbox(tracked)
+        pl, pt, pr, pb = pads
+        panel.patching_rect[0] = left - pl
+        panel.patching_rect[1] = top - pt
+        panel.patching_rect[2] = (right - left) + pl + pr
+        panel.patching_rect[3] = (bottom - top) + pt + pb
+        placed.append(panel)
+        for rider, dx, dy in deco.panel_riders.get(panel.id, []):
+            rider.patching_rect[0] = panel.patching_rect[0] + dx
+            rider.patching_rect[1] = panel.patching_rect[1] + dy
+            placed.append(rider)
+    return placed
+
+
+def _clear_negative_coords(patcher: Patcher, grid: float | None) -> None:
+    """Safety net: translate every box (and existing midpoint) right/down so
+    no box starts at a negative coordinate."""
+    if not patcher.boxes:
+        return
+    min_x = min(b.patching_rect[0] for b in patcher.boxes)
+    min_y = min(b.patching_rect[1] for b in patcher.boxes)
+    dx = _ceil_grid(-min_x, grid) if min_x < 0 else 0.0
+    dy = _ceil_grid(-min_y, grid) if min_y < 0 else 0.0
+    if not dx and not dy:
+        return
+    _translate(patcher.boxes, dx, dy)
+    for line in patcher.lines:
+        mids = getattr(line, "midpoints", None)
+        if mids:
+            line.midpoints = [
+                v + (dx if i % 2 == 0 else dy) for i, v in enumerate(mids)
+            ]
 
 
 def apply_layout(
@@ -237,11 +440,18 @@ def apply_layout(
                 ports, key=lambda b: b.patching_rect[0]
             )
 
+    # Decorations (panels, headers, labels, step markers) keep their
+    # pre-layout anchors and offsets (Q27 / F3).
+    deco = _capture_decorations(patcher)
+    box_map = {b.id: b for b in patcher.boxes}
+
     # Build adjacency graph from patcher.lines
     adj, in_degree, reverse_adj = _build_graph(patcher.boxes, patcher.lines)
 
-    # Separate connected components from disconnected objects
+    # Separate connected components from disconnected objects; anchored
+    # decorations are placed with their anchors, not in the column.
     components, disconnected = _find_components(patcher.boxes, adj)
+    disconnected = [b for b in disconnected if b.id not in deco.anchored]
 
     grid = options.grid_size if options.grid_snap else None
     cap_right = _START_X + options.max_width
@@ -294,32 +504,49 @@ def apply_layout(
         start_x = _ceil_grid(cursor_x, grid)
         _position_component(
             rows, start_x, band_top, reverse_adj, patcher.boxes,
-            patcher.lines, options, controls=ui_controls,
+            patcher.lines, options, controls=ui_controls, deco=deco,
         )
 
         # Position companion objects beside their parents
         _place_companions(patcher, companions)
 
+        # Provisional decorations: this component's riders and the panels
+        # whose members all lie in it. The block includes them; shift it
+        # right/down if they reach left of cursor_x or above the band top.
+        block_decos = _place_decorations(deco, box_map, within=comp_ids)
+        left, top, right, bottom = _block_bbox(component_boxes + block_decos)
+        shift_x = _ceil_grid(cursor_x - left, grid) if left < cursor_x else 0.0
+        shift_y = _ceil_grid(band_top - top, grid) if top < band_top else 0.0
+        if shift_x or shift_y:
+            _translate(component_boxes, shift_x, shift_y)
+            block_decos = _place_decorations(deco, box_map, within=comp_ids)
+            left, top, right, bottom = _block_bbox(component_boxes + block_decos)
+
         # Component banding: a block that passes the cap moves to a new
         # band below everything placed so far.
-        _, _, right, bottom = _block_bbox(component_boxes)
         if right > cap_right and cursor_x > _START_X:
             new_top = _ceil_grid(band_bottom + _COMPONENT_GAP, grid)
-            _translate(component_boxes, _START_X - start_x, new_top - band_top)
+            _translate(component_boxes, -_floor_grid(left - _START_X, grid),
+                       new_top - band_top)
             band_top = new_top
-            _, _, right, bottom = _block_bbox(component_boxes)
+            block_decos = _place_decorations(deco, box_map, within=comp_ids)
+            left, top, right, bottom = _block_bbox(component_boxes + block_decos)
         band_bottom = max(band_bottom, bottom)
         cursor_x = right + _COMPONENT_GAP
 
     # Place disconnected objects to the right of all components, or in a
     # new band when their widest box would pass the cap.
     if disconnected:
-        widest = max(_rdims(b)[0] for b in disconnected)
+        widest = 0.0
+        for b in disconnected:
+            fp = _footprint(b, None, 0.0, deco)
+            widest = max(widest, fp.right - fp.left)
         if cursor_x + widest <= cap_right:
             disc_x, disc_y = cursor_x, band_top
         else:
             disc_x, disc_y = _START_X, band_bottom + _COMPONENT_GAP
-        _position_disconnected(disconnected, disc_x, disc_y, cap_right=cap_right)
+        _position_disconnected(disconnected, disc_x, disc_y,
+                               cap_right=cap_right, deco=deco)
 
     # Place associated comments near their targets
     _place_associated_comments(patcher.boxes, options.comment_gap)
@@ -338,6 +565,11 @@ def apply_layout(
                 xs[i] = xs[i - 1] + options.grid_size
         for b, x in zip(ports, xs):
             b.patching_rect[0] = x
+
+    # Final decoration pass against final positions (exact offsets, never
+    # snapped), then make sure nothing starts at a negative coordinate.
+    _place_decorations(deco, box_map)
+    _clear_negative_coords(patcher, grid)
 
     # Generate midpoints for all cables needing segmented routing
     _generate_midpoints(patcher)
@@ -532,13 +764,16 @@ def _control_groups(
     controls: dict[str, tuple[Box, int]] | None,
     all_boxes: list[Box],
     options: LayoutOptions,
-) -> dict[str, list[tuple[Box, float]]]:
-    """Group extracted UI controls by target: target id -> [(control, dx)].
+    deco: "_Decorations | None" = None,
+) -> dict[str, list[tuple[Box, float, _Footprint]]]:
+    """Group extracted UI controls by target: target id -> [(control, dx, fp)].
 
     Controls are ordered by destination inlet, then box-array order, and
-    sit left to right from the target's x, each starting at least
-    ``h_gutter`` after the previous control's rendered right edge (rounded
-    up to the grid when grid_snap is on, so the final snap keeps gutters).
+    sit left to right from the target's x, each footprint starting at least
+    ``h_gutter`` after the previous one's right edge (rounded up to the grid
+    when grid_snap is on, so the final snap keeps gutters). A control's
+    footprint is its rendered rect plus its riders (a label beside a dial
+    widens the group; Q27 / F3).
     """
     if not controls:
         return {}
@@ -552,33 +787,42 @@ def _control_groups(
             continue
         by_target.setdefault(target.id, []).append(
             (inlet, order.get(ctrl_id, 0), ctrl))
-    groups: dict[str, list[tuple[Box, float]]] = {}
+    groups: dict[str, list[tuple[Box, float, _Footprint]]] = {}
     for target_id, entries in by_target.items():
         entries.sort(key=lambda e: (e[0], e[1]))
-        placed: list[tuple[Box, float]] = []
-        next_dx = 0.0
+        placed: list[tuple[Box, float, _Footprint]] = []
+        next_left = 0.0
         for _, _, ctrl in entries:
-            dx = _ceil_grid(next_dx, grid)
-            placed.append((ctrl, dx))
-            next_dx = dx + _rdims(ctrl)[0] + options.h_gutter
+            fp = _footprint(ctrl, None, 0.0, deco)
+            dx = _ceil_grid(next_left - fp.left, grid)
+            placed.append((ctrl, dx, fp))
+            next_left = dx + fp.right + options.h_gutter
         groups[target_id] = placed
     return groups
 
 
 def _footprint(
     box: Box,
-    group: list[tuple[Box, float]] | None,
+    group: list[tuple[Box, float, _Footprint]] | None,
     gap: float,
+    deco: "_Decorations | None" = None,
 ) -> _Footprint:
     """The footprint of a row box: its rendered rect, widened and raised by
-    its control group (W = group width, band = tallest control + gap)."""
+    its control group (W = group width, band = tallest control + gap) and
+    extended by its riders' offset rects (labels, headers; Q27 / F3)."""
     w, h = _rdims(box)
     fp = _Footprint(0.0, w, 0.0, h)
     if group:
-        width = max(dx + _rdims(c)[0] for c, dx in group)
-        tallest = max(_rdims(c)[1] for c, _ in group)
-        fp.right = max(fp.right, width)
+        fp.right = max(fp.right, max(dx + cfp.right for _, dx, cfp in group))
+        tallest = max(cfp.above + cfp.bottom for _, _, cfp in group)
         fp.above = max(fp.above, tallest + gap)
+    if deco is not None:
+        for rider, dx, dy in deco.riders_of(box.id):
+            rw, rh = _rdims(rider)
+            fp.left = min(fp.left, dx)
+            fp.right = max(fp.right, dx + rw)
+            fp.above = max(fp.above, -dy)
+            fp.bottom = max(fp.bottom, dy + rh)
     return fp
 
 
@@ -591,6 +835,7 @@ def _position_component(
     lines: list,
     options: LayoutOptions,
     controls: dict[str, tuple[Box, int]] | None = None,
+    deco: "_Decorations | None" = None,
 ) -> float:
     """Position boxes in a component as top-to-bottom rows.
 
@@ -604,7 +849,8 @@ def _position_component(
 
     Every row box reserves a footprint (Q27 / F2): its rendered rect plus
     the band of UI controls feeding it (*controls*: control id -> (target,
-    inlet)), which sit above it left to right by inlet. Slots keep
+    inlet)), which sit above it left to right by inlet, and the offset
+    rects of its riders (*deco*: labels and headers anchored to it). Slots keep
     ``h_gutter`` apart; a slot that would end past ``start_x +
     options.max_width`` opens a new line packed from start_x (a slot wider
     than the cap sits alone on its line). Each line's boxes share one y
@@ -619,7 +865,7 @@ def _position_component(
     grid = options.grid_size if options.grid_snap else None
     gap = options.v_spacing * 0.5
     cap = start_x + options.max_width
-    groups = _control_groups(controls, all_boxes, options)
+    groups = _control_groups(controls, all_boxes, options, deco)
 
     cursor_y = start_y
     for row_idx, row in enumerate(rows):
@@ -649,7 +895,7 @@ def _position_component(
         prev_right: float | None = None
         packing = False
         for box, ideal in zip(row, ideals):
-            fp = _footprint(box, groups.get(box.id), gap)
+            fp = _footprint(box, groups.get(box.id), gap, deco)
             if ideal is None or packing:
                 slot_left = start_x if prev_right is None else prev_right + options.h_gutter
             else:
@@ -667,8 +913,7 @@ def _position_component(
                     # Alone on its line: pull it back under the cap when
                     # it fits, else it starts at start_x.
                     x = max(_ceil_grid(start_x - fp.left, grid),
-                            cap - fp.right if not grid else
-                            math.floor((cap - fp.right) / grid + 1e-9) * grid)
+                            _floor_grid(cap - fp.right, grid))
             current.append((box, fp, x))
             prev_right = x + fp.right
         if current:
@@ -689,18 +934,18 @@ def _position_component(
                 next_gap += (height - 100) * 0.1
             cursor_y = y + height + next_gap
 
-    # Controls sit in their target's band, bottom-aligned gap px above it.
+    # Controls sit in their target's band, footprint bottoms gap px above it.
     for target_id, group in groups.items():
         target = box_map.get(target_id)
         if target is None:
             continue
         tx, ty = target.patching_rect[0], target.patching_rect[1]
-        for ctrl, dx in group:
+        for ctrl, dx, cfp in group:
             ctrl.patching_rect[0] = tx + dx
-            ctrl.patching_rect[1] = ty - gap - _rdims(ctrl)[1]
+            ctrl.patching_rect[1] = ty - gap - cfp.bottom
 
     placed = [b for row in rows for b in row]
-    placed.extend(c for group in groups.values() for c, _ in group)
+    placed.extend(c for group in groups.values() for c, _, _ in group)
     _, _, right, _ = _block_bbox(placed)
     return right - start_x
 
@@ -983,14 +1228,16 @@ def _position_disconnected(
     start_x: float,
     start_y: float,
     cap_right: float | None = None,
+    deco: "_Decorations | None" = None,
 ) -> None:
     """Place disconnected objects in a compact grid to the right of components.
 
     Groups subpatchers first, then other objects. Uses multi-column layout
-    with wrapping to avoid excessively tall columns. Column widths and box
-    heights are rendered (``sizing.rendered_rect``). When a new column would
-    end past *cap_right*, it instead starts a new column band at start_x,
-    below the tallest column so far (Q27 / F5).
+    with wrapping to avoid excessively tall columns. Each box occupies its
+    footprint: rendered rect (``sizing.rendered_rect``) plus the offset
+    rects of its riders (*deco*; Q27 / F3). When a new column would end
+    past *cap_right*, it instead starts a new column band at start_x, below
+    the tallest column so far (Q27 / F5).
     """
     if not boxes:
         return
@@ -1020,14 +1267,19 @@ def _position_disconnected(
         state["y"] = state["top"]
         state["col_w"] = 0.0
 
+    def dims(box: Box) -> _Footprint:
+        return _footprint(box, None, 0.0, deco)
+
     def place(box: Box) -> None:
-        w, h = _rdims(box)
+        fp = dims(box)
+        w = fp.right - fp.left
+        h = fp.above + fp.bottom
         if state["y"] + h > state["top"] + max_col_height and state["y"] > state["top"]:
             new_column(w)
-        box.patching_rect[0] = state["x"]
-        box.patching_rect[1] = state["y"]
+        box.patching_rect[0] = state["x"] - fp.left
+        box.patching_rect[1] = state["y"] + fp.above
         state["y"] += h + disc_v_gap
-        state["lowest"] = max(state["lowest"], box.patching_rect[1] + h)
+        state["lowest"] = max(state["lowest"], state["y"] - disc_v_gap)
         state["col_w"] = max(state["col_w"], w)
 
     # Place subpatchers first (in a column, they're reference modules)
@@ -1036,7 +1288,7 @@ def _position_disconnected(
 
     # Start new column for non-subpatcher objects if subpatchers were placed
     if subpatchers and others:
-        new_column(max(_rdims(b)[0] for b in others))
+        new_column(max(dims(b).right - dims(b).left for b in others))
 
     # Place other disconnected objects (comments, etc.)
     for box in others:
@@ -1119,6 +1371,8 @@ def _boxes_between(
     - Its vertical span overlaps the cord's vertical range (src_oy to dst_iy)
     - Its horizontal span overlaps the cord's horizontal corridor
     - It is not the source or destination box
+    - It is not a background element (a panel or a ``background: 1`` box):
+      cords run over panels, which sit behind their chains (Q27 / F3)
     """
     src_oy = src_box.patching_rect[1] + src_box.patching_rect[3]
     dst_iy = dst_box.patching_rect[1]
@@ -1134,6 +1388,8 @@ def _boxes_between(
     obstacles: list[Box] = []
     for box in patcher.boxes:
         if box.id == src_box.id or box.id == dst_box.id:
+            continue
+        if _is_background(box):
             continue
         bx, by, bw, bh = box.patching_rect
         # Expand box by collision pad
@@ -1153,6 +1409,11 @@ def _boxes_between(
 
 
 _ROUTE_CLEAR = 4.0  # Gap kept between a routed cord and any box edge
+
+
+def _is_background(box: Box) -> bool:
+    """Panels and ``background: 1`` boxes render behind cords."""
+    return box.maxclass == "panel" or box.extra_attrs.get("background") == 1
 
 
 def _segment_hits(
@@ -1217,6 +1478,8 @@ def _route_clear_path(
     for box in patcher.boxes:
         if box.id in (src_box.id, dst_box.id):
             continue
+        if _is_background(box):
+            continue  # panels / background boxes are never obstacles (Q27 / F3)
         bx, by, bw, bh = box.patching_rect
         rects.append((bx - pad, by - pad, bx + bw + pad, by + bh + pad))
 
