@@ -297,7 +297,7 @@
                     "numinlets": 1,
                     "numoutlets": 4,
                     "outlettype": [ "", "", "", "" ],
-                    "patching_rect": [ 195.0, 735.0, 79.0, 22.0 ],
+                    "patching_rect": [ 1206.5, 330.0, 79.0, 22.0 ],
                     "text": "autopattr",
                     "fontname": "Arial",
                     "fontsize": 12.0
