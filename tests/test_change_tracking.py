@@ -425,9 +425,10 @@ class TestB7PortSync:
         btn = p.add_box("button")
         p.add_connection(btn, 0, art, 2)
         result = inner.remove_box(new_inlet)
-        expected = [_orphan(btn.id, 0, "obj-85", 2)]
-        assert result.orphaned == expected
-        assert result.parent_orphaned == expected
+        # WR-01 (Q28 review): parent cords only in parent_orphaned; the new
+        # inlet had no cords in its own patcher, so orphaned is empty.
+        assert result.orphaned == []
+        assert result.parent_orphaned == [_orphan(btn.id, 0, "obj-85", 2)]
         assert (btn.id, 0, "obj-85", 2) not in _cords(p)
         assert art.numinlets == 2
 
@@ -509,9 +510,22 @@ class TestB7PortSync:
         assert ("obj-85", 1, "obj-73", 1) not in _cords(p)
         assert art.numoutlets == 1
 
-    def test_remove_non_port_box_returns_empty_edit_result(self):
+    def test_remove_non_port_box_returns_own_cords(self):
+        """WR-01 (Q28 review): orphaned holds the cords removed from this patcher."""
         p, _, _, inner = self._articulation()
         box = _box(inner, "obj-5")
         result = inner.remove_box(box)
         assert result.box is box
-        assert result.orphaned == [] and result.parent_orphaned == []
+        assert result.orphaned == [
+            _orphan("obj-1", 0, "obj-5", 0),
+            _orphan("obj-5", 1, "obj-7", 0),
+            _orphan("obj-5", 0, "obj-6", 0),
+        ]
+        assert result.parent_orphaned == []
+
+    def test_remove_port_box_splits_own_and_parent_cords(self):
+        """WR-01 (Q28 review): a port's own cords and the parent's never mix."""
+        p, _, art, inner = self._articulation()
+        result = inner.remove_box(_box(inner, "obj-2"))
+        assert result.orphaned == [_orphan("obj-2", 0, "obj-10", 0)]
+        assert result.parent_orphaned == [_orphan("obj-69", 0, "obj-85", 1)]

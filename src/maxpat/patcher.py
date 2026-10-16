@@ -215,9 +215,9 @@ class EditResult:
 
     ``parent_orphaned`` lists cords removed in the PARENT patcher when a
     port (inlet/outlet) box change inside a subpatcher shrank the parent
-    box's port count (Q28 / B7). remove_box returns them in both fields;
-    replace_box only in ``parent_orphaned`` (its ``orphaned`` stays the
-    cords of this patcher, which replace_box_safe rewires by id).
+    box's port count (Q28 / B7). ``orphaned`` is always cords of THIS
+    patcher (replace_box_safe rewires them by id); parent-patcher cords
+    appear only in ``parent_orphaned``.
     """
     box: Box
     orphaned: list[dict] = field(default_factory=list)
@@ -668,9 +668,11 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             box: The box to remove.
 
         Returns:
-            EditResult with the removed box. ``orphaned`` and
-            ``parent_orphaned`` both hold the parent-patcher cords removed
-            by the port resync (empty for any other box).
+            EditResult with the removed box. ``orphaned`` holds the cords
+            removed from THIS patcher (every cord to or from the box);
+            ``parent_orphaned`` holds the parent-patcher cords removed by
+            the port resync (empty for any other box). Parent cords never
+            appear in ``orphaned``.
 
         Raises:
             ValueError: If the box is not in this patcher.
@@ -681,18 +683,28 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             )
         kind = box.maxclass if box.maxclass in ("inlet", "outlet") else None
         rank = self._port_rank(box) if kind is not None else None
-        # Filter out all patchlines referencing this box (build new list)
-        self.lines = [
-            pl for pl in self.lines
-            if pl.source_id != box.id and pl.dest_id != box.id
-        ]
+        # Filter out all patchlines referencing this box (build new list),
+        # reporting the removed ones as this patcher's orphans.
+        orphaned: list[dict] = []
+        surviving = []
+        for pl in self.lines:
+            if pl.source_id == box.id or pl.dest_id == box.id:
+                orphaned.append({
+                    "source_id": pl.source_id,
+                    "source_outlet": pl.source_outlet,
+                    "dest_id": pl.dest_id,
+                    "dest_inlet": pl.dest_inlet,
+                })
+            else:
+                surviving.append(pl)
+        self.lines = surviving
         self.boxes.remove(box)
         parent_orphaned: list[dict] = []
         if kind is not None:
             parent_orphaned = self._sync_parent_ports_after_remove(kind, rank)
         return EditResult(
             box=box,
-            orphaned=[dict(o) for o in parent_orphaned],
+            orphaned=orphaned,
             parent_orphaned=parent_orphaned,
         )
 
