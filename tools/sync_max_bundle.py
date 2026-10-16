@@ -19,9 +19,11 @@ What this is, and is not
 * ``overrides.json`` is read only through ``ObjectDatabase``. The tool has no
   write path to it: :func:`write_db_file` -- the single function that writes
   into the DB tree -- accepts only the core domain object files, the
-  per-package object files and ``package_info.json``. The only other writer
-  into the DB tree is :func:`write_groups_file` (``--apply groups``), which
-  can only write ``<db-root>/groups.json``. The other write sites
+  per-package object files and ``package_info.json``. The only other writers
+  into the DB tree are :func:`write_groups_file` (``--apply groups``), which
+  can only write ``<db-root>/groups.json``, and :func:`write_aliases_file`
+  (``--apply aliases``), which can only add to ``<db-root>/aliases.json``.
+  The other write sites
   are :func:`write_report` (``--json`` / ``--snapshot-io`` targets), which
   refuses any path inside ``patches/`` or the DB tree, and
   :func:`write_extraction_log` (``--refresh-log``), which can only replace
@@ -63,6 +65,15 @@ Sources of shape
   from its help patch. ``--apply groups`` records them in ``groups.json``
   (each group once, merged at call time by ``ObjectDatabase``); attribute
   types come only from non-ambiguous group-page definitions.
+* objectfile aliases (Q30 / I6): every ``max objectfile NAME FILE [CLASS];``
+  line in every bundle init file (not only ``*objectmappings*``). Section
+  ``objectfile_aliases`` lists each name the DB cannot resolve with a
+  proposed alias target, how it was derived (``basis``) and help-box
+  evidence; names that resolve only to RNBO / Gen entries are listed apart
+  (``domain_shadowed``). ``--apply aliases --names`` adds named, verified
+  aliases to ``aliases.json`` through :func:`write_aliases_file`, its only
+  writer (additive, style- and mode-preserving, rolled back if the DB then
+  fails to load or resolve them).
 * UI maxclasses: every box maxclass the bundle's .maxpat/.maxhelp files carry
   (section ``ui_maxclasses``, review C5 / Q13), diffed against UI_MAXCLASSES;
   report-only.
@@ -80,6 +91,7 @@ Usage
     python3 tools/sync_max_bundle.py --apply deltas
     python3 tools/sync_max_bundle.py --apply inherited --attributes alpha_mode
     python3 tools/sync_max_bundle.py --apply groups
+    python3 tools/sync_max_bundle.py --apply aliases --names hslider mc.times~
     python3 tools/sync_max_bundle.py --refresh-log           # after an apply
     python3 tools/sync_max_bundle.py --snapshot-io /tmp/io.json
     python3 tools/sync_max_bundle.py --compare-io /tmp/io.json
@@ -160,12 +172,13 @@ _WHOLE_VALUE_TOKENS = ("undefined", "Dummy")
 # Bound on recursion into nested patchers when walking help patches (T-hwb-06).
 MAX_PATCHER_DEPTH = 32
 
-APPLY_MODES = ("new", "define", "deltas", "inherited", "groups")
+APPLY_MODES = ("new", "define", "deltas", "inherited", "groups", "aliases")
 
 SECTION_KEYS = [
     "install",
     "new_objects",
     "define_missing",
+    "objectfile_aliases",
     "deltas",
     "inherited_attributes",
     "groups",
@@ -186,6 +199,10 @@ class StyleUnreproducible(Exception):
 
 class AdditiveViolation(Exception):
     """A write would change or remove data on a pre-existing entry (T-hwb-02)."""
+
+
+class AliasVerificationFailed(Exception):
+    """aliases.json was restored: after the write the DB did not load or resolve (Q30 PD-6)."""
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +288,64 @@ def parse_define_mappings(c74: Path) -> dict[str, dict]:
                 },
             )
     return defines
+
+
+# Q30 PD-6: `max objectfile NAME FILE [CLASS ARGS...];` -- the name Max
+# instantiates by loading FILE (an external, an abstraction or a wrapper).
+_OBJECTFILE_RE = re.compile(r"^\s*max\s+objectfile\s+([^\s;]+)\s+([^\s;]+)\s*(.*?)\s*;?\s*$")
+
+
+def parse_objectfile_mappings(c74: Path) -> dict:
+    """Every `max objectfile` line in the bundle's init files (Q30 PD-6).
+
+    Reads every ``init/*.txt`` and ``packages/*/init/*.txt`` (Max runs every
+    init file, not only the ``*objectmappings*`` ones). Returns
+    ``{"records": {name: {name, file, class, args, package, mapping_file,
+    line}}, "lines": int, "files": [paths holding a line], "duplicates":
+    [names]}``. ``class`` is the first token after the file (None when
+    absent), ``args`` the rest. The first line for a name wins; later lines
+    for it are listed in ``duplicates``.
+    """
+    result: dict = {"records": {}, "lines": 0, "files": [], "duplicates": []}
+    paths: list[tuple[Path, str | None]] = []
+    try:
+        paths.extend((p, None) for p in sorted((c74 / "init").glob("*.txt")))
+        paths.extend(
+            (p, p.parent.parent.name) for p in sorted(c74.glob("packages/*/init/*.txt"))
+        )
+    except (PermissionError, OSError):
+        return result
+    records = result["records"]
+    for path, package in paths:
+        try:
+            text = path.read_text(errors="replace")
+        except (PermissionError, OSError):
+            continue
+        seen_line = False
+        for line in text.splitlines():
+            match = _OBJECTFILE_RE.match(line)
+            if not match:
+                continue
+            seen_line = True
+            result["lines"] += 1
+            name, file_, rest = match.group(1), match.group(2), match.group(3)
+            tokens = rest.split()
+            if name in records:
+                if name not in result["duplicates"]:
+                    result["duplicates"].append(name)
+                continue
+            records[name] = {
+                "name": name,
+                "file": file_,
+                "class": tokens[0] if tokens else None,
+                "args": " ".join(tokens[1:]),
+                "package": package,
+                "mapping_file": str(path),
+                "line": line.strip(),
+            }
+        if seen_line:
+            result["files"].append(str(path))
+    return result
 
 
 def _scan_refpage_file(path: Path, root_kind: str, package: str | None, hints) -> dict | None:
@@ -611,6 +686,7 @@ def build_bundle_index(max_app: str | Path) -> dict:
         "version": _major_minor(install.get("short_version")),
         "c74": str(c74),
         "defines": parse_define_mappings(c74),
+        "objectfiles": parse_objectfile_mappings(c74),
         "refs": refs,
         "parse_errors": errors,
         "help": build_help_index(c74),
@@ -1005,15 +1081,25 @@ def build_refpage_entry(
 # ---------------------------------------------------------------------------
 
 
+def is_doc_page_name(name: str) -> bool:
+    """A refpage name containing whitespace documents a topic, never an object.
+
+    "MC Wrapper Features", "Snapshot Messages": a name with a space can never
+    be the first token of an object box. Shared with
+    ``.claude/scripts/extract_objects.py`` (Q30 PD-7), which applies only
+    this rule.
+    """
+    return any(ch.isspace() for ch in name)
+
+
 def _is_doc_page(ref: dict) -> bool:
     """A refpage with no inlets, outlets or methods documents a topic, not an object.
 
-    So does any page whose name contains whitespace ("MC Wrapper Features",
-    "Snapshot Messages"): the bundle's group pages carry empty inletlist /
-    outletlist elements plus a shared methodlist, and a name with a space can
-    never be the first token of an object box.
+    So does any page whose name contains whitespace (:func:`is_doc_page_name`):
+    the bundle's group pages carry empty inletlist / outletlist elements plus
+    a shared methodlist.
     """
-    if any(ch.isspace() for ch in ref["name"]):
+    if is_doc_page_name(ref["name"]):
         return True
     return not ref["inlets"] and not ref["outlets"] and not ref["methods"]
 
@@ -1092,6 +1178,148 @@ def section_define_missing(index: dict, db: ObjectDatabase) -> dict:
         "available": True,
         "count": len(entries),
         "names": [e["alias"] for e in entries],
+        "entries": entries,
+    }
+
+
+_RNBO_GEN_DOMAINS = ("RNBO", "Gen")
+
+
+def _objectfile_canonical(db: ObjectDatabase, records: dict, x: str | None) -> str | None:
+    """The DB name lookup() gives `x`, else the DB name of the first objectfile
+    alias (in name order) whose file is `x` and which resolves (Q30 PD-6)."""
+    if not x:
+        return None
+    hit = _muted_lookup(db, x)
+    if hit is not None:
+        return hit.get("name", x)
+    for name in sorted(records):
+        if records[name]["file"] == x:
+            via = _muted_lookup(db, name)
+            if via is not None:
+                return via.get("name", name)
+    return None
+
+
+def objectfile_candidate(record: dict, db: ObjectDatabase, records: dict) -> tuple[str | None, str | None]:
+    """(candidate alias target, basis) for one objectfile record (Q30 PD-6).
+
+    By line shape, the first rule that yields a name the DB resolves:
+    * file ``mc.wrapper~`` -> basis ``mc_wrapper``: "mc." + canonical(class),
+      with no fallback to the mono class;
+    * file ending ``.maxpat`` / ``.js`` -> basis ``abstraction``: the file stem;
+    * otherwise basis ``class``: canonical(class) when it differs from the
+      alias, else basis ``file``: canonical(file).
+    (None, None) when no rule yields a resolvable name.
+    """
+    name, file_, cls = record["name"], record["file"], record["class"]
+
+    def resolved(candidate: str | None) -> str | None:
+        if not candidate or candidate == name:
+            return None
+        hit = _muted_lookup(db, candidate)
+        return hit.get("name", candidate) if hit is not None else None
+
+    if file_ == "mc.wrapper~":
+        mono = _objectfile_canonical(db, records, cls)
+        target = resolved("mc." + mono) if mono else None
+        return (target, "mc_wrapper") if target else (None, None)
+    if file_.endswith((".maxpat", ".js")):
+        target = resolved(file_.rsplit(".", 1)[0])
+        return (target, "abstraction") if target else (None, None)
+    target = resolved(_objectfile_canonical(db, records, cls))
+    if target:
+        return target, "class"
+    target = resolved(_objectfile_canonical(db, records, file_))
+    if target:
+        return target, "file"
+    return None, None
+
+
+def _io_counts(db: ObjectDatabase, name: str, args: list[str]) -> list[int] | None:
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            inlets, outlets = db.compute_io_counts(name, args)
+    except Exception:  # noqa: BLE001 -- evidence only; an unresolvable count is "no evidence"
+        return None
+    return [inlets, outlets]
+
+
+def objectfile_evidence(index: dict, db: ObjectDatabase, name: str, candidate: str | None) -> dict:
+    """Help-box evidence for aliasing `name` to `candidate` (Q30 PD-6).
+
+    ``help_io`` lists each help box's [numinlets, numoutlets];
+    ``help_io_agrees`` is True when every box equals
+    ``compute_io_counts(candidate, box args)``, False when any differs, None
+    with no box (or no candidate).
+    """
+    evidence = find_help_boxes(index, name, (candidate,) if candidate else ())
+    boxes = evidence["boxes"]
+    help_io = [[b["numinlets"], b["numoutlets"]] for b in boxes]
+    agrees: bool | None = None
+    if boxes and candidate:
+        agrees = all(
+            _io_counts(db, candidate, b["text"].split()[1:]) == [b["numinlets"], b["numoutlets"]]
+            for b in boxes
+        )
+    return {"help_stem": evidence["help_stem"], "help_io": help_io, "help_io_agrees": agrees}
+
+
+def _objectfile_entry(index: dict, db: ObjectDatabase, records: dict, record: dict) -> dict:
+    candidate, basis = objectfile_candidate(record, db, records)
+    target = _muted_lookup(db, candidate) if candidate else None
+    entry = {key: record[key] for key in ("name", "file", "class", "args", "package", "mapping_file", "line")}
+    entry.update(
+        {
+            "candidate": candidate,
+            "basis": basis,
+            "candidate_domain": target.get("domain") if target else None,
+            "candidate_io": _io_counts(db, candidate, []) if candidate else None,
+        }
+    )
+    entry.update(objectfile_evidence(index, db, record["name"], candidate))
+    return entry
+
+
+def section_objectfile_aliases(index: dict, db: ObjectDatabase) -> dict:
+    """`max objectfile` names the DB cannot resolve, with a proposed alias (Q30 PD-6).
+
+    Report-only; aliases land only through ``--apply aliases --names``. Names
+    whose lookup() entry is an RNBO or Gen entry (the list.* family) resolve,
+    so they are not unresolved, but Max instantiates the objectfile instead:
+    they are listed apart under ``domain_shadowed``.
+    """
+    parsed = index.get("objectfiles") or {"records": {}, "lines": 0, "files": [], "duplicates": []}
+    records = parsed["records"]
+    entries: list[dict] = []
+    shadowed: list[dict] = []
+    resolved = 0
+    for name in sorted(records):
+        hit = _muted_lookup(db, name)
+        if hit is None:
+            entries.append(_objectfile_entry(index, db, records, records[name]))
+            continue
+        resolved += 1
+        if hit.get("domain") in _RNBO_GEN_DOMAINS:
+            item = _objectfile_entry(index, db, records, records[name])
+            item["domain"] = hit.get("domain")
+            shadowed.append(item)
+    by_basis: dict[str, int] = {}
+    for entry in entries:
+        key = entry["basis"] or "none"
+        by_basis[key] = by_basis.get(key, 0) + 1
+    return {
+        "available": True,
+        "files": parsed["files"],
+        "lines": parsed["lines"],
+        "names": len(records),
+        "duplicates": parsed["duplicates"],
+        "resolved": resolved,
+        "unresolved_count": len(entries),
+        "names_unresolved": [e["name"] for e in entries],
+        "by_basis": dict(sorted(by_basis.items())),
+        "domain_shadowed": shadowed,
         "entries": entries,
     }
 
@@ -1629,6 +1857,7 @@ def run_report(db_root: str | Path, max_app: str | Path, index: dict | None = No
 
     sections["new_objects"] = section_new_objects(index, classified, db)
     sections["define_missing"] = section_define_missing(index, db)
+    sections["objectfile_aliases"] = section_objectfile_aliases(index, db)
     sections["deltas"] = deltas
     existing_groups = load_groups(db_root)
     inherited = compute_inherited(index, classified, db, raw_db, groups=existing_groups)
@@ -1880,6 +2109,51 @@ def write_groups_file(path: str | Path, data: dict, db_root: str | Path) -> bool
         check_groups_additive(old, data)
         if payload == raw:
             return False
+    atomic_write_bytes(target, payload)
+    return True
+
+
+ALIASES_FILE = "aliases.json"
+
+
+def write_aliases_file(db_root: str | Path, additions: dict[str, str]) -> bool:
+    """Add `additions` to <db_root>/aliases.json -- its only writer (Q30 PD-6).
+
+    Additive only: every existing top-level key and alias stays as it is
+    (AdditiveViolation if an addition would change one); existing aliases
+    keep their order and new ones are appended in name order. The file's own
+    style is reproduced (StyleUnreproducible otherwise) and the replace is
+    atomic and keeps the file's mode. Returns False (writes nothing) on
+    identical bytes.
+    """
+    target = Path(db_root) / ALIASES_FILE
+    raw = target.read_bytes()
+    old = json.loads(raw)
+    style = json_style(raw, old)
+    if style is None:
+        raise StyleUnreproducible(f"{target}: no indent-2 style reproduces the file")
+    if not isinstance(old, dict) or not isinstance(old.get("aliases"), dict):
+        raise StyleUnreproducible(f"{target}: not an aliases file (object with an `aliases` object)")
+    new = copy.deepcopy(old)
+    for name in sorted(additions):
+        current = old["aliases"].get(name)
+        if current is not None and current != additions[name]:
+            raise AdditiveViolation(
+                f"{ALIASES_FILE}: alias {name!r} would change ({current!r} -> {additions[name]!r})"
+            )
+        if current is None:
+            new["aliases"][name] = additions[name]
+    for key, value in old.items():
+        if key == "aliases":
+            continue
+        if not _same(new.get(key), value):  # pragma: no cover -- defensive
+            raise AdditiveViolation(f"{ALIASES_FILE}: top-level key {key!r} would change")
+    ensure_ascii, trailing_newline = style
+    payload = (
+        json.dumps(new, indent=2, ensure_ascii=ensure_ascii) + ("\n" if trailing_newline else "")
+    ).encode("utf-8")
+    if payload == raw:
+        return False
     atomic_write_bytes(target, payload)
     return True
 
@@ -2301,6 +2575,76 @@ def apply_inherited(
     return applied
 
 
+def apply_aliases(index: dict, db_root: Path, names: list[str]) -> list[dict]:
+    """--apply aliases: add NAMED objectfile aliases to aliases.json (Q30 PD-6).
+
+    Per name: a name lookup() already resolves (any domain, the RNBO-shadowed
+    list.* included) is skipped; no objectfile line, no candidate, or help
+    boxes that disagree with the candidate's counts abort it; otherwise
+    ``aliases[name] = candidate``. After the write the DB must load and
+    resolve every written alias to its candidate, else the original bytes are
+    restored and AliasVerificationFailed is raised.
+    """
+    db = load_db(db_root)
+    records = (index.get("objectfiles") or {}).get("records", {})
+    results: list[dict] = []
+    additions: dict[str, str] = {}
+    for name in names:
+        result: dict = {"name": name, "status": "aborted", "notes": {}}
+        hit = _muted_lookup(db, name)
+        if hit is not None:
+            results.append(
+                {
+                    "name": name,
+                    "status": "skipped",
+                    "reason": f"already resolves in the DB (domain {hit.get('domain')})",
+                }
+            )
+            continue
+        record = records.get(name)
+        if record is None:
+            results.append(_abort(result, f"no `max objectfile {name} ...` line in the bundle"))
+            continue
+        result["source"] = record["mapping_file"]
+        result["notes"]["objectfile"] = record["line"]
+        candidate, basis = objectfile_candidate(record, db, records)
+        if candidate is None:
+            results.append(_abort(result, "no candidate target the DB resolves"))
+            continue
+        evidence = objectfile_evidence(index, db, name, candidate)
+        result["notes"].update(evidence)
+        if evidence["help_io_agrees"] is False:
+            results.append(
+                _abort(
+                    result,
+                    f"help boxes {evidence['help_io']} disagree with {candidate!r} I/O counts",
+                )
+            )
+            continue
+        additions[name] = candidate
+        result.update({"status": "written", "target": candidate, "basis": basis, "file": ALIASES_FILE})
+        results.append(result)
+
+    if additions:
+        path = Path(db_root) / ALIASES_FILE
+        original = path.read_bytes()
+        if write_aliases_file(db_root, additions):
+            try:
+                reloaded = load_db(db_root)
+                bad = [
+                    name
+                    for name, candidate in additions.items()
+                    if (_muted_lookup(reloaded, name) or {}).get("name") != candidate
+                ]
+                reason = f"aliases did not resolve to their candidates: {bad}" if bad else None
+            except Exception as exc:  # noqa: BLE001 -- any load failure means restore
+                reason = f"the DB did not load after the write: {type(exc).__name__}: {exc}"
+            if reason is not None:
+                atomic_write_bytes(path, original)
+                raise AliasVerificationFailed(f"{ALIASES_FILE} restored -- {reason}")
+    return results
+
+
 def apply_groups(index: dict, db_root: Path) -> dict:
     """--apply groups: (re)write groups.json from the bundle's group lists."""
     db = load_db(db_root)
@@ -2334,16 +2678,19 @@ _LOG_HISTORY_FIELDS = (
 )
 
 
-def build_extraction_log(db_root: Path, report: dict, old: dict, now: _dt.datetime) -> dict:
-    """The extraction log re-stated from the DB on disk, after a sync.
+def restate_extraction_log(
+    db_root: Path, old: dict, now: _dt.datetime, extra: dict | None = None
+) -> dict:
+    """The extraction log re-stated from the DB on disk (Q30 PD-7).
 
-    The log's own fields (written by ``.claude/scripts/extract_objects.py``)
-    keep their names, order and meaning: counts are recomputed over every
-    ``objects.json`` the DB holds, with the traversal ``tests/conftest.py``
-    and ``tools/audit_db.py`` use. Fields this tool cannot recompute
-    (``errors``, ``error_count``, ``inlet_type_fallback_count``,
-    ``max_installation_path``) are carried over. The superseded state is
-    appended to ``history``; nothing recorded there is ever dropped.
+    The log's own fields keep their names, order and meaning: counts are
+    recomputed over every ``objects.json`` the DB holds, with the traversal
+    ``tests/conftest.py`` and ``tools/audit_db.py`` use. Fields that cannot be
+    recomputed (``errors``, ``error_count``, ``inlet_type_fallback_count``,
+    ``max_installation_path``) are carried over, every other old key is kept,
+    then ``extra`` is applied. The superseded state is appended to
+    ``history``; nothing recorded there is ever dropped. Shared by
+    ``--refresh-log`` and ``.claude/scripts/extract_objects.py``.
     """
     files = [db_root / domain / "objects.json" for domain in CORE_DOMAIN_DIRS]
     pkg_root = db_root / "packages"
@@ -2363,8 +2710,6 @@ def build_extraction_log(db_root: Path, report: dict, old: dict, now: _dt.dateti
     order = [*(old.get("domain_counts") or {}), *CORE_DOMAIN_DIRS, "packages"]
     domain_counts = {d: live[d] for d in dict.fromkeys(order) if d in live}
 
-    sections = report["sections"]
-    install = sections["install"]
     history = list(old.get("history") or [])
     if old:
         history.append({k: old[k] for k in _LOG_HISTORY_FIELDS if k in old})
@@ -2383,6 +2728,27 @@ def build_extraction_log(db_root: Path, report: dict, old: dict, now: _dt.dateti
             "empty_outlets_count": empty_outlets,
             "extraction_timestamp": now.isoformat(),
             "max_installation_path": old.get("max_installation_path", str(db_root)),
+        }
+    )
+    if extra:
+        log.update(extra)
+    log["history"] = history
+    return log
+
+
+def build_extraction_log(db_root: Path, report: dict, old: dict, now: _dt.datetime) -> dict:
+    """The extraction log re-stated from the DB on disk, after a sync.
+
+    :func:`restate_extraction_log` plus this sync's record: the installed Max
+    version and build and the ``sync`` summary.
+    """
+    sections = report["sections"]
+    install = sections["install"]
+    return restate_extraction_log(
+        db_root,
+        old,
+        now,
+        extra={
             "max_version": install.get("short_version"),
             "max_build": install.get("build_id"),
             "sync": {
@@ -2396,10 +2762,8 @@ def build_extraction_log(db_root: Path, report: dict, old: dict, now: _dt.dateti
                 "group_members": sections.get("groups", {}).get("members"),
                 "pending_group_names": sections.get("groups", {}).get("pending_names"),
             },
-            "history": history,
-        }
+        },
     )
-    return log
 
 
 def write_extraction_log(db_root: Path, log: dict) -> Path:
@@ -2492,6 +2856,14 @@ def format_summary(report: dict) -> str:
         f"  define missing  : {missing['count']}"
         + (f": {', '.join(missing['names'])}" if missing["names"] else "")
     )
+    of = s["objectfile_aliases"]
+    lines.append(
+        f"  objectfile      : {of['lines']} lines, {of['names']} names, "
+        f"{of['unresolved_count']} unresolved ("
+        + ", ".join(f"{k} {v}" for k, v in of["by_basis"].items())
+        + f"), {len(of['domain_shadowed'])} RNBO/Gen-shadowed "
+        "(report-only; --apply aliases --names NAME)"
+    )
     d = s["deltas"]
     lines.append(
         f"  deltas          : {d['object_count']} objects -- "
@@ -2560,15 +2932,16 @@ def build_parser() -> argparse.ArgumentParser:
         choices=APPLY_MODES,
         default=[],
         help=(
-            "Apply mode; repeatable. new / define require --names; inherited requires "
-            "--attributes; groups takes no allow-list and writes only groups.json."
+            "Apply mode; repeatable. new / define / aliases require --names; inherited "
+            "requires --attributes; groups takes no allow-list and writes only "
+            "groups.json; aliases writes only aliases.json."
         ),
     )
     parser.add_argument(
         "--names",
         nargs="+",
         default=None,
-        help="Explicit allow-list of object names (mandatory for new and define).",
+        help="Explicit allow-list of object names (mandatory for new, define and aliases).",
     )
     parser.add_argument(
         "--attributes",
@@ -2626,6 +2999,12 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    if "aliases" in modes and not args.names:
+        print(
+            "error: --apply aliases requires --names: objectfile aliases land only by name.",
+            file=sys.stderr,
+        )
+        return 2
     if "inherited" in modes and not args.attributes:
         print(
             "error: --apply inherited requires --attributes: inherited group "
@@ -2662,7 +3041,17 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 if "groups" in modes:
                     applied["groups"] = apply_groups(index, db_root)
-            except (WriteRefused, AdditiveViolation, StyleUnreproducible, OSError) as exc:
+                if "aliases" in modes:
+                    applied["aliases"] = apply_aliases(index, db_root, args.names)
+                    if any(r["status"] == "aborted" for r in applied["aliases"]):
+                        exit_code = 1
+            except (
+                WriteRefused,
+                AdditiveViolation,
+                StyleUnreproducible,
+                AliasVerificationFailed,
+                OSError,
+            ) as exc:
                 print(f"error: {type(exc).__name__}: {exc}", file=sys.stderr)
                 return 2
 
@@ -2675,6 +3064,10 @@ def main(argv: list[str] | None = None) -> int:
         detail = result.get("reason") or result.get("notes", {}).get("io_source", "")
         where = f" -> {result['file']} {result['io']}" if result["status"] == "written" else ""
         print(f"  {result['status']:8s}: {result['name']}{where}" + (f" ({detail})" if detail else ""))
+    for result in applied.get("aliases", []):
+        detail = result.get("reason") or result.get("basis", "")
+        where = f" -> {result['target']}" if result["status"] == "written" else ""
+        print(f"  alias {result['status']:8s}: {result['name']}{where}" + (f" ({detail})" if detail else ""))
     if "deltas" in applied:
         a = applied["deltas"]
         print(

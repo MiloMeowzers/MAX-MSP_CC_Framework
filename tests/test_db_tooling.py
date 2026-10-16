@@ -325,3 +325,446 @@ class TestVersionTuple:
     )
     def test_version_tuple(self, validate_db, value, expected) -> None:
         assert validate_db._version_tuple(value) == expected
+
+
+# ══ I6 part 2: objectfile aliases (sync report, --apply aliases, audit_db) ══
+
+
+def _add_entries(db_root: Path, rel: str, entries: dict) -> None:
+    """Add fake-DB entries to one domain file (created when absent), test setup only."""
+    path = db_root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    data.update(entries)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _objectfile_world(world: dict) -> dict:
+    """One alias per candidate basis, plus resolved and RNBO-shadowed names."""
+    from tests.test_sync_max_bundle import _entry
+
+    c74, root = world["c74"], world["db_root"]
+    (c74 / "init" / "q30-mappings.txt").write_text(
+        "max objectfile *~ times~;\n"
+        "max objectfile mc.times~ mc.wrapper~ times~;\n"
+        "max objectfile 4mixr vz.4mixr.maxpat;\n"
+        "max objectfile list.iter zl zl.iter;\n"
+        "max objectfile list.len zl zl.len;\n"
+        "max objectfile hslider slider;\n"
+        "max objectfile jit.plus jit.old;\n"
+        "max objectfile ghost.obj nowhere;\n"
+        "max objectfile old old.impl;\n"
+    )
+    help_max = c74 / "help" / "max"
+    help_max.mkdir(parents=True, exist_ok=True)
+    (help_max / "hslider.maxhelp").write_text(_help_patch([_newobj("hslider", 1, 1, [""])]))
+    _add_entries(root, "msp/objects.json", {"*~": _entry("*~", "MSP", "msp")})
+    _add_entries(root, "mc/objects.json", {"mc.*~": _entry("mc.*~", "MC", "mc")})
+    _add_entries(
+        root,
+        "max/objects.json",
+        {
+            "vz.4mixr": _entry("vz.4mixr", "Max", "max"),
+            "zl.iter": _entry("zl.iter", "Max", "max"),
+            "zl.len": _entry("zl.len", "Max", "max"),
+            "slider": _entry("slider", "Max", "max"),
+        },
+    )
+    _add_entries(root, "rnbo/objects.json", {"list.len": _entry("list.len", "RNBO", "rnbo")})
+    return world
+
+
+class TestI6ObjectfileParse:
+    def test_every_init_file_and_line_shape_is_read(self, tmp_path: Path) -> None:
+        c74 = tmp_path / "C74"
+        (c74 / "init").mkdir(parents=True)
+        (c74 / "packages" / "P" / "init").mkdir(parents=True)
+        core = c74 / "init" / "a-objectmappings.txt"
+        core.write_text(
+            "max objectfile  dbl.space   target.obj;\n"
+            "max objectfile mc.cls~ mc.wrapper~ cls~ @extra 1;\n"
+            "max objectfile nosemi file.obj\n"
+            "max objectfile dbl.space other.obj;\n"
+            "max define not.objectfile target;\n"
+        )
+        pkg = c74 / "packages" / "P" / "init" / "p-mc.txt"
+        pkg.write_text("max objectfile p.alias p.file;\n")
+
+        parsed = sync.parse_objectfile_mappings(c74)
+        records = parsed["records"]
+        assert set(records) == {"dbl.space", "mc.cls~", "nosemi", "p.alias"}
+        dbl, cls = records["dbl.space"], records["mc.cls~"]
+        assert (dbl["file"], dbl["class"], dbl["args"]) == ("target.obj", None, "")
+        assert (cls["file"], cls["class"], cls["args"]) == ("mc.wrapper~", "cls~", "@extra 1")
+        assert records["nosemi"]["file"] == "file.obj"
+        assert records["p.alias"]["package"] == "P"
+        assert dbl["package"] is None
+        assert parsed["lines"] == 5
+        assert parsed["duplicates"] == ["dbl.space"]
+        assert set(parsed["files"]) == {str(core), str(pkg)}
+
+
+class TestI6ObjectfileReport:
+    def test_section_slot(self) -> None:
+        keys = sync.SECTION_KEYS
+        assert keys[keys.index("define_missing") + 1] == "objectfile_aliases"
+        assert keys[-1] == "ui_maxclasses"
+
+    def test_candidates_bases_and_evidence(self, world: dict) -> None:
+        _objectfile_world(world)
+        before = _tree_bytes(world["db_root"])
+        report = sync.run_report(world["db_root"], world["app"])
+        assert _tree_bytes(world["db_root"]) == before
+        section = report["sections"]["objectfile_aliases"]
+        entries = {e["name"]: e for e in section["entries"]}
+
+        def pick(name):
+            return entries[name]["candidate"], entries[name]["basis"]
+
+        assert pick("mc.times~") == ("mc.*~", "mc_wrapper")
+        assert pick("4mixr") == ("vz.4mixr", "abstraction")
+        assert pick("list.iter") == ("zl.iter", "class")
+        assert pick("hslider") == ("slider", "file")
+        assert pick("ghost.obj") == (None, None)
+        # Resolved names are not entries; the RNBO-resolving one is listed apart.
+        assert "old" not in entries and "*~" not in entries and "list.len" not in entries
+        shadowed = {e["name"]: e for e in section["domain_shadowed"]}
+        assert shadowed["list.len"]["candidate"] == "zl.len"
+        # Help evidence.
+        assert entries["jit.gl.fresh"]["help_io_agrees"] is False
+        assert entries["list.iter"]["help_io_agrees"] is None
+        assert entries["hslider"]["help_io_agrees"] is True
+        assert entries["hslider"]["help_io"] == [[1, 1]]
+        for entry in entries.values():
+            for key in (
+                "file", "class", "args", "package", "mapping_file", "line",
+                "candidate_domain", "candidate_io", "help_stem",
+            ):
+                assert key in entry
+        assert section["unresolved_count"] == len(section["names_unresolved"]) == len(entries)
+        assert section["names_unresolved"] == sorted(section["names_unresolved"])
+        assert section["by_basis"]["mc_wrapper"] == 1
+
+        summary = sync.format_summary(report)
+        assert any(line.strip().startswith("objectfile") for line in summary.splitlines())
+
+
+class TestI6ApplyAliases:
+    def _seed_aliases(self, world: dict) -> Path:
+        path = world["db_root"] / "aliases.json"
+        path.write_text(
+            json.dumps({"_comment": "curated", "aliases": {"zz": "old", "aa": "corething"}}, indent=2)
+            + "\n"
+        )
+        os.chmod(path, 0o640)
+        return path
+
+    def test_names_are_mandatory(self, world: dict) -> None:
+        _objectfile_world(world)
+        before = _tree_bytes(world["db_root"])
+        assert _run(world, "--apply", "aliases") == 2
+        assert _tree_bytes(world["db_root"]) == before
+
+    def test_a_file_basis_alias_lands_additively(self, world: dict) -> None:
+        from src.maxpat.atomic_io import json_style
+        from src.maxpat.db_lookup import ObjectDatabase
+
+        _objectfile_world(world)
+        path = self._seed_aliases(world)
+        overrides = world["db_root"] / "overrides.json"
+        overrides_sha = hashlib.sha256(overrides.read_bytes()).hexdigest()
+        style_before = json_style(path.read_bytes(), json.loads(path.read_bytes()))
+        assert _run(world, "--apply", "aliases", "--names", "jit.plus") == 0
+        raw = path.read_bytes()
+        data = json.loads(raw)
+        assert list(data) == ["_comment", "aliases"]
+        assert list(data["aliases"].items()) == [
+            ("zz", "old"), ("aa", "corething"), ("jit.plus", "jit.old"),
+        ]
+        assert json_style(raw, data) == style_before
+        assert _mode(path) == 0o640
+        assert ObjectDatabase(world["db_root"]).lookup("jit.plus")["name"] == "jit.old"
+        assert hashlib.sha256(overrides.read_bytes()).hexdigest() == overrides_sha
+
+    def test_resolved_shadowed_unknown_and_disagreeing_names_never_land(self, world: dict) -> None:
+        _objectfile_world(world)
+        path = self._seed_aliases(world)
+        before = path.read_bytes()
+        out = world["repo"].parent / "aliases-report.json"
+        code = _run(
+            world, "--apply", "aliases", "--names", "old", "list.len", "nope.obj", "jit.gl.fresh",
+            "--json", str(out),
+        )
+        assert code == 1
+        assert path.read_bytes() == before
+        results = {r["name"]: r for r in json.loads(out.read_text())["applied"]["aliases"]}
+        assert results["old"]["status"] == "skipped"
+        assert results["list.len"]["status"] == "skipped"
+        assert results["nope.obj"]["status"] == "aborted"
+        assert results["jit.gl.fresh"]["status"] == "aborted"
+
+    def test_a_failed_reload_restores_the_file(
+        self, world: dict, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _objectfile_world(world)
+        path = self._seed_aliases(world)
+        before = path.read_bytes()
+        real_load = sync.load_db
+        calls = {"n": 0}
+
+        def failing_after_first(db_root):
+            calls["n"] += 1
+            if calls["n"] > 1:
+                raise RuntimeError("injected reload failure")
+            return real_load(db_root)
+
+        monkeypatch.setattr(sync, "load_db", failing_after_first)
+        assert _run(world, "--apply", "aliases", "--names", "jit.plus") == 2
+        assert path.read_bytes() == before
+        assert _mode(path) == 0o640
+
+
+class TestI6AuditObjectfile:
+    def test_objectfile_names_are_mapped_not_absent(self, tmp_path: Path) -> None:
+        import tools.audit_db as audit_db
+        from tests.test_audit_db import _add_packages, _fake_db, _make_fake_bundle
+
+        app = _make_fake_bundle(tmp_path)
+        c74 = _add_packages(app)
+        (c74 / "init").mkdir(parents=True, exist_ok=True)
+        (c74 / "init" / "q30-objectmappings.txt").write_text(
+            "max objectfile of.alias bitand;\n"
+            "max objectfile un.alias &;\n"
+        )
+        db_root = _fake_db(tmp_path, ["of.alias", "bare.alias", "ghost", "&"])
+        report = audit_db.run_audit(repo_root=db_root.parent.parent, db_root=db_root, max_app=app)
+        absent = report["sections"]["absent_from_bundle"]
+        assert absent["names"] == ["ghost"]
+        assert absent["count"] == 1
+        assert absent["objectfile_mapped"] == [{"name": "of.alias", "file": "bitand", "class": None}]
+        assert absent["objectfile_mapped_count"] == 1
+        lines = audit_db.format_summary(report).splitlines()
+        line = next(ln for ln in lines if "absent from Max" in ln)
+        assert "+1 objectfile-mapped" in line and "+1 define-mapped" in line
+        missing = report["sections"]["missing_from_db"]
+        assert "un.alias" in missing["objectfile_aliases"]["unresolved"]
+        assert missing["objectfile_aliases"]["lines"] == 2
+        missing_line = next(ln for ln in lines if "missing from DB" in ln)
+        assert "objectfile aliases unresolved" in missing_line
+        assert "objectfiles" not in report["refpage_index"]
+        assert len(report["sections"]) == 7
+
+
+@pytest.mark.requires_max
+class TestI6ObjectfileRealBundle:
+    """Read-only reports of the real bundle against the real DB."""
+
+    @pytest.fixture(scope="class")
+    def section(self) -> dict:
+        return sync.run_report(REAL_DB, MAX_APP_PATH)["sections"]["objectfile_aliases"]
+
+    def test_q38_candidates(self, section: dict) -> None:
+        entries = {e["name"]: e for e in section["entries"]}
+        expected = {
+            "mc.times~": ("mc.*~", "mc_wrapper"),
+            "hslider": ("slider", "file"),
+            "list.iter": ("zl.iter", "class"),
+            "4mixr": ("vz.4mixr", "abstraction"),
+        }
+        for name, (candidate, basis) in expected.items():
+            assert (entries[name]["candidate"], entries[name]["basis"]) == (candidate, basis), name
+
+    def test_non_objectmappings_init_files_and_shadowed_names(self, section: dict) -> None:
+        assert "mc.abl.dsp.chorus~" in section["names_unresolved"]
+        shadowed = {e["name"]: e for e in section["domain_shadowed"]}
+        assert shadowed["list.len"]["candidate"] == "zl.len"
+        assert section["unresolved_count"] >= 251
+
+    def test_audit_db_maps_objectfile_names(self) -> None:
+        import tools.audit_db as audit_db
+
+        report = audit_db.run_audit(repo_root=REPO_ROOT, db_root=REAL_DB, max_app=MAX_APP_PATH)
+        absent = report["sections"]["absent_from_bundle"]
+        mapped = {m["name"] for m in absent["objectfile_mapped"]}
+        for name in ("jit.*", "mc.send~", "array.at"):
+            assert name in mapped, name
+            assert name not in absent["names"], name
+
+
+# ══ I4: extract_objects.py refuses core overwrites, merges the log, skips doc pages ══
+
+
+def _extract(monkeypatch: pytest.MonkeyPatch, *argv: str) -> int:
+    """Run the extractor's main() through sys.argv; works with HEAD's main() too."""
+    import sys
+
+    module = _load_by_path("_q30_extract_objects", EXTRACTOR_PATH)
+    monkeypatch.setattr(sys, "argv", ["extract_objects.py", *argv])
+    try:
+        code = module.main()
+    except SystemExit as exc:
+        code = exc.code
+    return 0 if code is None else code
+
+
+def _fake_c74(tmp_path: Path) -> Path:
+    c74 = tmp_path / "C74"
+    max_ref = c74 / "docs" / "refpages" / "max-ref"
+    msp_ref = c74 / "docs" / "refpages" / "msp-ref"
+    max_ref.mkdir(parents=True)
+    msp_ref.mkdir(parents=True)
+    (max_ref / "q30.obj.maxref.xml").write_text(
+        _refpage(
+            "q30.obj", module="max", inlets=[("int", "in")], outlets=[("int", "out")], methods=["bang"]
+        )
+    )
+    (max_ref / "Doc Page.maxref.xml").write_text(
+        _refpage("Doc Page", module="max", inlets=[], outlets=[], methods=["bang"])
+    )
+    (max_ref / "q30.bare.maxref.xml").write_text(_refpage("q30.bare", module="max"))
+    (msp_ref / "q30.sig~.maxref.xml").write_text(
+        _refpage(
+            "q30.sig~", module="msp", inlets=[("signal", "in")], outlets=[("signal", "out")],
+            methods=["signal"],
+        )
+    )
+    return c74
+
+
+_SEED_LOG = {
+    "total_files_found": 2,
+    "total_objects": 2,
+    "domain_counts": {"max": 1, "msp": 1},
+    "extraction_timestamp": "2026-01-01T00:00:00+00:00",
+    "max_version": "9.2.0",
+    "max_build": "abc",
+    "sync": {"tool": "tools/sync_max_bundle.py --refresh-log"},
+    "history": [{"total_objects": 1}],
+}
+
+
+def _seed_output(tmp_path: Path) -> Path:
+    out = tmp_path / "out"
+    (out / "max").mkdir(parents=True)
+    (out / "msp").mkdir(parents=True)
+    (out / "max" / "objects.json").write_text(
+        json.dumps({"curated": {"name": "curated"}}, indent=2) + "\n"
+    )
+    (out / "msp" / "objects.json").write_text(
+        json.dumps({"curated~": {"name": "curated~"}}, indent=2) + "\n"
+    )
+    (out / "extraction-log.json").write_text(json.dumps(_SEED_LOG, indent=2) + "\n")
+    return out
+
+
+class TestI4ExtractRefusesCore:
+    def test_refuses_without_force_and_writes_nothing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        c74, out = _fake_c74(tmp_path), _seed_output(tmp_path)
+        before = _tree_bytes(out)
+        code = _extract(monkeypatch, "--max-path", str(c74), "--output", str(out))
+        err = capsys.readouterr().err
+        assert code == 2
+        assert "tools/sync_max_bundle.py" in err and "--force" in err
+        assert _tree_bytes(out) == before
+
+    def test_force_rebuilds_and_merges_the_log(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        c74, out = _fake_c74(tmp_path), _seed_output(tmp_path)
+        assert _extract(monkeypatch, "--max-path", str(c74), "--output", str(out), "--force") == 0
+        rebuilt = json.loads((out / "max" / "objects.json").read_text())
+        assert "q30.obj" in rebuilt and "Doc Page" not in rebuilt
+        log = json.loads((out / "extraction-log.json").read_text())
+        assert set(_SEED_LOG) <= set(log)
+        assert log["sync"] == _SEED_LOG["sync"]
+        assert len(log["history"]) == len(_SEED_LOG["history"]) + 1
+        assert log["last_extraction"]["mode"] == "full"
+
+    def test_a_single_domain_run_is_refused_too(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        c74, out = _fake_c74(tmp_path), _seed_output(tmp_path)
+        before = _tree_bytes(out)
+        code = _extract(monkeypatch, "--max-path", str(c74), "--output", str(out), "--domain", "msp")
+        assert code == 2
+        assert _tree_bytes(out) == before
+
+
+class TestI4ExtractLogMerge:
+    def test_package_run_merges_the_real_log_shape(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        out = tmp_path / "out"
+        (out / "packages").mkdir(parents=True)
+        old = json.loads((REAL_DB / "extraction-log.json").read_text())
+        (out / "extraction-log.json").write_text(json.dumps(old, indent=2) + "\n")
+        (out / "package_info.json").write_text(json.dumps({}, indent=2) + "\n")
+        pkg = tmp_path / "FakePackage"
+        (pkg / "docs").mkdir(parents=True)
+        (pkg / "docs" / "x.maxref.xml").write_text(
+            _refpage("fake.x", inlets=[("int", "in")], outlets=[("int", "out")], methods=["bang"])
+        )
+        code = _extract(monkeypatch, "--package", "Fake", "--path", str(pkg), "--output", str(out))
+        assert code == 0
+
+        log = json.loads((out / "extraction-log.json").read_text())
+        for key in old:
+            assert key in log, key
+        for key in ("sync", "max_version", "max_build"):
+            assert log[key] == old[key], key
+        superseded = {k: old[k] for k in sync._LOG_HISTORY_FIELDS if k in old}
+        assert log["history"] == list(old.get("history") or []) + [superseded]
+        assert log["last_extraction"]["package"] == "Fake"
+        live = len(json.loads((out / "packages" / "Fake" / "objects.json").read_text()))
+        assert log["total_objects"] == live == 1
+
+
+class TestI4DocPageFilter:
+    def test_whitespace_named_pages_are_not_extracted(self, tmp_path: Path) -> None:
+        module = _load_by_path("_q30_extract_objects_doc", EXTRACTOR_PATH)
+        result = module.extract_all(_fake_c74(tmp_path))
+        names = {n for bucket in result["domains"].values() for n in bucket}
+        assert "Doc Page" not in names
+        assert "Doc Page" in result["log"]["documentation_pages"]
+        assert "q30.bare" in names  # no I/O lists, no methods: still an object to the extractor
+
+    def test_sync_doc_page_rule_is_unchanged(self) -> None:
+        """Green guard (the whitespace and no-I/O shapes) plus the shared name rule."""
+        assert sync._is_doc_page({"name": "Doc Page", "inlets": [{}], "outlets": [{}], "methods": ["x"]})
+        assert sync._is_doc_page({"name": "q30.bare", "inlets": [], "outlets": [], "methods": []})
+        assert not sync._is_doc_page({"name": "q30.obj", "inlets": [{}], "outlets": [], "methods": []})
+        assert sync.is_doc_page_name("MC Wrapper Features")
+        assert not sync.is_doc_page_name("jit.gl.pbr")
+
+    @pytest.mark.requires_max
+    def test_real_bundle_in_memory(self) -> None:
+        module = _load_by_path("_q30_extract_objects_real", EXTRACTOR_PATH)
+        result = module.extract_all(MAX_APP_PATH / "Contents" / "Resources" / "C74")
+        names = {n for bucket in result["domains"].values() for n in bucket}
+        for doc in (
+            "MC Wrapper Features", "Snapshot Messages", "Jitter GL Object (OB3D) Messages",
+            "Jitter Matrix Operators", "Parameter Properties", "Jitter Geometry Features",
+        ):
+            assert doc not in names, doc
+        for name in (
+            "jbox", "onecopy", "project", "jit.graph", "jit.plot", "jit.mo.fieldmask",
+            "jit.mo.join", "mira.motion", "mira.multitouch",
+        ):
+            assert name in names, name
+
+
+@pytest.mark.requires_max
+class TestI4RealDbCopyRefused:
+    def test_scratch_copy_of_the_real_db_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        copy_root = scratch_copy_of_real_db(tmp_path / "db-copy")
+        before = _tree_bytes(copy_root)
+        code = _extract(
+            monkeypatch, "--max-path", str(MAX_APP_PATH / "Contents" / "Resources" / "C74"),
+            "--output", str(copy_root),
+        )
+        assert code == 2
+        assert _tree_bytes(copy_root) == before
