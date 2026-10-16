@@ -118,13 +118,18 @@ def _fanout_warning_content():
 
 
 def _hot_cold_content():
-    """Two separate number boxes into + inlets 0 and 1 (warning)."""
+    """number -> unpack 0 0; outlet 1 -> + inlet 0, outlet 0 -> + inlet 1:
+    one event updates the cold inlet after the hot one (warning; Q26 / E5)."""
     boxes = [
         _box("obj-2", None, 1, 2, maxclass="number", outlettype=["", "bang"]),
-        _box("obj-3", None, 1, 2, maxclass="number", outlettype=["", "bang"]),
+        _box("obj-3", "unpack 0 0", 1, 2, outlettype=["int", "int"]),
         _box("obj-4", "+", 2, 1, outlettype=["int"]),
     ]
-    lines = [_line("obj-2", 0, "obj-4", 0), _line("obj-3", 0, "obj-4", 1)]
+    lines = [
+        _line("obj-2", 0, "obj-3", 0),
+        _line("obj-3", 1, "obj-4", 0),
+        _line("obj-3", 0, "obj-4", 1),
+    ]
     return boxes, lines
 
 

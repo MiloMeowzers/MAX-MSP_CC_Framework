@@ -447,31 +447,27 @@ def _fan_out_with_trigger_patch() -> dict:
 
 
 def _hot_cold_ordering_issue_patch() -> dict:
-    """Two separate sources feed hot and cold inlets of + without trigger."""
+    """One number event reaches + hot and cold inlets in the wrong order.
+
+    number -> unpack 0 0; outlet 1 -> + inlet 0 (hot), outlet 0 -> + inlet 1
+    (cold). unpack fires right to left, so the cold update arrives after the
+    hot inlet already fired (Q26 / E5: a shared upstream ancestor).
+    """
     boxes = [
         {
-            "id": "obj-1",
-            "maxclass": "newobj",
-            "text": "metro 500",
-            "numinlets": 2,
-            "numoutlets": 1,
-            "outlettype": ["bang"],
-        },
-        {
             "id": "obj-2",
-            "maxclass": "newobj",
-            "text": "random 100",
-            "numinlets": 2,
-            "numoutlets": 1,
-            "outlettype": ["int"],
+            "maxclass": "number",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": ["", "bang"],
         },
         {
             "id": "obj-3",
             "maxclass": "newobj",
-            "text": "random 50",
-            "numinlets": 2,
-            "numoutlets": 1,
-            "outlettype": ["int"],
+            "text": "unpack 0 0",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": ["int", "int"],
         },
         {
             "id": "obj-4",
@@ -483,9 +479,8 @@ def _hot_cold_ordering_issue_patch() -> dict:
         },
     ]
     lines = [
-        # Two separate sources feeding hot (inlet 0) and cold (inlet 1)
-        # of + without trigger-based ordering
-        {"source": ["obj-2", 0], "destination": ["obj-4", 0]},
+        {"source": ["obj-2", 0], "destination": ["obj-3", 0]},
+        {"source": ["obj-3", 1], "destination": ["obj-4", 0]},
         {"source": ["obj-3", 0], "destination": ["obj-4", 1]},
     ]
     return _make_patch(boxes, lines)
@@ -647,16 +642,12 @@ class TestStructureCritic:
         )
 
     def test_hot_cold_ordering_detected(self):
-        """Multiple sources feeding hot+cold inlets without trigger -> warning."""
+        """One upstream event updating a cold inlet after the hot one -> warning (Q26 / E5)."""
         patch = _hot_cold_ordering_issue_patch()
         results = review_structure(patch)
-        warnings = [r for r in results if r.severity == "warning"]
-        assert len(warnings) >= 1
-        assert any(
-            "hot" in r.finding.lower() or "cold" in r.finding.lower()
-            or "ordering" in r.finding.lower() or "order" in r.finding.lower()
-            for r in warnings
-        )
+        hc = [r for r in results if "Hot/cold" in r.finding]
+        assert [r.severity for r in hc] == ["warning"]
+        assert hc[0].finding.startswith("Hot/cold inlet ordering issue: '+' (obj-4)")
 
     def test_duplicate_patchlines_detected(self):
         """Duplicate connections -> warning."""

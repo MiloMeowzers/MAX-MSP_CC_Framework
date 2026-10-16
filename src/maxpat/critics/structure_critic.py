@@ -4,7 +4,11 @@ Catches structural issues that the mechanical validation pipeline does
 not detect:
   - Fan-out without trigger (ordering ambiguity): blocker when branches
     reconverge on one box at different inlets, otherwise warning (Q3 / E1)
-  - Hot/cold inlet ordering issues (stale value computation)
+  - Hot/cold inlet ordering (Q26 / E5): one upstream event reaching a box's
+    hot inlet 0 and a DB-cold inlet, with the cold update fired at or after
+    the last hot firing (right-to-left outlet order at the divergence box).
+    Independent sources, p / bpatcher / js and storage targets, exclusive
+    routers and the targets Q21's trigger-order check owns are not reported.
   - Invalid trigger types (Q21 / R4): ``t a`` and any other single
     lower-case letter outside b, i, f, l, s outputs the literal symbol
   - ``$N`` arity (Q21 / R4): a message box's highest ``$N`` above the
@@ -82,7 +86,11 @@ def review_structure(
     Checks, per scope of the shared graph:
       1. Fan-out without trigger (2+ non-display destinations from one
          control outlet; blocker only on reconvergence -- Q3 / E1)
-      2. Hot/cold inlet ordering (multiple inlets fed without trigger ordering)
+      2. Hot/cold inlet ordering (warning; Q26 / E5, PD-1..PD-3): one
+         upstream event updates a cold inlet at or after the hot inlet 0
+         fires. Targets a trigger reaches at inlet 0 and a cold inlet
+         (directly or through one hop) are left to check 5, which runs
+         first; results keep the order below.
       3. Invalid trigger types (blocker; Q21 / R4)
       4. Message ``$N`` arity (blocker; Q21 / R4)
       5. Trigger order: one trigger feeding a hot inlet after a cold one
@@ -121,11 +129,12 @@ def review_structure(
     for scope in graph.scopes:
         found: list[CriticResult] = []
         if scope.context != "gen":
+            trigger_order = _check_trigger_order(scope, dbh)
             found.extend(_check_fan_out_without_trigger(scope.boxes, scope.edges))
-            found.extend(_check_hot_cold_ordering(scope.boxes, scope.edges))
+            found.extend(_check_hot_cold_ordering(scope, dbh, _q21_targets(scope, dbh)))
             found.extend(_check_trigger_types(scope))
             found.extend(_check_dollar_arity(scope, dbh))
-            found.extend(_check_trigger_order(scope, dbh))
+            found.extend(trigger_order)
             found.extend(_check_uninitialized_state(graph, scope, dbh, is_new, ctx))
         found.extend(_check_redundant_connections(scope.edges))
         results.extend(tag_results(found, scope.path))
@@ -406,88 +415,207 @@ def _check_fan_out_without_trigger(
 # Check 2: Hot/cold inlet ordering
 # ---------------------------------------------------------------------------
 
-def _check_hot_cold_ordering(
-    box_lookup: dict[str, dict],
-    edges: list,
-) -> list[CriticResult]:
-    """Detect hot/cold inlet ordering issues.
+# Divergence boxes that send each event out of exactly one outlet (planner
+# decision PD-1, Q26 / E5): a hot and a cold path leaving different outlets
+# of one of these never carry the same event (terrain-source
+# ``route backup restore``).
+_EXCLUSIVE_ROUTER_NAMES = frozenset({
+    "route", "routepass", "select", "sel", "gate", "ggate", "gswitch2",
+    "split", "spray", "if",
+})
 
-    When multiple separate sources feed different inlets of the same
-    destination box, and neither source comes from a trigger object that
-    controls ordering, the computation may use stale values.
+_HOT_COLD_SUGGESTION = (
+    "Feed both from one 'trigger' (t) with the hot inlet on its lowest "
+    "outlet: trigger outlets fire right to left, so the cold inlets are set first."
+)
 
-    Per CLAUDE.md Rule #3: "Send to cold inlets FIRST (right to left),
-    send to hot inlet LAST (leftmost, inlet 0) -- this triggers computation."
 
-    Skip signal (~) connections -- all signal inlets are hot in the audio
-    domain (Rule #3).
+def _hot_cold_upstream(scope, seeds, target_id, dbh) -> set:
+    """Boxes whose control event can reach a seed (seeds included; Q26 / E5).
+
+    Walks control in-cords upstream from *seeds*. A cord is followed only
+    when it enters its box at a hot inlet (not :func:`_inlet_is_cold`), is
+    not a Jitter setter hop (:func:`_is_jitter_setter_hop`) and does not
+    leave the target itself. An event that enters a box at a cold inlet
+    stops there (notein -> poly inlet 1 is not a shared ancestor).
+    """
+    seen = set(seeds)
+    queue = deque(seeds)
+    while queue:
+        box_id = queue.popleft()
+        box = scope.boxes.get(box_id)
+        if box is None:
+            continue
+        for edge in scope.in_edges.get(box_id, ()):
+            if edge.signal or edge.src == target_id or edge.src in seen:
+                continue
+            if _inlet_is_cold(box, edge.inlet, dbh):
+                continue
+            src_box = scope.boxes.get(edge.src)
+            if src_box is None or _is_jitter_setter_hop(src_box, box):
+                continue
+            seen.add(edge.src)
+            queue.append(edge.src)
+    return seen
+
+
+def _cord_reaches(scope, edge, target_id, side_cords, side_up, dbh) -> bool:
+    """True when control cord *edge* carries its event to one side of the target.
+
+    *side_cords* holds ``id()`` of the target's own cords on that side (Edge
+    carries its line dict, so it is not hashable); *side_up* is that side's
+    upstream set.
+    """
+    if id(edge) in side_cords:
+        return True
+    if edge.dst == target_id or edge.dst not in side_up:
+        return False
+    dst_box = scope.boxes.get(edge.dst)
+    src_box = scope.boxes.get(edge.src)
+    if dst_box is None or src_box is None:
+        return False
+    if _inlet_is_cold(dst_box, edge.inlet, dbh):
+        return False
+    return not _is_jitter_setter_hop(src_box, dst_box)
+
+
+def _is_opaque_divergence(box, dbh) -> bool:
+    """A box whose outlet order is not knowable here (PD-1): exclusive
+    routers, all-hot containers, embedded patchers and DB-unknown names."""
+    name = walk.box_name(box)
+    if name in _EXCLUSIVE_ROUTER_NAMES or name in _ALL_HOT_NAMES:
+        return True
+    if walk.inner_patcher(box) is not None:
+        return True
+    return dbh.lookup(name) is None
+
+
+def _is_hot_cold_target(box) -> bool:
+    """False for the targets the hot/cold check never reports (PD-1)."""
+    name = walk.box_name(box)
+    if name in _ORDER_EXCLUDED_NAMES or walk.inner_patcher(box) is not None:
+        return False
+    if name in _ORDER_STORAGE_NAMES or _is_zl_reg(box) or name in _ORDER_IDIOM_TARGETS:
+        return False
+    return True
+
+
+def _check_hot_cold_ordering(scope, dbh, q21_targets=frozenset()) -> list[CriticResult]:
+    """Flag a box whose cold inlet is updated after its hot inlet by one event.
+
+    Q26 / E5 (planner decisions PD-1 to PD-3). Per CLAUDE.md Rule #3 cold
+    inlets must be set before the hot inlet 0 fires. Two independent
+    sources feeding hot and cold inlets are not a hazard (the review
+    measured that shape as noise); one upstream event that reaches both is.
+
+    * Targets: a box with control cords into inlet 0 and into at least one
+      DB-cold inlet (:func:`_inlet_is_cold`), except the gate/switch family,
+      pak, funnel, all-hot containers (p, bpatcher, js, poly~, ...), any box
+      with an embedded patcher, the Q21 storage / idiom targets, and every
+      target Q21 owns (*q21_targets*, PD-2). Signal cords never count.
+    * Upstream sets: for the hot cords and the cold cords separately,
+      :func:`_hot_cold_upstream` from the cord sources. No shared box: no
+      finding.
+    * Divergence: each shared ancestor in sorted id order, skipping
+      exclusive routers and opaque boxes (:func:`_is_opaque_divergence`).
+      Its control out-cords are classified as reaching hot only (H), cold
+      only (C) or both (B). Outlets fire right to left, so a hazard is
+      C non-empty, H or B non-empty and min(C) <= min(H | B): a cold update
+      at a lower outlet arrives after the last hot firing, and an equal
+      outlet is a fan-out in undefined order (PD-3). B-only shapes are not
+      hazards: each B wave sets its own cold inlets first.
+    * One warning per target, from the first hazardous ancestor.
     """
     results: list[CriticResult] = []
-
-    # Group connections by destination box
-    # dst_id -> {inlet_idx -> list of (src_id, src_outlet)}
-    dst_inlets: dict[str, dict[int, list[tuple[str, int]]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
-
-    for edge in edges:
-        dst_inlets[edge.dst][edge.inlet].append((edge.src, edge.outlet))
-
-    for dst_id, inlets_map in dst_inlets.items():
-        dst_box = box_lookup.get(dst_id)
-        if not dst_box:
+    for dst_id, dst_box in scope.boxes.items():
+        in_edges = [e for e in scope.in_edges.get(dst_id, ()) if not e.signal]
+        if not in_edges:
             continue
-
-        # Skip signal objects -- all inlets hot in audio domain
-        if _is_signal_object(dst_box):
+        hot_cords = [e for e in in_edges if e.inlet == 0]
+        if not hot_cords or all(e.inlet == 0 for e in in_edges):
             continue
-
-        # Only flag if multiple inlets are being fed (hot + cold)
-        if len(inlets_map) < 2:
+        if dst_id in q21_targets or not _is_hot_cold_target(dst_box):
             continue
-
-        # Check if inlet 0 (hot) is present
-        if 0 not in inlets_map:
+        cold_by_inlet: dict = defaultdict(list)
+        for e in in_edges:
+            if isinstance(e.inlet, int) and e.inlet > 0 and _inlet_is_cold(dst_box, e.inlet, dbh):
+                cold_by_inlet[e.inlet].append(e)
+        if not cold_by_inlet:
             continue
-
-        # Get all source box IDs feeding this destination
-        all_source_ids: set[str] = set()
-        for inlet_sources in inlets_map.values():
-            for src_id, _ in inlet_sources:
-                all_source_ids.add(src_id)
-
-        # Check if sources feeding hot inlet come from a trigger
-        hot_sources = inlets_map[0]
-        cold_inlet_indices = [idx for idx in inlets_map if idx > 0]
-
-        # If a trigger feeds the hot inlet AND also feeds the cold inlets
-        # (through different outlets), ordering is explicit -- no warning
-        hot_from_trigger = False
-        for src_id, _ in hot_sources:
-            src_box = box_lookup.get(src_id)
-            if src_box and _is_trigger_object(src_box):
-                hot_from_trigger = True
-                break
-
-        if hot_from_trigger:
+        cold_cords = [e for i in sorted(cold_by_inlet) for e in cold_by_inlet[i]]
+        hot_up = _hot_cold_upstream(scope, [e.src for e in hot_cords], dst_id, dbh)
+        cold_up_by_inlet = {
+            i: _hot_cold_upstream(scope, [e.src for e in es], dst_id, dbh)
+            for i, es in cold_by_inlet.items()
+        }
+        cold_up = set().union(*cold_up_by_inlet.values())
+        shared = hot_up & cold_up
+        if not shared:
             continue
-
-        # Multiple separate sources feeding hot and cold inlets
-        # without trigger-based ordering
-        dst_name = walk.box_name(dst_box)
-        cold_desc = ", ".join(str(idx) for idx in sorted(cold_inlet_indices))
-
-        results.append(CriticResult(
-            "warning",
-            f"Hot/cold inlet ordering issue: '{dst_name}' ({dst_id}) "
-            f"receives data on inlet 0 (hot) and inlet(s) {cold_desc} "
-            f"(cold) from separate sources without trigger ordering -- "
-            f"cold inlets may contain stale values when hot inlet triggers",
-            f"Use a 'trigger' (t) object to ensure cold inlets are "
-            f"updated before hot inlet fires",
-        ))
-
+        hot_set = {id(e) for e in hot_cords}
+        cold_set = {id(e) for e in cold_cords}
+        for anc in sorted(shared, key=str):
+            anc_box = scope.boxes.get(anc)
+            if anc_box is None or _is_opaque_divergence(anc_box, dbh):
+                continue
+            h_out: set = set()
+            c_out: set = set()
+            b_out: set = set()
+            for edge in scope.out_edges.get(anc, ()):
+                if edge.signal or not isinstance(edge.outlet, int):
+                    continue
+                to_hot = _cord_reaches(scope, edge, dst_id, hot_set, hot_up, dbh)
+                to_cold = _cord_reaches(scope, edge, dst_id, cold_set, cold_up, dbh)
+                if to_hot and to_cold:
+                    b_out.add(edge.outlet)
+                elif to_hot:
+                    h_out.add(edge.outlet)
+                elif to_cold:
+                    c_out.add(edge.outlet)
+            if not c_out or not (h_out or b_out):
+                continue
+            c = min(c_out)
+            h = min(h_out | b_out)
+            if c > h:
+                continue
+            name = walk.box_name(dst_box)
+            cold_desc = ", ".join(
+                str(i) for i in sorted(cold_up_by_inlet) if anc in cold_up_by_inlet[i]
+            )
+            label = _box_label(anc_box)
+            if c < h:
+                finding = (
+                    f"Hot/cold inlet ordering issue: '{name}' ({dst_id}) gets hot inlet 0 "
+                    f"and cold inlet(s) {cold_desc} from one event at '{label}' ({anc}), "
+                    f"but outlet {c} (cold) fires after outlet {h} (hot) -- '{name}' "
+                    f"outputs with a stale cold value"
+                )
+            else:
+                finding = (
+                    f"Hot/cold inlet ordering issue: '{name}' ({dst_id}) gets hot inlet 0 "
+                    f"and cold inlet(s) {cold_desc} from one event at '{label}' ({anc}) "
+                    f"outlet {c}, which fans out to both in undefined order -- '{name}' "
+                    f"may output with a stale cold value"
+                )
+            results.append(CriticResult("warning", finding, _HOT_COLD_SUGGESTION))
+            break
     return results
+
+
+def _q21_targets(scope, dbh) -> set:
+    """Targets a trigger reaches (directly or through one Q21 hop) at inlet 0
+    and at a DB-cold inlet: the trigger-order check owns them (PD-2)."""
+    owned: set = set()
+    for t_id, t_box in scope.boxes.items():
+        if walk.box_name(t_box) not in _TRIGGER_NAMES:
+            continue
+        for dst_id, inlets in _trigger_reach(scope, t_id).items():
+            dst_box = scope.boxes.get(dst_id)
+            if dst_box is None or 0 not in inlets:
+                continue
+            if any(isinstance(i, int) and i > 0 and _inlet_is_cold(dst_box, i, dbh) for i in inlets):
+                owned.add(dst_id)
+    return owned
 
 
 # ---------------------------------------------------------------------------
@@ -781,6 +909,29 @@ def _is_order_idiom(dst_box, letters, hot, cold) -> bool:
     )
 
 
+def _trigger_reach(scope, t_id) -> dict:
+    """``dst_id -> inlet -> {(outlet, "direct" | "hop")}`` for trigger *t_id*.
+
+    Every (box, inlet) the trigger reaches directly or through one hop
+    (planner decision 5: :func:`_is_order_hop`, entered at inlet 0 and left
+    by outlet 0); cords back into the trigger are ignored. Shared by
+    :func:`_check_trigger_order` and the hot/cold skip set (Q26 PD-2).
+    """
+    reach: dict = defaultdict(lambda: defaultdict(set))
+    for edge in scope.out_edges.get(t_id, ()):
+        if edge.dst == t_id:
+            continue
+        reach[edge.dst][edge.inlet].add((edge.outlet, "direct"))
+        hop_box = scope.boxes.get(edge.dst)
+        if edge.inlet != 0 or hop_box is None or not _is_order_hop(hop_box):
+            continue
+        for nxt in scope.out_edges.get(edge.dst, ()):
+            if nxt.outlet != 0 or nxt.dst == t_id:
+                continue
+            reach[nxt.dst][nxt.inlet].add((edge.outlet, "hop"))
+    return reach
+
+
 def _check_trigger_order(scope, dbh) -> list[CriticResult]:
     """Flag a trigger that feeds a box's hot inlet before its cold inlets.
 
@@ -803,19 +954,7 @@ def _check_trigger_order(scope, dbh) -> list[CriticResult]:
         if walk.box_name(t_box) not in _TRIGGER_NAMES:
             continue
         letters = _trigger_letters(t_box)
-        # dst_id -> inlet -> set of (outlet, "direct" | "hop")
-        reach: dict = defaultdict(lambda: defaultdict(set))
-        for edge in scope.out_edges.get(t_id, ()):
-            if edge.dst == t_id:
-                continue
-            reach[edge.dst][edge.inlet].add((edge.outlet, "direct"))
-            hop_box = scope.boxes.get(edge.dst)
-            if edge.inlet != 0 or hop_box is None or not _is_order_hop(hop_box):
-                continue
-            for nxt in scope.out_edges.get(edge.dst, ()):
-                if nxt.outlet != 0 or nxt.dst == t_id:
-                    continue
-                reach[nxt.dst][nxt.inlet].add((edge.outlet, "hop"))
+        reach = _trigger_reach(scope, t_id)
 
         for dst_id, inlets in reach.items():
             dst_box = scope.boxes.get(dst_id)

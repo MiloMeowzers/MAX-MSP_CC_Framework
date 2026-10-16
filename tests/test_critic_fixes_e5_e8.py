@@ -153,3 +153,250 @@ class TestRnboMissingIn:
         d = json.loads(p.read_text(errors="replace"))
         results = review_rnbo(d)
         assert not [x for x in results if x.severity == "blocker" and "in~" in x.finding]
+
+
+# ---------------------------------------------------------------------------
+# E5 -- hot/cold ordering on a shared upstream event
+# ---------------------------------------------------------------------------
+
+
+_HC = "Hot/cold inlet ordering issue: "
+
+
+def _structure(d, db):
+    from src.maxpat.critics.structure_critic import review_structure
+    return review_structure(d, db=db)
+
+
+def _hc(results):
+    return [r for r in results if _HC in r.finding]
+
+
+def _number(box_id):
+    return _box(box_id, None, 1, 2, maxclass="number", outlettype=["", "bang"])
+
+
+def _reversed_unpack(target, target_id="obj-4", hot_outlet=1, cold_outlet=0):
+    """number obj-2 -> unpack 0 0 obj-3; unpack *hot_outlet* -> target inlet 0,
+    unpack *cold_outlet* -> target inlet 1."""
+    boxes = [
+        _number("obj-2"),
+        _box("obj-3", "unpack 0 0", 1, 2, outlettype=["int", "int"]),
+        target,
+    ]
+    lines = [
+        _line("obj-2", 0, "obj-3", 0),
+        _line("obj-3", hot_outlet, target_id, 0),
+        _line("obj-3", cold_outlet, target_id, 1),
+    ]
+    return boxes, lines
+
+
+def _plus(box_id="obj-4", text="+"):
+    return _box(box_id, text, 2, 1, outlettype=["int"])
+
+
+class TestHotColdSharedAncestor:
+    def test_reversed_order_warns_once(self, db):
+        boxes, lines = _reversed_unpack(_plus())
+        hc = _hc(_structure(_patch(boxes, lines), db))
+        assert [(r.severity, r.finding, r.suggestion) for r in hc] == [(
+            "warning",
+            "Hot/cold inlet ordering issue: '+' (obj-4) gets hot inlet 0 and cold "
+            "inlet(s) 1 from one event at 'unpack 0 0' (obj-3), but outlet 0 (cold) "
+            "fires after outlet 1 (hot) -- '+' outputs with a stale cold value",
+            "Feed both from one 'trigger' (t) with the hot inlet on its lowest "
+            "outlet: trigger outlets fire right to left, so the cold inlets are set first.",
+        )]
+
+    def test_swapped_cords_clean(self, db):
+        boxes, lines = _reversed_unpack(_plus(), hot_outlet=0, cold_outlet=1)
+        assert _hc(_structure(_patch(boxes, lines), db)) == []
+
+    def test_independent_sources_clean(self, db):
+        boxes = [_number("obj-2"), _number("obj-3"), _plus()]
+        lines = [_line("obj-2", 0, "obj-4", 0), _line("obj-3", 0, "obj-4", 1)]
+        assert _hc(_structure(_patch(boxes, lines), db)) == []
+
+    def test_same_outlet_fanout(self, db):
+        boxes = [
+            _box("obj-2", "button", 1, 1, maxclass="button", outlettype=["bang"]),
+            _box("obj-3", "pack 0 0", 2, 1, outlettype=["list"]),
+        ]
+        lines = [_line("obj-2", 0, "obj-3", 0), _line("obj-2", 0, "obj-3", 1)]
+        results = _structure(_patch(boxes, lines), db)
+        hc = _hc(results)
+        assert [r.finding for r in hc] == [
+            "Hot/cold inlet ordering issue: 'pack' (obj-3) gets hot inlet 0 and "
+            "cold inlet(s) 1 from one event at 'button' (obj-2) outlet 0, which fans "
+            "out to both in undefined order -- 'pack' may output with a stale cold value"
+        ]
+        assert [r.severity for r in results if r.finding.startswith("Fan-out without trigger")] == ["blocker"]
+
+    @pytest.mark.parametrize("target", [
+        _container("obj-4", "p x", _inner([
+            _box("obj-20", None, 1, 1, maxclass="inlet"),
+            _box("obj-21", None, 1, 1, maxclass="inlet"),
+        ]), 2, 1),
+        _container("obj-4", None, _inner(), 2, 1, maxclass="bpatcher"),
+        _box("obj-4", "js foo.js", 2, 1),
+        _box("obj-4", "gate 2", 2, 2),
+        _box("obj-4", "pak 0 0", 2, 1),
+        _box("obj-4", "i", 2, 1),
+    ], ids=["p", "bpatcher", "js", "gate", "pak", "i"])
+    def test_skipped_targets(self, db, target):
+        boxes, lines = _reversed_unpack(target)
+        assert _hc(_structure(_patch(boxes, lines), db)) == []
+
+    def test_exclusive_router_divergence_clean(self, db):
+        boxes = [
+            _number("obj-2"),
+            _box("obj-3", "route a b", 2, 3, outlettype=["", "", ""]),
+            _plus(),
+        ]
+        lines = [
+            _line("obj-2", 0, "obj-3", 0),
+            _line("obj-3", 1, "obj-4", 0),
+            _line("obj-3", 0, "obj-4", 1),
+        ]
+        assert _hc(_structure(_patch(boxes, lines), db)) == []
+
+    @pytest.mark.parametrize("target_text", ["int", "+"])
+    def test_cold_inlet_stops_walk(self, db, target_text):
+        boxes = [
+            _box("obj-2", "notein", 1, 3, outlettype=["int", "int", "int"]),
+            _box("obj-3", "poly 4", 2, 4, outlettype=["int", "int", "int", "int"]),
+            _box("obj-4", target_text, 2, 1, outlettype=["int"]),
+        ]
+        lines = [
+            _line("obj-2", 0, "obj-3", 0),
+            _line("obj-2", 1, "obj-3", 1),
+            _line("obj-3", 1, "obj-4", 1),
+            _line("obj-3", 0, "obj-4", 0),
+        ]
+        assert _hc(_structure(_patch(boxes, lines), db)) == []
+
+    def test_jitter_setter_hop_stops_walk(self, db):
+        boxes = [
+            _box("obj-10", "loadbang", 1, 1, outlettype=["bang"]),
+            _box("obj-11", "exprfill 0 snorm[0]", 2, 1, maxclass="message", outlettype=[""]),
+            _box("obj-12", "exprfill 0 snorm[1]", 2, 1, maxclass="message", outlettype=[""]),
+            _box("obj-13", "jit.matrix 1 float32 64 64", 1, 2, outlettype=["jit_matrix", ""]),
+            _box("obj-14", "jit.matrix 1 float32 64 64", 1, 2, outlettype=["jit_matrix", ""]),
+            _box("obj-19", "jit.pack 3", 3, 2, outlettype=["jit_matrix", ""]),
+        ]
+        lines = [
+            _line("obj-10", 0, "obj-11", 0),
+            _line("obj-10", 0, "obj-12", 0),
+            _line("obj-11", 0, "obj-13", 0),
+            _line("obj-12", 0, "obj-14", 0),
+            _line("obj-13", 0, "obj-19", 0),
+            _line("obj-14", 0, "obj-19", 1),
+        ]
+        assert _hc(_structure(_patch(boxes, lines), db)) == []
+
+    def test_deep_reversed_order_outside_q21_reach(self, db):
+        boxes = [
+            _box("obj-2", "t i i", 1, 2, outlettype=["int", "int"]),
+            _box("obj-3", "+ 1", 2, 1, outlettype=["int"]),
+            _box("obj-4", "-", 2, 1, outlettype=["int"]),
+        ]
+        lines = [
+            _line("obj-2", 1, "obj-3", 0),
+            _line("obj-3", 0, "obj-4", 0),
+            _line("obj-2", 0, "obj-4", 1),
+        ]
+        results = _structure(_patch(boxes, lines), db)
+        hc = _hc(results)
+        assert len(hc) == 1
+        assert hc[0].finding.startswith(
+            "Hot/cold inlet ordering issue: '-' (obj-4) gets hot inlet 0 and cold "
+            "inlet(s) 1 from one event at 't i i' (obj-2), but outlet 0 (cold) fires "
+            "after outlet 1 (hot)"
+        )
+        assert not [r for r in results if r.finding.startswith("Trigger order: ")]
+
+    def test_q21_boundary_trigger_order_only(self, db):
+        boxes = [_box("obj-2", "t i b", 1, 2, outlettype=["int", "bang"]), _plus()]
+        lines = [_line("obj-2", 1, "obj-4", 0), _line("obj-2", 0, "obj-4", 1)]
+        results = _structure(_patch(boxes, lines), db)
+        assert _hc(results) == []
+        assert [r.severity for r in results if r.finding.startswith("Trigger order: ")] == ["blocker"]
+
+    def test_q21_idiom_gives_neither(self, db):
+        boxes = [_box("obj-2", "t f f", 1, 2, outlettype=["float", "float"]),
+                 _box("obj-4", "- 0.", 2, 1, outlettype=["float"])]
+        lines = [_line("obj-2", 1, "obj-4", 0), _line("obj-2", 0, "obj-4", 1)]
+        results = _structure(_patch(boxes, lines), db)
+        assert _hc(results) == []
+        assert not [r for r in results if r.finding.startswith("Trigger order: ")]
+
+    def _ears(self):
+        return _box("obj-4", "ears.slice~", 2, 2, outlettype=["signal", ""])
+
+    def test_msp_control_inlets_one_hop_reported_by_q21_only(self, db):
+        boxes = [_box("obj-2", "t l b", 1, 2, outlettype=["", "bang"]), self._ears()]
+        lines = [_line("obj-2", 1, "obj-4", 0), _line("obj-2", 0, "obj-4", 1)]
+        results = _structure(_patch(boxes, lines), db)
+        assert _hc(results) == []
+        assert len([r for r in results if r.finding.startswith("Trigger order: ")]) == 1
+
+    def test_msp_control_inlets_two_hops_reported_by_hot_cold(self, db):
+        boxes = [
+            _box("obj-2", "t l b", 1, 2, outlettype=["", "bang"]),
+            _box("obj-5", "prepend set", 1, 1, outlettype=[""]),
+            _box("obj-6", "prepend foo", 1, 1, outlettype=[""]),
+            self._ears(),
+        ]
+        lines = [
+            _line("obj-2", 1, "obj-4", 0),
+            _line("obj-2", 0, "obj-5", 0),
+            _line("obj-5", 0, "obj-6", 0),
+            _line("obj-6", 0, "obj-4", 1),
+        ]
+        results = _structure(_patch(boxes, lines), db)
+        assert len(_hc(results)) == 1
+        assert not [r for r in results if r.finding.startswith("Trigger order: ")]
+
+    def test_signal_cords_never_count(self, db):
+        boxes = [
+            _box("obj-2", "cycle~ 440", 2, 1, outlettype=["signal"]),
+            _box("obj-3", "unpack 0 0", 1, 2, outlettype=["int", "int"]),
+            _number("obj-5"),
+            _box("obj-4", "ears.slice~", 2, 2, outlettype=["signal", ""]),
+        ]
+        lines = [
+            _line("obj-5", 0, "obj-3", 0),
+            _line("obj-2", 0, "obj-4", 0),
+            _line("obj-3", 0, "obj-4", 1),
+        ]
+        assert _hc(_structure(_patch(boxes, lines), db)) == []
+
+    def test_nested_path_and_prefix(self, db):
+        boxes, lines = _reversed_unpack(_plus())
+        d = _patch([_container("obj-1", "p a", _inner(boxes, lines))])
+        hc = _hc(_structure(d, db))
+        assert [r.path for r in hc] == ["obj-1"]
+        assert hc[0].finding.startswith("[p a] Hot/cold inlet ordering issue: '+' (obj-4)")
+
+    def test_junk_never_raises_and_pure(self, db):
+        boxes, lines = _reversed_unpack(_plus())
+        boxes += [
+            {"box": {"id": "obj-30", "maxclass": "newobj", "text": 7}},
+            {"box": {"id": "obj-31", "maxclass": "newobj", "text": "nosuchobject 1 2"}},
+            {"box": {"id": "obj-32", "maxclass": 5}},
+            {"box": 3},
+        ]
+        lines += [
+            _line("obj-2", 0, "obj-31", 0),
+            _line("obj-30", 0, "obj-31", 1),
+            _line("obj-2", "x", "obj-31", 1),
+            _line("obj-2", 0, "obj-99", 0),
+            _line("obj-99", 0, "obj-4", 1),
+            _line("obj-32", 0, "obj-4", 0),
+            {"patchline": {"source": None, "destination": ["obj-4", 0]}},
+        ]
+        d = _patch(boxes, lines)
+        before = copy.deepcopy(d)
+        _structure(d, db)
+        assert d == before
