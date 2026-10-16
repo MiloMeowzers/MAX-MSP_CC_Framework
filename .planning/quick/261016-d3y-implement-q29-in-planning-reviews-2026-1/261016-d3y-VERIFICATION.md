@@ -1,7 +1,7 @@
 ---
 phase: quick-261016-d3y
 verified: 2026-10-16T18:44:48Z
-status: human_needed
+status: passed
 score: 7/7 must-haves verified
 covered_files:
   - .planning/quick/261016-d3y-implement-q29-in-planning-reviews-2026-1/261016-d3y-PLAN.md
@@ -100,3 +100,11 @@ None. All automated checks passed independently of the SUMMARY. Remaining items 
 
 _Verified: 2026-10-16_
 _Verifier: Claude (gsd-verifier)_
+
+## Human verification (2026-10-16)
+
+User-confirmed in MAX 9.2 with `patches/q29-check/generated/q29-check.maxpat` (all four items pass):
+1. MAX re-save (commit 301ddcd8), then a Python no-op save of that file: byte-identical (`format_patch_text(...) == text`).
+2. `q29-grow.gendsp` grown 2 → 3 outputs in place by write_gendsp (719dc7d3): compiles, 3 outlets, outputs 0.25/0.5/0.75, HAND EDIT comment survived.
+3. replace_box_safe live.dial → live.slider: parameter `q29dial` registered by MAX, pattrstorage store/recall works, flonum cord rewired; pack 0 0 → pack 0 0 0 cords all survived.
+4. meter~ placed 5px right of gain~ renders side by side.

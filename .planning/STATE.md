@@ -122,7 +122,7 @@ None.
 | 261015-nkm | Implement Q26 in .planning/reviews/2026-10-11-fix-plan.md — hot/cold, gain safety, theme-aware contrast, RNBO critic | 2026-10-16 | a841a2e1 | Verified | [261015-nkm-implement-q26-in-planning-reviews-2026-1](./quick/261015-nkm-implement-q26-in-planning-reviews-2026-1/) |
 | 261015-qm7 | Implement Q27 in .planning/reviews/2026-10-11-fix-plan.md — layout overlay, stacking, contrast order, bpatcher faces, width cap | 2026-10-16 | 40428815 | Needs Review | [261015-qm7-implement-q27-in-planning-reviews-2026-1](./quick/261015-qm7-implement-q27-in-planning-reviews-2026-1/) |
 | 261015-u3j | Implement Q28 in .planning/reviews/2026-10-11-fix-plan.md — change tracking for loaded patches | 2026-10-16 | 8c040b0a | Needs Review | [261015-u3j-implement-q28-in-planning-reviews-2026-1](./quick/261015-u3j-implement-q28-in-planning-reviews-2026-1/) |
-| 261016-d3y | Implement Q29 in .planning/reviews/2026-10-11-fix-plan.md — replace_box identity, gendsp round-trip, MAX-style JSON writer | 2026-10-16 | a5787ae8 | Needs Review | [261016-d3y-implement-q29-in-planning-reviews-2026-1](./quick/261016-d3y-implement-q29-in-planning-reviews-2026-1/) |
+| 261016-d3y | Implement Q29 in .planning/reviews/2026-10-11-fix-plan.md — replace_box identity, gendsp round-trip, MAX-style JSON writer | 2026-10-16 | a5787ae8 | Verified | [261016-d3y-implement-q29-in-planning-reviews-2026-1](./quick/261016-d3y-implement-q29-in-planning-reviews-2026-1/) |
 
 ## Deferred Items
 
