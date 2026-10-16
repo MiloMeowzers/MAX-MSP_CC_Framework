@@ -35,6 +35,7 @@ from src.maxpat.hooks import (
     validate_file,
     validate_code_file,
     detect_indent,
+    format_patch_text,
     save_patch_roundtrip,
     read_patch,
     finalize_patch,
@@ -93,6 +94,7 @@ __all__ = [
     "validate_file",
     "validate_code_file",
     "detect_indent",
+    "format_patch_text",
     "save_patch_roundtrip",
     "read_patch",
     # Code generation

@@ -338,7 +338,7 @@ class TestNewBlockerGate:
         assert json.loads(X.read_text()) == p.to_dict()
 
     def test_force_bypasses_with_warning(self, tmp_path):
-        from src.maxpat.hooks import save_patch_roundtrip, SaveGateWarning
+        from src.maxpat.hooks import format_patch_text, save_patch_roundtrip, SaveGateWarning
 
         root = _repo(tmp_path)
         P = _patch_path(root)
@@ -350,9 +350,7 @@ class TestNewBlockerGate:
             result = save_patch_roundtrip(new_dict, P, T, force=True)
 
         assert result == _head(root)
-        expected = json.dumps(new_dict, indent="    ", ensure_ascii=False)
-        if T.endswith("\n"):
-            expected += "\n"
+        expected = format_patch_text(new_dict, T)
         assert P.read_text() == expected
 
     def test_patch_validation_error_bare_message(self):

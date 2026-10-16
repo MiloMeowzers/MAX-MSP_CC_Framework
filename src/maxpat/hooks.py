@@ -17,7 +17,10 @@ report-only; validate_file runs on demand. The gate validates .gendsp /
 
 Provides:
 - finalize_patch: Single-call layout cleanup hook for new and edited patches.
-- write_gendsp: Generate and write a .gendsp file to disk.
+- format_patch_text: Serialize a patch dict in its file's own JSON layout
+  (MAX 9 inline arrays or the expanded json.dumps layout; Q29 / B9).
+- write_gendsp: Write a .gendsp file -- generate a new one, or edit an
+  existing one in place (codebox code and in/out ports; Q29 / B8).
 - write_js: Write JavaScript code and run code validation.
 - validate_file: Load and validate an existing .maxpat file from disk.
 - validate_code_file: Validate .gendsp or .js code files from disk.
@@ -258,6 +261,46 @@ def detect_indent(file_text: str) -> str:
     return "    "  # Default: 4 spaces (MAX 9.1.2 format per user decision)
 
 
+def format_patch_text(patch_dict: dict, original_text: str | None = None) -> str:
+    """Serialize a patch dict in the layout of the file it came from (Q29 / B9).
+
+    - indent: ``detect_indent(original_text)`` when original_text is given,
+      else 4 spaces (MAX's default).
+    - layout: when original_text is given and uses expanded arrays (the
+      json.dumps layout the framework used to write; ``has_expanded_arrays``),
+      the text is ``json.dumps(patch_dict, indent=indent, ensure_ascii=False)``.
+      Otherwise -- MAX-saved files and new files -- it is MAX 9's own layout
+      (``maxjson.dumps_max``: short scalar arrays inline).
+    - a trailing newline is added only when original_text ends with one
+      (MAX writes none).
+
+    So a no-op save is byte-identical whichever tool wrote the file last,
+    and MAX's first re-save of a framework-made file shows only real changes.
+
+    Args:
+        patch_dict: The patch dict (output of Patcher.to_dict()).
+        original_text: The file's text as read, or None for a new file.
+
+    Returns:
+        The file text.
+    """
+    from src.maxpat.maxjson import dumps_max, has_expanded_arrays
+
+    if original_text is not None:
+        indent = detect_indent(original_text)
+    else:
+        indent = "    "  # MAX default: 4 spaces
+
+    if original_text is not None and has_expanded_arrays(original_text):
+        output = json.dumps(patch_dict, indent=indent, ensure_ascii=False)
+    else:
+        output = dumps_max(patch_dict, indent)
+
+    if original_text is not None and original_text.endswith("\n"):
+        output += "\n"
+    return output
+
+
 def save_patch_roundtrip(
     patch_dict: dict,
     path: "str | Path",
@@ -265,11 +308,14 @@ def save_patch_roundtrip(
     *,
     force: bool = False,
 ) -> str | None:
-    """Save a .maxpat dict preserving the original file's indentation.
+    """Save a .maxpat dict preserving the original file's layout.
 
     For round-trip saves (load -> edit -> save), pass the original file text
-    so indentation is preserved. For new files, omit original_text to use
-    MAX's default 4-space indentation.
+    so its indentation, JSON layout and trailing newline are kept
+    (``format_patch_text``; Q29 / B9): a MAX-saved file keeps MAX 9's inline
+    scalar arrays, a file in the framework's expanded layout keeps it, so a
+    no-op save is byte-identical. New files (original_text omitted) are
+    written in MAX 9 layout with 4-space indentation.
 
     Stale-file check (fix-plan Q5, review finding A6): when original_text is
     given and the file already exists, the file on disk must still equal
@@ -294,9 +340,9 @@ def save_patch_roundtrip(
         patch_dict: The .maxpat dict (output of Patcher.to_dict()).
         path: Destination file path.
         original_text: Original file content, as returned by read_patch().
-            Used for indent detection and as the stale-check baseline. If
-            None, uses 4-space indent (MAX 9.1.2 default) and skips the
-            stale check.
+            Used for layout and indent detection and as the stale-check
+            baseline. If None, writes MAX 9 layout with 4-space indent and
+            skips the stale check.
         force: Keyword-only. Overwrite a stale file anyway, with a
             UserWarning, and bypass the save gate, with a SaveGateWarning
             listing what was bypassed. Use only when the user confirms the
@@ -333,17 +379,8 @@ def save_patch_roundtrip(
     # Save gate (Q7, A3 / R1): after the stale check, before mkdir/write/commit.
     _run_save_gate(patch_dict, path, original_text, force=force)
 
-    if original_text is not None:
-        indent = detect_indent(original_text)
-    else:
-        indent = "    "  # MAX default: 4 spaces
-
-    # json.dumps indent parameter accepts str for custom indentation
-    output = json.dumps(patch_dict, indent=indent, ensure_ascii=False)
-
-    # Preserve trailing newline status of original file
-    if original_text is not None and original_text.endswith("\n"):
-        output += "\n"
+    # The file's own layout, indent and trailing newline (Q29 / B9)
+    output = format_patch_text(patch_dict, original_text)
 
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_and_sync(path, output)
@@ -447,6 +484,12 @@ class GendspWriteResult(dict):
 
     A plain dict subclass with identical content; ``commit_hash`` is the
     auto-commit hash (str) or None when nothing was committed (Q5, OQ1-A).
+
+    ``orphaned`` (Q29 / B8; set per instance by write_gendsp) lists the cords
+    an in-place edit of an existing file removed, as ``{"source_id",
+    "source_outlet", "dest_id", "dest_inlet"}`` dicts: cords of removed
+    surplus ``in N`` / ``out N`` boxes and cords on codebox inlets/outlets
+    the new code no longer has. Always ``[]`` for a newly generated file.
     """
 
     commit_hash: "str | None" = None
@@ -864,6 +907,115 @@ def _run_save_gate(
     )
 
 
+_GEN_PORT_KINDS = ("in", "out")
+
+
+def _gen_port_index(box) -> "tuple[str, int] | None":
+    """(kind, index) of a top-level gen ``in N`` / ``out N`` newobj, else None."""
+    if box.maxclass != "newobj":
+        return None
+    tokens = (box.text or "").split()
+    if len(tokens) < 2 or tokens[0] not in _GEN_PORT_KINDS:
+        return None
+    if not tokens[1].isdecimal() or int(tokens[1]) < 1:
+        return None
+    return tokens[0], int(tokens[1])
+
+
+def _edit_gendsp_in_place(
+    patcher: "Patcher",
+    path: Path,
+    code: str,
+    num_inputs: int | None,
+    num_outputs: int | None,
+) -> list[dict]:
+    """Replace the codebox code of a loaded .gendsp and sync its ports (Q29 / B8).
+
+    Returns the removed cords as orphan dicts. Raises ValueError, before any
+    change, unless the patcher has exactly one top-level codebox.
+    """
+    from src.maxpat.codegen import parse_genexpr_io
+
+    codeboxes = [b for b in patcher.boxes if b.maxclass == "codebox"]
+    if len(codeboxes) != 1:
+        raise ValueError(
+            f"{path}: write_gendsp edits single-codebox .gendsp files in place, "
+            f"but this file has {len(codeboxes)} top-level codeboxes. Edit it with "
+            f"read_patch + the Patcher API + save_patch_roundtrip, or delete the "
+            f"file first to regenerate it."
+        )
+    cb = codeboxes[0]
+
+    if num_inputs is None or num_outputs is None:
+        det_in, det_out = parse_genexpr_io(code)
+        n_in = det_in if num_inputs is None else num_inputs
+        n_out = det_out if num_outputs is None else num_outputs
+    else:
+        n_in, n_out = num_inputs, num_outputs
+
+    # Code and I/O counts (tracked fields; Q28 writes them back on save)
+    cb.extra_attrs["code"] = code
+    cb.numinlets = n_in
+    cb.numoutlets = n_out
+    cb.outlettype = [""] * n_out
+
+    orphaned: list[dict] = []
+    targets = {"in": n_in, "out": n_out}
+
+    # Surplus port boxes: remove only when they touch nothing but the codebox
+    ports: dict[str, dict[int, object]] = {"in": {}, "out": {}}
+    for box in list(patcher.boxes):
+        info = _gen_port_index(box)
+        if info is None:
+            continue
+        kind, idx = info
+        if idx > targets[kind]:
+            touching = [
+                pl for pl in patcher.lines
+                if pl.source_id == box.id or pl.dest_id == box.id
+            ]
+            if all(
+                (pl.dest_id if pl.source_id == box.id else pl.source_id) == cb.id
+                for pl in touching
+            ):
+                orphaned.extend(patcher.remove_box(box).orphaned)
+                continue
+        ports[kind].setdefault(idx, box)
+
+    # Missing port boxes: add and wire to the codebox
+    for kind in _GEN_PORT_KINDS:
+        existing = [b for b in patcher.boxes if (_gen_port_index(b) or ("", 0))[0] == kind]
+        if existing:
+            next_x = max(b.patching_rect[0] for b in existing) + 80.0
+            row_y = min(b.patching_rect[1] for b in existing)
+        else:
+            next_x = None
+            row_y = 20.0 if kind == "in" else cb.patching_rect[1] + cb.patching_rect[3] + 40.0
+        for k in range(1, targets[kind] + 1):
+            if k in ports[kind]:
+                continue
+            x = next_x if next_x is not None else 50.0 + (k - 1) * 80.0
+            box = patcher.add_box(kind, [str(k)], x, row_y, skip_overlap_check=True)
+            if next_x is not None:
+                next_x += 80.0
+            ports[kind][k] = box
+            if kind == "in":
+                patcher.add_connection(box, 0, cb, k - 1)
+            else:
+                patcher.add_connection(cb, k - 1, box, 0)
+
+    # Sweep cords on codebox inlets/outlets the new code no longer has
+    surviving = []
+    for pl in patcher.lines:
+        if ((pl.dest_id == cb.id and pl.dest_inlet >= n_in)
+                or (pl.source_id == cb.id and pl.source_outlet >= n_out)):
+            orphaned.append(patcher._orphan_dict(pl))
+        else:
+            surviving.append(pl)
+    patcher.lines = surviving
+    return orphaned
+
+
 def write_gendsp(
     code: str,
     path: str | Path,
@@ -872,39 +1024,80 @@ def write_gendsp(
     *,
     force: bool = False,
 ) -> dict:
-    """Generate and write a .gendsp file to disk.
+    """Write a .gendsp file: generate a new one, or edit an existing one in place.
 
-    Creates a standalone .gendsp file containing a Gen patcher with
-    codebox, in/out objects, and patchlines.
+    **New path:** generates a standalone .gendsp (a Gen patcher with ``in N``
+    objects, a codebox holding the code, ``out N`` objects and patchlines)
+    and writes it in MAX 9 layout (``format_patch_text``).
 
-    Save gate (fix-plan Q7): before anything is written, the generated dict
-    goes through the same gate as save_patch_roundtrip -- validate_patch
-    (on a deepcopy) and review_patch, compared with the HEAD version of the
-    path, else the file on disk; with neither it is a new file and every
-    blocker refuses. Removed cords warn (SaveGateWarning); new blockers and
-    port x-rank changes raise PatchValidationError.
+    **Existing path (Q29 / B8):** never regenerated, so edits made in MAX's
+    gen editor survive. The file is loaded with read_patch and must have
+    exactly one top-level codebox (else ValueError, nothing written; delete
+    the file first to regenerate it, or edit it with read_patch + the
+    Patcher API + save_patch_roundtrip). Only these change:
+
+    - the codebox ``code``, numinlets, numoutlets and outlettype;
+    - missing ``in N`` / ``out N`` boxes are added, wired to the codebox;
+    - surplus ``in N`` / ``out N`` boxes (N above the new count) are removed
+      when every cord touching them goes to the codebox (or they have no
+      cords); a surplus port that also feeds the user's own gen graph is
+      kept;
+    - cords on codebox inlets/outlets the new code lacks are removed.
+
+    Every other box, position, comment, cord and patcher property is kept.
+    The result is saved through save_patch_roundtrip with the file's text
+    as original_text: stale-file check, save gate, the file's own JSON
+    layout (a no-op write is byte-identical) and the auto-commit. Removed
+    cords come back in ``result.orphaned`` and warn (SaveGateWarning).
+
+    Save gate (fix-plan Q7): before anything is written, the dict goes
+    through the same gate as save_patch_roundtrip -- validate_patch (on a
+    deepcopy) and review_patch, compared with the baseline (the file's text
+    for an existing file; else the HEAD version of the path, else the file
+    on disk); with no baseline it is a new file and every blocker refuses.
+    Removed cords warn (SaveGateWarning); new blockers and port x-rank
+    changes raise PatchValidationError.
 
     Args:
         code: GenExpr source code for the codebox.
         path: Output file path for the .gendsp file.
         num_inputs: Number of inputs. Auto-detected from code if None.
         num_outputs: Number of outputs. Auto-detected from code if None.
-        force: Keyword-only. Bypass the save gate, with a SaveGateWarning
-            listing what was bypassed.
+        force: Keyword-only. Bypass the save gate (and, for an existing
+            file, the stale check), with a warning listing what was bypassed.
 
     Returns:
-        The generated .gendsp dict, as a GendspWriteResult (a dict subclass)
+        The written .gendsp dict, as a GendspWriteResult (a dict subclass)
         whose ``commit_hash`` attribute is the path-scoped auto-commit hash,
-        or None with a UserWarning giving the reason (Q5). Overwrites
-        unconditionally -- there is no stale-file check here.
+        or None with a UserWarning giving the reason (Q5), and whose
+        ``orphaned`` attribute lists the cords an in-place edit removed
+        (``[]`` for a new file).
 
     Raises:
+        ValueError: an existing file does not have exactly one top-level
+            codebox. Nothing is written.
+        StaleFileError: the existing file changed on disk while it was
+            being edited and force is False.
         PatchValidationError: the save gate refused the write and force is
             False. Nothing is written, created or committed.
     """
     from src.maxpat.codegen import generate_gendsp
 
     path = Path(path)
+
+    if path.exists():
+        # In-place round-trip (Q29 / B8). A read error propagates; nothing written.
+        patcher, original_text = read_patch(path)
+        orphaned = _edit_gendsp_in_place(
+            patcher, path, code, num_inputs, num_outputs
+        )
+        d = patcher.to_dict()
+        commit_hash = save_patch_roundtrip(d, path, original_text, force=force)
+        result = GendspWriteResult(d)
+        result.commit_hash = commit_hash
+        result.orphaned = orphaned
+        return result
+
     gendsp_dict = generate_gendsp(code, num_inputs, num_outputs)
 
     # Save gate (Q7): before mkdir, write or commit.
@@ -913,12 +1106,13 @@ def write_gendsp(
     # Create parent directories if needed
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Write JSON with readable formatting
-    _write_and_sync(path, json.dumps(gendsp_dict, indent=2))
+    # New file: MAX 9 layout (Q29 / B9)
+    _write_and_sync(path, format_patch_text(gendsp_dict))
 
     # Auto-commit to git to prevent work loss (path-scoped; warns on None)
     result = GendspWriteResult(gendsp_dict)
     result.commit_hash = _auto_commit_saved_file(path)
+    result.orphaned = []
     return result
 
 

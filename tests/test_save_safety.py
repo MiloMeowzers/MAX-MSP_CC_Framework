@@ -359,7 +359,7 @@ class TestStaleFile:
         assert _head(root) == head_before
 
     def test_force_overwrites_with_warning(self, tmp_path):
-        from src.maxpat.hooks import save_patch_roundtrip
+        from src.maxpat.hooks import format_patch_text, save_patch_roundtrip
 
         root = _repo(tmp_path)
         P, patcher, T = _saved_and_read(root)
@@ -370,9 +370,7 @@ class TestStaleFile:
         with pytest.warns(UserWarning, match="force=True"):
             result = save_patch_roundtrip(new_dict, P, T, force=True)
 
-        expected = json.dumps(new_dict, indent="    ", ensure_ascii=False)
-        if T.endswith("\n"):
-            expected += "\n"
+        expected = format_patch_text(new_dict, T)
         assert P.read_text() == expected
         assert result == _head(root)
         assert _head_files(root) == [REL_P]
