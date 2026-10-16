@@ -244,7 +244,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 160, 290, 65.0, 22.0 ],
+                    "patching_rect": [ 160.0, 290, 65.0, 22.0 ],
                     "text": "store 1",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -257,7 +257,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 240, 290, 72.0, 22.0 ],
+                    "patching_rect": [ 253.0, 290, 72.0, 22.0 ],
                     "text": "recall 1",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -270,7 +270,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 325, 290, 100.0, 22.0 ],
+                    "patching_rect": [ 354.0, 290, 100.0, 22.0 ],
                     "text": "clientwindow",
                     "fontname": "Arial",
                     "fontsize": 12.0
