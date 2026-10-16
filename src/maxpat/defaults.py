@@ -27,6 +27,13 @@ COMMENT_WRAP_RATIO = 1.6
 COMMENT_LINE_HEIGHT = 14.0
 COMMENT_BASE_HEIGHT = 6.0
 
+# Global auto-layout limits (Q27 / F5): rows, component bands and the
+# disconnected column wrap so content stays within LAYOUT_MAX_WIDTH px of
+# the layout origin; apply_layout refuses patchers with more boxes than
+# LAYOUT_MAX_BOXES (or MAX-saved ones) unless forced.
+LAYOUT_MAX_WIDTH = 1600.0
+LAYOUT_MAX_BOXES = 120
+
 # Layout spacing constants
 V_SPACING = 20          # Vertical gap between rows (~16-20px matches real MAX patches)
 H_GUTTER = 15           # Horizontal gap between objects in a row
@@ -60,6 +67,7 @@ class LayoutOptions:
     grid_snap: bool = True
     inlet_align: bool = True
     comment_gap: float = 10.0
+    max_width: float = LAYOUT_MAX_WIDTH
 
 
 # Subpatcher default window size

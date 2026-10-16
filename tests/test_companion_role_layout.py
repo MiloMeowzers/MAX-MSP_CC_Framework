@@ -6,8 +6,8 @@ Covers D-11..D-14:
   layout.py (no per-object companion_hint in overrides.json).
 - D-13: Augment-don't-replace -- legacy `_COMPANION_NAMES` heuristic remains
   the fall-through for outlets where db.get_signal_role returns None.
-- D-14: Six-key role map exactly: audio->meter~/right, status->flonum/overlay,
-  trigger/float/data/list -> None.
+- D-14: Six-key role map exactly: audio->meter~/right, status -> no companion
+  (Q27 / F1: the status overlay hid its source), trigger/float/data/list -> None.
 
 Source-of-audio for tests: `cycle~` outlet 0 has signal_role: "audio" curated
 in `.claude/max-objects/overrides.json` (Phase 28 D-01 canonical fixture).
@@ -39,9 +39,9 @@ class TestRoleDrivenCompanions:
         assert _ROLE_COMPANION_MAP["audio"]["placement"] == "right"
 
     def test_role_map_status_overlay(self):
-        """D-14: status -> flonum overlay."""
-        assert _ROLE_COMPANION_MAP["status"]["companion"] == "flonum"
-        assert _ROLE_COMPANION_MAP["status"]["placement"] == "overlay"
+        """Q27 / F1: status has no auto-companion (the overlay hid its source)."""
+        assert _ROLE_COMPANION_MAP["status"]["companion"] is None
+        assert _ROLE_COMPANION_MAP["status"]["placement"] is None
 
     def test_role_map_trigger_no_companion(self):
         """D-14: trigger has no auto-companion."""
@@ -144,19 +144,16 @@ class TestRoleDrivenCompanions:
     # Plan 31-07 — WR-01 (overlay placement) and WR-02 (single-parent guard)
     # ------------------------------------------------------------------
 
-    def test_status_role_overlays_source(self, monkeypatch):
-        """WR-01 fix: status outlet -> flonum overlays source rect.
+    def test_status_role_no_overlay(self, monkeypatch):
+        """Q27 / F1: a status outlet -> flonum is laid out as an ordinary row
+        box below its source, never stacked on it.
 
-        No MSP outlet has signal_role='status' curated yet, so we monkey-patch
-        ObjectDatabase.get_signal_role to return 'status' for a fixed (name,
-        outlet) pair. The role map then drives placement='overlay':
-        flonum.patching_rect == source.patching_rect, ignoreclick=1, flonum
-        at boxes[0] (renders on top).
+        No MSP outlet has signal_role='status' curated for cycle~, so we
+        monkey-patch ObjectDatabase.get_signal_role to return 'status' for a
+        fixed (name, outlet) pair.
         """
         from src.maxpat.db_lookup import ObjectDatabase
 
-        # Force `cycle~` outlet 0 to report role='status' so the overlay path
-        # fires (cycle~ is normally 'audio'; this is a test-only injection).
         original_get_role = ObjectDatabase.get_signal_role
 
         def fake_get_role(self, name, outlet):
@@ -170,23 +167,19 @@ class TestRoleDrivenCompanions:
 
         p = Patcher()
         src = p.add_box("cycle~", ["440"])
-        # Use a flonum as the companion (matches _ROLE_COMPANION_MAP['status']).
         readout = p.add_box("flonum")
         p.add_connection(src, 0, readout, 0)
         apply_layout(p)
 
-        # Rect equality: overlay copies all four components.
-        assert list(readout.patching_rect) == list(src.patching_rect), (
-            f"overlay placement should copy parent rect; got "
+        sx, sy, sw, sh = src.patching_rect
+        rx, ry, rw, rh = readout.patching_rect
+        assert not (sx < rx + rw and rx < sx + sw and sy < ry + rh and ry < sy + sh), (
+            f"status readout must not overlap its source; "
             f"readout={readout.patching_rect} src={src.patching_rect}"
         )
-        # ignoreclick=1 baked.
-        assert readout.extra_attrs.get("ignoreclick") == 1
-        # z-order: flonum at index 0 (renders on top).
-        assert p.boxes[0] is readout, (
-            f"overlay companion should be brought to front; "
-            f"boxes[0].name={p.boxes[0].name!r}"
-        )
+        assert "ignoreclick" not in readout.extra_attrs
+        assert ry > sy
+        assert p.boxes[0] is not readout
 
     def test_status_role_overlay_rect_not_aliased(self, monkeypatch):
         """Pitfall 1 (mirror of add_overlay_readout): mutating the readout's

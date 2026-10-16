@@ -266,3 +266,351 @@ class TestF5Robustness:
         before = copy.deepcopy(patch)
         review_layout(patch)
         assert patch == before
+
+
+# ---------------------------------------------------------------------------
+# Task 2 helpers
+# ---------------------------------------------------------------------------
+
+from src.maxpat import layout as _layout  # noqa: E402
+from src.maxpat.defaults import LayoutOptions  # noqa: E402
+
+H_GUTTER = LayoutOptions().h_gutter
+
+
+def apply_layout(patcher, *args, **kwargs):
+    return _layout.apply_layout(patcher, *args, **kwargs)
+
+
+def _content_rects(p):
+    return [(b, rendered_rect(b)) for b in p.boxes
+            if b.maxclass not in ("comment", "panel")]
+
+
+def _assert_no_intersections(p):
+    rects = _content_rects(p)
+    for i in range(len(rects)):
+        for j in range(i + 1, len(rects)):
+            a, ra = rects[i]
+            b, rb = rects[j]
+            assert not _intersect(ra, rb), (
+                f"{a.text or a.maxclass} {ra} intersects {b.text or b.maxclass} {rb}")
+
+
+# ---------------------------------------------------------------------------
+# F1: no status-role overlay
+# ---------------------------------------------------------------------------
+
+class TestF1NoStatusOverlay:
+
+    def test_role_map_status_has_no_companion(self):
+        assert _layout._ROLE_COMPANION_MAP["status"] == {"companion": None, "placement": None}
+        assert len(_layout._ROLE_COMPANION_MAP) == 6
+
+    def test_dspstate_flonum_not_stacked(self):
+        p = Patcher()
+        src = p.add_box("dspstate~")
+        num = p.add_box("flonum")
+        p.add_connection(src, 1, num, 0)
+        apply_layout(p)
+        assert not _intersect(src.patching_rect, num.patching_rect)
+        assert "ignoreclick" not in num.extra_attrs
+        assert num.patching_rect[1] > src.patching_rect[1]
+
+
+# ---------------------------------------------------------------------------
+# F2: controls feeding one object sit in a band above it
+# ---------------------------------------------------------------------------
+
+def _pack_with_controls(p, x=0.0):
+    pack = p.add_box("pack", ["0.", "0.", "0."], x=x)
+    a = p.add_box("flonum", x=x)
+    b = p.add_box("flonum", x=x)
+    d = p.add_box("dial", x=x)
+    # cords created out of inlet order
+    p.add_connection(d, 0, pack, 2)
+    p.add_connection(b, 0, pack, 1)
+    p.add_connection(a, 0, pack, 0)
+    return pack, [a, b, d]
+
+
+class TestF2ControlBand:
+
+    def test_three_controls_in_one_band_above_pack(self):
+        p = Patcher()
+        pack, controls = _pack_with_controls(p)
+        out = p.add_box("print")
+        p.add_connection(pack, 0, out, 0)
+        apply_layout(p)
+        top = pack.patching_rect[1]
+        for c in controls:
+            assert c.patching_rect[1] + c.patching_rect[3] <= top + 1e-9
+        for i in range(3):
+            for j in range(i + 1, 3):
+                ci, cj = controls[i].patching_rect, controls[j].patching_rect
+                assert ci[1] < cj[1] + cj[3] and cj[1] < ci[1] + ci[3]
+        for prev, cur in zip(controls, controls[1:]):
+            prev_right = rendered_rect(prev)[0] + rendered_rect(prev)[2]
+            assert cur.patching_rect[0] >= prev_right + H_GUTTER - 1e-9
+        _assert_no_intersections(p)
+
+    def test_two_packs_in_one_row_do_not_collide(self):
+        p = Patcher()
+        pack1, _ = _pack_with_controls(p)
+        pack2, _ = _pack_with_controls(p)
+        out = p.add_box("print")
+        p.add_connection(pack1, 0, out, 0)
+        p.add_connection(pack2, 0, out, 0)
+        apply_layout(p)
+        assert pack1.patching_rect[1] == pack2.patching_rect[1]
+        _assert_no_intersections(p)
+
+    def test_dial_scale_mul_does_not_land_on_cycle(self):
+        p = Patcher()
+        dial = p.add_box("dial")
+        sc = p.add_box("scale", ["0", "127", "0.", "1."])
+        osc = p.add_box("cycle~", ["440"])
+        mul = p.add_box("*~")
+        dac = p.add_box("dac~")
+        p.add_connection(dial, 0, sc, 0)
+        p.add_connection(sc, 0, mul, 1)
+        p.add_connection(osc, 0, mul, 0)
+        p.add_connection(mul, 0, dac, 0)
+        apply_layout(p)
+        _assert_no_intersections(p)
+
+    def test_control_feeding_control_stays_in_rows(self):
+        p = Patcher()
+        dial = p.add_box("dial")
+        num = p.add_box("flonum")
+        out = p.add_box("print")
+        p.add_connection(dial, 0, num, 0)
+        p.add_connection(num, 0, out, 0)
+        apply_layout(p)
+        assert dial.patching_rect[1] < num.patching_rect[1] < out.patching_rect[1]
+        _assert_no_intersections(p)
+
+
+# ---------------------------------------------------------------------------
+# F4: embedded bpatcher faces are never re-laid out
+# ---------------------------------------------------------------------------
+
+class TestF4BpatcherFace:
+
+    def test_bpatcher_inner_rects_unchanged(self):
+        p = Patcher()
+        bp, inner = p.add_bpatcher(embedded=True, width=120.0, height=80.0)
+        dial = inner.add_box("dial", x=10.0, y=10.0)
+        lbl = inner.add_comment("freq", x=55.0, y=20.0)
+        dial.presentation = True
+        dial.presentation_rect = [10.0, 10.0, 40.0, 40.0]
+        before = [list(dial.patching_rect), list(lbl.patching_rect)]
+        src = p.add_box("loadbang")
+        p.add_connection(src, 0, bp, 0)
+        apply_layout(p)
+        assert [dial.patching_rect, lbl.patching_rect] == before
+        assert dial.presentation_rect == [10.0, 10.0, 40.0, 40.0]
+
+    def test_subpatcher_still_laid_out(self):
+        p = Patcher()
+        sp, inner = p.add_subpatcher("work", inlets=0, outlets=0)
+        a = inner.add_box("loadbang", x=300.0, y=300.0)
+        b = inner.add_box("print", x=300.0, y=200.0)
+        inner.add_connection(a, 0, b, 0)
+        apply_layout(p)
+        assert a.patching_rect[1] < b.patching_rect[1]
+        assert a.patching_rect[:2] != [300.0, 300.0]
+
+
+# ---------------------------------------------------------------------------
+# F5: refusal guard
+# ---------------------------------------------------------------------------
+
+def _saved_patch(version):
+    p = Patcher()
+    a = p.add_box("loadbang", x=400.0, y=400.0)
+    b = p.add_box("print", x=100.0, y=100.0)
+    p.add_box("metro", ["100"], x=700.0, y=10.0)
+    p.add_connection(a, 0, b, 0)
+    d = p.to_dict()
+    d["patcher"]["appversion"] = dict(d["patcher"]["appversion"], **version)
+    return Patcher.from_dict(d)
+
+
+class TestF5Guard:
+
+    def test_max_saved_patch_refused_unchanged(self):
+        p = _saved_patch({"major": 9, "minor": 1, "revision": 5})
+        before = [list(b.patching_rect) for b in p.boxes]
+        with pytest.raises(_layout.LayoutRefusedError) as exc:
+            apply_layout(p)
+        assert "saved by MAX 9.1.5" in str(exc.value)
+        assert "force=True" in str(exc.value)
+        assert isinstance(exc.value, ValueError)
+        assert [list(b.patching_rect) for b in p.boxes] == before
+
+    def test_force_lays_out(self):
+        p = _saved_patch({"major": 9, "minor": 1, "revision": 5})
+        before = [list(b.patching_rect) for b in p.boxes]
+        apply_layout(p, force=True)
+        assert [list(b.patching_rect) for b in p.boxes] != before
+
+    def test_generator_version_lays_out(self):
+        p = _saved_patch({})
+        apply_layout(p)
+
+    def test_box_limit(self):
+        p = Patcher()
+        for _ in range(121):
+            p.add_box("print", skip_overlap_check=True)
+        with pytest.raises(_layout.LayoutRefusedError, match=r"121 boxes \(limit 120\)"):
+            apply_layout(p)
+        p.boxes.pop()
+        apply_layout(p)
+
+    def test_inner_patcher_checked_too(self):
+        p = Patcher()
+        sp, inner = p.add_subpatcher("big", inlets=0, outlets=0)
+        for _ in range(121):
+            inner.add_box("print", skip_overlap_check=True)
+        with pytest.raises(_layout.LayoutRefusedError):
+            apply_layout(p)
+        apply_layout(p, force=True)
+
+
+# ---------------------------------------------------------------------------
+# F5: ~1600 px width cap
+# ---------------------------------------------------------------------------
+
+CAP_RIGHT = 30.0 + 1600.0
+
+
+def _right(b):
+    r = rendered_rect(b)
+    return r[0] + r[2]
+
+
+class TestF5WidthCap:
+
+    def test_twenty_chains_wrap_into_bands(self):
+        p = Patcher()
+        pairs = []
+        for _ in range(20):
+            m = p.add_box("metro", ["100"])
+            o = p.add_box("print")
+            p.add_connection(m, 0, o, 0)
+            pairs.append((m, o))
+        apply_layout(p)
+        assert max(_right(b) for b in p.boxes) <= CAP_RIGHT
+        first_bottom = max(b.patching_rect[1] + b.patching_rect[3] for b in pairs[0])
+        assert any(m.patching_rect[1] > first_bottom for m, _ in pairs)
+        _assert_no_intersections(p)
+
+    def test_thirty_sources_one_sink_wraps(self):
+        p = Patcher()
+        out = p.add_box("print")
+        srcs = []
+        for _ in range(30):
+            s = p.add_box("loadbang")
+            p.add_connection(s, 0, out, 0)
+            srcs.append(s)
+        apply_layout(p)
+        assert max(_right(b) for b in p.boxes) <= CAP_RIGHT
+        assert all(out.patching_rect[1] > s.patching_rect[1] + s.patching_rect[3]
+                   for s in srcs)
+        _assert_no_intersections(p)
+
+    @pytest.mark.parametrize("n", [15, 18])
+    def test_disconnected_inside_cap(self, n):
+        p = Patcher()
+        out = p.add_box("print")
+        for _ in range(n):
+            p.add_connection(p.add_box("loadbang"), 0, out, 0)
+        loose = [p.add_box("metro", ["100"]) for _ in range(5)]
+        apply_layout(p)
+        assert all(_right(b) <= CAP_RIGHT for b in loose)
+        assert max(_right(b) for b in p.boxes) <= CAP_RIGHT
+        _assert_no_intersections(p)
+
+    def test_oversize_box_terminates_alone_past_cap(self):
+        p = Patcher()
+        src = p.add_box("loadbang")
+        outs = [p.add_box("print") for _ in range(3)]
+        outs[1].patching_rect[2] = 2000.0
+        for o in outs:
+            p.add_connection(src, 0, o, 0)
+        apply_layout(p)
+        past = [b for b in p.boxes if _right(b) > CAP_RIGHT]
+        assert past == [outs[1]]
+        _assert_no_intersections(p)
+
+
+# ---------------------------------------------------------------------------
+# F5: presentation auto-grid with a running x offset
+# ---------------------------------------------------------------------------
+
+class TestF5PresentationGrid:
+
+    def test_mixed_widths_do_not_overlap(self):
+        p = Patcher()
+        boxes = [p.add_box("multislider"), p.add_box("toggle"), p.add_box("slider")]
+        for b in boxes:
+            b.presentation = True
+        apply_layout(p)
+        rects = [b.presentation_rect for b in boxes]
+        for i in range(3):
+            for j in range(i + 1, 3):
+                assert not _intersect(rects[i], rects[j]), rects
+
+    def test_uniform_widths_reproduce_old_grid(self):
+        p = Patcher()
+        toggles = [p.add_box("toggle") for _ in range(3)]
+        for t in toggles:
+            t.presentation = True
+        apply_layout(p)
+        assert [t.presentation_rect[:2] for t in toggles] == [
+            [20.0, 20.0], [104.0, 20.0], [188.0, 20.0]]
+
+
+# ---------------------------------------------------------------------------
+# F7: add_overlay_readout presentation copy and empty comment text
+# ---------------------------------------------------------------------------
+
+def _serialized(p, box):
+    for entry in p.to_dict()["patcher"]["boxes"]:
+        if entry["box"]["id"] == box.id:
+            return entry["box"]
+    raise AssertionError(box.id)
+
+
+class TestF7OverlayReadout:
+
+    def test_comment_readout_text_empty(self):
+        p = Patcher()
+        dial = p.add_box("dial", x=30.0, y=30.0)
+        r = p.add_overlay_readout(dial, type="comment")
+        assert _serialized(p, r)["text"] == ""
+
+    def test_presentation_copied_with_offsets(self):
+        p = Patcher()
+        dial = p.add_box("dial", x=30.0, y=30.0)
+        p.add_to_presentation(dial, [100.0, 50.0, 40.0, 40.0])
+        r = p.add_overlay_readout(dial, offset_x=5.0, offset_y=4.0)
+        assert r.presentation is True
+        assert r.presentation_rect == [105.0, 54.0, 40.0, 40.0]
+
+    def test_not_in_presentation_when_target_is_not(self):
+        p = Patcher()
+        dial = p.add_box("dial", x=30.0, y=30.0)
+        r = p.add_overlay_readout(dial)
+        assert r.presentation is False
+        assert r.presentation_rect is None
+
+
+class TestF5AddBoxNewBoxRenderedDims:
+
+    def test_new_message_measured_by_rendered_width(self):
+        p = Patcher()
+        t = p.add_box("toggle", x=105.0, y=30.0, skip_overlap_check=True)
+        m = p.add_box("message", x=30.0, y=30.0)
+        assert not _intersect(rendered_rect(m), t.patching_rect)

@@ -26,7 +26,7 @@ from src.maxpat.defaults import (
     GEN_PATCHER_BGCOLOR,
 )
 from src.maxpat.maxclass_map import is_ui_object
-from src.maxpat.sizing import calculate_box_size
+from src.maxpat.sizing import calculate_box_size, is_max_saved, rendered_rect
 from src.maxpat.patcher import Box, Patchline
 
 
@@ -54,9 +54,10 @@ class BuildersMixin:
             x: Horizontal position (default 0, set by layout engine later).
             y: Vertical position (default 0, set by layout engine later).
             skip_overlap_check: If False (default), automatically nudges the
-                box to avoid overlapping pre-existing boxes. Set True when the
-                caller handles its own positioning (e.g., replace_box,
-                insert_into_connection, add_subpatcher).
+                box to avoid overlapping pre-existing boxes, measuring both the
+                new and the existing boxes by ``sizing.rendered_rect`` (Q27 /
+                F5). Set True when the caller handles its own positioning
+                (e.g., replace_box, insert_into_connection, add_subpatcher).
 
         Returns:
             The created Box instance.
@@ -79,8 +80,11 @@ class BuildersMixin:
                   allowed_packages=self.allowed_packages)
 
         if not skip_overlap_check:
-            w = box.patching_rect[2]
-            h = box.patching_rect[3]
+            r = rendered_rect(box, max_saved=is_max_saved(self.props))
+            if r is not None:
+                w, h = r[2], r[3]
+            else:
+                w, h = box.patching_rect[2], box.patching_rect[3]
             new_x, new_y = self._find_clear_position(x, y, w, h)
             if new_x != x or new_y != y:
                 box.patching_rect[0] = new_x
@@ -412,7 +416,12 @@ class BuildersMixin:
         renders on top) plus ``ignoreclick=1`` (clicks pass through to the
         underlying control). The readout copies ``target.patching_rect`` by
         default; ``offset_x``/``offset_y`` fine-tune the position without
-        aliasing the target's rect.
+        aliasing the target's rect. When the target is in presentation, the
+        readout is added to presentation too, at the target's
+        ``presentation_rect`` plus the same offsets (Rule #9; Q27 / F7); a
+        target outside presentation leaves the readout out of it. A
+        ``type='comment'`` readout starts with empty text (fill it with
+        ``set ...``), never the literal word "comment".
 
         Z-order model: in ``.maxpat`` files objects earlier in the ``boxes``
         array render on top of later ones (index 0 = topmost).
@@ -497,8 +506,24 @@ class BuildersMixin:
         # type='comment' has no native format/decimals attribute; the format kwarg
         # is informational only (callers wanting unit display wire prepend->comment).
         # Intentionally NOT written to extra_attrs (CR-01: don't ship dead keys).
+        if type == "comment":
+            readout.text = ""
         if not editable:
             readout.extra_attrs["ignoreclick"] = 1
+        # Presentation parity (Rule #9; Q27 / F7): copy the target's
+        # presentation rect, offset like the patching rect.
+        prect = target.presentation_rect
+        if (
+            target.presentation
+            and isinstance(prect, (list, tuple))
+            and len(prect) >= 4
+            and all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                    for v in prect[:4])
+        ):
+            self.add_to_presentation(
+                readout,
+                [prect[0] + offset_x, prect[1] + offset_y, prect[2], prect[3]],
+            )
         # Unconditional bring_to_front per D-06 (always renders on top)
         self.bring_to_front(readout)
         return readout

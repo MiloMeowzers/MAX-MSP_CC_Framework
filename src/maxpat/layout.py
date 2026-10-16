@@ -5,20 +5,32 @@ Positions MAX objects in a patcher for readable top-to-bottom signal flow:
 2. Kahn's algorithm (topological sort by levels) to assign boxes to rows
 3. Row-based layout: levels flow top-to-bottom, objects spread horizontally
 4. Within-row ordering by parent position to minimize cable crossings
-5. UI control objects positioned above their targets
-6. Disconnected objects (bpatchers, presentation-only) placed to the right
+5. UI control objects grouped in a band above their target, left to right
+   by inlet with gutters; each row box reserves a footprint for its band
+   (Q27 / F2)
+6. Disconnected objects (bpatchers, presentation-only) placed to the right,
+   or in a new band below once the ~1600 px width cap is reached; rows and
+   components wrap at the same cap (Q27 / F5)
 7. Midpoint generation for all cable types:
    a. Horizontal offset cables get L-shaped routing at the vertical midpoint
    b. Upward-flowing cables (init sections) get right-edge bus routing
    c. Parallel bus cables are spaced apart to avoid visual overlap
 8. Auto-sizing patcher rect to fit all content including bus routes
-9. Presentation mode grid layout for UI objects
+9. Presentation mode grid layout for UI objects (running x offset, rows
+   advance by their tallest box; Q27 / F5)
+
+Widths and heights come from ``sizing.rendered_rect`` (the geometry the
+overlap critic and add_box share). apply_layout refuses MAX-saved or
+>120-box patchers unless forced (LayoutRefusedError), never re-lays out an
+embedded bpatcher face, and gives a status outlet no overlay companion
+(Q27 / F1, F4, F5).
 
 Implements PAT-06 (top-to-bottom signal flow) and PAT-07 (readable spacing).
 """
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict, deque
 from typing import TYPE_CHECKING
 
@@ -30,9 +42,11 @@ from src.maxpat.defaults import (
     BUS_MARGIN,
     BUS_SPACING,
     PATCHER_PADDING,
+    LAYOUT_MAX_BOXES,
     LayoutOptions,
 )
 from src.maxpat.maxclass_map import is_ui_object
+from src.maxpat.sizing import is_max_saved, rendered_rect
 
 if TYPE_CHECKING:
     from src.maxpat.patcher import Box, Patcher
@@ -58,7 +72,9 @@ _COMPANION_NAMES = frozenset({
 # `_COMPANION_NAMES` (D-13). Six keys verbatim per D-14.
 _ROLE_COMPANION_MAP: dict[str, dict[str, str | None]] = {
     "audio":   {"companion": "meter~", "placement": "right"},
-    "status":  {"companion": "flonum", "placement": "overlay"},
+    # Q27 / F1: no status overlay -- copying the source rect onto a flonum
+    # hid the source; add_overlay_readout is the explicit overlay path.
+    "status":  {"companion": None,     "placement": None},
     "trigger": {"companion": None,     "placement": None},
     "float":   {"companion": None,     "placement": None},
     "data":    {"companion": None,     "placement": None},
@@ -79,20 +95,131 @@ _COMPONENT_GAP = 40.0
 _IO_MARGIN = 7.0
 
 
-def apply_layout(patcher: Patcher, options: LayoutOptions | None = None) -> None:
+class LayoutRefusedError(ValueError):
+    """apply_layout refused to lay out a MAX-saved or large patcher (Q27 / F5).
+
+    Global auto-layout on a user-arranged patch makes it unusably wide
+    (ji-harmonizer 1,968 -> 10,203 px). Raised before any box moves; pass
+    ``force=True`` to lay it out anyway.
+    """
+
+
+def _refusal_reason(patcher: Patcher) -> str | None:
+    """Why *patcher* (its own boxes only) must not be auto-laid out, or None."""
+    if is_max_saved(patcher.props):
+        app = patcher.props.get("appversion") or {}
+        return "the patch was saved by MAX %s.%s.%s" % (
+            app.get("major"), app.get("minor"), app.get("revision"))
+    n = len(patcher.boxes)
+    if n > LAYOUT_MAX_BOXES:
+        return "the patch has %d boxes (limit %d)" % (n, LAYOUT_MAX_BOXES)
+    return None
+
+
+def _layout_children(patcher: Patcher) -> list[Patcher]:
+    """Inner patchers apply_layout recurses into: not embedded bpatcher
+    faces (Q27 / F4), not ``_skip_auto_layout`` opt-outs, not empty ones."""
+    out = []
+    for box in patcher.boxes:
+        inner = box._inner_patcher
+        if inner is None or not inner.boxes:
+            continue
+        if box.maxclass == "bpatcher" or box.name == "bpatcher":
+            continue
+        if getattr(inner, "_skip_auto_layout", False):
+            continue
+        out.append(inner)
+    return out
+
+
+def _check_layout_allowed(patcher: Patcher) -> None:
+    """Raise LayoutRefusedError if *patcher* or any inner patcher the
+    recursion would visit is MAX-saved or too large. Mutates nothing."""
+    reason = _refusal_reason(patcher)
+    if reason is not None:
+        raise LayoutRefusedError(
+            f"apply_layout refused: {reason}. Global auto-layout makes "
+            "MAX-saved or large patches unusably wide; make local fixes "
+            "(finalize_patch(patcher, is_new=False)) or pass force=True."
+        )
+    for inner in _layout_children(patcher):
+        _check_layout_allowed(inner)
+
+
+def _ceil_grid(v: float, grid: float | None) -> float:
+    """Round *v* up to the grid (no-op when grid is None or <= 0)."""
+    if not grid or grid <= 0:
+        return v
+    return math.ceil(v / grid - 1e-9) * grid
+
+
+def _rdims(box: Box) -> tuple[float, float]:
+    """Rendered (width, height) of a box, falling back to its stored rect."""
+    r = rendered_rect(box)
+    if r is None:
+        return (box.patching_rect[2], box.patching_rect[3])
+    return (r[2], r[3])
+
+
+def _block_bbox(boxes: list[Box]) -> tuple[float, float, float, float]:
+    """(left, top, right, bottom) over the rendered rects of *boxes*."""
+    left = top = math.inf
+    right = bottom = -math.inf
+    for b in boxes:
+        w, h = _rdims(b)
+        x, y = b.patching_rect[0], b.patching_rect[1]
+        left = min(left, x)
+        top = min(top, y)
+        right = max(right, x + w)
+        bottom = max(bottom, y + h)
+    return left, top, right, bottom
+
+
+def _translate(boxes: list[Box], dx: float, dy: float) -> None:
+    for b in boxes:
+        b.patching_rect[0] += dx
+        b.patching_rect[1] += dy
+
+
+def apply_layout(
+    patcher: Patcher,
+    options: LayoutOptions | None = None,
+    *,
+    force: bool = False,
+) -> None:
     """Position all boxes using row-based topological layout with component grouping.
 
     Signal flow is top-to-bottom: topological depth maps to y-position.
-    Independent signal chains are placed side by side as vertical groups.
-    Disconnected objects (bpatchers, presentation-only) go to the right.
+    Independent signal chains are placed side by side as vertical groups,
+    wrapping into a new band below once a block would pass
+    ``30 + options.max_width`` (~1600 px); rows wrap at the same cap.
+    UI controls feeding one object sit in a band above it, ordered by inlet.
+    Disconnected objects (bpatchers, presentation-only) go to the right, or
+    into a new band when they would not fit under the cap.
     Backward-direction cables get midpoints for clean segmented routing.
+    Inner patchers are laid out recursively, except embedded bpatcher faces
+    (their inner layout IS the face) and ``_skip_auto_layout`` opt-outs.
+
+    Refusal guard (Q27 / F5): unless *force* is True, raises
+    :class:`LayoutRefusedError` (a ValueError) before moving any box when
+    this patcher or an inner patcher the recursion would visit was saved by
+    MAX (``sizing.is_max_saved``) or has more than ``LAYOUT_MAX_BOXES``
+    (120) boxes. Global layout of a user-arranged patch destroys it; use
+    ``finalize_patch(patcher, is_new=False)`` for edits.
 
     Args:
         patcher: A Patcher instance containing boxes and lines.
         options: Optional layout parameters. Uses LayoutOptions defaults if None.
+        force: Lay out a MAX-saved or large patcher anyway.
+
+    Raises:
+        LayoutRefusedError: the guard refused (nothing was changed).
     """
     if options is None:
         options = LayoutOptions()
+
+    if not force:
+        _check_layout_allowed(patcher)
 
     if not patcher.boxes:
         return
@@ -116,8 +243,14 @@ def apply_layout(patcher: Patcher, options: LayoutOptions | None = None) -> None
     # Separate connected components from disconnected objects
     components, disconnected = _find_components(patcher.boxes, adj)
 
-    # Layout each component as a vertical group (top-to-bottom rows)
+    grid = options.grid_size if options.grid_snap else None
+    cap_right = _START_X + options.max_width
+
+    # Layout each component as a vertical group (top-to-bottom rows),
+    # side by side in bands no wider than the cap (Q27 / F5).
     cursor_x = _START_X
+    band_top = _START_Y
+    band_bottom = _START_Y
     for component_boxes in components:
         # Filter graph to this component
         comp_ids = {b.id for b in component_boxes}
@@ -132,7 +265,7 @@ def apply_layout(patcher: Patcher, options: LayoutOptions | None = None) -> None
         if not rows:
             continue
 
-        # Identify and extract UI controls
+        # Identify and extract UI controls (placed in their target's band)
         ui_controls = _identify_ui_controls(component_boxes, patcher.lines, rows)
         for box_id in ui_controls:
             for row in rows:
@@ -157,31 +290,36 @@ def apply_layout(patcher: Patcher, options: LayoutOptions | None = None) -> None
         if not rows:
             continue
 
-        # Position this component starting at cursor_x
-        comp_width = _position_component(
-            rows, cursor_x, _START_Y, reverse_adj, patcher.boxes,
-            patcher.lines, options,
+        # Position this component (rows + control bands) at cursor_x
+        start_x = _ceil_grid(cursor_x, grid)
+        _position_component(
+            rows, start_x, band_top, reverse_adj, patcher.boxes,
+            patcher.lines, options, controls=ui_controls,
         )
 
-        # Position UI controls above their targets
-        _place_ui_controls(patcher.boxes, ui_controls, options)
-
-        # Position companion objects beside their parents (or as overlays;
-        # placement spec carried in the companions dict per Plan 31-07 WR-01).
+        # Position companion objects beside their parents
         _place_companions(patcher, companions)
 
-        # Recalculate component width after companion placement
-        comp_right = max(
-            b.patching_rect[0] + b.patching_rect[2]
-            for b in component_boxes
-        )
-        comp_width = comp_right - cursor_x
+        # Component banding: a block that passes the cap moves to a new
+        # band below everything placed so far.
+        _, _, right, bottom = _block_bbox(component_boxes)
+        if right > cap_right and cursor_x > _START_X:
+            new_top = _ceil_grid(band_bottom + _COMPONENT_GAP, grid)
+            _translate(component_boxes, _START_X - start_x, new_top - band_top)
+            band_top = new_top
+            _, _, right, bottom = _block_bbox(component_boxes)
+        band_bottom = max(band_bottom, bottom)
+        cursor_x = right + _COMPONENT_GAP
 
-        cursor_x += comp_width + _COMPONENT_GAP
-
-    # Place disconnected objects to the right of all components
+    # Place disconnected objects to the right of all components, or in a
+    # new band when their widest box would pass the cap.
     if disconnected:
-        _position_disconnected(disconnected, cursor_x, _START_Y)
+        widest = max(_rdims(b)[0] for b in disconnected)
+        if cursor_x + widest <= cap_right:
+            disc_x, disc_y = cursor_x, band_top
+        else:
+            disc_x, disc_y = _START_X, band_bottom + _COMPONENT_GAP
+        _position_disconnected(disconnected, disc_x, disc_y, cap_right=cap_right)
 
     # Place associated comments near their targets
     _place_associated_comments(patcher.boxes, options.comment_gap)
@@ -208,12 +346,10 @@ def apply_layout(patcher: Patcher, options: LayoutOptions | None = None) -> None
     if not patcher._is_subpatcher:
         _auto_size_patcher_rect(patcher, options)
 
-    # Recursively layout inner patchers (subpatchers, gen~, bpatchers)
-    for box in patcher.boxes:
-        if box._inner_patcher is not None and box._inner_patcher.boxes:
-            if getattr(box._inner_patcher, '_skip_auto_layout', False):
-                continue
-            apply_layout(box._inner_patcher, options)
+    # Recursively layout inner patchers (subpatchers, gen~); embedded
+    # bpatcher faces keep their arrangement (Q27 / F4).
+    for inner in _layout_children(patcher):
+        apply_layout(inner, options, force=force)
 
     # Apply presentation mode layout if any boxes have presentation=True
     _apply_presentation_layout(patcher.boxes)
@@ -375,6 +511,77 @@ def _topological_levels(
 # ---------------------------------------------------------------------------
 
 
+class _Footprint:
+    """Space a row box reserves, as offsets from its top-left (Q27 / F2).
+
+    ``left`` <= 0 and ``right`` >= the box's rendered width bound it
+    horizontally; ``above`` is the band height reserved over it (its
+    control group), ``bottom`` its extent below its top edge.
+    """
+
+    __slots__ = ("left", "right", "above", "bottom")
+
+    def __init__(self, left: float, right: float, above: float, bottom: float):
+        self.left = left
+        self.right = right
+        self.above = above
+        self.bottom = bottom
+
+
+def _control_groups(
+    controls: dict[str, tuple[Box, int]] | None,
+    all_boxes: list[Box],
+    options: LayoutOptions,
+) -> dict[str, list[tuple[Box, float]]]:
+    """Group extracted UI controls by target: target id -> [(control, dx)].
+
+    Controls are ordered by destination inlet, then box-array order, and
+    sit left to right from the target's x, each starting at least
+    ``h_gutter`` after the previous control's rendered right edge (rounded
+    up to the grid when grid_snap is on, so the final snap keeps gutters).
+    """
+    if not controls:
+        return {}
+    grid = options.grid_size if options.grid_snap else None
+    order = {b.id: i for i, b in enumerate(all_boxes)}
+    box_map = {b.id: b for b in all_boxes}
+    by_target: dict[str, list[tuple[int, int, Box]]] = {}
+    for ctrl_id, (target, inlet) in controls.items():
+        ctrl = box_map.get(ctrl_id)
+        if ctrl is None:
+            continue
+        by_target.setdefault(target.id, []).append(
+            (inlet, order.get(ctrl_id, 0), ctrl))
+    groups: dict[str, list[tuple[Box, float]]] = {}
+    for target_id, entries in by_target.items():
+        entries.sort(key=lambda e: (e[0], e[1]))
+        placed: list[tuple[Box, float]] = []
+        next_dx = 0.0
+        for _, _, ctrl in entries:
+            dx = _ceil_grid(next_dx, grid)
+            placed.append((ctrl, dx))
+            next_dx = dx + _rdims(ctrl)[0] + options.h_gutter
+        groups[target_id] = placed
+    return groups
+
+
+def _footprint(
+    box: Box,
+    group: list[tuple[Box, float]] | None,
+    gap: float,
+) -> _Footprint:
+    """The footprint of a row box: its rendered rect, widened and raised by
+    its control group (W = group width, band = tallest control + gap)."""
+    w, h = _rdims(box)
+    fp = _Footprint(0.0, w, 0.0, h)
+    if group:
+        width = max(dx + _rdims(c)[0] for c, dx in group)
+        tallest = max(_rdims(c)[1] for c, _ in group)
+        fp.right = max(fp.right, width)
+        fp.above = max(fp.above, tallest + gap)
+    return fp
+
+
 def _position_component(
     rows: list[list[Box]],
     start_x: float,
@@ -383,6 +590,7 @@ def _position_component(
     all_boxes: list[Box],
     lines: list,
     options: LayoutOptions,
+    controls: dict[str, tuple[Box, int]] | None = None,
 ) -> float:
     """Position boxes in a component as top-to-bottom rows.
 
@@ -394,73 +602,107 @@ def _position_component(
     destination inlet X aligns under the parent's source outlet X (straighter
     cables). Otherwise, child center-x is aligned under parent center-x.
 
+    Every row box reserves a footprint (Q27 / F2): its rendered rect plus
+    the band of UI controls feeding it (*controls*: control id -> (target,
+    inlet)), which sit above it left to right by inlet. Slots keep
+    ``h_gutter`` apart; a slot that would end past ``start_x +
+    options.max_width`` opens a new line packed from start_x (a slot wider
+    than the cap sits alone on its line). Each line's boxes share one y
+    below the line's tallest band.
+
     Returns the total width of the component.
     """
     if not rows:
         return 0.0
 
     box_map = {b.id: b for b in all_boxes}
+    grid = options.grid_size if options.grid_snap else None
+    gap = options.v_spacing * 0.5
+    cap = start_x + options.max_width
+    groups = _control_groups(controls, all_boxes, options)
 
-    # Compute y position for each row
-    row_y: list[float] = [start_y]
-    for i in range(1, len(rows)):
-        prev_row = rows[i - 1]
-        max_height = max(b.patching_rect[3] for b in prev_row)
-        # Adaptive gap: add proportional spacing for tall elements (bpatchers)
-        gap = options.v_spacing
-        if max_height > 100:
-            gap += (max_height - 100) * 0.1
-        row_y.append(row_y[-1] + max_height + gap)
-
-    # Position boxes row by row
-    max_right = start_x
+    cursor_y = start_y
     for row_idx, row in enumerate(rows):
-        y = row_y[row_idx]
+        if row_idx > 0 and len(row) > 1:
+            # Sort by parent x to reduce crossings
+            _sort_row_by_parent_x(row, reverse_adj, box_map)
 
-        if row_idx == 0:
-            # First row: pack left to right from start_x
-            x = start_x
-            for box in row:
+        # Ideal x per box (row 0 packs left to right). Computed before any
+        # box of this row moves, as the per-box pass did.
+        ideals: list[float | None] = []
+        for box in row:
+            if row_idx == 0:
+                ideals.append(None)
+            elif options.inlet_align:
+                # Inlet-under-outlet alignment for straighter cables
+                ideals.append(_target_x_for_inlet_align(
+                    box, reverse_adj, box_map, lines,
+                ))
+            else:
+                # Legacy center-under-center
+                target_x = _parent_center_x(box, reverse_adj, box_map)
+                ideals.append(target_x - _rdims(box)[0] * 0.5)
+
+        # Pack slots into lines, wrapping at the cap.
+        row_lines: list[list[tuple[Box, _Footprint, float]]] = []
+        current: list[tuple[Box, _Footprint, float]] = []
+        prev_right: float | None = None
+        packing = False
+        for box, ideal in zip(row, ideals):
+            fp = _footprint(box, groups.get(box.id), gap)
+            if ideal is None or packing:
+                slot_left = start_x if prev_right is None else prev_right + options.h_gutter
+            else:
+                slot_left = max(ideal + fp.left, start_x)
+                if prev_right is not None:
+                    slot_left = max(slot_left, prev_right + options.h_gutter)
+            x = _ceil_grid(slot_left - fp.left, grid)
+            if x + fp.right > cap:
+                if current:
+                    row_lines.append(current)
+                    current = []
+                    packing = True
+                    x = _ceil_grid(start_x - fp.left, grid)
+                else:
+                    # Alone on its line: pull it back under the cap when
+                    # it fits, else it starts at start_x.
+                    x = max(_ceil_grid(start_x - fp.left, grid),
+                            cap - fp.right if not grid else
+                            math.floor((cap - fp.right) / grid + 1e-9) * grid)
+            current.append((box, fp, x))
+            prev_right = x + fp.right
+        if current:
+            row_lines.append(current)
+
+        for line in row_lines:
+            band = max(fp.above for _, fp, _ in line)
+            y = cursor_y + band
+            if band > 0:
+                y = _ceil_grid(y, grid)
+            height = max(fp.bottom for _, fp, _ in line)
+            for box, _, x in line:
                 box.patching_rect[0] = x
                 box.patching_rect[1] = y
-                x += box.patching_rect[2] + options.h_gutter
-        else:
-            # Sort by parent x to reduce crossings
-            if len(row) > 1:
-                _sort_row_by_parent_x(row, reverse_adj, box_map)
+            # Adaptive gap: add proportional spacing for tall elements (bpatchers)
+            next_gap = options.v_spacing
+            if height > 100:
+                next_gap += (height - 100) * 0.1
+            cursor_y = y + height + next_gap
 
-            # Position each box, then resolve overlaps by pushing right
-            positions: list[float] = []
-            for box in row:
-                if options.inlet_align:
-                    # Inlet-under-outlet alignment for straighter cables
-                    ideal_x = _target_x_for_inlet_align(
-                        box, reverse_adj, box_map, lines,
-                    )
-                else:
-                    # Legacy center-under-center
-                    target_x = _parent_center_x(box, reverse_adj, box_map)
-                    ideal_x = target_x - box.patching_rect[2] * 0.5
+    # Controls sit in their target's band, bottom-aligned gap px above it.
+    for target_id, group in groups.items():
+        target = box_map.get(target_id)
+        if target is None:
+            continue
+        tx, ty = target.patching_rect[0], target.patching_rect[1]
+        for ctrl, dx in group:
+            ctrl.patching_rect[0] = tx + dx
+            ctrl.patching_rect[1] = ty - gap - _rdims(ctrl)[1]
 
-                ideal_x = max(ideal_x, start_x)
-
-                # Prevent overlap with previous box
-                if positions:
-                    prev_right = positions[-1]
-                    if ideal_x < prev_right + options.h_gutter:
-                        ideal_x = prev_right + options.h_gutter
-
-                box.patching_rect[0] = ideal_x
-                box.patching_rect[1] = y
-                positions.append(ideal_x + box.patching_rect[2])
-
-        row_right = max(
-            b.patching_rect[0] + b.patching_rect[2] for b in row
-        )
-        if row_right > max_right:
-            max_right = row_right
-
-    return max_right - start_x
+    placed = [b for row in rows for b in row]
+    placed.extend(c for group in groups.values() for c, _ in group)
+    _, _, right, _ = _block_bbox(placed)
+    return right - start_x
 
 
 def _target_x_for_inlet_align(
@@ -543,13 +785,18 @@ def _identify_ui_controls(
     boxes: list[Box],
     lines: list,
     rows: list[list[Box]],
-) -> dict[str, Box]:
+) -> dict[str, tuple[Box, int]]:
     """Identify UI control objects that should be placed above their targets.
 
     A UI control qualifies if:
     1. Its name is in _UI_CONTROL_NAMES
     2. It connects to a target (first connection target used)
     3. The target is in the same or the next row
+    4. The target is not itself a qualifying control (Q27 / F2): a control
+       feeding a control stays a row box, so bands never stack.
+
+    Returns:
+        control id -> (target box, destination inlet of the first cord).
     """
     row_index: dict[str, int] = {}
     for r_idx, row in enumerate(rows):
@@ -558,52 +805,34 @@ def _identify_ui_controls(
 
     box_map = {b.id: b for b in boxes}
 
-    ui_connections: dict[str, str] = {}
+    ui_connections: dict[str, tuple[str, int]] = {}
     for line in lines:
         src = line.source_id
         if src not in ui_connections and src in box_map:
             src_box = box_map[src]
             if src_box.name in _UI_CONTROL_NAMES:
-                ui_connections[src] = line.dest_id
+                ui_connections[src] = (line.dest_id, line.dest_inlet)
 
-    result: dict[str, Box] = {}
-    for ui_id, target_id in ui_connections.items():
+    result: dict[str, tuple[Box, int]] = {}
+    for ui_id, (target_id, inlet) in ui_connections.items():
         if ui_id in row_index and target_id in row_index:
             ui_row = row_index[ui_id]
             target_row = row_index[target_id]
             if target_row == ui_row or target_row == ui_row + 1:
                 if target_id in box_map:
-                    result[ui_id] = box_map[target_id]
+                    result[ui_id] = (box_map[target_id], inlet)
+
+    # A candidate whose target is a candidate stays in its row. Removal is
+    # judged against the candidate set as it stood at the start of each
+    # pass (order-independent); repeat until no candidate is removed.
+    while True:
+        drop = [ui_id for ui_id, (target, _) in result.items() if target.id in result]
+        if not drop:
+            break
+        for ui_id in drop:
+            del result[ui_id]
 
     return result
-
-
-def _place_ui_controls(
-    all_boxes: list[Box],
-    ui_controls: dict[str, Box],
-    options: LayoutOptions,
-) -> None:
-    """Position UI control objects above their targets.
-
-    Sets the UI control's x to match target's x, and y above target.
-    """
-    box_map = {b.id: b for b in all_boxes}
-
-    for ui_id, target_box in ui_controls.items():
-        ui_box = box_map.get(ui_id)
-        if ui_box is None:
-            continue
-
-        target_x = target_box.patching_rect[0]
-        target_y = target_box.patching_rect[1]
-        ui_height = ui_box.patching_rect[3]
-
-        new_y = target_y - ui_height - options.v_spacing * 0.5
-        if new_y < 5.0:
-            new_y = 5.0
-
-        ui_box.patching_rect[0] = target_x
-        ui_box.patching_rect[1] = new_y
 
 
 # ---------------------------------------------------------------------------
@@ -620,10 +849,9 @@ def _identify_companions(
     """Identify companion objects + their placement strategy.
 
     Returns a dict mapping each companion's id to a `(parent_box, placement)`
-    tuple. `placement` is one of:
-      - "right"   -- place companion to the right of the parent (legacy).
-      - "overlay" -- copy parent's patching_rect to companion, set
-                     ignoreclick=1, and z-order companion above parent.
+    tuple. `placement` is "right" (place the companion to the right of
+    the parent); the role map's former "overlay" entry for status outlets
+    was removed in Q27 / F1.
 
     Dispatch order (D-13 augment-don't-replace):
       Pass A -- role-driven via `_ROLE_COMPANION_MAP` consulting
@@ -707,44 +935,28 @@ def _place_companions(
     patcher: "Patcher",
     companions: dict[str, tuple[Box, str]],
 ) -> None:
-    """Position companion objects beside / overlapping their parent.
+    """Position companion objects beside their parent.
 
-    Placement strategies (carried in the companions dict from
-    `_identify_companions`):
-      - "right"   -- companion sits at parent.x + parent.w + _COMPANION_GAP,
-                     same y. Stacks if multiple companions share a parent.
-      - "overlay" -- companion.patching_rect = list(parent.patching_rect)
-                     (same x, y, w, h). Sets extra_attrs['ignoreclick']=1
-                     so clicks pass through to the source. Calls
-                     `patcher.bring_to_front(companion)` so the overlay
-                     renders on top (z-order to index 0). Mirrors the
-                     contract enforced by `Patcher.add_overlay_readout`.
-
-    WR-01 fix (Plan 31-07): the `placement='overlay'` branch
-    (status->flonum from `_ROLE_COMPANION_MAP`) was previously dead code;
-    this implementation wires it.
+    Every companion sits at parent.x + parent.w + _COMPANION_GAP, same y,
+    stacking left to right when several share a parent. The placement
+    string carried in the companions dict (from `_identify_companions`) is
+    "right"; any other value falls back to "right". The former "overlay"
+    placement (status -> flonum on top of its source) was removed in
+    Q27 / F1 because it hid the source; `Patcher.add_overlay_readout` is the
+    explicit overlay path.
 
     Args:
-        patcher: The Patcher instance whose boxes/state are being placed.
-            Needed for `bring_to_front` (a Patcher method) on the overlay
-            path.
+        patcher: The Patcher instance whose boxes are being placed.
         companions: Map from companion box id to (parent_box, placement).
     """
     all_boxes = patcher.boxes
     box_map = {b.id: b for b in all_boxes}
 
-    # Group right-placed companions by parent for stacking.
+    # Group companions by parent for stacking.
     right_groups: dict[str, list[str]] = {}
-    overlay_pairs: list[tuple[str, Box]] = []  # (comp_id, parent_box)
+    for comp_id, (parent_box, _placement) in companions.items():
+        right_groups.setdefault(parent_box.id, []).append(comp_id)
 
-    for comp_id, (parent_box, placement) in companions.items():
-        if placement == "overlay":
-            overlay_pairs.append((comp_id, parent_box))
-        else:
-            # Default to "right" for any unrecognized placement (defensive).
-            right_groups.setdefault(parent_box.id, []).append(comp_id)
-
-    # Right placement (existing behavior, unchanged).
     for parent_id, comp_ids in right_groups.items():
         parent = box_map.get(parent_id)
         if parent is None:
@@ -760,24 +972,6 @@ def _place_companions(
             comp_box.patching_rect[1] = parent.patching_rect[1]
             cursor_x += comp_box.patching_rect[2] + _COMPANION_GAP
 
-    # Overlay placement (WR-01 fix). Mirrors Patcher.add_overlay_readout's
-    # recipe: copy rect, set ignoreclick=1, bring_to_front.
-    for comp_id, parent_box in overlay_pairs:
-        comp_box = box_map.get(comp_id)
-        if comp_box is None:
-            continue
-        # Copy (NOT alias) the parent's patching_rect -- same Pitfall 1
-        # mitigation as add_overlay_readout (don't share list refs).
-        comp_box.patching_rect = list(parent_box.patching_rect)
-        comp_box.extra_attrs["ignoreclick"] = 1
-        try:
-            patcher.bring_to_front(comp_box)
-        except ValueError:
-            # Defensive: if comp_box isn't actually in patcher.boxes
-            # (shouldn't happen -- it came from box_map), don't crash
-            # the layout pass.
-            pass
-
 
 # ---------------------------------------------------------------------------
 # Disconnected object positioning
@@ -788,11 +982,15 @@ def _position_disconnected(
     boxes: list[Box],
     start_x: float,
     start_y: float,
+    cap_right: float | None = None,
 ) -> None:
     """Place disconnected objects in a compact grid to the right of components.
 
     Groups subpatchers first, then other objects. Uses multi-column layout
-    with wrapping to avoid excessively tall columns.
+    with wrapping to avoid excessively tall columns. Column widths and box
+    heights are rendered (``sizing.rendered_rect``). When a new column would
+    end past *cap_right*, it instead starts a new column band at start_x,
+    below the tallest column so far (Q27 / F5).
     """
     if not boxes:
         return
@@ -806,37 +1004,43 @@ def _position_disconnected(
     disc_h_gap = H_GUTTER
     max_col_height = 400.0  # Wrap to next column after this height
 
-    cursor_x = start_x
-    cursor_y = start_y
-    col_max_width = 0.0
+    state = {
+        "x": start_x, "y": start_y, "top": start_y,
+        "col_w": 0.0, "lowest": start_y,
+    }
+
+    def new_column(next_w: float) -> None:
+        next_x = state["x"] + state["col_w"] + disc_h_gap
+        if cap_right is not None and next_x + next_w > cap_right and next_x > start_x:
+            # New column band below the tallest column so far
+            state["x"] = start_x
+            state["top"] = state["lowest"] + disc_v_gap
+        else:
+            state["x"] = next_x
+        state["y"] = state["top"]
+        state["col_w"] = 0.0
+
+    def place(box: Box) -> None:
+        w, h = _rdims(box)
+        if state["y"] + h > state["top"] + max_col_height and state["y"] > state["top"]:
+            new_column(w)
+        box.patching_rect[0] = state["x"]
+        box.patching_rect[1] = state["y"]
+        state["y"] += h + disc_v_gap
+        state["lowest"] = max(state["lowest"], box.patching_rect[1] + h)
+        state["col_w"] = max(state["col_w"], w)
 
     # Place subpatchers first (in a column, they're reference modules)
     for box in subpatchers:
-        if cursor_y + box.patching_rect[3] > start_y + max_col_height and cursor_y > start_y:
-            cursor_x += col_max_width + disc_h_gap
-            cursor_y = start_y
-            col_max_width = 0.0
-        box.patching_rect[0] = cursor_x
-        box.patching_rect[1] = cursor_y
-        cursor_y += box.patching_rect[3] + disc_v_gap
-        col_max_width = max(col_max_width, box.patching_rect[2])
+        place(box)
 
     # Start new column for non-subpatcher objects if subpatchers were placed
     if subpatchers and others:
-        cursor_x += col_max_width + disc_h_gap
-        cursor_y = start_y
-        col_max_width = 0.0
+        new_column(max(_rdims(b)[0] for b in others))
 
     # Place other disconnected objects (comments, etc.)
     for box in others:
-        if cursor_y + box.patching_rect[3] > start_y + max_col_height and cursor_y > start_y:
-            cursor_x += col_max_width + disc_h_gap
-            cursor_y = start_y
-            col_max_width = 0.0
-        box.patching_rect[0] = cursor_x
-        box.patching_rect[1] = cursor_y
-        cursor_y += box.patching_rect[3] + disc_v_gap
-        col_max_width = max(col_max_width, box.patching_rect[2])
+        place(box)
 
 
 # ---------------------------------------------------------------------------
@@ -1301,18 +1505,23 @@ def _auto_size_patcher_rect(patcher: Patcher, options: LayoutOptions) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Presentation mode layout (unchanged)
+# Presentation mode layout
 # ---------------------------------------------------------------------------
 
 
 def _apply_presentation_layout(boxes: list[Box]) -> None:
     """Set presentation_rect on boxes with presentation=True.
 
-    Arranges presentation objects in a grid layout (left-to-right, wrapping).
-    Only applies to boxes that don't already have a presentation_rect set.
+    Arranges presentation objects in a grid layout (left-to-right, wrapping
+    after 4 per row). Only boxes that don't already have a presentation_rect
+    are placed, and only they count toward a row. x is a running offset
+    advanced by each box's rendered width + 60, and each row starts below
+    the previous row's tallest box + 40, so mixed widths never overlap
+    (Q27 / F5). The rect keeps the box's stored width and height; uniform
+    sizes reproduce the fixed-pitch grid.
     """
-    pres_boxes = [b for b in boxes if b.presentation]
-    if not pres_boxes:
+    auto = [b for b in boxes if b.presentation and b.presentation_rect is None]
+    if not auto:
         return
 
     grid_x_start = 20.0
@@ -1321,17 +1530,21 @@ def _apply_presentation_layout(boxes: list[Box]) -> None:
     grid_v_spacing = 40.0
     max_per_row = 4
 
-    for idx, box in enumerate(pres_boxes):
-        # Respect existing presentation_rect (set by generator or UI agent)
-        if box.presentation_rect is not None:
-            continue
-        col = idx % max_per_row
-        row = idx // max_per_row
-        w = box.patching_rect[2]
-        h = box.patching_rect[3]
-        px = grid_x_start + col * (w + grid_h_spacing)
-        py = grid_y_start + row * (h + grid_v_spacing)
-        box.presentation_rect = [px, py, w, h]
+    x = grid_x_start
+    y = grid_y_start
+    row_h = 0.0
+    col = 0
+    for box in auto:
+        if col == max_per_row:
+            x = grid_x_start
+            y += row_h + grid_v_spacing
+            row_h = 0.0
+            col = 0
+        rw, rh = _rdims(box)
+        box.presentation_rect = [x, y, box.patching_rect[2], box.patching_rect[3]]
+        x += rw + grid_h_spacing
+        row_h = max(row_h, rh)
+        col += 1
 
 
 # ---------------------------------------------------------------------------
