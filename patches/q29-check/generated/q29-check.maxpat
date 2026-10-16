@@ -9,7 +9,7 @@
             "modernui": 1
         },
         "classnamespace": "box",
-        "rect": [ 85.0, 104.0, 1782.0, 752.0 ],
+        "rect": [ 85.0, 104.0, 1566.0, 815.0 ],
         "bglocked": 0,
         "openinpresentation": 0,
         "default_fontsize": 12.0,
@@ -45,8 +45,8 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "outlettype": [],
-                    "patching_rect": [ 30.0, 525.0, 674.0, 20.0 ],
-                    "text": "Q29 CHECK -- four MAX checks for the Q29 fixes. Leave the patch unedited until step 1 is done.",
+                    "patching_rect": [ 30.0, 570.0, 534.0, 20.0 ],
+                    "text": "Q29 CHECK -- four MAX checks. Do step 1 (bottom) before touching anything.",
                     "fontname": "Arial",
                     "fontsize": 12.0,
                     "textcolor": [ 0.8, 0.8, 0.82, 1.0 ]
@@ -59,7 +59,7 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "outlettype": [],
-                    "patching_rect": [ 30.0, 565.0, 471.0, 20.0 ],
+                    "patching_rect": [ 30.0, 610.0, 471.0, 20.0 ],
                     "text": "A. write_gendsp grew q29-grow.gendsp from 2 to 3 outputs in place",
                     "fontname": "Arial",
                     "fontsize": 12.0,
@@ -73,7 +73,7 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "outlettype": [],
-                    "patching_rect": [ 30.0, 585.0, 772.0, 20.0 ],
+                    "patching_rect": [ 30.0, 630.0, 772.0, 20.0 ],
                     "text": "Click ezdac~ to start DSP. Expect 0.25 / 0.5 / 0.75. Double-click gen~: the HAND EDIT comment must be there.",
                     "fontname": "Arial",
                     "fontsize": 12.0,
@@ -87,7 +87,7 @@
                     "numinlets": 2,
                     "numoutlets": 0,
                     "outlettype": [],
-                    "patching_rect": [ 30.0, 615.0, 45.0, 45.0 ],
+                    "patching_rect": [ 30.0, 660.0, 45.0, 45.0 ],
                     "parameter_enable": 0,
                     "bgcolor": [ 0.92, 0.85, 0.85, 1.0 ]
                 }
@@ -184,7 +184,7 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "outlettype": [],
-                    "patching_rect": [ 1005.0, 310.0, 625.0, 20.0 ],
+                    "patching_rect": [ 705.0, 280.0, 625.0, 20.0 ],
                     "text": "B. replace_box_safe: live.dial -> live.slider (varname q29dial), pack 0 0 -> pack 0 0 0",
                     "fontname": "Arial",
                     "fontsize": 12.0,
@@ -198,8 +198,8 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "outlettype": [],
-                    "patching_rect": [ 1005.0, 330.0, 737.0, 20.0 ],
-                    "text": "Move the slider: flonum follows. store 1, move it, recall 1: it jumps back. clientwindow lists q29dial.",
+                    "patching_rect": [ 705.0, 300.0, 821.0, 20.0 ],
+                    "text": "Move the slider: flonum follows. Click store 1, move it, click recall 1: it jumps back. clientwindow lists q29dial.",
                     "fontname": "Arial",
                     "fontsize": 12.0,
                     "textcolor": [ 0.8, 0.8, 0.82, 1.0 ]
@@ -212,7 +212,7 @@
                     "numinlets": 1,
                     "numoutlets": 2,
                     "outlettype": [ "", "" ],
-                    "patching_rect": [ 1005.0, 360.0, 39.0, 87.0 ],
+                    "patching_rect": [ 705.0, 330.0, 39.0, 87.0 ],
                     "parameter_enable": 1,
                     "varname": "q29dial",
                     "saved_attribute_attributes": {
@@ -234,7 +234,7 @@
                     "numinlets": 1,
                     "numoutlets": 2,
                     "outlettype": [ "", "" ],
-                    "patching_rect": [ 1005.0, 450.0, 50.0, 22.0 ],
+                    "patching_rect": [ 705.0, 420.0, 50.0, 22.0 ],
                     "parameter_enable": 0
                 }
             },
@@ -245,7 +245,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 30.0, 360.0, 65.0, 22.0 ],
+                    "patching_rect": [ 900.0, 30.0, 65.0, 22.0 ],
                     "text": "store 1",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -258,7 +258,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 735.0, 360.0, 72.0, 22.0 ],
+                    "patching_rect": [ 1005.0, 30.0, 72.0, 22.0 ],
                     "text": "recall 1",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -271,7 +271,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 135.0, 360.0, 100.0, 22.0 ],
+                    "patching_rect": [ 1110.0, 30.0, 100.0, 22.0 ],
                     "text": "clientwindow",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -284,7 +284,7 @@
                     "numinlets": 1,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 300.0, 405.0, 186.5, 22.0 ],
+                    "patching_rect": [ 1005.0, 75.0, 186.5, 22.0 ],
                     "text": "pattrstorage q29store",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -297,7 +297,7 @@
                     "numinlets": 1,
                     "numoutlets": 4,
                     "outlettype": [ "", "", "", "" ],
-                    "patching_rect": [ 30.0, 690.0, 79.0, 22.0 ],
+                    "patching_rect": [ 195.0, 735.0, 79.0, 22.0 ],
                     "text": "autopattr",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -310,7 +310,7 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "outlettype": [],
-                    "patching_rect": [ 450.0, 35.0, 555.0, 20.0 ],
+                    "patching_rect": [ 25.0, 755.0, 555.0, 20.0 ],
                     "text": "Set both numbers: the message shows 'a b 0' (all cords survived the replace).",
                     "fontname": "Arial",
                     "fontsize": 12.0,
@@ -324,7 +324,7 @@
                     "numinlets": 1,
                     "numoutlets": 2,
                     "outlettype": [ "", "" ],
-                    "patching_rect": [ 450.0, 60.0, 50.0, 22.0 ],
+                    "patching_rect": [ 450.0, 45.0, 50.0, 22.0 ],
                     "parameter_enable": 0
                 }
             },
@@ -335,7 +335,7 @@
                     "numinlets": 1,
                     "numoutlets": 2,
                     "outlettype": [ "", "" ],
-                    "patching_rect": [ 915.0, 60.0, 50.0, 22.0 ],
+                    "patching_rect": [ 525.0, 45.0, 50.0, 22.0 ],
                     "parameter_enable": 0
                 }
             },
@@ -346,7 +346,7 @@
                     "numinlets": 3,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 450.0, 90.0, 88.0, 22.0 ],
+                    "patching_rect": [ 450.0, 75.0, 88.0, 22.0 ],
                     "text": "pack 0 0 0",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -359,7 +359,7 @@
                     "numinlets": 1,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 450.0, 135.0, 97.0, 22.0 ],
+                    "patching_rect": [ 450.0, 120.0, 97.0, 22.0 ],
                     "text": "prepend set",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -372,7 +372,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 780.0, 180.0, 40.0, 22.0 ],
+                    "patching_rect": [ 585.0, 165.0, 40.0, 22.0 ],
                     "text": "",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -385,7 +385,7 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "outlettype": [],
-                    "patching_rect": [ 250.0, 310.0, 506.0, 20.0 ],
+                    "patching_rect": [ 455.0, 215.0, 506.0, 20.0 ],
                     "text": "C. meter~ added 5px right of gain~: must sit side by side, not stacked",
                     "fontname": "Arial",
                     "fontsize": 12.0,
@@ -399,8 +399,8 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "outlettype": [],
-                    "patching_rect": [ 250.0, 330.0, 576.0, 20.0 ],
-                    "text": "Raise the gain~ fader (DSP on): the meter moves. No dac~, so nothing is audible.",
+                    "patching_rect": [ 30.0, 270.0, 604.0, 20.0 ],
+                    "text": "With DSP on, raise the gain~ fader: the meter moves. No dac~, so nothing is audible.",
                     "fontname": "Arial",
                     "fontsize": 12.0,
                     "textcolor": [ 0.8, 0.8, 0.82, 1.0 ]
@@ -413,7 +413,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "signal" ],
-                    "patching_rect": [ 870.0, 300.0, 86.0, 22.0 ],
+                    "patching_rect": [ 30.0, 300.0, 86.0, 22.0 ],
                     "text": "cycle~ 220",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -426,7 +426,7 @@
                     "numinlets": 1,
                     "numoutlets": 2,
                     "outlettype": [ "signal", "" ],
-                    "patching_rect": [ 915.0, 345.0, 22.0, 140.0 ],
+                    "patching_rect": [ 30.0, 345.0, 22.0, 140.0 ],
                     "parameter_enable": 0
                 }
             },
@@ -437,7 +437,7 @@
                     "numinlets": 1,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 945.0, 345.0, 15.0, 100.0 ],
+                    "patching_rect": [ 60.0, 345.0, 15.0, 100.0 ],
                     "parameter_enable": 0
                 }
             },
@@ -448,8 +448,8 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "outlettype": [],
-                    "patching_rect": [ 450.0, 240.0, 751.0, 20.0 ],
-                    "text": "1. Open in MAX, change nothing, Cmd-S, close. Then tell Claude -- it checks the diff and a no-op re-save.",
+                    "patching_rect": [ 30.0, 510.0, 786.0, 20.0 ],
+                    "text": "1. FIRST: open in MAX, change nothing, Cmd-S, close. Then tell Claude: it checks the diff and a no-op re-save.",
                     "fontname": "Arial",
                     "fontsize": 12.0,
                     "textcolor": [ 0.8, 0.8, 0.82, 1.0 ]
@@ -473,7 +473,7 @@
                 "patchline": {
                     "source": [ "obj-5", 1 ],
                     "destination": [ "obj-8", 0 ],
-                    "midpoints": [ 90.5, 60.0, 172.0, 60.0 ]
+                    "midpoints": [ 90.5, 58.0, 172.0, 58.0 ]
                 }
             },
             {
@@ -486,7 +486,7 @@
                 "patchline": {
                     "source": [ "obj-5", 2 ],
                     "destination": [ "obj-10", 0 ],
-                    "midpoints": [ 144.0, 60.0, 307.0, 60.0 ]
+                    "midpoints": [ 144.0, 58.0, 307.0, 58.0 ]
                 }
             },
             {
@@ -499,28 +499,27 @@
                 "patchline": {
                     "source": [ "obj-16", 0 ],
                     "destination": [ "obj-19", 0 ],
-                    "midpoints": [ 37.0, 388.0, 307.0, 388.0 ]
+                    "midpoints": [ 907.0, 58.0, 1012.0, 58.0 ]
                 }
             },
             {
                 "patchline": {
                     "source": [ "obj-17", 0 ],
-                    "destination": [ "obj-19", 0 ],
-                    "midpoints": [ 742.0, 393.5, 307.0, 393.5 ]
+                    "destination": [ "obj-19", 0 ]
                 }
             },
             {
                 "patchline": {
                     "source": [ "obj-18", 0 ],
                     "destination": [ "obj-19", 0 ],
-                    "midpoints": [ 142.0, 393.5, 307.0, 393.5 ]
+                    "midpoints": [ 1117.0, 58.0, 1012.0, 58.0 ]
                 }
             },
             {
                 "patchline": {
                     "source": [ "obj-25", 0 ],
                     "destination": [ "obj-26", 0 ],
-                    "midpoints": [ 457.0, 168.5, 787.0, 168.5 ]
+                    "midpoints": [ 457.0, 153.5, 592.0, 153.5 ]
                 }
             },
             {
@@ -539,7 +538,7 @@
                 "patchline": {
                     "source": [ "obj-23", 0 ],
                     "destination": [ "obj-28", 1 ],
-                    "midpoints": [ 922.0, 86.0, 494.0, 86.0 ]
+                    "midpoints": [ 532.0, 71.0, 494.0, 71.0 ]
                 }
             },
             {
@@ -551,15 +550,14 @@
             {
                 "patchline": {
                     "source": [ "obj-31", 0 ],
-                    "destination": [ "obj-32", 0 ],
-                    "midpoints": [ 877.0, 333.5, 922.0, 333.5 ]
+                    "destination": [ "obj-32", 0 ]
                 }
             },
             {
                 "patchline": {
                     "source": [ "obj-32", 0 ],
                     "destination": [ "obj-33", 0 ],
-                    "midpoints": [ 967.0, 490.0, 967.0, 337.0, 952.0, 337.0 ]
+                    "midpoints": [ 82.0, 490.0, 82.0, 337.0, 67.0, 337.0 ]
                 }
             }
         ],
