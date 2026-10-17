@@ -23,7 +23,8 @@ Provides:
   existing one in place (codebox code and in/out ports; Q29 / B8).
 - write_js: Write JavaScript code and run code validation.
 - validate_file: Load and validate an existing .maxpat file from disk.
-- validate_code_file: Validate .gendsp or .js code files from disk.
+- validate_code_file: Validate .gendsp (every codebox, nested ones included)
+  or .js code files from disk.
 - PatchGenerationError: Raised when unfixable errors prevent generation.
 - PatchValidationError: Raised when the save gate blocks a file write.
 - SaveGateWarning: Warning for removed cords and force=True bypasses.
@@ -1247,8 +1248,14 @@ def validate_code_file(
 ) -> list[ValidationResult]:
     """Validate a .gendsp or .js code file from disk.
 
-    For .gendsp files: parses JSON, extracts codebox code attribute,
-    and runs validate_genexpr on it.
+    For .gendsp files: parses JSON and runs validate_genexpr on every
+    codebox (Q31 / G3): every ``codebox`` box with a ``code`` attribute in
+    every patcher ``walk.iter_patchers(data, scope="gen")`` yields (top
+    level and gen subpatchers), in walker order. A file with exactly one
+    codebox, at the top level, returns validate_genexpr's output unchanged.
+    Otherwise each finding's message is prefixed
+    ``[path] codebox '<id>': `` (the ``[path] `` part only when nested) and
+    carries ``path`` (the box-id chain of its patcher).
 
     For .js files: reads content, uses detect_js_type to determine
     if N4M or js object, and runs the appropriate validator. A js-object
@@ -1294,21 +1301,46 @@ def validate_code_file(
                 f"Invalid JSON in .gendsp file: {e}",
             )]
 
-        # Find the codebox and extract code
-        code = None
-        for box_entry in data.get("patcher", {}).get("boxes", []):
-            box = box_entry.get("box", {})
-            if box.get("maxclass") == "codebox" and "code" in box:
-                code = box["code"]
-                break
+        from src.maxpat import walk
 
-        if code is None:
+        # Collect every codebox in every patcher (top level and gen subpatchers)
+        codeboxes: list[tuple[tuple, dict]] = []
+        for cb_path, patcher, _context in walk.iter_patchers(data, scope="gen"):
+            boxes = patcher.get("boxes")
+            if not isinstance(boxes, list):
+                continue
+            for box_entry in boxes:
+                if not isinstance(box_entry, dict):
+                    continue
+                box = box_entry.get("box")
+                if not isinstance(box, dict):
+                    continue
+                if box.get("maxclass") == "codebox" and "code" in box:
+                    codeboxes.append((cb_path, box))
+
+        if not codeboxes:
             return [ValidationResult(
                 "code", "warning",
                 "No codebox with 'code' attribute found in .gendsp file",
             )]
 
-        return validate_genexpr(code)
+        db = _gate_db()
+        if len(codeboxes) == 1 and codeboxes[0][0] == ():
+            return validate_genexpr(codeboxes[0][1]["code"], db=db)
+
+        results: list[ValidationResult] = []
+        for cb_path, box in codeboxes:
+            label = (
+                f"{walk.path_prefix(cb_path)}codebox "
+                f"'{box.get('id', '<unknown>')}': "
+            )
+            for r in validate_genexpr(box["code"], db=db):
+                results.append(ValidationResult(
+                    r.layer, r.level, f"{label}{r.message}",
+                    auto_fixed=r.auto_fixed,
+                    path=walk.path_ids(cb_path),
+                ))
+        return results
 
     elif path.suffix == ".js":
         js_type = detect_js_type(content)

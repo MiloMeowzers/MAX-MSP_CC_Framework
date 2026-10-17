@@ -577,3 +577,210 @@ class TestG7ExtAgentDocs:
         assert ".gitignore" in text
         for name in ("setup_min_devkit", "scaffold_external", "build_external"):
             assert name in text
+
+
+# ---------------------------------------------------------------------------
+# G6: N4M dict identifiers and js anything()
+# ---------------------------------------------------------------------------
+
+needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not on PATH")
+
+_BANG_HANDLER = [{"name": "bang", "args": [], "body": "maxAPI.outlet(1);"}]
+
+
+class TestG6N4MDictIdentifiers:
+    NAMES = ["my-dict", "my_dict", "1st.dict", "a b", 'say"hi', "my-dict"]
+
+    def _script(self):
+        from src.maxpat.codegen import generate_n4m_script
+
+        return generate_n4m_script(_BANG_HANDLER, dict_access=self.NAMES)
+
+    def test_identifiers_sanitized_and_unique(self):
+        code = self._script()
+        expected = ["my_dict", "my_dict_2", "1st_dict", "a_b", "say_hi"]
+        assert re.findall(r"async function getDict_(\w+)\(\)", code) == expected
+        assert re.findall(r"async function setDict_(\w+)\(data\)", code) == expected
+
+    def test_dict_name_literals_escaped(self):
+        code = self._script()
+        assert 'maxAPI.getDict("my-dict")' in code
+        assert 'maxAPI.getDict("say\\"hi")' in code
+        assert 'maxAPI.setDict("say\\"hi", data)' in code
+
+    @needs_node
+    def test_node_accepts_script(self, tmp_path):
+        path = tmp_path / "n4m_dicts.js"
+        path.write_text(self._script())
+        res = subprocess.run(["node", "--check", str(path)],
+                             capture_output=True, text=True, timeout=60)
+        assert res.returncode == 0, res.stderr
+
+    def test_plain_name_unchanged(self):
+        from src.maxpat.codegen import generate_n4m_script
+
+        code = generate_n4m_script(_BANG_HANDLER, dict_access=["mydict"])
+        assert "async function getDict_mydict()" in code
+        assert "async function setDict_mydict(data)" in code
+        assert "Error getting dict mydict: " in code
+
+
+_ANYTHING_DRIVER = r"""
+const fs = require("fs");
+const vm = require("vm");
+const code = fs.readFileSync(process.argv[2], "utf8");
+const calls = [];
+const ctx = {
+    messagename: "foo",
+    outlet: function () { calls.push(Array.prototype.slice.call(arguments)); },
+    arrayfromargs: function (a) { return Array.prototype.slice.call(a); },
+    post: function () {},
+};
+vm.createContext(ctx);
+vm.runInContext(code, ctx);
+vm.runInContext('anything("x", 2);', ctx);
+process.stdout.write(JSON.stringify(calls));
+"""
+
+
+class TestG6JsAnythingHandler:
+    BODY = "outlet(0, [messagename].concat(args));"
+
+    def _code(self):
+        from src.maxpat.codegen import generate_js_script
+
+        return generate_js_script(1, 1, handlers=[{"type": "anything", "body": self.BODY}])
+
+    def test_anything_reads_arguments(self):
+        lines = self._code().splitlines()
+        i = lines.index("function anything() {")
+        assert lines[i + 1] == "    var args = arrayfromargs(arguments);"
+        assert "anything(msg" not in self._code()
+
+    def test_validate_js_clean(self):
+        from src.maxpat.code_validation import validate_js
+
+        errors = [r.message for r in validate_js(self._code(), engine="js")
+                  if r.level == "error"]
+        assert errors == []
+
+    @needs_node
+    def test_runs_with_max_globals(self, tmp_path):
+        code_path = tmp_path / "anything.js"
+        code_path.write_text(self._code())
+        driver = tmp_path / "q31_anything_driver.js"
+        driver.write_text(_ANYTHING_DRIVER)
+        res = subprocess.run(["node", str(driver), str(code_path)],
+                             capture_output=True, text=True, timeout=60)
+        assert res.returncode == 0, res.stderr
+        assert json.loads(res.stdout) == [[0, ["foo", "x", 2]]]
+
+    def test_default_handlers_unchanged(self):
+        from src.maxpat.codegen import generate_js_script
+
+        code = generate_js_script()
+        assert "function msg_int(v) {" in code
+        assert "function list() {" in code
+        assert "arrayfromargs(arguments)" in code
+
+
+# ---------------------------------------------------------------------------
+# G8: detect_js_type reads code outside comments and strings
+# ---------------------------------------------------------------------------
+
+_JS_WITH_COMMENTED_REQUIRE = (
+    "// require('max-api') is for node.script\n"
+    "inlets = 1;\noutlets = 1;\nfunction bang() { outlet(0, 1); }"
+)
+
+
+class TestG8DetectJsTypeIgnoresComments:
+    @pytest.mark.parametrize("code,expected", [
+        (_JS_WITH_COMMENTED_REQUIRE, "js"),
+        ("// inlets = 2\nfunction bang() {}", None),
+        ('post("inlets = 3");', None),
+        ('const maxAPI = require("max-api");', "n4m"),
+        ("inlets = 2;\noutlets = 1;", "js"),
+    ])
+    def test_detect(self, code, expected):
+        from src.maxpat.code_validation import detect_js_type
+
+        assert detect_js_type(code) == expected
+
+    def test_validate_code_file_picks_js_validator(self, tmp_path):
+        from src.maxpat.hooks import validate_code_file
+
+        path = tmp_path / "commented_require.js"
+        path.write_text(_JS_WITH_COMMENTED_REQUIRE)
+        messages = [r.message for r in validate_code_file(path)]
+        assert any("Handler functions found" in m for m in messages), messages
+        assert not any("maxAPI" in m for m in messages), messages
+
+
+class TestG8ValidateJsCommentsConfirmed:
+    def test_commented_declarations_do_not_count(self):
+        from src.maxpat.code_validation import validate_js
+
+        res = validate_js("// inlets = 2\n// outlets = 1\nfunction bang() {}")
+        errors = [r.message for r in res if r.level == "error"]
+        assert any("Missing 'inlets' declaration" in m for m in errors)
+        assert any("Missing 'outlets' declaration" in m for m in errors)
+
+
+# ---------------------------------------------------------------------------
+# G3: validate_code_file checks every .gendsp codebox
+# ---------------------------------------------------------------------------
+
+
+def _codebox(box_id: str, code: str) -> dict:
+    return {"box": {"id": box_id, "maxclass": "codebox", "code": code,
+                    "numinlets": 1, "numoutlets": 1,
+                    "patching_rect": [10.0, 10.0, 200.0, 100.0]}}
+
+
+def _gendsp(boxes: list[dict]) -> dict:
+    return {"patcher": {"fileversion": 1, "classnamespace": "dsp.gen",
+                        "boxes": boxes, "lines": []}}
+
+
+class TestG3ValidateCodeFileEveryCodebox:
+    def _run(self, tmp_path, data):
+        from src.maxpat.hooks import validate_code_file
+
+        path = tmp_path / "multi.gendsp"
+        path.write_text(json.dumps(data))
+        return validate_code_file(path)
+
+    def test_second_top_level_codebox_checked(self, tmp_path):
+        data = _gendsp([_codebox("obj-1", "out1 = in1;"),
+                        _codebox("obj-2", "out1 = delay(in1, 100);")])
+        errors = [r for r in self._run(tmp_path, data) if r.level == "error"]
+        assert any("codebox 'obj-2': " in r.message and "delay()" in r.message
+                   for r in errors), [r.message for r in errors]
+
+    def test_nested_codebox_checked_with_path(self, tmp_path):
+        inner = {"fileversion": 1, "classnamespace": "dsp.gen",
+                 "boxes": [_codebox("obj-10", "out1 = delay(in1, 10);")], "lines": []}
+        sub = {"box": {"id": "obj-9", "maxclass": "newobj", "text": "gen",
+                       "numinlets": 1, "numoutlets": 1,
+                       "patching_rect": [10.0, 200.0, 40.0, 22.0],
+                       "patcher": inner}}
+        data = _gendsp([_codebox("obj-1", "out1 = in1;"), sub])
+        nested = [r for r in self._run(tmp_path, data)
+                  if r.level == "error" and r.path == "obj-9"]
+        assert nested, "no error carries path obj-9"
+        assert all(r.message.startswith("[") for r in nested)
+        assert any("codebox 'obj-10': " in r.message for r in nested)
+
+    def test_single_top_level_codebox_unchanged(self, tmp_path):
+        from src.maxpat.code_validation import validate_genexpr
+
+        code = "Param g(0.5);\nout1 = in1 * g;"
+        got = [r.message for r in self._run(tmp_path, _gendsp([_codebox("obj-1", code)]))]
+        assert got == [r.message for r in validate_genexpr(code)]
+
+    def test_no_codebox_warning(self, tmp_path):
+        res = self._run(tmp_path, _gendsp([]))
+        assert [r.message for r in res] == [
+            "No codebox with 'code' attribute found in .gendsp file"
+        ]

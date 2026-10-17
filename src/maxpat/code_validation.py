@@ -1049,13 +1049,20 @@ def detect_js_type(code: str) -> str | None:
     Args:
         code: JavaScript source code string.
 
+    Both tests read real code only (Q31 / G8): text inside comments and
+    string literals is ignored via ``_js_mask``. The require test runs on
+    the raw code (the mask blanks the ``'max-api'`` string) but counts only
+    a match whose ``require`` token survives the mask at the same offset.
+
     Returns:
-        "n4m" if code contains require('max-api'),
-        "js" if code contains inlets declaration,
+        "n4m" if code contains require('max-api') outside comments/strings,
+        "js" if code contains an inlets declaration outside comments/strings,
         None if neither is detected.
     """
-    if re.search(r"""require\s*\(\s*['"]max-api['"]\s*\)""", code):
-        return "n4m"
-    if re.search(r"inlets\s*=", code):
+    masked = _js_mask(code)[0]
+    for m in re.finditer(r"""require\s*\(\s*['"]max-api['"]\s*\)""", code):
+        if masked[m.start():m.start() + len("require")] == "require":
+            return "n4m"
+    if re.search(r"inlets\s*=", masked):
         return "js"
     return None

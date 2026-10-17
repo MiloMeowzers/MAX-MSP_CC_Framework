@@ -9,12 +9,15 @@ Exports:
 - build_genexpr: Build formatted GenExpr code with Params and sections
 - generate_gendsp: Generate a complete .gendsp JSON dict
 - generate_n4m_script: Generate Node for Max JavaScript with CommonJS require
-- generate_js_script: Generate js object (Legacy Engine, ES5) JavaScript with handlers
+  (dict names become valid, unique JS identifiers; literals JSON-escaped)
+- generate_js_script: Generate js object (Legacy Engine, ES5) JavaScript with
+  handlers (``anything()`` reads ``messagename`` and ``arrayfromargs(arguments)``)
 """
 
 from __future__ import annotations
 
 import copy
+import json
 import re
 
 from src.maxpat.defaults import DEFAULT_PATCHER_PROPS, FONT_NAME, FONT_SIZE, GEN_PATCHER_BGCOLOR
@@ -355,6 +358,15 @@ def generate_n4m_script(
         dict_access: Optional list of dict names to generate async
             getter/setter helper functions for.
 
+    Dict helper names (Q31 / G6): each dict name (``str(name)``; exact
+    duplicates emitted once) maps to the suffix
+    ``re.sub(r"[^A-Za-z0-9_$]", "_", name)`` (``_`` when empty), giving
+    ``getDict_<suffix>()`` / ``setDict_<suffix>(data)``; a suffix already
+    used gets ``_2``, ``_3``, ... (``my-dict`` -> ``getDict_my_dict``, then
+    ``my_dict`` -> ``getDict_my_dict_2``). Every dict-name string literal
+    and post-message prefix is ``json.dumps``-escaped, so a name never
+    becomes code. Plain names keep their function names and messages.
+
     Returns:
         Complete N4M JavaScript source string.
     """
@@ -367,23 +379,42 @@ def generate_n4m_script(
     if dict_access:
         sections.append("")
         sections.append("// === DICT ACCESS ===")
-        for dict_name in dict_access:
+        seen_names: set[str] = set()
+        used_suffixes: set[str] = set()
+        for raw_name in dict_access:
+            dict_name = str(raw_name)
+            if dict_name in seen_names:
+                continue
+            seen_names.add(dict_name)
+
+            base = re.sub(r"[^A-Za-z0-9_$]", "_", dict_name) or "_"
+            suffix = base
+            n = 2
+            while suffix in used_suffixes:
+                suffix = f"{base}_{n}"
+                n += 1
+            used_suffixes.add(suffix)
+
+            name_lit = json.dumps(dict_name)
+            get_err = json.dumps("Error getting dict " + dict_name + ": ")
+            set_err = json.dumps("Error setting dict " + dict_name + ": ")
             sections.append(f"""
-async function getDict_{dict_name}() {{
+// dict {name_lit} -> getDict_{suffix}() / setDict_{suffix}(data)
+async function getDict_{suffix}() {{
     try {{
-        const data = await maxAPI.getDict("{dict_name}");
+        const data = await maxAPI.getDict({name_lit});
         return data;
     }} catch (e) {{
-        maxAPI.post("Error getting dict {dict_name}: " + e.message);
+        maxAPI.post({get_err} + e.message);
         return null;
     }}
 }}
 
-async function setDict_{dict_name}(data) {{
+async function setDict_{suffix}(data) {{
     try {{
-        await maxAPI.setDict("{dict_name}", data);
+        await maxAPI.setDict({name_lit}, data);
     }} catch (e) {{
-        maxAPI.post("Error setting dict {dict_name}: " + e.message);
+        maxAPI.post({set_err} + e.message);
     }}
 }}""".rstrip())
 
@@ -427,6 +458,14 @@ def generate_js_script(
             anything) and ``body`` (str).
             If None, default handlers are generated.
 
+    ``anything`` handlers (Q31 / G6, J1): MAX passes the selector in the
+    ``messagename`` global and the arguments in ``arguments``, never as
+    named parameters, so the generated ``function anything() {`` takes no
+    parameters and its body starts with
+    ``var args = arrayfromargs(arguments);``; the caller's body reads
+    ``messagename`` and ``args``. Output is ES5 only (``var`` /
+    ``function``).
+
     Returns:
         Complete js object (Legacy Engine, ES5) JavaScript source string.
     """
@@ -451,7 +490,7 @@ def generate_js_script(
         "msg_int": "v",
         "msg_float": "v",
         "list": "",
-        "anything": "msg",
+        "anything": "",
     }
 
     for handler in handlers:
@@ -461,6 +500,8 @@ def generate_js_script(
 
         # Indent body lines
         body_lines = body.strip().split("\n")
+        if handler_type == "anything":
+            body_lines = ["var args = arrayfromargs(arguments);"] + body_lines
         indented_body = "\n".join(f"    {line}" for line in body_lines)
 
         sections.append(f"""
