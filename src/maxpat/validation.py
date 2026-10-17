@@ -1368,12 +1368,6 @@ def _validate_domain_rules(
     # --- Rule: Feedback loop detection ---
     results.extend(_check_feedback_loops(box_lookup, signal_adj))
 
-    # --- Rule: GenExpr I/O syntax ---
-    results.extend(_check_genexpr_io_syntax(box_lookup))
-
-    # --- Rule: GenExpr delay usage ---
-    results.extend(_check_genexpr_delay_usage(box_lookup))
-
     # --- Rule: gen~ @param message syntax ---
     results.extend(_check_gen_param_message_syntax(box_lookup, ctrl_adj))
 
@@ -1482,15 +1476,8 @@ def _validate_embedded_genexpr(
     top-level gen file's own codeboxes (``.gendsp``) stay unchecked here --
     ``hooks.validate_code_file`` covers them.
 
-    Note (RESEARCH.md R1): existing Layer 4 helpers
-    `_check_genexpr_io_syntax` and `_check_genexpr_delay_usage` iterate
-    box_lookup and match boxes whose maxclass=='newobj' with text starting
-    'codebox'. Embedded codeboxes inside gen patchers have
-    maxclass=='codebox' (not 'newobj') and live in the inner patcher (not
-    box_lookup), so the two channels do NOT overlap in the canonical
-    embedded-codebox case. Top-level codeboxes remain a duplicate-emission
-    corner case (rare in practice). Consolidating to a single channel is
-    OUT OF SCOPE here; Phase 33-class cleanup.
+    Layer 5 is validate_patch's only GenExpr channel: Layer 4 has no
+    codebox check, and a top-level codebox is a Layer 4b restriction error.
     """
     # Deferred import -- code_validation imports validation, so avoid a
     # circular import at module top.
@@ -1781,54 +1768,6 @@ def _check_feedback_loops(
 # ===========================================================================
 # Layer 4: GenExpr and API-usage checks
 # ===========================================================================
-
-def _check_genexpr_io_syntax(
-    box_lookup: dict[str, dict],
-) -> list[ValidationResult]:
-    """Catch GenExpr codebox using 'in 1'/'out 2' instead of 'in1'/'out2'."""
-    results: list[ValidationResult] = []
-
-    for box_id, box in box_lookup.items():
-        if box.get("maxclass") != "newobj":
-            continue
-        if not walk.box_text(box).startswith("codebox"):
-            continue
-        code = box.get("code", "")
-        if not isinstance(code, str) or not code:
-            continue
-        if _re.search(r'\b(in|out)\s+\d', code):
-            results.append(ValidationResult(
-                "domain", "error",
-                f"GenExpr codebox uses 'in1'/'out1' (no space), not "
-                f"'in 1'/'out 1' ({box_id})",
-            ))
-
-    return results
-
-
-def _check_genexpr_delay_usage(
-    box_lookup: dict[str, dict],
-) -> list[ValidationResult]:
-    """Catch GenExpr codebox using delay() instead of Delay.read()/Delay.write()."""
-    results: list[ValidationResult] = []
-
-    for box_id, box in box_lookup.items():
-        if box.get("maxclass") != "newobj":
-            continue
-        if not walk.box_text(box).startswith("codebox"):
-            continue
-        code = box.get("code", "")
-        if not isinstance(code, str) or not code:
-            continue
-        if _re.search(r'\bdelay\s*\(', code):
-            results.append(ValidationResult(
-                "domain", "error",
-                f"GenExpr uses Delay.read()/Delay.write(), not delay() "
-                f"function ({box_id})",
-            ))
-
-    return results
-
 
 def _check_gen_param_message_syntax(
     box_lookup: dict[str, dict],

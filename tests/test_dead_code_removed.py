@@ -155,6 +155,8 @@ class TestRemovedInternals:
     @pytest.mark.parametrize(
         "module, name",
         [
+            ("src.maxpat.validation", "_check_genexpr_io_syntax"),
+            ("src.maxpat.validation", "_check_genexpr_delay_usage"),
             ("src.maxpat.patcher", "Patcher.add_node_script"),
             ("src.maxpat.defaults", "MS_BAR_HEIGHT"),
             ("src.maxpat.defaults", "MS_LABEL_FONTSIZE"),
@@ -194,6 +196,8 @@ class TestRemovedInternals:
 
     def test_no_reference_names_removed_internals(self):
         assert _references([
+            r"\b_check_genexpr_io_syntax\b",
+            r"\b_check_genexpr_delay_usage\b",
             r"\b_uncovered_empty_io\b",
             r"\brefresh_uncovered_only\b",
             r"\b32-02\b",

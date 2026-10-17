@@ -1308,28 +1308,6 @@ class TestLayer4GenExprChecks:
 
     # --- Check 1: GenExpr I/O syntax ---
 
-    def test_genexpr_spaced_io_triggers_error(self, db):
-        """Codebox with 'in 1' triggers error."""
-        patch = _make_patch_dict(boxes=[
-            _make_codebox("obj-1", code="out1 = in 1 * 0.5;"),
-        ])
-        results = validate_patch(patch, db=db)
-        errs = [r for r in results
-                if r.layer == "domain" and r.level == "error"
-                and "in1" in r.message.lower()]
-        assert len(errs) >= 1
-
-    def test_genexpr_spaced_out_triggers_error(self, db):
-        """Codebox with 'out 2' triggers error."""
-        patch = _make_patch_dict(boxes=[
-            _make_codebox("obj-1", code="out 2 = in1;"),
-        ])
-        results = validate_patch(patch, db=db)
-        errs = [r for r in results
-                if r.layer == "domain" and r.level == "error"
-                and "in1" in r.message.lower()]
-        assert len(errs) >= 1
-
     def test_genexpr_correct_io_no_error(self, db):
         """Codebox with 'in1'/'out1' (no space) produces no error."""
         patch = _make_patch_dict(boxes=[
@@ -1342,17 +1320,6 @@ class TestLayer4GenExprChecks:
         assert errs == []
 
     # --- Check 2: GenExpr delay syntax ---
-
-    def test_genexpr_delay_call_triggers_error(self, db):
-        """Codebox with delay() triggers error."""
-        patch = _make_patch_dict(boxes=[
-            _make_codebox("obj-1", code="out1 = delay(in1, 100);"),
-        ])
-        results = validate_patch(patch, db=db)
-        errs = [r for r in results
-                if r.layer == "domain" and r.level == "error"
-                and "delay" in r.message.lower()]
-        assert len(errs) >= 1
 
     def test_genexpr_delay_read_no_error(self, db):
         """Codebox with Delay.read() produces no error."""
