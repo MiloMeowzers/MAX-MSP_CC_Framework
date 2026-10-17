@@ -862,7 +862,7 @@ class TestAutoFixLoopDetection:
 
 
 class TestSetupMinDevkit:
-    """setup_min_devkit initializes git submodule."""
+    """setup_min_devkit clones Min-DevKit into the external's gitignored min-devkit/."""
 
     def test_setup_min_devkit_already_present(self, tmp_path):
         from src.maxpat.externals import setup_min_devkit
@@ -879,10 +879,10 @@ class TestSetupMinDevkit:
         assert result is True
 
     def test_setup_min_devkit_not_present(self, tmp_path):
-        """When min-devkit is missing, setup attempts git submodule add."""
+        """When min-devkit is missing, setup attempts a recursive git clone."""
         from src.maxpat.externals import setup_min_devkit
 
-        # Mock subprocess to simulate git submodule add failure (no git repo)
+        # Mock subprocess to simulate a failed git clone (e.g. no network)
         mock_result = MagicMock()
         mock_result.returncode = 1
         mock_result.stderr = "not a git repository"

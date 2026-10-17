@@ -328,3 +328,252 @@ class TestG7CmakeHint:
         assert "setup_min_devkit" in src
         assert "git clone --recursive" in src
         assert "git submodule" not in src
+
+
+# ---------------------------------------------------------------------------
+# G5: ext_critic identifiers and comment masking
+# ---------------------------------------------------------------------------
+
+_F1F_TILDE_MESSAGE = '''#include "c74_min.h"
+
+using namespace c74::min;
+
+class foo~ : public object<foo~> {
+public:
+    inlet<>  m_input  { this, "(anything) input" };
+    outlet<> m_output { this, "(anything) output" };
+};
+
+MIN_EXTERNAL(foo~);
+'''
+
+_VALID_BODY = '''class my_object : public object<my_object> {
+public:
+    inlet<>  m_input  { this, "(anything) input" };
+    outlet<> m_output { this, "(anything) output" };
+};
+'''
+
+
+class TestG5ExtCriticIdentifiers:
+    def test_tilde_name_reports_identifier_not_missing(self):
+        blockers = [r for r in review_external(_F1F_TILDE_MESSAGE, archetype="message")
+                    if r.severity == "blocker"]
+        assert len(blockers) == 1, [b.finding for b in blockers]
+        b = blockers[0]
+        assert "'foo~' is not a valid C++ identifier" in b.finding
+        assert "class declaration and MIN_EXTERNAL" in b.finding
+        assert "foo_tilde" in b.suggestion
+        assert not any("Missing MIN_EXTERNAL" in r.finding
+                       for r in review_external(_F1F_TILDE_MESSAGE, archetype="message"))
+
+    def test_commented_old_min_external_ignored(self):
+        code = ('#include "c74_min.h"\nusing namespace c74::min;\n' + _VALID_BODY
+                + "// MIN_EXTERNAL(old_name);\nMIN_EXTERNAL(my_object);\n")
+        assert _blockers(review_external(code, archetype="message")) == []
+
+    def test_min_external_only_in_block_comment_is_missing(self):
+        code = ('#include "c74_min.h"\nusing namespace c74::min;\n' + _VALID_BODY
+                + "/* MIN_EXTERNAL(my_object); */\n")
+        assert any("Missing MIN_EXTERNAL" in f
+                   for f in _blockers(review_external(code, archetype="message")))
+
+    def test_include_only_in_comment_is_missing(self):
+        code = ('// #include "c74_min.h"\nusing namespace c74::min;\n' + _VALID_BODY
+                + "MIN_EXTERNAL(my_object);\n")
+        assert any("c74_min.h" in f
+                   for f in _blockers(review_external(code, archetype="message")))
+
+    def test_helper_class_before_object_class(self):
+        code = ('#include "c74_min.h"\nusing namespace c74::min;\n'
+                "struct base_thing {};\n"
+                "class helper : public base_thing {};\n" + _VALID_BODY
+                + "MIN_EXTERNAL(my_object);\n")
+        assert _blockers(review_external(code, archetype="message")) == []
+
+    def test_empty_min_external(self):
+        code = ('#include "c74_min.h"\nusing namespace c74::min;\n' + _VALID_BODY
+                + "MIN_EXTERNAL();\n")
+        assert any("names no class" in f
+                   for f in _blockers(review_external(code, archetype="message")))
+
+    def test_mismatch_text_kept(self):
+        code = ('#include "c74_min.h"\nusing namespace c74::min;\n'
+                "class a : public object<a> {\npublic:\n"
+                '    inlet<> m_input { this, "in" };\n};\nMIN_EXTERNAL(b);\n')
+        assert _blockers(review_external(code, archetype="message")) == [
+            "MIN_EXTERNAL(b) does not match class declaration 'a'"
+        ]
+
+    @pytest.mark.parametrize("label,archetype,code", _template_cases(),
+                             ids=[c[0] for c in _template_cases()])
+    def test_every_template_reviews_clean(self, label, archetype, code):
+        assert _blockers(review_external(code, archetype=archetype)) == []
+
+
+# ---------------------------------------------------------------------------
+# G7: setup_min_devkit clones into the external's own gitignored folder
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fake_run(monkeypatch):
+    """Replace subprocess.run in src.maxpat.externals; never touches the network."""
+    import src.maxpat.externals as externals
+
+    state = {"calls": [], "returncode": 0, "raises": None, "readme": False}
+
+    def run(argv, cwd=None, **kwargs):
+        state["calls"].append((list(argv), cwd))
+        if state["raises"] is not None:
+            raise state["raises"]
+        if state["returncode"] == 0:
+            if argv[:2] == ["git", "clone"]:
+                dest = Path(cwd) / argv[-1]
+                (dest / "source" / "min-api").mkdir(parents=True)
+                if state["readme"]:
+                    (dest / "README.md").write_text("min-devkit\n")
+            elif argv[:3] == ["git", "submodule", "update"]:
+                (Path(cwd) / "source" / "min-api").mkdir(parents=True)
+        return subprocess.CompletedProcess(argv, state["returncode"], "", "")
+
+    monkeypatch.setattr(externals.subprocess, "run", run)
+    return state
+
+
+def _gitignore_lines(ext_dir: Path) -> list[str]:
+    return (ext_dir / ".gitignore").read_text().splitlines()
+
+
+class TestG7SetupMinDevkitClones:
+    def test_clone_into_ext_dir(self, tmp_path, fake_run):
+        from src.maxpat.externals import MIN_DEVKIT_URL, setup_min_devkit
+
+        ext = tmp_path / "ext"
+        ext.mkdir()
+        assert setup_min_devkit(ext) is True
+        assert fake_run["calls"] == [
+            (["git", "clone", "--recursive", MIN_DEVKIT_URL, "min-devkit"], str(ext))
+        ]
+        for argv, cwd in fake_run["calls"]:
+            assert not ("submodule" in argv and "add" in argv)
+            assert Path(cwd).resolve().is_relative_to(ext.resolve())
+        assert _gitignore_lines(ext).count("min-devkit/") == 1
+
+    def test_idempotent(self, tmp_path, fake_run):
+        from src.maxpat.externals import setup_min_devkit
+
+        assert setup_min_devkit(tmp_path) is True
+        n = len(fake_run["calls"])
+        assert setup_min_devkit(tmp_path) is True
+        assert len(fake_run["calls"]) == n
+        assert _gitignore_lines(tmp_path).count("min-devkit/") == 1
+
+    def test_existing_gitignore_kept(self, tmp_path, fake_run):
+        from src.maxpat.externals import setup_min_devkit
+
+        (tmp_path / ".gitignore").write_text("build/\n*.o")
+        assert setup_min_devkit(tmp_path) is True
+        text = (tmp_path / ".gitignore").read_text()
+        assert text.startswith("build/\n*.o\n")
+        lines = text.splitlines()
+        assert lines[:2] == ["build/", "*.o"]
+        assert lines.count("min-devkit/") == 1
+
+    def test_half_present_checkout_repaired_inside(self, tmp_path, fake_run):
+        from src.maxpat.externals import setup_min_devkit
+
+        (tmp_path / "min-devkit" / ".git").mkdir(parents=True)
+        assert setup_min_devkit(tmp_path) is True
+        assert fake_run["calls"] == [
+            (["git", "submodule", "update", "--init", "--recursive"],
+             str(tmp_path / "min-devkit"))
+        ]
+
+    def test_non_git_folder_refused(self, tmp_path, fake_run):
+        from src.maxpat.externals import setup_min_devkit
+
+        user = tmp_path / "min-devkit" / "mine.txt"
+        user.parent.mkdir()
+        user.write_text("keep")
+        assert setup_min_devkit(tmp_path) is False
+        assert fake_run["calls"] == []
+        assert sorted(p.name for p in user.parent.iterdir()) == ["mine.txt"]
+        assert user.read_text() == "keep"
+
+    def test_clone_failure(self, tmp_path, fake_run):
+        from src.maxpat.externals import setup_min_devkit
+
+        fake_run["returncode"] = 1
+        assert setup_min_devkit(tmp_path) is False
+
+    def test_git_missing(self, tmp_path, fake_run):
+        from src.maxpat.externals import setup_min_devkit
+
+        fake_run["raises"] = FileNotFoundError("git")
+        assert setup_min_devkit(tmp_path) is False
+
+    def test_missing_ext_dir(self, tmp_path, fake_run):
+        from src.maxpat.externals import setup_min_devkit
+
+        missing = tmp_path / "nope"
+        assert setup_min_devkit(missing) is False
+        assert fake_run["calls"] == []
+        assert not missing.exists()
+
+    def test_marker_present(self, tmp_path, fake_run):
+        from src.maxpat.externals import setup_min_devkit
+
+        (tmp_path / "min-devkit" / "source" / "min-api").mkdir(parents=True)
+        assert setup_min_devkit(tmp_path) is True
+        assert fake_run["calls"] == []
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
+class TestG7GitIgnoresCheckout:
+    def test_enclosing_repo_does_not_see_checkout(self, tmp_path, monkeypatch):
+        import src.maxpat.externals as externals
+
+        repo = tmp_path / "repo"
+        ext = repo / "ext"
+        ext.mkdir(parents=True)
+        (ext / "CMakeLists.txt").write_text("# ext\n")
+        subprocess.run(["git", "init", "-q", str(repo)], check=True,
+                       capture_output=True, text=True)
+
+        real_run = subprocess.run
+
+        def fake(argv, cwd=None, **kwargs):
+            assert argv[:2] == ["git", "clone"]
+            dest = Path(cwd) / argv[-1]
+            (dest / "source" / "min-api").mkdir(parents=True)
+            (dest / "README.md").write_text("min-devkit\n")
+            return subprocess.CompletedProcess(argv, 0, "", "")
+
+        with monkeypatch.context() as m:
+            m.setattr(externals.subprocess, "run", fake)
+            assert externals.setup_min_devkit(ext) is True
+
+        out = real_run(
+            ["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=all"],
+            check=True, capture_output=True, text=True,
+        ).stdout
+        paths = [line[3:] for line in out.splitlines()]
+        assert "ext/.gitignore" in paths
+        assert not any(p.startswith("ext/min-devkit") for p in paths), paths
+
+
+class TestG7ExtAgentDocs:
+    SKILL = Path(".claude/skills/max-ext-agent/SKILL.md")
+    BOUNDARIES = Path(".claude/skills/max-ext-agent/BOUNDARIES.md")
+
+    def test_no_submodule_wording(self):
+        for path in (self.SKILL, self.BOUNDARIES):
+            assert "submodule" not in path.read_text().lower(), path
+
+    def test_skill_describes_clone(self):
+        text = self.SKILL.read_text()
+        assert "min-devkit/" in text
+        assert ".gitignore" in text
+        for name in ("setup_min_devkit", "scaffold_external", "build_external"):
+            assert name in text

@@ -7,7 +7,8 @@ Provides:
   builds back into ``<name>~.mxo``) with class ``cpp_identifier(name)``.
 - generate_external_code: Returns C++ code string for an archetype.
 - generate_help_patch: Builds a Patcher for the .maxhelp file.
-- setup_min_devkit: Initializes Min-DevKit as a git submodule.
+- setup_min_devkit: Clones Min-DevKit (with min-api) into the external's own
+  ``min-devkit/`` folder and lists it in that folder's ``.gitignore``.
 - build_external: cmake/make build loop with auto-fix and .mxo validation.
 - auto_fix: Attempts to fix known compiler error patterns.
 
@@ -35,6 +36,8 @@ from src.maxpat.defaults import FONT_NAME, FONT_SIZE
 from src.maxpat.sizing import calculate_box_size
 
 VALID_ARCHETYPES = ("message", "dsp", "scheduler")
+
+MIN_DEVKIT_URL = "https://github.com/Cycling74/min-devkit.git"
 
 
 def generate_external_code(
@@ -290,55 +293,91 @@ def scaffold_external(
 # ── Plan 03: Build system integration ────────────────────────────────────
 
 
-def setup_min_devkit(ext_dir: Path) -> bool:
-    """Initialize Min-DevKit as a git submodule in the external project.
+def _ensure_gitignored(ext_dir: Path) -> None:
+    """List ``min-devkit/`` in ``ext_dir/.gitignore`` once, keeping every byte.
 
-    Checks if min-devkit/source/min-api already exists (already set up).
-    If not, runs ``git submodule add`` with recursive init to pull
-    min-devkit and its nested min-api submodule.
+    Writes nothing when a stripped line is already ``min-devkit``,
+    ``min-devkit/``, ``/min-devkit`` or ``/min-devkit/``. Otherwise appends a
+    comment line and ``min-devkit/`` (adding a newline first when the file is
+    non-empty and lacks one), creating the file when it is missing. Only that
+    one file is written. Raises OSError when it cannot be read or written.
+    """
+    gitignore = ext_dir / ".gitignore"
+    existing = gitignore.read_text() if gitignore.exists() else ""
+    entries = {"min-devkit", "min-devkit/", "/min-devkit", "/min-devkit/"}
+    if any(line.strip() in entries for line in existing.splitlines()):
+        return
+    prefix = "\n" if existing and not existing.endswith("\n") else ""
+    with open(gitignore, "a") as fh:
+        fh.write(
+            prefix
+            + "# Min-DevKit checkout (setup_min_devkit) -- never committed\n"
+            + "min-devkit/\n"
+        )
+
+
+def setup_min_devkit(ext_dir: Path) -> bool:
+    """Clone Min-DevKit into the external's own gitignored ``min-devkit/``.
+
+    Steps (Q31 / G7):
+    1. ``ext_dir`` must be an existing directory; otherwise return False
+       without writing anything or running any command.
+    2. List ``min-devkit/`` in ``ext_dir/.gitignore`` (append-only,
+       idempotent) before any clone, so a partial checkout is never
+       stageable in an enclosing repository.
+    3. ``min-devkit/source/min-api`` already present: return True.
+    4. ``min-devkit/`` present with a ``.git`` entry: run
+       ``git submodule update --init --recursive`` inside ``min-devkit``
+       (min-devkit's own nested min-api, never the framework repo).
+       Present without ``.git``: return False and leave the files alone.
+    5. Otherwise ``git clone --recursive MIN_DEVKIT_URL min-devkit`` with
+       cwd = ``ext_dir``.
+
+    No git command ever runs outside ``ext_dir`` and no repository gains a
+    submodule entry.
 
     Args:
         ext_dir: Root directory of the external project.
 
     Returns:
-        True if min-devkit is present (or successfully initialized),
-        False if setup failed.
+        True if min-api is present afterwards, False if setup failed
+        (non-zero git exit, git missing, timeout, unwritable .gitignore).
     """
-    min_api_marker = ext_dir / "min-devkit" / "source" / "min-api"
-    if min_api_marker.exists():
-        return True
+    ext_dir = Path(ext_dir)
+    if not ext_dir.is_dir():
+        return False
 
-    # Attempt git submodule add
+    checkout = ext_dir / "min-devkit"
+    min_api_marker = checkout / "source" / "min-api"
+
     try:
+        _ensure_gitignored(ext_dir)
+
+        if min_api_marker.exists():
+            return True
+
+        if checkout.exists():
+            if not (checkout / ".git").exists():
+                return False
+            argv = ["git", "submodule", "update", "--init", "--recursive"]
+            cwd = str(checkout)
+        else:
+            argv = ["git", "clone", "--recursive", MIN_DEVKIT_URL, "min-devkit"]
+            cwd = str(ext_dir)
+
         result = subprocess.run(
-            [
-                "git", "submodule", "add",
-                "https://github.com/Cycling74/min-devkit.git",
-                "min-devkit",
-            ],
-            cwd=str(ext_dir),
+            argv,
+            cwd=cwd,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=600,
         )
         if result.returncode != 0:
             return False
 
-        # Recursive init for nested submodules (min-api)
-        result = subprocess.run(
-            ["git", "submodule", "update", "--init", "--recursive"],
-            cwd=str(ext_dir),
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if result.returncode != 0:
-            return False
-
-        # Verify min-api headers exist after setup
         return min_api_marker.exists()
 
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 

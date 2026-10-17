@@ -4,7 +4,7 @@
 
 - Scaffold Min-DevKit external projects (directory structure, CMake, source, help)
 - Generate C++ source code for message, dsp, and scheduler archetypes
-- Set up Min-DevKit as a git submodule
+- Set up Min-DevKit by cloning it (recursively, with min-api) into the external's own `min-devkit/` folder, listed in that folder's `.gitignore` and kept outside the framework repo's index
 - Build externals with automated cmake/make loop and auto-fix
 - Validate .mxo bundles (Mach-O type, arm64 architecture)
 - Generate .maxhelp demonstration patches

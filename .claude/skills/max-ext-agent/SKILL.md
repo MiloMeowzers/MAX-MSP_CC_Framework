@@ -21,7 +21,7 @@ Scaffold, generate, build, and validate C++ externals using the Min-DevKit. Supp
 - **Three archetypes**: message (control objects), dsp (signal processing), scheduler (timed events)
 - **Code generation**: Generate archetype-specific C++ source via `generate_external_code`
 - **Build and compile**: Automated cmake/make build loop with error parsing and auto-fix via `build_external`
-- **Min-DevKit setup**: Initialize git submodule for Min-DevKit via `setup_min_devkit`
+- **Min-DevKit setup**: Clone Min-DevKit (recursively, with min-api) into the external's own `min-devkit/` folder via `setup_min_devkit`, listed in that folder's `.gitignore` so it stays outside the framework repo's index
 - **.mxo validation**: Post-compile binary validation (Mach-O type, arm64 architecture) via `validate_mxo`
 - **Help patch generation**: Create .maxhelp demonstration patches via `generate_help_patch`
 - **Code review**: Run external critic for structural code issues
@@ -56,7 +56,7 @@ from src.maxpat.critics.ext_critic import review_external
 
 - `scaffold_external(project_dir, name, archetype, description)`: Creates complete project directory structure
 - `generate_external_code(name, archetype, description, **kwargs)`: Returns C++ code string
-- `setup_min_devkit(ext_dir)`: Initializes Min-DevKit as a git submodule
+- `setup_min_devkit(ext_dir)`: Clones Min-DevKit recursively (with min-api) into `ext_dir/min-devkit/` and lists `min-devkit/` in `ext_dir/.gitignore`, outside the framework repo's index; `ext_dir` is the scaffold root, and a MAX name with `~` scaffolds as `<name>_tilde/` (min-api's CMake builds it back into `<name>~.mxo`)
 - `build_external(ext_dir, max_attempts=5)`: cmake/make build loop with auto-fix and loop detection
 - `validate_mxo(mxo_path)`: Post-compile .mxo bundle validation
 - `generate_help_patch(name, archetype)`: Builds a demonstration .maxhelp Patcher
@@ -70,7 +70,7 @@ from src.maxpat.critics.ext_critic import review_external
 ## Output Protocol (New Patches)
 
 1. **Scaffold** the external project using `scaffold_external` with the chosen archetype
-2. **Set up Min-DevKit** via `setup_min_devkit` (initializes git submodule)
+2. **Set up Min-DevKit** via `setup_min_devkit` (clones Min-DevKit with min-api into the external's own `min-devkit/` folder and lists it in that folder's `.gitignore`)
 3. **Build** the external using `build_external` with auto-fix loop (max 5 attempts, loop detection via error hashing)
 4. **Validate .mxo** output using `validate_mxo` (checks Mach-O type, arm64 architecture)
 5. **Write help patch** via `generate_help_patch` for the external
