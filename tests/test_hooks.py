@@ -28,7 +28,6 @@ def test_public_api_importable():
         ObjectDatabase,
         LayoutOptions,
         auto_size_panel,
-        is_complex_patch,
     )
     # Sanity check types
     assert callable(read_patch)
@@ -43,7 +42,6 @@ def test_public_api_importable():
     assert ObjectDatabase is not None
     assert LayoutOptions is not None
     assert callable(auto_size_panel)
-    assert callable(is_complex_patch)
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 """Aesthetic styling helpers for MAX patcher generation.
 
 Provides palette access, canvas background setting, object background
-color helpers, panel auto-sizing, and patch complexity heuristics.
+color helpers, and panel auto-sizing.
 All colors come from AESTHETIC_PALETTE in defaults.py.
 """
 
@@ -137,22 +137,6 @@ def choose_text_color(current, backgrounds: list[list[float]]) -> tuple[list[flo
         return best, False
     every = tuple(TEXT_COLOR_CANDIDATES) + tuple(FALLBACK_TEXT_CANDIDATES)
     return best_text_color(backgrounds, every), False
-
-
-def contrast_text_color(bg_color: list[float] | None) -> list[float]:
-    """Return a text color with good contrast against the given background.
-
-    Thin back-compat wrapper over ``best_text_color([bg_color])``.
-
-    Args:
-        bg_color: RGBA background color, or None for default canvas.
-
-    Returns:
-        RGBA color list suitable for readable text on the background.
-    """
-    if bg_color is None:
-        return list(AESTHETIC_PALETTE["annotation_color"])
-    return best_text_color([bg_color])
 
 
 def set_canvas_background(
@@ -695,23 +679,3 @@ def repair_text_contrast(patcher: Patcher) -> int:
         an unchanged patcher returns 0.
     """
     return _apply_text_contrast(patcher)
-
-
-def is_complex_patch(patcher: Patcher) -> bool:
-    """Heuristic to determine if a patch is visually complex.
-
-    A patch is considered complex if it has 10 or more boxes, or if any
-    box contains a subpatcher (inner patcher).
-
-    Args:
-        patcher: The Patcher instance to evaluate.
-
-    Returns:
-        True if the patch is complex, False otherwise.
-    """
-    if len(patcher.boxes) >= 10:
-        return True
-    for box in patcher.boxes:
-        if box._inner_patcher is not None:
-            return True
-    return False

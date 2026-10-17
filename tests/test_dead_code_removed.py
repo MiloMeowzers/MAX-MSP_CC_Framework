@@ -111,3 +111,34 @@ class TestRemovedFilesAndModules:
             r"gen_codebox\.maxpat",
             r"verified-objects\.json",
         ]) == []
+
+
+class TestRemovedPublicApi:
+    @pytest.mark.parametrize(
+        "module, name",
+        [
+            ("src.maxpat.project", "build_examples_catalog"),
+            ("src.maxpat.project", "_read_project_description"),
+            ("src.maxpat.aesthetics", "contrast_text_color"),
+            ("src.maxpat.aesthetics", "is_complex_patch"),
+            ("src.maxpat", "is_complex_patch"),
+            ("src.maxpat.layout", "suggest_subpatchers"),
+        ],
+    )
+    def test_removed_name_is_gone(self, module, name):
+        assert not _has_attr(module, name)
+
+    def test_package_all_names_exist(self):
+        pkg = importlib.import_module("src.maxpat")
+        missing = [n for n in pkg.__all__ if not hasattr(pkg, n)]
+        assert missing == []
+
+    def test_no_reference_names_removed_api(self):
+        assert _references([
+            r"\bbuild_examples_catalog\b",
+            r"\b_read_project_description\b",
+            r"\bcontrast_text_color\b",
+            r"\bis_complex_patch\b",
+            r"\bsuggest_subpatchers\b",
+            r"\b_skip_auto_layout\b",
+        ]) == []

@@ -1,5 +1,5 @@
 """Tests for aesthetic styling: palette, comment tiers, bubble comments, patcher styling,
-panels, step markers, auto-sizing, and patch complexity heuristic.
+panels, step markers, and auto-sizing.
 
 Covers CMNT-01..04, PANL-01..05, PTCH-01, PTCH-02 requirements from phase 10.
 """
@@ -20,7 +20,6 @@ from src.maxpat.defaults import (
 from src.maxpat.patcher import Box, Patcher
 from src.maxpat.aesthetics import (
     auto_size_panel,
-    is_complex_patch,
     set_canvas_background,
     set_object_bgcolor,
 )
@@ -661,78 +660,6 @@ class TestZOrder:
         assert p.boxes.index(flonum) < p.boxes.index(dial)
 
 
-class TestContrastText:
-    """Tests for contrast_text_color() function."""
-
-    def test_light_background_gets_dark_text(self):
-        """Light background (luminance > 0.5) returns dark text color."""
-        from src.maxpat.aesthetics import contrast_text_color
-        result = contrast_text_color([0.94, 0.94, 0.96, 1.0])
-        # Dark text
-        assert result == [0.20, 0.20, 0.25, 1.0]
-
-    def test_dark_background_gets_light_text(self):
-        """Dark background (luminance < 0.5) returns light text color."""
-        from src.maxpat.aesthetics import contrast_text_color
-        result = contrast_text_color([0.333, 0.333, 0.333, 1.0])
-        # Light text
-        assert result == [0.80, 0.80, 0.82, 1.0]
-
-    def test_none_returns_default_annotation(self):
-        """None background returns default annotation_color."""
-        from src.maxpat.aesthetics import contrast_text_color
-        result = contrast_text_color(None)
-        assert result == list(AESTHETIC_PALETTE["annotation_color"])
-
-    def test_returns_list(self):
-        """Return type is always a list of 4 floats."""
-        from src.maxpat.aesthetics import contrast_text_color
-        for bg in [[0.0, 0.0, 0.0, 1.0], [1.0, 1.0, 1.0, 1.0], None]:
-            result = contrast_text_color(bg)
-            assert isinstance(result, list)
-            assert len(result) == 4
-
-    def test_midpoint_luminance(self):
-        """Mid-gray background returns whichever candidate wins on WCAG ratio.
-
-        CORRECTED: this test previously asserted light text, encoding the
-        removed `luminance <= 0.5` binary flip. Under WCAG relative luminance
-        a 0.5 sRGB gray sits at L=0.214, where the dark candidate scores 3.13
-        and the light candidate only 2.49 -- so light text was the LESS
-        readable of the two. The assertion now tracks the measured ratio.
-        """
-        from src.maxpat.aesthetics import contrast_ratio, contrast_text_color
-        bg = [0.5, 0.5, 0.5, 1.0]
-        result = contrast_text_color(bg)
-        assert result == [0.20, 0.20, 0.25, 1.0]
-        assert contrast_ratio(result, bg) > contrast_ratio([0.80, 0.80, 0.82, 1.0], bg)
-
-
-class TestComplexity:
-    """Tests for is_complex_patch() heuristic."""
-
-    def test_simple_patch(self):
-        """Patcher with 3 boxes is NOT complex."""
-        p = Patcher()
-        for _ in range(3):
-            p.add_box("toggle")
-        assert is_complex_patch(p) is False
-
-    def test_complex_by_object_count(self):
-        """Patcher with 15 boxes IS complex."""
-        p = Patcher()
-        for _ in range(15):
-            p.add_box("toggle")
-        assert is_complex_patch(p) is True
-
-    def test_complex_by_subpatcher(self):
-        """Patcher with a subpatcher IS complex regardless of box count."""
-        p = Patcher()
-        p.add_box("toggle")
-        p.add_subpatcher("mysub")
-        assert is_complex_patch(p) is True
-
-
 class TestEnsureTextContrast:
     """Tests for ensure_text_contrast() -- automatic font vs background contrast."""
 
@@ -1047,11 +974,6 @@ class TestContrastPrimitives:
         chosen_min = min(contrast_ratio(chosen, bg) for bg in backgrounds)
         for cand in (DARK_TEXT, LIGHT_TEXT):
             assert chosen_min >= min(contrast_ratio(cand, bg) for bg in backgrounds)
-
-    def test_contrast_text_color_none_returns_annotation(self):
-        from src.maxpat.aesthetics import contrast_text_color
-
-        assert contrast_text_color(None) == list(AESTHETIC_PALETTE["annotation_color"])
 
 
 class TestPanelEncodings:

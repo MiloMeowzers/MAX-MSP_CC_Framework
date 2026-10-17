@@ -22,7 +22,6 @@ from src.maxpat.aesthetics import (
     set_canvas_background,
     set_object_bgcolor,
     auto_size_panel,
-    is_complex_patch,
     apply_auto_styling,
     ensure_text_contrast,
     repair_text_contrast,
@@ -146,7 +145,6 @@ __all__ = [
     "set_canvas_background",
     "set_object_bgcolor",
     "auto_size_panel",
-    "is_complex_patch",
     "ensure_text_contrast",
     "repair_text_contrast",
 ]

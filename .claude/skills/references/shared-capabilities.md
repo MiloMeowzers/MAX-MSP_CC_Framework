@@ -106,7 +106,6 @@ The structure critic (`src/maxpat/critics/structure_critic.py`) detects fan-out 
 - `set_canvas_background(patcher, color=None)` -- override default canvas color
 - `set_object_bgcolor(box, palette_key=None, color=None)` -- highlight specific objects
 - `auto_size_panel(boxes, padding=18)` -- compute panel rect to enclose a group of boxes
-- `is_complex_patch(patcher)` -- heuristic: True if 10+ boxes or has subpatchers
 
 ## Layout Options
 
