@@ -2,10 +2,10 @@
 gsd_state_version: "1.0"
 milestone: v5.0
 status: completed
-last_updated: "2026-10-17T01:39:50.386Z"
+last_updated: "2026-10-17T03:25:09.175Z"
 last_activity: 2026-10-16
 last_activity_desc: "Completed quick task 261001-hwb: Max 9.2.0 update — object DB re-synced from the installed bundle, 9.2 guidance added"
-state_head: a04b94a46a92699fe77ea0aca8986712aa5f83bc
+state_head: 71a1914949daecdc393d0371563afaa756c47e89
 progress:
   total_phases: 5
   completed_phases: 5
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v5.0)
 Phase: —
 Plan: —
 Status: v5.0 shipped; awaiting `/gsd-new-milestone` to start next cycle
-Last activity: 2026-10-16 - Completed quick task 261016-mpq: Implement Q31 in .planning/reviews/2026-10-11-fix-plan.md — codegen and Min-DevKit template fixes
+Last activity: 2026-10-16 - Completed quick task 261016-pz8: Implement Q32 in .planning/reviews/2026-10-11-fix-plan.md — remove dead code
 
 Previous: 2026-09-21 - Completed quick task 260921-kfd: SF-04/SF-06/SF-07 closed — CLAUDE.md `live.*` extraction note revised (all 30 resolve); added refpage `<c74object name>`-is-authoritative rule and refpage-placeholder (54.5%) counts-not-types / never-overwrite-overrides rule
 
@@ -125,6 +125,7 @@ None.
 | 261016-d3y | Implement Q29 in .planning/reviews/2026-10-11-fix-plan.md — replace_box identity, gendsp round-trip, MAX-style JSON writer | 2026-10-16 | a5787ae8 | Verified | [261016-d3y-implement-q29-in-planning-reviews-2026-1](./quick/261016-d3y-implement-q29-in-planning-reviews-2026-1/) |
 | 261016-jbx | Implement Q30 in .planning/reviews/2026-10-11-fix-plan.md — safe DB tooling | 2026-10-16 | 39f6c99b | Verified | [261016-jbx-implement-q30-in-planning-reviews-2026-1](./quick/261016-jbx-implement-q30-in-planning-reviews-2026-1/) |
 | 261016-mpq | Implement Q31 in .planning/reviews/2026-10-11-fix-plan.md — codegen and Min-DevKit template fixes | 2026-10-17 | a04b94a4 | Needs Review | [261016-mpq-implement-q31-in-planning-reviews-2026-1](./quick/261016-mpq-implement-q31-in-planning-reviews-2026-1/) |
+| 261016-pz8 | Implement Q32 in .planning/reviews/2026-10-11-fix-plan.md — remove dead code | 2026-10-17 | 71a19149 | Verified | [261016-pz8-implement-q32-in-planning-reviews-2026-1](./quick/261016-pz8-implement-q32-in-planning-reviews-2026-1/) |
 
 ## Deferred Items
 
