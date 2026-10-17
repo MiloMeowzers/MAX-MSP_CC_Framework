@@ -32,7 +32,6 @@ from src.maxpat.ext_templates import (
     render_scheduler_template,
 )
 from src.maxpat.patcher import Box, Patcher
-from src.maxpat.defaults import FONT_NAME, FONT_SIZE
 from src.maxpat.sizing import calculate_box_size
 
 VALID_ARCHETYPES = ("message", "dsp", "scheduler")
@@ -144,32 +143,18 @@ def _create_external_box(
     x: float = 0.0,
     y: float = 0.0,
 ) -> Box:
-    """Create a box for the custom external (not in DB, uses Box.__new__)."""
+    """Create a box for the custom external (not in DB, uses Box.structural)."""
     if outlettype is None:
         outlettype = [""] * numoutlets
 
     box_id = p._gen_id()
     w, h = calculate_box_size(name, "newobj")
 
-    ext_box = Box.__new__(Box)
-    ext_box.name = name
-    ext_box.args = []
-    ext_box.id = box_id
-    ext_box.maxclass = "newobj"
-    ext_box.text = name
-    ext_box.numinlets = numinlets
-    ext_box.numoutlets = numoutlets
-    ext_box.outlettype = outlettype
-    ext_box.patching_rect = [x, y, w, h]
-    ext_box.fontname = FONT_NAME
-    ext_box.fontsize = FONT_SIZE
-    ext_box.presentation = False
-    ext_box.presentation_rect = None
-    ext_box.extra_attrs = {}
-    ext_box._inner_patcher = None
-    ext_box._saved_object_attributes = None
-    ext_box._bpatcher_attrs = None
-    ext_box._raw = None
+    ext_box = Box.structural(
+        "newobj", name, numinlets, numoutlets, outlettype, [x, y, w, h],
+        box_id=box_id,
+        name=name,
+    )
 
     p.boxes.append(ext_box)
     return ext_box

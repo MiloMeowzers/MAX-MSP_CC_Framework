@@ -193,7 +193,7 @@ def _box_added_or_moved(box) -> bool:
     """True when a box was added or moved since the patch was loaded.
 
     Added: the box has no ``_raw`` (created in this session) or no load-time
-    snapshot (``_loaded_rect``; builder boxes made via ``Box.__new__`` lack
+    snapshot (``_loaded_rect``; boxes built without ``Box.__init__`` may lack
     the attribute). Moved: its x or y differs from the snapshot. A resize
     alone (width/height change, e.g. from a text edit) is not a move.
     """

@@ -338,7 +338,8 @@ class Box:
 
         # Requested (x, y) when add_box moved the box off a real overlap
         # (Q29 / B10); None when it was placed where asked. Not serialized.
-        # Builder boxes come from Box.__new__: read with getattr(..., None).
+        # Boxes made without __init__ (from_dict, test fixtures) may lack it:
+        # read with getattr(..., None).
         self.nudged_from: tuple[float, float] | None = None
 
         # Internal: track if this is a subpatcher/bpatcher with embedded patcher
@@ -381,6 +382,74 @@ class Box:
             else:
                 result.append("")
         return result
+
+    @classmethod
+    def structural(
+        cls,
+        maxclass: str,
+        text: str,
+        nin: int,
+        nout: int,
+        outlettype: list[str],
+        rect: list[float],
+        /,
+        *,
+        box_id: str,
+        name: str | None = None,
+        args: list | None = None,
+        font: tuple[str, float] | None = None,
+        inner: Patcher | None = None,
+        saved_attrs: dict[str, Any] | None = None,
+        bpatcher_attrs: dict[str, Any] | None = None,
+        **attrs: Any,
+    ) -> Box:
+        """Build a Box without a DB lookup (fix-plan Q33 / review S3).
+
+        The one factory for boxes that bypass the object database: structural
+        containers (panel, step marker, ``p`` parent, bpatcher, gen~ / rnbo~
+        parents), gen / rnbo internals (in, out, codebox, in~, out~, param,
+        inport, outport) and custom external help boxes. It sets exactly the
+        attribute set :meth:`__init__` sets.
+
+        The six positionals are positional-only, so extra attributes passed
+        through ``**attrs`` may be named ``text`` / ``maxclass`` /
+        ``fontname`` (the step marker's label, the codebox's font).
+        ``**attrs`` becomes ``extra_attrs`` in call order.
+
+        Defaults: ``name`` is the first whitespace token of *text*, else
+        *maxclass*; ``args`` is ``[]``; ``font`` is ``(FONT_NAME, FONT_SIZE)``.
+        Nothing passed in is copied: *rect*, *outlettype* and *args* are
+        stored as given (a bpatcher shares one args list with its
+        bpatcher_attrs).
+        """
+        box = cls.__new__(cls)
+        if name is None:
+            tokens = text.split()
+            name = tokens[0] if tokens else maxclass
+        fontname, fontsize = font if font is not None else (FONT_NAME, FONT_SIZE)
+        box.name = name
+        box.args = args if args is not None else []
+        box.id = box_id
+        box.maxclass = maxclass
+        box.text = text
+        box.numinlets = nin
+        box.numoutlets = nout
+        box.outlettype = outlettype
+        box.patching_rect = rect
+        box.fontname = fontname
+        box.fontsize = fontsize
+        box.presentation = False
+        box.presentation_rect = None
+        box.extra_attrs = attrs
+        box.target_id = None
+        box.nudged_from = None
+        box._inner_patcher = inner
+        box._saved_object_attributes = saved_attrs
+        box._bpatcher_attrs = bpatcher_attrs
+        box._raw = None
+        box._loaded_rect = None
+        box._loaded = None
+        return box
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to .maxpat box JSON structure.

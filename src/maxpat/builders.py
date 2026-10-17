@@ -328,33 +328,15 @@ class BuildersMixin:
         Returns:
             The created panel Box (inserted at index 0 for z-order).
         """
-        panel = Box.__new__(Box)
-        panel.name = "panel"
-        panel.args = []
-        panel.id = self._gen_id()
-        panel.maxclass = "panel"
-        panel.text = ""
-        panel.numinlets = 1
-        panel.numoutlets = 0
-        panel.outlettype = []
-        panel.patching_rect = [x, y, width, height]
-        panel.fontname = FONT_NAME
-        panel.fontsize = FONT_SIZE
-        panel.presentation = False
-        panel.presentation_rect = None
-        panel.target_id = None
-        panel._inner_patcher = None
-        panel._saved_object_attributes = None
-        panel._bpatcher_attrs = None
-        panel._raw = None
-
-        panel.extra_attrs = {
-            "background": 1,
-            "ignoreclick": 1,
-            "border": 0,
-            "rounded": 7,
-            "mode": 0,
-        }
+        panel = Box.structural(
+            "panel", "", 1, 0, [], [x, y, width, height],
+            box_id=self._gen_id(),
+            background=1,
+            ignoreclick=1,
+            border=0,
+            rounded=7,
+            mode=0,
+        )
 
         if gradient:
             panel.extra_attrs["bgfillcolor"] = {
@@ -387,26 +369,6 @@ class BuildersMixin:
         Returns:
             The created step marker Box (inserted at index 0 for z-order).
         """
-        marker = Box.__new__(Box)
-        marker.name = "textbutton"
-        marker.args = []
-        marker.id = self._gen_id()
-        marker.maxclass = "textbutton"
-        marker.text = ""
-        marker.numinlets = 1
-        marker.numoutlets = 3
-        marker.outlettype = ["", "", "int"]
-        marker.patching_rect = [x, y, 24.0, 24.0]
-        marker.fontname = FONT_NAME
-        marker.fontsize = 11.0
-        marker.presentation = False
-        marker.presentation_rect = None
-        marker.target_id = None
-        marker._inner_patcher = None
-        marker._saved_object_attributes = None
-        marker._bpatcher_attrs = None
-        marker._raw = None
-
         # Text color is DERIVED from the chip color, not hardcoded. The old
         # hardcoded white scored only 2.23:1 on the amber chip -- well under
         # WCAG AA. The step_marker_text palette entry is retained for
@@ -414,16 +376,19 @@ class BuildersMixin:
         from src.maxpat.aesthetics import best_text_color
         chip = list(AESTHETIC_PALETTE["step_marker_bg"])
 
-        marker.extra_attrs = {
-            "background": 1,
-            "ignoreclick": 1,
-            "rounded": 60.0,
-            "text": str(number),
-            "textcolor": best_text_color([chip]),
-            "bgcolor": chip,
-            "fontface": FONTFACE_BOLD,
-            "parameter_enable": 0,
-        }
+        marker = Box.structural(
+            "textbutton", "", 1, 3, ["", "", "int"], [x, y, 24.0, 24.0],
+            box_id=self._gen_id(),
+            font=(FONT_NAME, 11.0),
+            background=1,
+            ignoreclick=1,
+            rounded=60.0,
+            text=str(number),
+            textcolor=best_text_color([chip]),
+            bgcolor=chip,
+            fontface=FONTFACE_BOLD,
+            parameter_enable=0,
+        )
 
         # Insert at index 0 (visually front, but background=1 forces behind)
         self.boxes.insert(0, marker)
@@ -833,32 +798,20 @@ class BuildersMixin:
         from src.maxpat.sizing import calculate_box_size
         w, h = calculate_box_size(text, "newobj")
 
-        parent_box = Box.__new__(Box)
-        parent_box.name = "patcher"
-        parent_box.args = [name]
-        parent_box.id = box_id
-        parent_box.maxclass = "newobj"
-        parent_box.text = text
-        parent_box.numinlets = inlets
-        parent_box.numoutlets = outlets
         # Outlet types: all control by default for subpatchers
-        parent_box.outlettype = [""] * outlets
-        parent_box.patching_rect = [x, y, w, h]
-        parent_box.fontname = FONT_NAME
-        parent_box.fontsize = FONT_SIZE
-        parent_box.presentation = False
-        parent_box.presentation_rect = None
-        parent_box.target_id = None
-        parent_box.extra_attrs = {}
-        parent_box._inner_patcher = inner
-        parent_box._saved_object_attributes = {
-            "description": "",
-            "digest": "",
-            "globalpatchername": "",
-            "tags": "",
-        }
-        parent_box._bpatcher_attrs = None
-        parent_box._raw = None
+        parent_box = Box.structural(
+            "newobj", text, inlets, outlets, [""] * outlets, [x, y, w, h],
+            box_id=box_id,
+            name="patcher",
+            args=[name],
+            inner=inner,
+            saved_attrs={
+                "description": "",
+                "digest": "",
+                "globalpatchername": "",
+                "tags": "",
+            },
+        )
 
         # Back-refs for the parent port sync, set after the inner ports
         # exist so building them does not resync (Q28 / B7).
@@ -928,26 +881,6 @@ class BuildersMixin:
 
         box_id = self._gen_id()
 
-        # Create the bpatcher box manually
-        bpatch_box = Box.__new__(Box)
-        bpatch_box.name = "bpatcher"
-        bpatch_box.args = args
-        bpatch_box.id = box_id
-        bpatch_box.maxclass = "bpatcher"
-        bpatch_box.text = ""
-        bpatch_box.numinlets = numinlets
-        bpatch_box.numoutlets = numoutlets
-        bpatch_box.outlettype = [""] * numoutlets
-        bpatch_box.patching_rect = [x, y, width, height]
-        bpatch_box.fontname = FONT_NAME
-        bpatch_box.fontsize = FONT_SIZE
-        bpatch_box.presentation = False
-        bpatch_box.presentation_rect = None
-        bpatch_box.target_id = None
-        bpatch_box.extra_attrs = {}
-        bpatch_box._saved_object_attributes = None
-        bpatch_box._raw = None
-
         # bpatcher-specific attributes (from research Pattern 5)
         bpatcher_attrs: dict[str, Any] = {
             "args": args,
@@ -964,7 +897,14 @@ class BuildersMixin:
         if filename is not None:
             bpatcher_attrs["name"] = filename
 
-        bpatch_box._bpatcher_attrs = bpatcher_attrs
+        # One args list, shared with bpatcher_attrs["args"]
+        bpatch_box = Box.structural(
+            "bpatcher", "", numinlets, numoutlets, [""] * numoutlets,
+            [x, y, width, height],
+            box_id=box_id,
+            args=args,
+            bpatcher_attrs=bpatcher_attrs,
+        )
 
         if embedded:
             from src.maxpat.patcher import Patcher
@@ -979,7 +919,6 @@ class BuildersMixin:
             self.boxes.append(bpatch_box)
             return (bpatch_box, inner)
         else:
-            bpatch_box._inner_patcher = None
             self.boxes.append(bpatch_box)
             return bpatch_box
 
@@ -1042,79 +981,35 @@ class BuildersMixin:
         # Add in objects inside the inner patcher
         in_boxes: list[Box] = []
         for i in range(num_inputs):
-            in_box = Box.__new__(Box)
-            in_box.name = "in"
-            in_box.args = [str(i + 1)]
-            in_box.id = inner._gen_id()
-            in_box.maxclass = "newobj"
-            in_box.text = f"in {i + 1}"
-            in_box.numinlets = 0
-            in_box.numoutlets = 1
-            in_box.outlettype = [""]
-            in_box.patching_rect = [50.0 + i * 80.0, 20.0, 30.0, 22.0]
-            in_box.fontname = FONT_NAME
-            in_box.fontsize = FONT_SIZE
-            in_box.presentation = False
-            in_box.presentation_rect = None
-            in_box.target_id = None
-            in_box.extra_attrs = {}
-            in_box._inner_patcher = None
-            in_box._saved_object_attributes = None
-            in_box._bpatcher_attrs = None
-            in_box._raw = None
+            in_box = Box.structural(
+                "newobj", f"in {i + 1}", 0, 1, [""],
+                [50.0 + i * 80.0, 20.0, 30.0, 22.0],
+                box_id=inner._gen_id(),
+                args=[str(i + 1)],
+            )
             inner.boxes.append(in_box)
             in_boxes.append(in_box)
 
         # Create codebox (structural, not a DB object)
-        codebox = Box.__new__(Box)
-        codebox.name = "codebox"
-        codebox.args = []
-        codebox.id = inner._gen_id()
-        codebox.maxclass = "codebox"
-        codebox.text = ""
-        codebox.numinlets = num_inputs
-        codebox.numoutlets = num_outputs
-        codebox.outlettype = [""] * num_outputs
-        codebox.patching_rect = [50.0, 80.0, 400.0, 200.0]
-        codebox.fontname = FONT_NAME
-        codebox.fontsize = FONT_SIZE
-        codebox.presentation = False
-        codebox.presentation_rect = None
-        codebox.target_id = None
-        codebox.extra_attrs = {
-            "code": code,
-            "fontname": FONT_NAME,
-            "fontsize": FONT_SIZE,
-        }
-        codebox._inner_patcher = None
-        codebox._saved_object_attributes = None
-        codebox._bpatcher_attrs = None
-        codebox._raw = None
+        codebox = Box.structural(
+            "codebox", "", num_inputs, num_outputs, [""] * num_outputs,
+            [50.0, 80.0, 400.0, 200.0],
+            box_id=inner._gen_id(),
+            code=code,
+            fontname=FONT_NAME,
+            fontsize=FONT_SIZE,
+        )
         inner.boxes.append(codebox)
 
         # Add out objects inside the inner patcher
         out_boxes: list[Box] = []
         for i in range(num_outputs):
-            out_box = Box.__new__(Box)
-            out_box.name = "out"
-            out_box.args = [str(i + 1)]
-            out_box.id = inner._gen_id()
-            out_box.maxclass = "newobj"
-            out_box.text = f"out {i + 1}"
-            out_box.numinlets = 1
-            out_box.numoutlets = 0
-            out_box.outlettype = []
-            out_box.patching_rect = [50.0 + i * 80.0, 320.0, 30.0, 22.0]
-            out_box.fontname = FONT_NAME
-            out_box.fontsize = FONT_SIZE
-            out_box.presentation = False
-            out_box.presentation_rect = None
-            out_box.target_id = None
-            out_box.extra_attrs = {}
-            out_box._inner_patcher = None
-            out_box._saved_object_attributes = None
-            out_box._bpatcher_attrs = None
-            out_box._raw = None
+            out_box = Box.structural(
+                "newobj", f"out {i + 1}", 1, 0, [],
+                [50.0 + i * 80.0, 320.0, 30.0, 22.0],
+                box_id=inner._gen_id(),
+                args=[str(i + 1)],
+            )
             inner.boxes.append(out_box)
             out_boxes.append(out_box)
 
@@ -1129,28 +1024,14 @@ class BuildersMixin:
         # Create the parent gen~ box (uses maxclass="newobj" like all non-UI objects)
         w, h = calculate_box_size("gen~", "newobj")
 
-        parent_box = Box.__new__(Box)
-        parent_box.name = "gen~"
-        parent_box.args = []
-        parent_box.id = box_id
-        parent_box.maxclass = "newobj"
-        parent_box.text = "gen~"
         # MAX always gives gen~ at least one inlet: it carries `param`
         # messages even when the gen patcher has no `in` objects (D3).
-        parent_box.numinlets = max(1, num_inputs)
-        parent_box.numoutlets = num_outputs
-        parent_box.outlettype = ["signal"] * num_outputs
-        parent_box.patching_rect = [x, y, w, h]
-        parent_box.fontname = FONT_NAME
-        parent_box.fontsize = FONT_SIZE
-        parent_box.presentation = False
-        parent_box.presentation_rect = None
-        parent_box.target_id = None
-        parent_box.extra_attrs = {}
-        parent_box._inner_patcher = inner
-        parent_box._saved_object_attributes = None
-        parent_box._bpatcher_attrs = None
-        parent_box._raw = None
+        parent_box = Box.structural(
+            "newobj", "gen~", max(1, num_inputs), num_outputs,
+            ["signal"] * num_outputs, [x, y, w, h],
+            box_id=box_id,
+            inner=inner,
+        )
 
         self.boxes.append(parent_box)
         return (parent_box, inner)
@@ -1293,8 +1174,8 @@ class BuildersMixin:
         """Add a js object box (Legacy Engine, ES5 JavaScript).
 
         In .maxpat files, js uses maxclass="newobj" with text="js filename.js"
-        (not maxclass="js"). Uses Box.__new__ to bypass DB lookup and ensure
-        the correct maxclass.
+        (not maxclass="js"). Built with Box.structural to bypass DB lookup and
+        ensure the correct maxclass.
 
         Args:
             filename: JavaScript file name (e.g., "myobject.js").
@@ -1311,27 +1192,13 @@ class BuildersMixin:
         box_id = self._gen_id()
         text = f"js {filename}"
 
-        box = Box.__new__(Box)
-        box.name = "js"
-        box.args = [filename]
-        box.id = box_id
-        box.maxclass = "newobj"
-        box.text = text
-        box.numinlets = num_inlets
-        box.numoutlets = num_outlets
-        box.outlettype = [""] * num_outlets
         w, h = calculate_box_size(text, "newobj")
-        box.patching_rect = [x, y, w, h]
-        box.fontname = FONT_NAME
-        box.fontsize = FONT_SIZE
-        box.presentation = False
-        box.presentation_rect = None
-        box.target_id = None
-        box.extra_attrs = {}
-        box._inner_patcher = None
-        box._saved_object_attributes = None
-        box._bpatcher_attrs = None
-        box._raw = None
+        box = Box.structural(
+            "newobj", text, num_inlets, num_outlets, [""] * num_outlets,
+            [x, y, w, h],
+            box_id=box_id,
+            args=[filename],
+        )
 
         self.boxes.append(box)
         return (box, code)

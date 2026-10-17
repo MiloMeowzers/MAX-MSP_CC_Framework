@@ -3,7 +3,7 @@
 Provides a dedicated RNBO object database that avoids the core-domain-priority
 issue in ObjectDatabase (where MSP cycle~ overwrites RNBO cycle~ with different
 outlet count). Also provides GenExpr Param extraction and rnbo~ container
-generation following the established Box.__new__ pattern.
+generation through the Box.structural factory.
 
 Exports:
 - RNBODatabase: RNBO-specific object lookup
@@ -151,7 +151,7 @@ def add_rnbo(
 ) -> tuple[Any, Any]:
     """Add an rnbo~ object with inner RNBO patcher to a Patcher.
 
-    Creates a parent rnbo~ box (via Box.__new__ bypass pattern) containing
+    Creates a parent rnbo~ box (via the Box.structural factory) containing
     an inner RNBO patcher with in~/out~ for audio, param objects for
     parameters, inport/outport for messages, and user-specified objects.
 
@@ -175,7 +175,6 @@ def add_rnbo(
     """
     # Lazy imports to avoid circular dependencies
     from src.maxpat.patcher import Box, Patcher as PatcherClass
-    from src.maxpat.defaults import FONT_NAME, FONT_SIZE
     from src.maxpat.sizing import calculate_box_size
 
     if objects is None:
@@ -204,48 +203,22 @@ def add_rnbo(
 
     # Add in~ objects (audio inputs)
     for i in range(audio_ins):
-        in_box = Box.__new__(Box)
-        in_box.name = "in~"
-        in_box.args = [str(i + 1)]
-        in_box.id = inner._gen_id()
-        in_box.maxclass = "newobj"
-        in_box.text = f"in~ {i + 1}"
-        in_box.numinlets = 0
-        in_box.numoutlets = 1
-        in_box.outlettype = ["signal"]
-        in_box.patching_rect = [50.0 + i * 100.0, 30.0, 40.0, 22.0]
-        in_box.fontname = FONT_NAME
-        in_box.fontsize = FONT_SIZE
-        in_box.presentation = False
-        in_box.presentation_rect = None
-        in_box.extra_attrs = {}
-        in_box._inner_patcher = None
-        in_box._saved_object_attributes = None
-        in_box._bpatcher_attrs = None
-        in_box._raw = None
+        in_box = Box.structural(
+            "newobj", f"in~ {i + 1}", 0, 1, ["signal"],
+            [50.0 + i * 100.0, 30.0, 40.0, 22.0],
+            box_id=inner._gen_id(),
+            args=[str(i + 1)],
+        )
         inner.boxes.append(in_box)
 
     # Add out~ objects (audio outputs)
     for i in range(audio_outs):
-        out_box = Box.__new__(Box)
-        out_box.name = "out~"
-        out_box.args = [str(i + 1)]
-        out_box.id = inner._gen_id()
-        out_box.maxclass = "newobj"
-        out_box.text = f"out~ {i + 1}"
-        out_box.numinlets = 1
-        out_box.numoutlets = 0
-        out_box.outlettype = []
-        out_box.patching_rect = [50.0 + i * 100.0, 400.0, 40.0, 22.0]
-        out_box.fontname = FONT_NAME
-        out_box.fontsize = FONT_SIZE
-        out_box.presentation = False
-        out_box.presentation_rect = None
-        out_box.extra_attrs = {}
-        out_box._inner_patcher = None
-        out_box._saved_object_attributes = None
-        out_box._bpatcher_attrs = None
-        out_box._raw = None
+        out_box = Box.structural(
+            "newobj", f"out~ {i + 1}", 1, 0, [],
+            [50.0 + i * 100.0, 400.0, 40.0, 22.0],
+            box_id=inner._gen_id(),
+            args=[str(i + 1)],
+        )
         inner.boxes.append(out_box)
 
     # Add param objects
@@ -264,74 +237,30 @@ def add_rnbo(
         if param_default is not None:
             param_text += f" @initial {param_default}"
 
-        param_box = Box.__new__(Box)
-        param_box.name = "param"
-        param_box.args = []
-        param_box.id = inner._gen_id()
-        param_box.maxclass = "newobj"
-        param_box.text = param_text
-        param_box.numinlets = 2
-        param_box.numoutlets = 2
-        param_box.outlettype = ["", ""]
-        param_box.patching_rect = [
-            50.0 + (audio_ins + i) * 100.0,
-            30.0,
-            len(param_text) * 7.0 + 16.0,
-            22.0,
-        ]
-        param_box.fontname = FONT_NAME
-        param_box.fontsize = FONT_SIZE
-        param_box.presentation = False
-        param_box.presentation_rect = None
-        param_box.extra_attrs = {}
-        param_box._inner_patcher = None
-        param_box._saved_object_attributes = None
-        param_box._bpatcher_attrs = None
-        param_box._raw = None
+        param_box = Box.structural(
+            "newobj", param_text, 2, 2, ["", ""],
+            [
+                50.0 + (audio_ins + i) * 100.0,
+                30.0,
+                len(param_text) * 7.0 + 16.0,
+                22.0,
+            ],
+            box_id=inner._gen_id(),
+        )
         inner.boxes.append(param_box)
 
     # Add inport (message input)
-    inport_box = Box.__new__(Box)
-    inport_box.name = "inport"
-    inport_box.args = []
-    inport_box.id = inner._gen_id()
-    inport_box.maxclass = "newobj"
-    inport_box.text = "inport"
-    inport_box.numinlets = 0
-    inport_box.numoutlets = 1
-    inport_box.outlettype = [""]
-    inport_box.patching_rect = [500.0, 30.0, 50.0, 22.0]
-    inport_box.fontname = FONT_NAME
-    inport_box.fontsize = FONT_SIZE
-    inport_box.presentation = False
-    inport_box.presentation_rect = None
-    inport_box.extra_attrs = {}
-    inport_box._inner_patcher = None
-    inport_box._saved_object_attributes = None
-    inport_box._bpatcher_attrs = None
-    inport_box._raw = None
+    inport_box = Box.structural(
+        "newobj", "inport", 0, 1, [""], [500.0, 30.0, 50.0, 22.0],
+        box_id=inner._gen_id(),
+    )
     inner.boxes.append(inport_box)
 
     # Add outport (message output)
-    outport_box = Box.__new__(Box)
-    outport_box.name = "outport"
-    outport_box.args = []
-    outport_box.id = inner._gen_id()
-    outport_box.maxclass = "newobj"
-    outport_box.text = "outport"
-    outport_box.numinlets = 1
-    outport_box.numoutlets = 0
-    outport_box.outlettype = []
-    outport_box.patching_rect = [500.0, 400.0, 50.0, 22.0]
-    outport_box.fontname = FONT_NAME
-    outport_box.fontsize = FONT_SIZE
-    outport_box.presentation = False
-    outport_box.presentation_rect = None
-    outport_box.extra_attrs = {}
-    outport_box._inner_patcher = None
-    outport_box._saved_object_attributes = None
-    outport_box._bpatcher_attrs = None
-    outport_box._raw = None
+    outport_box = Box.structural(
+        "newobj", "outport", 1, 0, [], [500.0, 400.0, 50.0, 22.0],
+        box_id=inner._gen_id(),
+    )
     inner.boxes.append(outport_box)
 
     # Add user-specified objects (validated above)
@@ -340,56 +269,37 @@ def add_rnbo(
         obj_args = obj_spec.get("args", [])
         obj_text = " ".join([obj_name] + obj_args).strip()
 
-        user_box = Box.__new__(Box)
-        user_box.name = obj_name
-        user_box.args = obj_args
-        user_box.id = inner._gen_id()
-        user_box.maxclass = "newobj"
-        user_box.text = obj_text
         # Look up RNBO I/O counts if available
         rnbo_obj = rnbo_db.lookup(obj_name)
         if rnbo_obj:
-            user_box.numinlets = len(rnbo_obj.get("inlets", []))
-            user_box.numoutlets = len(rnbo_obj.get("outlets", []))
-            user_box.outlettype = _derive_outlet_types(rnbo_obj)
+            nin = len(rnbo_obj.get("inlets", []))
+            nout = len(rnbo_obj.get("outlets", []))
+            otype = _derive_outlet_types(rnbo_obj)
         else:
-            user_box.numinlets = 1
-            user_box.numoutlets = 1
-            user_box.outlettype = [""]
-        user_box.patching_rect = [200.0, 200.0, len(obj_text) * 7.0 + 16.0, 22.0]
-        user_box.fontname = FONT_NAME
-        user_box.fontsize = FONT_SIZE
-        user_box.presentation = False
-        user_box.presentation_rect = None
-        user_box.extra_attrs = {}
-        user_box._inner_patcher = None
-        user_box._saved_object_attributes = None
-        user_box._bpatcher_attrs = None
-        user_box._raw = None
+            nin = 1
+            nout = 1
+            otype = [""]
+        user_box = Box.structural(
+            "newobj", obj_text, nin, nout, otype,
+            [200.0, 200.0, len(obj_text) * 7.0 + 16.0, 22.0],
+            box_id=inner._gen_id(),
+            name=obj_name,
+            args=obj_args,
+        )
         inner.boxes.append(user_box)
 
-    # Create the parent rnbo~ box via Box.__new__ (structural container)
+    # Create the parent rnbo~ box via Box.structural (structural container)
     w, h = calculate_box_size("rnbo~", "newobj")
 
-    parent_box = Box.__new__(Box)
-    parent_box.name = "rnbo~"
-    parent_box.args = []
-    parent_box.id = box_id
-    parent_box.maxclass = "rnbo~"
-    parent_box.text = "rnbo~"
-    parent_box.numinlets = audio_ins + 1    # audio inputs + 1 message inlet
-    parent_box.numoutlets = audio_outs + 1  # audio outputs + 1 message outlet
-    parent_box.outlettype = ["signal"] * audio_outs + [""]
-    parent_box.patching_rect = [x, y, w, h]
-    parent_box.fontname = FONT_NAME
-    parent_box.fontsize = FONT_SIZE
-    parent_box.presentation = False
-    parent_box.presentation_rect = None
-    parent_box.extra_attrs = {}
-    parent_box._inner_patcher = inner
-    parent_box._saved_object_attributes = None
-    parent_box._bpatcher_attrs = None
-    parent_box._raw = None
+    parent_box = Box.structural(
+        "rnbo~", "rnbo~",
+        audio_ins + 1,   # audio inputs + 1 message inlet
+        audio_outs + 1,  # audio outputs + 1 message outlet
+        ["signal"] * audio_outs + [""],
+        [x, y, w, h],
+        box_id=box_id,
+        inner=inner,
+    )
 
     patcher.boxes.append(parent_box)
     return (parent_box, inner)
