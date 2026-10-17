@@ -38,7 +38,7 @@ import re as _re
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from src.maxpat import dsp_roles, walk
+from src.maxpat import dsp_roles, gain_staging, walk
 from src.maxpat.db_lookup import DOMAIN_SCOPES, ObjectDatabase, detect_patcher_scope
 from src.maxpat.maxclass_map import is_ui_object, UI_MAXCLASSES
 
@@ -53,13 +53,10 @@ if TYPE_CHECKING:
 # (walk.object_name returns None for it).
 _MAXCLASS_USAGE_SKIP = frozenset({"inlet", "outlet", "bpatcher"})
 
-# Oscillator objects that need gain staging before dac~/ezdac~
-_OSCILLATOR_NAMES = frozenset({
-    "cycle~", "saw~", "rect~", "tri~", "noise~", "pink~",
-})
-
 # Gain stages, output terminals and chain terminals come from
 # src.maxpat.dsp_roles (DB-driven, shared with the DSP critic; Q26 / E6).
+# The oscillator vocabulary and the missing-gain traversal come from
+# src.maxpat.gain_staging (shared with the DSP critic; Q33 / S7).
 
 # Objects that provide delay in a feedback loop
 _DELAY_NAMES = frozenset({"tapin~", "tapout~", "gen~"})
@@ -1607,56 +1604,24 @@ def _check_gain_staging(
 ) -> list[ValidationResult]:
     """Detect oscillators reaching an output terminal without gain.
 
-    Uses BFS from each oscillator. If it reaches an output terminal in
-    *terminal_names* without passing through a gain stage in *gain_names*,
-    emit a warning. Both sets come from ``dsp_roles(db)`` (Q26 / E6): the
+    Uses :func:`gain_staging.find_ungained_paths` (base oscillators only).
+    If an oscillator reaches an output terminal in *terminal_names* without
+    passing through a gain stage in *gain_names*, emit a warning. Both sets come from ``dsp_roles(db)`` (Q26 / E6): the
     gain stages include live.gain~ and the mc.* variants, the terminals
     mc.dac~ and plugout~.
     """
     results: list[ValidationResult] = []
 
-    # Find all oscillator box ids
-    osc_ids = []
-    for box_id, box in box_lookup.items():
-        name = walk.box_name(box)
-        if name in _OSCILLATOR_NAMES:
-            osc_ids.append(box_id)
-
-    # For each oscillator, BFS to see if it reaches dac~/ezdac~ without gain
-    for osc_id in osc_ids:
-        osc_name = walk.box_name(box_lookup[osc_id])
-        # BFS: track (current_id, passed_through_gain)
-        from collections import deque
-        queue = deque([(osc_id, False)])
-        visited: set[tuple[str, bool]] = set()
-
-        while queue:
-            current_id, has_gain = queue.popleft()
-            if (current_id, has_gain) in visited:
-                continue
-            visited.add((current_id, has_gain))
-
-            for next_id in signal_adj.get(current_id, []):
-                next_box = box_lookup.get(next_id)
-                if not next_box:
-                    continue
-                next_name = walk.box_name(next_box)
-
-                next_has_gain = has_gain or (next_name in gain_names)
-
-                # Reached an output terminal
-                if next_name in terminal_names:
-                    if not next_has_gain:
-                        results.append(ValidationResult(
-                            "domain", "warning",
-                            f"Missing gain staging: '{osc_name}' ({osc_id}) "
-                            f"connected to '{next_name}' ({next_id}) without "
-                            f"passing through a gain object (*~ or gain~)",
-                        ))
-                    # Don't continue past dac~
-                    continue
-
-                queue.append((next_id, next_has_gain))
+    for osc_id, osc_name, next_id, next_name in gain_staging.find_ungained_paths(
+        box_lookup, signal_adj, gain_staging.OSCILLATOR_NAMES,
+        gain_names, terminal_names,
+    ):
+        results.append(ValidationResult(
+            "domain", "warning",
+            f"Missing gain staging: '{osc_name}' ({osc_id}) "
+            f"connected to '{next_name}' ({next_id}) without "
+            f"passing through a gain object (*~ or gain~)",
+        ))
 
     return results
 

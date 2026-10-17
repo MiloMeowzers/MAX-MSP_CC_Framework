@@ -257,6 +257,50 @@ def _is_number(v: Any) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+# Margin from box edge to first/last inlet/outlet center
+IO_MARGIN = 7.0
+
+
+def _port_x(box: Any, idx: int, count_key: str) -> float:
+    """Approximate x of port *idx* on a Box or a raw box dict.
+
+    A dict reads ``patching_rect`` (default ``[0, 0, 60, 22]``) and
+    *count_key* (default 1) with no ``{"box": ...}`` unwrapping; a Box reads
+    its ``patching_rect`` and count attribute directly.
+    """
+    if isinstance(box, dict):
+        rect = box.get("patching_rect", [0, 0, 60, 22])
+        n = box.get(count_key, 1)
+    else:
+        rect = box.patching_rect
+        n = getattr(box, count_key)
+    x = rect[0]
+    w = rect[2]
+    if n <= 1:
+        return x + IO_MARGIN  # MAX draws a lone port at the left edge, not centered
+    usable = w - 2 * IO_MARGIN
+    spacing = usable / (n - 1)
+    return x + IO_MARGIN + idx * spacing
+
+
+def outlet_x(box: Any, outlet_idx: int) -> float:
+    """Approximate x position of an outlet on a Box or raw box dict.
+
+    The one port-geometry helper shared by apply_layout and the layout
+    critic (fix-plan Q33 / review S12).
+    """
+    return _port_x(box, outlet_idx, "numoutlets")
+
+
+def inlet_x(box: Any, inlet_idx: int) -> float:
+    """Approximate x position of an inlet on a Box or raw box dict.
+
+    The one port-geometry helper shared by apply_layout and the layout
+    critic (fix-plan Q33 / review S12).
+    """
+    return _port_x(box, inlet_idx, "numinlets")
+
+
 def _box_fields(box: Any) -> tuple[Any, Any, Any, Any, dict]:
     """Return (maxclass, text, patching_rect, fontsize, attrs) of a Box or a
     raw box dict (a ``{"box": {...}}`` wrapper is unwrapped)."""

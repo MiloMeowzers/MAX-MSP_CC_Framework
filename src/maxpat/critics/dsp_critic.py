@@ -10,7 +10,10 @@ not detect:
   - Missing gain staging before an output terminal (Q26 / E6, PD-5): the
     gain stages and output terminals come from :mod:`src.maxpat.dsp_roles`
     (DB-driven, shared with validation.py): live.gain~ is a gain stage,
-    mc.dac~ and plugout~ are terminals
+    mc.dac~ and plugout~ are terminals. The oscillator vocabulary and the
+    traversal are :mod:`src.maxpat.gain_staging`, shared with validation.py
+    Layer 4 (Q33 / S7); the critic adds the mc oscillators and reports a
+    blocker
   - Unsafe gain sources (Q26 / E6, PD-4): a bounds-propagating backward
     trace into both inlets of every ``*~`` / ``mc.*~`` that reads comma
     segments, line~ target/time pairs, ``* k`` / ``/ k`` / scale / zmap /
@@ -26,8 +29,9 @@ reviewed on its own boxes and cords (Q20); nested findings carry
 (GenExpr operators are not MSP objects). ``code_context["gen~_code"]`` is
 keyed by top-level box id and applies to the top scope only.
 
-NOTE: Does NOT duplicate validation.py Layer 4 checks (unterminated chains,
-feedback loops). Focus is on semantic issues validation misses.
+NOTE: Gain staging is reported by both layers from one shared
+implementation (src.maxpat.gain_staging). Unterminated chains and feedback
+loops stay validation-only (validation.py Layer 4).
 """
 
 from __future__ import annotations
@@ -36,18 +40,12 @@ import math
 import re
 from collections import deque
 
-from src.maxpat import dsp_roles, walk
+from src.maxpat import dsp_roles, gain_staging, walk
 from src.maxpat.critics.base import CriticResult, tag_results
 from src.maxpat.codegen import parse_genexpr_io
 from src.maxpat.graph import SIGNAL_OUTLET_TYPES, PatchGraph
 from src.maxpat.io_resolvers import split_box_text
 
-
-# Oscillator objects that need gain staging before dac~/ezdac~
-_OSCILLATOR_NAMES = frozenset({
-    "cycle~", "saw~", "rect~", "tri~", "noise~", "pink~",
-    "mc.cycle~", "mc.saw~", "mc.rect~", "mc.tri~",
-})
 
 # Back-compat exports (Q26 / E6, PD-5): the checks take their sets from
 # dsp_roles(db); these equal the repo-DB values and a test pins them equal.
@@ -271,9 +269,9 @@ def _check_gain_staging(
 ) -> list[CriticResult]:
     """Detect oscillators reaching an output terminal without gain staging.
 
-    Uses BFS from each oscillator. If it reaches a terminal in
-    *terminal_names* without passing through a gain stage in *gain_names*,
-    emit a blocker. Both default to ``dsp_roles(None)`` (Q26 / E6, PD-5).
+    Uses :func:`gain_staging.find_ungained_paths` (base and mc
+    oscillators). If an oscillator reaches a terminal in *terminal_names*
+    without passing through a gain stage in *gain_names*, emit a blocker. Both default to ``dsp_roles(None)`` (Q26 / E6, PD-5).
     For plugout~ the suggestion names only ``*~``: the M4L critic forbids
     gain~ / live.gain~ before plugout~.
     """
@@ -300,56 +298,29 @@ def _check_gain_staging(
         if is_signal:
             signal_adj.setdefault(edge.src, []).append(edge.dst)
 
-    # Find oscillator boxes
-    osc_ids = [
-        box_id for box_id, box in box_lookup.items()
-        if walk.box_name(box) in _OSCILLATOR_NAMES
-    ]
-
-    # BFS from each oscillator
-    for osc_id in osc_ids:
-        osc_name = walk.box_name(box_lookup[osc_id])
-        queue = deque([(osc_id, False)])  # (current_id, passed_through_gain)
-        visited: set[tuple[str, bool]] = set()
-
-        while queue:
-            current_id, has_gain = queue.popleft()
-            state = (current_id, has_gain)
-            if state in visited:
-                continue
-            visited.add(state)
-
-            for next_id in signal_adj.get(current_id, []):
-                next_box = box_lookup.get(next_id)
-                if not next_box:
-                    continue
-                next_name = walk.box_name(next_box)
-
-                next_has_gain = has_gain or (next_name in gain_names)
-
-                if next_name in terminal_names:
-                    if not next_has_gain:
-                        if next_name.endswith("plugout~"):
-                            suggestion = (
-                                f"Insert a '*~ 0.5' between '{osc_name}' and "
-                                f"'{next_name}' to control volume (no gain stage "
-                                f"object before plugout~ in Max for Live)"
-                            )
-                        else:
-                            suggestion = (
-                                f"Insert a '*~ 0.5' or 'gain~' between "
-                                f"'{osc_name}' and '{next_name}' to control volume"
-                            )
-                        results.append(CriticResult(
-                            "blocker",
-                            f"Missing gain staging: '{osc_name}' ({osc_id}) "
-                            f"connected to '{next_name}' ({next_id}) without "
-                            f"passing through *~ or gain~",
-                            suggestion,
-                        ))
-                    continue  # Don't traverse past dac~
-
-                queue.append((next_id, next_has_gain))
+    for osc_id, osc_name, next_id, next_name in gain_staging.find_ungained_paths(
+        box_lookup, signal_adj,
+        gain_staging.OSCILLATOR_NAMES | gain_staging.MC_OSCILLATOR_NAMES,
+        gain_names, terminal_names,
+    ):
+        if next_name.endswith("plugout~"):
+            suggestion = (
+                f"Insert a '*~ 0.5' between '{osc_name}' and "
+                f"'{next_name}' to control volume (no gain stage "
+                f"object before plugout~ in Max for Live)"
+            )
+        else:
+            suggestion = (
+                f"Insert a '*~ 0.5' or 'gain~' between "
+                f"'{osc_name}' and '{next_name}' to control volume"
+            )
+        results.append(CriticResult(
+            "blocker",
+            f"Missing gain staging: '{osc_name}' ({osc_id}) "
+            f"connected to '{next_name}' ({next_id}) without "
+            f"passing through *~ or gain~",
+            suggestion,
+        ))
 
     return results
 

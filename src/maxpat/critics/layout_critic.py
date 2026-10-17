@@ -22,7 +22,13 @@ from src.maxpat import walk
 from src.maxpat.critics.base import CriticResult, tag_results
 from src.maxpat.graph import PatchGraph
 from src.maxpat.defaults import AESTHETIC_PALETTE, HORIZONTAL_THRESHOLD, UPWARD_BUS_THRESHOLD
-from src.maxpat.sizing import is_max_saved, rendered_rect
+from src.maxpat.maxclass_map import PRESENTATION_CONTROLS
+from src.maxpat.sizing import (
+    inlet_x as _inlet_x,
+    is_max_saved,
+    outlet_x as _outlet_x,
+    rendered_rect,
+)
 
 # Collision padding from Phase 15-02 decision: 5px around all boxes
 COLLISION_PAD = 5.0
@@ -34,10 +40,6 @@ _DECORATIVE_MAXCLASSES = frozenset({"comment", "panel"})
 # stored rect (within this tolerance) is a deliberate overlay readout
 # (add_overlay_readout; Q27 / F5), not an accidental overlap.
 _OVERLAY_TOLERANCE = 2.0
-
-# Margin from box edge to first/last inlet/outlet center (matches layout.py)
-_IO_MARGIN = 7.0
-
 
 def review_layout(patch_dict: dict, *, graph: "PatchGraph | None" = None) -> list[CriticResult]:
     """Review physical layout of a patch for readability issues.
@@ -107,32 +109,6 @@ def _rects_overlap(r1: list[float], r2: list[float], pad: float) -> bool:
     if bottom1 <= top2 or bottom2 <= top1:
         return False
     return True
-
-
-def _outlet_x(box: dict, outlet_idx: int) -> float:
-    """Approximate x position of an outlet on a box (raw dict version)."""
-    rect = box.get("patching_rect", [0, 0, 60, 22])
-    x = rect[0]
-    w = rect[2]
-    n = box.get("numoutlets", 1)
-    if n <= 1:
-        return x + _IO_MARGIN  # MAX draws a lone port at the left edge, not centered
-    usable = w - 2 * _IO_MARGIN
-    spacing = usable / (n - 1)
-    return x + _IO_MARGIN + outlet_idx * spacing
-
-
-def _inlet_x(box: dict, inlet_idx: int) -> float:
-    """Approximate x position of an inlet on a box (raw dict version)."""
-    rect = box.get("patching_rect", [0, 0, 60, 22])
-    x = rect[0]
-    w = rect[2]
-    n = box.get("numinlets", 1)
-    if n <= 1:
-        return x + _IO_MARGIN  # MAX draws a lone port at the left edge, not centered
-    usable = w - 2 * _IO_MARGIN
-    spacing = usable / (n - 1)
-    return x + _IO_MARGIN + inlet_idx * spacing
 
 
 def _box_label(box: dict) -> str:
@@ -327,18 +303,6 @@ def _check_out_of_bounds(box_list: list[dict]) -> list[CriticResult]:
 # Check 5: Presentation coverage
 # ---------------------------------------------------------------------------
 
-# Interactive param-entry widgets that belong in presentation mode when the
-# patch uses it. Monitoring/level objects (gain~, meter~, scope~) and comments
-# are deliberately excluded: they are often patching-side by design (e.g. a
-# slaved stereo fader) and would produce persistent false positives.
-_INTERACTIVE_MAXCLASSES = frozenset({
-    "flonum", "number", "umenu", "toggle", "textedit", "kslider",
-    "dial", "slider", "multislider", "rslider", "incdec", "tab",
-    "pictslider", "matrixctrl", "textbutton",
-    "live.dial", "live.slider", "live.numbox", "live.menu",
-    "live.toggle", "live.tab", "live.text", "live.button",
-})
-
 
 def _check_presentation_coverage(box_list: list[dict]) -> list[CriticResult]:
     """Flag interactive controls missing from presentation mode.
@@ -354,7 +318,7 @@ def _check_presentation_coverage(box_list: list[dict]) -> list[CriticResult]:
 
     results: list[CriticResult] = []
     for box in box_list:
-        if walk.box_maxclass(box) not in _INTERACTIVE_MAXCLASSES:
+        if walk.box_maxclass(box) not in PRESENTATION_CONTROLS:
             continue
         if box.get("presentation"):
             continue
@@ -374,18 +338,6 @@ def _check_presentation_coverage(box_list: list[dict]) -> list[CriticResult]:
 # ---------------------------------------------------------------------------
 # Check 4: Low-contrast text
 # ---------------------------------------------------------------------------
-
-
-def _resolve_patcher_bg(patcher_props: dict) -> list[float]:
-    """Patcher background, preferring the key MAX honors in locked mode.
-
-    Delegates to :func:`src.maxpat.aesthetics.resolve_patcher_background`
-    (the generator's helper), so a patcher with no bg key reads as the
-    Max 9 theme canvas 0.235 in both (Q26 / E7).
-    """
-    from src.maxpat.aesthetics import resolve_patcher_background
-
-    return resolve_patcher_background(patcher_props)
 
 
 def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[CriticResult]:
@@ -415,11 +367,12 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
         is_text_contrast_target,
         is_valid_color,
         resolve_effective_background,
+        resolve_patcher_background,
     )
     from src.maxpat.defaults import MAX_THEME_TEXT, MIN_CONTRAST_RATIO
 
     results: list[CriticResult] = []
-    patcher_bg = _resolve_patcher_bg(patcher_props)
+    patcher_bg = resolve_patcher_background(patcher_props)
 
     panels = [b for b in box_list if b.get("maxclass") == "panel"]
     patching_layers, presentation_layers = build_panel_layers(

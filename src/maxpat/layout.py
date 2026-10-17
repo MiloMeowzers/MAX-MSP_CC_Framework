@@ -45,19 +45,16 @@ from src.maxpat.defaults import (
     LAYOUT_MAX_BOXES,
     LayoutOptions,
 )
-from src.maxpat.sizing import is_max_saved, rendered_rect
+from src.maxpat.maxclass_map import LAYOUT_BAND_CONTROLS
+from src.maxpat.sizing import (
+    inlet_x as _inlet_x,
+    is_max_saved,
+    outlet_x as _outlet_x,
+    rendered_rect,
+)
 
 if TYPE_CHECKING:
     from src.maxpat.patcher import Box, Patcher
-
-# UI control object names that should be positioned above their targets
-_UI_CONTROL_NAMES = frozenset({
-    "toggle", "slider", "dial", "number", "flonum",
-    "rslider", "button", "multislider", "kslider",
-    "nslider", "led", "radiogroup", "umenu",
-    "live.dial", "live.slider", "live.numbox",
-    "live.toggle", "live.button",
-})
 
 # Companion objects placed beside their parent (monitoring/display sinks)
 _COMPANION_NAMES = frozenset({
@@ -89,10 +86,6 @@ _START_Y = 30.0
 
 # Gap between independent components laid out side by side
 _COMPONENT_GAP = 40.0
-
-# Margin from box edge to first/last inlet/outlet center
-_IO_MARGIN = 7.0
-
 
 class LayoutRefusedError(ValueError):
     """apply_layout refused to lay out a MAX-saved or large patcher (Q27 / F5).
@@ -1031,7 +1024,7 @@ def _identify_ui_controls(
     """Identify UI control objects that should be placed above their targets.
 
     A UI control qualifies if:
-    1. Its name is in _UI_CONTROL_NAMES
+    1. Its name is in maxclass_map.LAYOUT_BAND_CONTROLS
     2. It connects to a target (first connection target used)
     3. The target is in the same or the next row
     4. The target is not itself a qualifying control (Q27 / F2): a control
@@ -1052,7 +1045,7 @@ def _identify_ui_controls(
         src = line.source_id
         if src not in ui_connections and src in box_map:
             src_box = box_map[src]
-            if src_box.name in _UI_CONTROL_NAMES:
+            if src_box.name in LAYOUT_BAND_CONTROLS:
                 ui_connections[src] = (line.dest_id, line.dest_inlet)
 
     result: dict[str, tuple[Box, int]] = {}
@@ -1326,30 +1319,6 @@ def _place_associated_comments(boxes: list[Box], comment_gap: float) -> None:
 # ---------------------------------------------------------------------------
 # Midpoint generation for all cable types
 # ---------------------------------------------------------------------------
-
-
-def _outlet_x(box: Box, outlet_idx: int) -> float:
-    """Approximate x position of an outlet on a box."""
-    x = box.patching_rect[0]
-    w = box.patching_rect[2]
-    n = box.numoutlets
-    if n <= 1:
-        return x + _IO_MARGIN  # MAX draws a lone port at the left edge, not centered
-    usable = w - 2 * _IO_MARGIN
-    spacing = usable / (n - 1)
-    return x + _IO_MARGIN + outlet_idx * spacing
-
-
-def _inlet_x(box: Box, inlet_idx: int) -> float:
-    """Approximate x position of an inlet on a box."""
-    x = box.patching_rect[0]
-    w = box.patching_rect[2]
-    n = box.numinlets
-    if n <= 1:
-        return x + _IO_MARGIN  # MAX draws a lone port at the left edge, not centered
-    usable = w - 2 * _IO_MARGIN
-    spacing = usable / (n - 1)
-    return x + _IO_MARGIN + inlet_idx * spacing
 
 
 _COLLISION_PAD = 5.0  # Padding around obstacle bounding boxes

@@ -18,7 +18,13 @@ own maxclass (review C4, fix-plan Q13).
 ``python3 tools/sync_max_bundle.py`` (section ``ui_maxclasses``) regenerates
 the set from a survey of every box in the bundle's .maxpat/.maxhelp files for
 review; the set itself is still edited by hand.
+
+``ui_control_names(db)`` derives the UI-control set from the DB; the three
+purpose subsets (LAYOUT_BAND_CONTROLS, PRESENTATION_CONTROLS,
+PARAMETER_LIST_CONTROLS) live beside it (fix-plan Q33 / review S12).
 """
+
+import functools
 
 # All UI maxclass names that use their own name (NOT "newobj") in .maxpat files.
 # Verified from 02-RESEARCH.md Pattern 7 + MAX SDK scripting docs.
@@ -115,3 +121,70 @@ def is_ui_object(object_name: str) -> bool:
         True if the object uses its own name as maxclass in .maxpat files.
     """
     return object_name in UI_MAXCLASSES
+
+
+@functools.lru_cache(maxsize=1)
+def _default_db():
+    """One process-wide ObjectDatabase for ``db=None`` callers (cached)."""
+    from src.maxpat.db_lookup import ObjectDatabase
+
+    return ObjectDatabase()
+
+
+def ui_control_names(db=None) -> frozenset[str]:
+    """UI controls: UI_MAXCLASSES members the DB marks as parameters.
+
+    A member counts when ``db.attributes(name)`` has ``parameter_enable`` or
+    ``parameter_mappable`` (47 names under the repo DB). This is the DB
+    authority the three purpose subsets below are pinned against (fix-plan
+    Q33 / review S12); no consumer uses it directly yet. ``db=None`` uses
+    one process-wide cached ObjectDatabase.
+    """
+    if db is None:
+        db = _default_db()
+    names = set()
+    for name in UI_MAXCLASSES:
+        attrs = db.attributes(name)
+        if attrs and ("parameter_enable" in attrs or "parameter_mappable" in attrs):
+            names.add(name)
+    return frozenset(names)
+
+
+# Purpose subsets of ui_control_names(). They differ on purpose: unifying
+# them changes layout, critic and analyze() output, so it is a recorded user
+# decision (Q33 SUMMARY, PD-6), not a refactor. A test pins each as a subset
+# of ui_control_names(db) and equal to its pre-Q33 members.
+
+# apply_layout: controls placed in a band above the object they feed.
+# Matched by box name.
+LAYOUT_BAND_CONTROLS: frozenset[str] = frozenset({
+    "toggle", "slider", "dial", "number", "flonum",
+    "rslider", "button", "multislider", "kslider",
+    "nslider", "led", "radiogroup", "umenu",
+    "live.dial", "live.slider", "live.numbox",
+    "live.toggle", "live.button",
+})
+
+# Layout critic presentation coverage: interactive param-entry widgets that
+# belong in presentation mode when the patch uses it. Monitoring/level
+# objects (gain~, meter~, scope~) and comments are deliberately excluded:
+# they are often patching-side by design (e.g. a slaved stereo fader) and
+# would produce persistent false positives. Matched by maxclass.
+PRESENTATION_CONTROLS: frozenset[str] = frozenset({
+    "flonum", "number", "umenu", "toggle", "textedit", "kslider",
+    "dial", "slider", "multislider", "rslider", "incdec", "tab",
+    "pictslider", "matrixctrl", "textbutton",
+    "live.dial", "live.slider", "live.numbox", "live.menu",
+    "live.toggle", "live.tab", "live.text", "live.button",
+})
+
+# Patcher.analyze()'s parameter list; includes gain~ / live.gain~.
+# Matched by maxclass.
+PARAMETER_LIST_CONTROLS: frozenset[str] = frozenset({
+    "slider", "dial", "rslider", "multislider",
+    "number", "flonum", "toggle", "button",
+    "kslider", "nslider", "umenu", "textbutton",
+    "tab", "gain~", "live.dial", "live.slider",
+    "live.numbox", "live.toggle", "live.button",
+    "live.menu", "live.tab", "live.gain~",
+})

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from src.maxpat import walk
 from src.maxpat.graph import resolve_patcher
-from src.maxpat.maxclass_map import UI_MAXCLASSES
+from src.maxpat.maxclass_map import PARAMETER_LIST_CONTROLS, UI_MAXCLASSES
 
 if TYPE_CHECKING:
     from src.maxpat.patcher import Box
@@ -677,18 +677,13 @@ class AnalysisMixin:
         return "\n".join(lines)
 
     def _parameter_lines(self, prefix: str) -> list[str]:
-        """``- {prefix}label (maxclass)`` per UI control of this Patcher."""
-        ui_controls = {
-            "slider", "dial", "rslider", "multislider",
-            "number", "flonum", "toggle", "button",
-            "kslider", "nslider", "umenu", "textbutton",
-            "tab", "gain~", "live.dial", "live.slider",
-            "live.numbox", "live.toggle", "live.button",
-            "live.menu", "live.tab", "live.gain~",
-        }
+        """``- {prefix}label (maxclass)`` per UI control of this Patcher.
+
+        Controls are maxclass_map.PARAMETER_LIST_CONTROLS (Q33 / S12).
+        """
         params: list[str] = []
         for box in self.boxes:
-            if box.maxclass in ui_controls:
+            if box.maxclass in PARAMETER_LIST_CONTROLS:
                 varname = box.extra_attrs.get("varname", "")
                 label = varname if varname else box.maxclass
                 params.append(f"- {prefix}{label} ({box.maxclass})")

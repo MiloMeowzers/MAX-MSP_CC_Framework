@@ -401,11 +401,6 @@ def resolve_patcher_background(props) -> list[float]:
     return list(MAX_THEME_CANVAS_BG)
 
 
-def _resolve_patcher_bg(patcher: Patcher) -> list[float]:
-    """Effective patcher background of a Patcher (resolve_patcher_background)."""
-    return resolve_patcher_background(patcher.props)
-
-
 def build_panel_layers(entries) -> tuple[list, list]:
     """Z-ordered panel layers for contrast resolution (Q26 / E7, PD-6).
 
@@ -584,7 +579,7 @@ def _apply_text_contrast(patcher: Patcher) -> int:
     counted. Returns the number of boxes whose textcolor changed.
     """
     panels = [b for b in patcher.boxes if b.maxclass == "panel"]
-    patcher_bg = _resolve_patcher_bg(patcher)
+    patcher_bg = resolve_patcher_background(patcher.props)
 
     patching_layers, presentation_layers = build_panel_layers(
         (p.extra_attrs, p.patching_rect, p.presentation, p.presentation_rect)
