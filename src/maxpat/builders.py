@@ -1281,62 +1281,6 @@ class BuildersMixin:
 
         return gen_obj, dials, plugout
 
-    def add_node_script(
-        self,
-        filename: str,
-        code: str | None = None,
-        num_outlets: int = 2,
-        x: float = 0.0,
-        y: float = 0.0,
-    ) -> tuple[Box, str | None]:
-        """Add a node.script box for Node for Max.
-
-        node.script is in the object database (added by quick task
-        260921-j0h, extracted from the Max 9.1.5 refpage). This builder still
-        uses Box.__new__ to bypass DB lookup so the existing ``num_outlets``
-        parameter keeps working; the real MAX object always creates 2 outlets
-        (fixed 1 in / 2 out), so any value other than the default emits a box
-        MAX will not honor.
-
-        Args:
-            filename: JavaScript file name (e.g., "myscript.js").
-            code: Optional N4M JavaScript code string. Caller is responsible
-                for writing it to disk.
-            num_outlets: Number of outlets (default 2: data + status).
-            x: Horizontal position.
-            y: Vertical position.
-
-        Returns:
-            (box, code) tuple. code is None if not provided.
-        """
-        box_id = self._gen_id()
-        text = f"node.script {filename}"
-
-        box = Box.__new__(Box)
-        box.name = "node.script"
-        box.args = [filename]
-        box.id = box_id
-        box.maxclass = "newobj"
-        box.text = text
-        box.numinlets = 1
-        box.numoutlets = num_outlets
-        box.outlettype = [""] * num_outlets
-        w, h = calculate_box_size(text, "newobj")
-        box.patching_rect = [x, y, w, h]
-        box.fontname = FONT_NAME
-        box.fontsize = FONT_SIZE
-        box.presentation = False
-        box.presentation_rect = None
-        box.target_id = None
-        box.extra_attrs = {}
-        box._inner_patcher = None
-        box._saved_object_attributes = None
-        box._bpatcher_attrs = None
-        box._raw = None
-
-        self.boxes.append(box)
-        return (box, code)
-
     def add_js(
         self,
         filename: str,

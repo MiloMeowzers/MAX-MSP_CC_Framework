@@ -33,18 +33,7 @@ from src.maxpat.dsp_sim.topologies.reed_bore import ReedBore
 from src.maxpat.dsp_sim.topologies.reed_bore_post_radiation import (
     ReedBorePostRadiation,
 )
-
-
-# TopologyError lives in src.maxpat.dsp_sim.runner (Plan 32-01). Lazy-import
-# at first use to avoid circulars; if 32-01 has not landed yet (e.g., during
-# isolated worktree execution of 32-02), fall back to a local definition with
-# the same name and shape so tests pass standalone. After post-wave merge the
-# canonical runner.TopologyError is the one users see.
-try:
-    from src.maxpat.dsp_sim.runner import TopologyError  # type: ignore[no-redef]
-except (ImportError, ModuleNotFoundError):
-    class TopologyError(Exception):
-        """Raised when a topology name is unknown or mirror conflict detected."""
+from src.maxpat.dsp_sim.runner import TopologyError
 
 
 TOPOLOGIES: dict[str, type] = {

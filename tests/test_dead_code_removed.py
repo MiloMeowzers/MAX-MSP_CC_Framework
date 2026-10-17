@@ -1,8 +1,10 @@
 """Q32 removal guard: removed files and names stay removed, no tracked file
 references them, kept paths keep their behaviour."""
 
+import ast
 import importlib
 import importlib.util
+import json
 import re
 import subprocess
 from functools import lru_cache
@@ -142,3 +144,96 @@ class TestRemovedPublicApi:
             r"\bsuggest_subpatchers\b",
             r"\b_skip_auto_layout\b",
         ]) == []
+
+
+def _try_nodes(tree) -> list:
+    kinds = (ast.Try,) + ((ast.TryStar,) if hasattr(ast, "TryStar") else ())
+    return [n for n in ast.walk(tree) if isinstance(n, kinds)]
+
+
+class TestRemovedInternals:
+    @pytest.mark.parametrize(
+        "module, name",
+        [
+            ("src.maxpat.patcher", "Patcher.add_node_script"),
+            ("src.maxpat.defaults", "MS_BAR_HEIGHT"),
+            ("src.maxpat.defaults", "MS_LABEL_FONTSIZE"),
+            ("src.maxpat.defaults", "MS_LABEL_HEIGHT"),
+            ("src.maxpat.defaults", "MS_LABEL_WIDTH"),
+            ("src.maxpat.defaults", "MS_GAP"),
+            ("src.maxpat.audit", "run_audit"),
+        ],
+    )
+    def test_removed_name_is_gone(self, module, name):
+        assert not _has_attr(module, name)
+
+    def test_overrides_drops_uncovered_empty_io(self):
+        path = REPO_ROOT / ".claude" / "max-objects" / "overrides.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert "_uncovered_empty_io" not in data
+
+    @pytest.mark.parametrize(
+        "rel, func",
+        [
+            ("src/maxpat/audit/__init__.py", None),
+            ("src/maxpat/dsp_sim/topologies/__init__.py", None),
+            ("src/maxpat/dsp_sim/runner.py", "_resolve_stepper_factory"),
+        ],
+    )
+    def test_no_import_fallback(self, rel, func):
+        tree = ast.parse((REPO_ROOT / rel).read_text(encoding="utf-8"))
+        if func is not None:
+            matches = [
+                n for n in ast.walk(tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and n.name == func
+            ]
+            assert len(matches) == 1
+            tree = matches[0]
+        assert _try_nodes(tree) == []
+
+    def test_no_reference_names_removed_internals(self):
+        assert _references([
+            r"\b_uncovered_empty_io\b",
+            r"\brefresh_uncovered_only\b",
+            r"\b32-02\b",
+            r"\badd_node_script\b",
+            r"\bMS_(BAR_HEIGHT|LABEL_FONTSIZE|LABEL_HEIGHT|LABEL_WIDTH|GAP)\b",
+        ]) == []
+
+    # Behaviour pins: green before and after the removals.
+
+    def test_top_level_codebox_still_blocks(self):
+        from src.maxpat.validation import has_blocking_errors, validate_patch
+
+        patch = {"patcher": {"boxes": [{"box": {
+            "id": "c1",
+            "maxclass": "newobj",
+            "text": "codebox",
+            "numinlets": 1,
+            "numoutlets": 1,
+            "patching_rect": [0, 0, 100, 50],
+            "code": "out1 = delay(in1, 10);",
+        }}], "lines": []}}
+        results = validate_patch(patch)
+        assert has_blocking_errors(results)
+        assert any("restricted to" in r.message for r in results)
+
+    def test_node_script_box_from_add_box(self):
+        from src.maxpat.patcher import Patcher
+
+        box = Patcher().add_box("node.script", ["x.js"])
+        assert box.maxclass == "newobj"
+        assert box.text == "node.script x.js"
+        assert box.numinlets == 1
+        assert box.numoutlets == 2
+
+    def test_topology_error_is_one_class(self):
+        from src.maxpat.dsp_sim import runner, topologies
+
+        assert topologies.TopologyError is runner.TopologyError
+        with pytest.raises(runner.TopologyError):
+            topologies.get_topology("nope")
+
+    def test_audit_cli_imports(self):
+        assert callable(importlib.import_module("src.maxpat.audit.cli").main)

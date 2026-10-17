@@ -129,15 +129,9 @@ def _resolve_stepper_factory(
         raise TopologyError("must supply either topology= or mirror= (D-01)")
     if mirror is not None:
         return mirror, None
-    # topology= path -- import topology library lazily so 32-01 can ship
-    # before 32-02 lands the actual topology classes.
-    try:
-        from src.maxpat.dsp_sim.topologies import get_topology  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise TopologyError(
-            f"topology library not available: {exc}. "
-            f"Use mirror= until 32-02 lands."
-        )
+    # The import stays inside the function: topologies imports TopologyError
+    # from this module at load time, so a module-level import would cycle.
+    from src.maxpat.dsp_sim.topologies import get_topology
     cls = get_topology(topology)  # raises TopologyError on miss
 
     def factory(sample_rate, params):

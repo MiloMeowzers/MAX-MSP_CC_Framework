@@ -307,7 +307,6 @@ After generation, the router passes output through the critic loop before writin
 | `add_subpatcher(name, inlets, outlets, x, y)` | Create embedded subpatcher with inlet/outlet objects |
 | `add_bpatcher(filename=None, embedded=False, args=None, x=0.0, y=0.0, ...)` | Create bpatcher (file reference or embedded) |
 | `add_gen(code, inputs, outputs, x, y)` | Create gen~ with embedded codebox |
-| `add_node_script(filename, code, outlets, x, y)` | Create node.script box |
 | `add_js(filename, code, inlets, outlets, x, y)` | Create js object box |
 | `find_box(*, id=None, name=None, maxclass=None, text=None, recursive=False)` | Find first matching box by id, name, maxclass, or text |
 | `find_boxes(*, id=None, name=None, maxclass=None, text=None, recursive=False)` | Find all matching boxes |

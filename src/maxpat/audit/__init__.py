@@ -52,9 +52,3 @@ class BoxInstance:
 
     source_file: str = ""
     """Path to the .maxhelp file this instance was extracted from."""
-
-
-try:
-    from .cli import main as run_audit
-except ImportError:
-    pass

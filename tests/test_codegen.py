@@ -644,28 +644,6 @@ class TestN4M:
         assert 'addHandler("set_value"' in result
         assert 'addHandler("reset"' in result
 
-    def test_add_node_script_box(self):
-        """creates box with correct maxclass and text."""
-        from src.maxpat.patcher import Patcher
-
-        p = Patcher()
-        box, code = p.add_node_script("myscript.js")
-
-        assert box.maxclass == "newobj"
-        assert box.text == "node.script myscript.js"
-        assert box.numinlets == 1
-        assert code is None
-
-    def test_add_node_script_outlets(self):
-        """num_outlets parameter sets outlet count."""
-        from src.maxpat.patcher import Patcher
-
-        p = Patcher()
-        box, code = p.add_node_script("test.js", num_outlets=3)
-
-        assert box.numoutlets == 3
-        assert box.outlettype == ["", "", ""]
-
 
 # ---------------------------------------------------------------------------
 # TestJsObject -- js object code generation (CODE-05)

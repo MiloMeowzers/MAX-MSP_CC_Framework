@@ -46,7 +46,7 @@ Before any generation:
 - `save_patch_roundtrip(patcher.to_dict(), path)` -- write .maxpat to disk
 - `Patcher.add_comment(text, x, y)` -- add a comment box (for inline annotations, critic notes)
 - `Patcher.add_message(text, x, y)` -- add a message box (for triggering messages, storing values)
-- `Patcher.add_node_script(filename, code=None, num_outlets=2, x=0.0, y=0.0)` -- add a node.script box for Node for Max (returns tuple of Box and code string)
+- `Patcher.add_box("node.script", ["myscript.js"], x=0.0, y=0.0)` -- add a node.script box for Node for Max (DB entry: fixed 1 inlet / 2 outlets); write the script file with `write_js(code, path)`
 - `Patcher.add_js(filename, code=None, num_inlets=1, num_outlets=1, x=0.0, y=0.0)` -- add a js object box (Legacy Engine, ES5 JavaScript) (returns tuple of Box and code string)
 
 ### Object Expertise

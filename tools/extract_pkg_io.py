@@ -21,8 +21,7 @@ For every entry in ObjectDatabase().audit_empty_io()['critical']:
   6. Deep-merge into overrides.json under `objects`. Existing entries are NOT
      clobbered: only `inlets` / `outlets` / `_audit` are added if the entry is
      present-but-empty, otherwise a brand-new entry is created.
-  7. Refresh `_uncovered_empty_io` to reflect post-merge audit state.
-  8. Atomic write via temp file + os.replace.
+  7. Atomic write via temp file + os.replace.
 
 Re-running is a no-op once entries are populated. Extend MANUAL_FALLBACK if a
 new package object lands in the DB with empty I/O and no helpfile coverage.
@@ -324,30 +323,17 @@ def merge_into_overrides(populated: dict[str, dict]) -> tuple[int, int]:
             objs[name] = payload
             added += 1
 
-    # Refresh _uncovered_empty_io from a live audit (after the in-memory merge
-    # but before the on-disk write -- so we use the post-merge state by
-    # writing first then re-reading via ObjectDatabase).
     tmp = OVERRIDES_PATH.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(ov, indent=2))
     os.replace(tmp, OVERRIDES_PATH)
 
-    # Now run the audit and rewrite _uncovered_empty_io to match
+    # Post-merge critical count from a live audit of the written file.
     from src.maxpat.db_lookup import ObjectDatabase  # noqa: E402
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         db = ObjectDatabase()
         audit = db.audit_empty_io()
-
-    # Reload to keep our hand-edited file structure
-    with OVERRIDES_PATH.open() as f:
-        ov = json.load(f)
-    if "_uncovered_empty_io" in ov and isinstance(ov["_uncovered_empty_io"], dict):
-        ov["_uncovered_empty_io"]["count"] = len(audit["critical"])
-        ov["_uncovered_empty_io"]["objects"] = sorted(audit["critical"])
-    tmp = OVERRIDES_PATH.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(ov, indent=2))
-    os.replace(tmp, OVERRIDES_PATH)
 
     return added, extended, len(audit["critical"])
 
@@ -416,40 +402,13 @@ def main() -> int:
     print(f"Manual fallback: {fallback_used} populated")
 
     if not populated:
-        # Even when nothing new merges, refresh _uncovered_empty_io to
-        # reflect the live audit (handles the case where someone manually
-        # removed an override entry and re-ran the script).
-        post_critical = refresh_uncovered_only()
-        print(f"Nothing to merge -- already idempotent. "
-              f"_uncovered_empty_io refreshed to {post_critical} entries.")
+        print("Nothing to merge -- already idempotent.")
         return 0
 
     added, extended, post_critical = merge_into_overrides(populated)
     print(f"overrides.json: {added} new entries, {extended} extended")
     print(f"Post-merge critical bucket size: {post_critical}")
     return 0
-
-
-def refresh_uncovered_only() -> int:
-    """Re-run audit and rewrite overrides._uncovered_empty_io to match.
-    Returns the live critical count.
-    """
-    from src.maxpat.db_lookup import ObjectDatabase  # noqa: E402
-    import warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        db = ObjectDatabase()
-        audit = db.audit_empty_io()
-
-    with OVERRIDES_PATH.open() as f:
-        ov = json.load(f)
-    if "_uncovered_empty_io" in ov and isinstance(ov["_uncovered_empty_io"], dict):
-        ov["_uncovered_empty_io"]["count"] = len(audit["critical"])
-        ov["_uncovered_empty_io"]["objects"] = sorted(audit["critical"])
-    tmp = OVERRIDES_PATH.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(ov, indent=2))
-    os.replace(tmp, OVERRIDES_PATH)
-    return len(audit["critical"])
 
 
 if __name__ == "__main__":

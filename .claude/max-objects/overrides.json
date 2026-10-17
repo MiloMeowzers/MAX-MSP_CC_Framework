@@ -17411,20 +17411,5 @@
         "confidence": "HIGH"
       }
     }
-  },
-  "_uncovered_empty_io": {
-    "_note": "Objects with empty inlets or outlets not yet covered by audit overrides. Future work.",
-    "count": 9,
-    "objects": [
-      "bp.Global Transport",
-      "bp.serialosc",
-      "dsp",
-      "jbox",
-      "jit_kernel",
-      "onecopy",
-      "opensoundcontrol",
-      "project",
-      "snorm"
-    ]
   }
 }

@@ -4,10 +4,8 @@ Per Phase 32 CONTEXT.md D-01 (topology + mirror on-ramps mutually exclusive),
 D-03 (SimulationReport shape), D-05 (default thresholds), D-09 (verdict
 priority).
 
-The mirror= on-ramp is the single contract this plan must support
-end-to-end; topology= raises TopologyError until 32-02 lands the topology
-library. Tests use small in-test stub mirrors (no bassoon math); the live
-mirror tests live in 32-04.
+Tests use small in-test stub mirrors (no bassoon math); topology= runs are
+covered by test_topologies.py and the bassoon regression tests.
 """
 
 from __future__ import annotations
