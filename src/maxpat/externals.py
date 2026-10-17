@@ -2,7 +2,9 @@
 
 Provides:
 - scaffold_external: Creates complete Min-DevKit project directory structure
-  with CMakeLists.txt, C++ source file, and .maxhelp help patch.
+  with CMakeLists.txt, C++ source file, and .maxhelp help patch. A MAX name
+  with ``~`` scaffolds as ``<name>_tilde/`` (the folder form min-api's CMake
+  builds back into ``<name>~.mxo``) with class ``cpp_identifier(name)``.
 - generate_external_code: Returns C++ code string for an archetype.
 - generate_help_patch: Builds a Patcher for the .maxhelp file.
 - setup_min_devkit: Initializes Min-DevKit as a git submodule.
@@ -22,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from src.maxpat.ext_templates import (
+    cmake_folder_name,
     render_cmake_template,
     render_dsp_template,
     render_message_template,
@@ -46,7 +49,7 @@ def generate_external_code(
     No file I/O -- returns the code as a string.
 
     Args:
-        name: External object name (valid C++ identifier).
+        name: MAX object name (mapped through cpp_identifier for the class).
         archetype: One of "message", "dsp", "scheduler".
         description: Human-readable description.
         **kwargs: Archetype-specific parameters passed through to template.
@@ -215,18 +218,23 @@ def scaffold_external(
 ) -> dict[str, Path]:
     """Create a complete Min-DevKit external project directory.
 
-    Creates:
-    - {project_dir}/{name}/
-    - {project_dir}/{name}/source/{name}.cpp
-    - {project_dir}/{name}/help/{name}.maxhelp
-    - {project_dir}/{name}/CMakeLists.txt
+    Creates, with ``folder = cmake_folder_name(name)`` (``foo~`` ->
+    ``foo_tilde``; names without ``~`` are unchanged):
+    - {project_dir}/{folder}/
+    - {project_dir}/{folder}/source/{folder}.cpp
+    - {project_dir}/{folder}/help/{name}.maxhelp  (MAX finds help by object name)
+    - {project_dir}/{folder}/CMakeLists.txt
 
-    Does NOT create min-devkit/ submodule or build/ directory
-    (handled in Plan 03 build step).
+    min-api's CMake (max-sdk-base max-pretarget) names the project after the
+    folder and maps ``_tilde`` back to ``~``, so ``foo_tilde/`` builds
+    ``foo~.mxo``. The class is ``cpp_identifier(name)``.
+
+    Does NOT create min-devkit/ (see setup_min_devkit) or the build/
+    directory (see build_external).
 
     Args:
         project_dir: Parent directory for the external project.
-        name: External object name (used for directory and file names).
+        name: MAX object name (``foo~``); see above for the derived names.
         archetype: One of "message", "dsp", "scheduler".
         description: Human-readable description.
         **kwargs: Archetype-specific parameters.
@@ -244,7 +252,8 @@ def scaffold_external(
         )
 
     project_dir = Path(project_dir)
-    root = project_dir / name
+    folder = cmake_folder_name(name)
+    root = project_dir / folder
 
     # Create directory structure
     source_dir = root / "source"
@@ -254,7 +263,7 @@ def scaffold_external(
 
     # Generate and write C++ source
     cpp_code = generate_external_code(name, archetype, description, **kwargs)
-    cpp_path = source_dir / f"{name}.cpp"
+    cpp_path = source_dir / f"{folder}.cpp"
     cpp_path.write_text(cpp_code)
 
     # Generate and write CMakeLists.txt

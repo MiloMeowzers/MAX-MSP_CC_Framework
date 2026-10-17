@@ -133,7 +133,7 @@ class TestDSPArchetype:
             params=[],
         )
         assert "operator()" in code
-        assert "samples<1>" in code
+        assert "sample operator()(sample input1)" in code
 
     def test_dsp_archetype_has_signal_outlets(self):
         from src.maxpat.ext_templates import render_dsp_template

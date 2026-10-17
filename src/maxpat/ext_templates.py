@@ -7,11 +7,47 @@ Provides render functions for three archetypes:
 
 Also provides CMakeLists.txt and Catch2 test scaffold templates.
 
+Names (Q31 / G5): every render function takes the MAX object name. The
+class and ``MIN_EXTERNAL`` argument use :func:`cpp_identifier` (``foo~`` ->
+``foo_tilde``); the project folder and source file use
+:func:`cmake_folder_name`, which mirrors max-sdk-base's
+``max-pretarget.cmake`` (a folder named ``foo_tilde`` builds ``foo~.mxo``).
+Names that are already valid identifiers render unchanged.
+
 All generated code uses Min-DevKit C++17 patterns exclusively
 (no classic Max SDK class_new/class_addmethod patterns).
 """
 
 from __future__ import annotations
+
+import re
+
+_NON_IDENT_RE = re.compile(r"[^A-Za-z0-9_]")
+
+
+def cpp_identifier(name: str) -> str:
+    """Map a MAX object name to a valid C++ identifier.
+
+    ``~`` becomes ``_tilde``, then every character outside ``[A-Za-z0-9_]``
+    becomes ``_``; a ``_`` is prefixed when the result is empty or starts
+    with a digit. ``foo~`` -> ``foo_tilde``, ``my.ext~`` -> ``my_ext_tilde``,
+    ``plain`` -> ``plain``, ``2x`` -> ``_2x``.
+    """
+    ident = _NON_IDENT_RE.sub("_", str(name).replace("~", "_tilde"))
+    if not ident or ident[0].isdigit():
+        ident = "_" + ident
+    return ident
+
+
+def cmake_folder_name(name: str) -> str:
+    """Map a MAX object name to the project folder min-api's CMake expects.
+
+    Replaces ``~`` with ``_tilde`` only, mirroring max-sdk-base's
+    ``max-pretarget.cmake`` (``string(REPLACE "~" "_tilde" ...)``), which
+    turns the folder back into the ``~`` external name: ``foo~`` ->
+    ``foo_tilde`` (builds ``foo~.mxo``), ``my.ext~`` -> ``my.ext_tilde``.
+    """
+    return str(name).replace("~", "_tilde")
 
 
 def render_message_template(
@@ -24,7 +60,7 @@ def render_message_template(
     """Render C++ source for a message/data processing external.
 
     Args:
-        name: External object name (valid C++ identifier).
+        name: MAX object name (mapped through cpp_identifier).
         description: Human-readable description (used in MIN_DESCRIPTION).
         inlets: List of dicts with "comment" key for inlet descriptions.
         outlets: List of dicts with "comment" key for outlet descriptions.
@@ -66,11 +102,13 @@ def render_message_template(
     outlets_str = "\n".join(outlet_lines)
     handlers_str = "\n\n".join(handler_lines)
 
+    cls = cpp_identifier(name)
+
     return f'''#include "c74_min.h"
 
 using namespace c74::min;
 
-class {name} : public object<{name}> {{
+class {cls} : public object<{cls}> {{
 public:
     MIN_DESCRIPTION {{ "{description}" }};
     MIN_TAGS {{ "utility" }};
@@ -83,7 +121,7 @@ public:
 {handlers_str}
 }};
 
-MIN_EXTERNAL({name});
+MIN_EXTERNAL({cls});
 '''
 
 
@@ -97,22 +135,46 @@ def render_dsp_template(
     """Render C++ source for a DSP/signal processing external.
 
     Args:
-        name: External object name (valid C++ identifier).
+        name: MAX object name (mapped through cpp_identifier).
         description: Human-readable description.
-        num_inputs: Number of signal inputs.
-        num_outputs: Number of signal outputs.
+        num_inputs: Number of signal inputs (int >= 0). With 0 inputs the
+            external gets one control inlet, as min-devkit's min.phasor~ does.
+        num_outputs: Number of signal outputs (int >= 1).
         params: List of param dicts with name, default, min, max.
+
+    The perform method follows min-api's sample_operator performer (Q31 /
+    G5): it takes ``sample input1, ..., sample inputN`` and returns
+    ``sample`` for one output (the ``<1, 1>`` performer assigns the result
+    to a double) or ``samples<N>`` for two or more. Output k passes
+    ``input{k+1}`` through, or ``0.0`` once the inputs run out.
 
     Returns:
         Complete C++ source string.
+
+    Raises:
+        ValueError: If num_inputs < 0 or num_outputs < 1 (or either is not
+            an int).
     """
-    # Build signal inlet declarations
+    def _is_count(v: object) -> bool:
+        return isinstance(v, int) and not isinstance(v, bool)
+
+    if not (_is_count(num_inputs) and _is_count(num_outputs)
+            and num_inputs >= 0 and num_outputs >= 1):
+        raise ValueError(
+            f"Unsupported DSP I/O: num_inputs={num_inputs!r}, "
+            f"num_outputs={num_outputs!r}; supported: num_inputs an int >= 0, "
+            f"num_outputs an int >= 1"
+        )
+
+    # Build signal inlet declarations (one control inlet when there are none)
     inlet_lines = []
     for i in range(num_inputs):
         var_name = f"m_input_{i}" if i > 0 else "m_input"
         inlet_lines.append(
             f'    inlet<>  {var_name}  {{ this, "(signal) audio input {i + 1}" }};'
         )
+    if num_inputs == 0:
+        inlet_lines.append('    inlet<>  m_input  { this, "(anything) messages" };')
 
     # Build signal outlet declarations
     outlet_lines = []
@@ -135,10 +197,19 @@ def render_dsp_template(
             f'    }};'
         )
 
-    # Build input parameter list for operator()
+    # Build input parameter list and return statement for operator()
     input_params = ", ".join(f"sample input{i + 1}" for i in range(num_inputs))
-    if num_inputs == 1:
-        input_params = "sample input"
+    out_values = [
+        f"input{k + 1}" if k < num_inputs else "0.0" for k in range(num_outputs)
+    ]
+    if num_outputs == 1:
+        return_type = "sample"
+        return_stmt = f"return {out_values[0]};"
+    else:
+        return_type = f"samples<{num_outputs}>"
+        return_stmt = "return { " + ", ".join(out_values) + " };"
+
+    cls = cpp_identifier(name)
 
     inlets_str = "\n".join(inlet_lines)
     outlets_str = "\n".join(outlet_lines)
@@ -150,7 +221,7 @@ def render_dsp_template(
 
 using namespace c74::min;
 
-class {name} : public object<{name}>, public sample_operator<{num_inputs}, {num_outputs}> {{
+class {cls} : public object<{cls}>, public sample_operator<{num_inputs}, {num_outputs}> {{
 public:
     MIN_DESCRIPTION {{ "{description}" }};
     MIN_TAGS {{ "audio" }};
@@ -160,10 +231,10 @@ public:
 
 {outlets_str}
 {params_section}
-    samples<{num_outputs}> operator()({input_params}) {{
+    {return_type} operator()({input_params}) {{
         // TODO: implement DSP processing
-        return {{ input }};
-    }};
+        {return_stmt}
+    }}
 
     message<> dspsetup {{ this, "dspsetup",
         MIN_FUNCTION {{
@@ -176,7 +247,7 @@ private:
     double m_samplerate {{ 44100.0 }};
 }};
 
-MIN_EXTERNAL({name});
+MIN_EXTERNAL({cls});
 '''
 
 
@@ -189,7 +260,7 @@ def render_scheduler_template(
     """Render C++ source for a scheduler external.
 
     Args:
-        name: External object name (valid C++ identifier).
+        name: MAX object name (mapped through cpp_identifier).
         description: Human-readable description.
         interval_default: Default interval in ms.
         attributes: List of extra attribute dicts with name, type, default, min, max.
@@ -214,11 +285,13 @@ def render_scheduler_template(
     extra_attrs = "\n\n".join(attr_lines)
     extra_attrs_section = f"\n{extra_attrs}\n" if extra_attrs else ""
 
+    cls = cpp_identifier(name)
+
     return f'''#include "c74_min.h"
 
 using namespace c74::min;
 
-class {name} : public object<{name}> {{
+class {cls} : public object<{cls}> {{
 public:
     MIN_DESCRIPTION {{ "{description}" }};
     MIN_TAGS {{ "time" }};
@@ -250,7 +323,7 @@ public:
     }};
 }};
 
-MIN_EXTERNAL({name});
+MIN_EXTERNAL({cls});
 '''
 
 
@@ -272,7 +345,7 @@ project(${{PROJECT_NAME}})
 # Find min-api
 set(MIN_API_DIR "${{CMAKE_CURRENT_SOURCE_DIR}}/min-devkit/source/min-api")
 if(NOT EXISTS "${{MIN_API_DIR}}")
-    message(FATAL_ERROR "min-api not found. Run: git submodule update --init --recursive")
+    message(FATAL_ERROR "min-api not found. Run setup_min_devkit(ext_dir), or: git clone --recursive https://github.com/Cycling74/min-devkit.git min-devkit")
 endif()
 
 # Include min-api CMake scripts
@@ -295,16 +368,20 @@ def render_test_template(name: str) -> str:
     """Render a basic Catch2 test scaffold for an external.
 
     Args:
-        name: External object name.
+        name: MAX object name. The include names the source file
+            (``<cmake_folder_name(name)>.cpp``); the TEST_CASE label keeps
+            the MAX name.
 
     Returns:
         C++ test source string.
     """
+    source = cmake_folder_name(name)
+
     return f'''#include "c74_min_api.h"
 
 #include "c74_min.h"
 
-#include "{name}.cpp"
+#include "{source}.cpp"
 
 #include <catch.hpp>
 
