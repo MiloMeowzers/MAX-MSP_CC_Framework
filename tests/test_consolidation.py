@@ -300,3 +300,164 @@ class TestSharedHelpers:
         assert not _module_assigns("src/maxpat/critics/layout_critic.py",
                                    "_INTERACTIVE_MAXCLASSES")
         assert "PARAMETER_LIST_CONTROLS" in inspect.getsource(Patcher._parameter_lines)
+
+
+# ---------------------------------------------------------------------------
+# Task 3: structured CriticResult fields (review S7)
+# ---------------------------------------------------------------------------
+
+_RULE_RE = __import__("re").compile(r"^[a-z][a-z0-9_]*$")
+_PATCH_FILES = sorted(REPO_ROOT.glob("patches/*/generated/*.maxpat"))
+
+
+@pytest.fixture(scope="module")
+def corpus_reviews(db):
+    """(rel, patch_dict, results) per committed generated patch."""
+    from src.maxpat.critics import review_patch
+
+    out = []
+    for path in _PATCH_FILES:
+        with open(path) as f:
+            d = json.load(f)
+        out.append((path.relative_to(REPO_ROOT).as_posix(), d,
+                    review_patch(json.loads(json.dumps(d)), db=db)))
+    return out
+
+
+def _all_box_ids(patch: dict) -> set[str]:
+    from src.maxpat import walk
+
+    ids = set()
+    for _path, patcher, _ctx in walk.iter_patchers(patch):
+        for entry in patcher.get("boxes", []):
+            if not isinstance(entry, dict):
+                continue
+            box = entry.get("box", entry)
+            if isinstance(box, dict) and isinstance(box.get("id"), str):
+                ids.add(box["id"])
+    return ids
+
+
+class TestCriticResultFields:
+    def test_defaults_and_keyword_only(self):
+        from src.maxpat.critics.base import CriticResult
+
+        r = CriticResult("note", "f", "s")
+        assert r.rule == ""
+        assert r.box_ids == ()
+        assert r.port is None
+        assert r.path == ""
+        with pytest.raises(TypeError):
+            CriticResult("note", "f", "s", "", "rule")
+        assert CriticResult("note", "f", "s", box_ids=["a"]).box_ids == ("a",)
+
+    def test_every_site_names_a_rule(self):
+        count = 0
+        for path in sorted((REPO_ROOT / "src/maxpat/critics").glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                        and node.func.id == "CriticResult"):
+                    continue
+                count += 1
+                kw = {k.arg: k.value for k in node.keywords}
+                assert "rule" in kw, f"{path.name}:{node.lineno} has no rule="
+                value = kw["rule"]
+                assert isinstance(value, ast.Constant) and isinstance(value.value, str), (
+                    f"{path.name}:{node.lineno} rule is not a str literal")
+                assert _RULE_RE.match(value.value), f"{path.name}:{node.lineno}"
+        assert count >= 49
+
+    def test_corpus_results_are_structured(self, corpus_reviews):
+        import re
+
+        assert corpus_reviews
+        for rel, d, results in corpus_reviews:
+            ids = _all_box_ids(d)
+            alternation = "|".join(re.escape(i) for i in sorted(ids, key=len, reverse=True))
+            id_re = re.compile(rf"(?<![\w.-])({alternation})(?![\w-])") if ids else None
+            for r in results:
+                assert r.rule, (rel, r.finding)
+                assert isinstance(r.box_ids, tuple), (rel, r.finding)
+                for i in r.box_ids:
+                    assert isinstance(i, str) and i in ids, (rel, i, r.finding)
+                named: list[str] = []
+                if id_re is not None:
+                    for m in id_re.finditer(r.finding):
+                        if m.group(1) not in named:
+                            named.append(m.group(1))
+                assert named == [i for i in r.box_ids if i in named], (
+                    rel, r.rule, r.box_ids, r.finding)
+                assert r.port is None or (isinstance(r.port, int)
+                                          and not isinstance(r.port, bool)), (rel, r.finding)
+
+    def test_allowlist_rules_carry_ports(self, corpus_reviews, db):
+        for rel, _d, results in corpus_reviews:
+            for r in results:
+                if r.severity == "blocker" and r.rule in (
+                    "fan_out_without_trigger", "unsafe_gain_sources",
+                ):
+                    assert isinstance(r.port, int), (rel, r.finding)
+
+        if db.lookup("bach.score") is None:
+            pytest.skip("bach package not in DB")
+        from src.maxpat.critics.package_critic import review_packages
+
+        patch = {"patcher": {
+            "boxes": [
+                {"box": {"id": "obj-1", "maxclass": "newobj", "text": "pack 0 0",
+                         "numinlets": 2, "numoutlets": 1, "outlettype": [""]}},
+                {"box": {"id": "obj-2", "maxclass": "newobj", "text": "bach.score",
+                         "numinlets": 1, "numoutlets": 1, "outlettype": [""]}},
+            ],
+            "lines": [{"patchline": {"source": ["obj-1", 0],
+                                     "destination": ["obj-2", 0]}}],
+        }}
+        hits = [r for r in review_packages(patch) if r.rule == "bach_llll_types"]
+        assert hits
+        assert hits[0].box_ids == ("obj-1", "obj-2")
+        assert hits[0].port == 0
+
+    def test_allowlist_is_structured(self):
+        from src.maxpat.critics.base import CriticResult
+        import tests.test_integration_patches as tip
+
+        data = json.loads((REPO_ROOT / "tests/review_blocker_allowlist.json").read_text())
+        for entries in data["patches"].values():
+            for e in entries:
+                assert isinstance(e.get("rule"), str) and e["rule"]
+                assert isinstance(e.get("box_ids"), list)
+                assert all(isinstance(i, str) for i in e["box_ids"])
+                assert "port" in e and (e["port"] is None or isinstance(e["port"], int))
+                assert "path" in e
+                assert e.get("severity")
+                assert e.get("reason")
+                for gone in ("kind", "source_id", "outlet", "gain_id", "inlet",
+                             "destinations"):
+                    assert gone not in e
+
+        tree = ast.parse((REPO_ROOT / "tests/test_integration_patches.py").read_text())
+        defined = set()
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef):
+                defined.add(node.name)
+            elif isinstance(node, ast.Assign):
+                defined.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        for name in ("_FANOUT_RE", "_BACH_RE", "_UNSAFE_GAIN_RE", "_DST_NAME_RE",
+                     "_blocker_match_key", "_entry_key"):
+            assert name not in defined, name
+
+        r = CriticResult("blocker", "x", "s", path="p", rule="r", box_ids=("a",), port=1)
+        assert tip._result_key(r) == ("r", ("a",), 1, "p")
+
+    def test_q24_helpers_are_structured(self):
+        import inspect
+
+        import tests.test_uninitialized_state as tus
+
+        tree = ast.parse((REPO_ROOT / "tests/test_uninitialized_state.py").read_text())
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                assert not any(isinstance(t, ast.Name) and t.id == "_ID_RE"
+                               for t in node.targets)
+        assert "rule" in inspect.getsource(tus._q24)

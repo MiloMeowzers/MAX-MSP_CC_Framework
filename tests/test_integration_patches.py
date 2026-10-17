@@ -36,86 +36,28 @@ _PATCH_FILES = sorted(_REPO_ROOT.glob("patches/*/generated/*.maxpat"))
 # and missing reasons, and calibration-project patches may never appear here.
 # A NEW patch (path absent from the allowlist) or a NEW blocker (signature not
 # explicitly listed for its patch) is never exempted -- it still fails.
-# Keys include the CriticResult path (Q20): an entry's optional `path`
-# (default "", the top level) must equal the blocker's scope path, so a
-# nested blocker is never exempted by a top-level entry with the same id.
+# Keys are the structured CriticResult fields (Q33): rule, box_ids, port and
+# path. An entry's `path` (default "", the top level) must equal the
+# blocker's scope path (Q20), so a nested blocker is never exempted by a
+# top-level entry with the same ids.
 _ALLOWLIST_PATH = Path(__file__).resolve().parent / "review_blocker_allowlist.json"
 with open(_ALLOWLIST_PATH) as _f:
     _ALLOWLIST = json.load(_f).get("patches", {})
 
-# Blocker finding-string formats are fixed by the critics:
-#   Fan-out:  "Fan-out without trigger: '<name>' (<source_id>) outlet <N> ..."
-#   Bach-llll: "Bach llll type mismatch: '<name>' (<source_id>) connected to
-#               '<dst>' (<dst_id>) inlet <N> which expects llll data ..."
-#   Unsafe gain (Q26 / E6): "Unsafe gain source: '<name>' (<source_id>) |
-#               message '<text>' (<source_id>) reaches '<gain>' (<gain_id>)
-#               inlet <N> ..."
-_FANOUT_RE = re.compile(
-    r"Fan-out without trigger: '[^']*' \(([^)]+)\) outlet (\d+) "
-    r"connected to \d+ destinations \((.*?)\) --"
-)
-_BACH_RE = re.compile(
-    r"Bach llll type mismatch: '[^']*' \(([^)]+)\) connected to "
-    r"'([^']*)' \([^)]+\) inlet (\d+)"
-)
-_UNSAFE_GAIN_RE = re.compile(
-    r"Unsafe gain source: (?:message )?'[^']*' \(([^)]+)\) reaches '[^']*' "
-    r"\(([^)]+)\) inlet (\d+)"
-)
-_DST_NAME_RE = re.compile(r"'([^']*)' \([^)]+\)")
-
-
-def _blocker_match_key(finding: str):
-    """Derive a signature key from a blocker finding string, or None if the
-    blocker is not an allowlist-eligible kind (fan-out / Bach-llll).
-
-    Keys mirror the allowlist entry keys:
-      fan-out   -> ("fanout", source_id, outlet)
-      Bach-llll -> ("bach_llll", source_id, inlet, (sorted destinations))
-      unsafe gain -> ("unsafe_gain", source_id, gain_id, inlet)  (Q26)
-    """
-    m = _FANOUT_RE.search(finding)
-    if m:
-        source_id, outlet, _dsts = m.groups()
-        return ("fanout", source_id, int(outlet))
-    mb = _BACH_RE.search(finding)
-    if mb:
-        source_id, dst, inlet = mb.groups()
-        return ("bach_llll", source_id, int(inlet), (dst,))
-    mg = _UNSAFE_GAIN_RE.search(finding)
-    if mg:
-        source_id, gain_id, inlet = mg.groups()
-        return ("unsafe_gain", source_id, gain_id, int(inlet))
-    return None
-
-
-def _entry_key(entry: dict):
-    """Derive the same signature key from an allowlist entry."""
-    kind = entry.get("kind")
-    if kind == "fanout":
-        return ("fanout", entry["source_id"], int(entry["outlet"]))
-    if kind == "bach_llll":
-        dsts = tuple(sorted(entry.get("destinations", [])))
-        return ("bach_llll", entry["source_id"], int(entry["inlet"]), dsts)
-    if kind == "unsafe_gain":
-        return ("unsafe_gain", entry["source_id"], entry["gain_id"], int(entry["inlet"]))
-    return None
-
 
 def _result_key(result):
-    """Signature key of a CriticResult blocker: finding key + scope path."""
-    key = _blocker_match_key(result.finding)
-    if key is None:
-        return None
-    return key + (getattr(result, "path", ""),)
+    """Signature key of a CriticResult blocker: its structured fields (Q33)."""
+    return (result.rule, tuple(result.box_ids), result.port, result.path)
 
 
 def _allow_key(entry: dict):
-    """Signature key of an allowlist entry: entry key + its `path` (default "")."""
-    key = _entry_key(entry)
-    if key is None:
-        return None
-    return key + (entry.get("path", ""),)
+    """Signature key of an allowlist entry: rule, box_ids, port, path (default "")."""
+    return (
+        entry.get("rule"),
+        tuple(entry.get("box_ids", ())),
+        entry.get("port"),
+        entry.get("path", ""),
+    )
 
 
 def _is_allowlisted(patch_rel: str, result) -> bool:
@@ -126,8 +68,6 @@ def _is_allowlisted(patch_rel: str, result) -> bool:
     if not entries:
         return False
     key = _result_key(result)
-    if key is None:
-        return False
     return any(_allow_key(e) == key for e in entries)
 
 # ---------------------------------------------------------------------------
@@ -367,8 +307,13 @@ def test_allowlist_key_includes_path() -> None:
         "reconverge on 'waveform~' (obj-4) at different inlets, so execution "
         "order changes the result"
     )
-    nested = CriticResult("blocker", "[p x] " + finding, "s", path="obj-9")
-    top = CriticResult("blocker", finding, "s")
+    fields = {
+        "rule": "fan_out_without_trigger",
+        "box_ids": ("obj-1", "obj-27", "obj-28", "obj-4"),
+        "port": 1,
+    }
+    nested = CriticResult("blocker", "[p x] " + finding, "s", path="obj-9", **fields)
+    top = CriticResult("blocker", finding, "s", **fields)
     assert not _is_allowlisted(patch_rel, nested)
     assert _is_allowlisted(patch_rel, top)
 

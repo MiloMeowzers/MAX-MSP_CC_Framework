@@ -19,7 +19,7 @@ presentation box.
 from __future__ import annotations
 
 from src.maxpat import walk
-from src.maxpat.critics.base import CriticResult, tag_results
+from src.maxpat.critics.base import CriticResult, finding_ids, tag_results
 from src.maxpat.graph import PatchGraph
 from src.maxpat.defaults import AESTHETIC_PALETTE, HORIZONTAL_THRESHOLD, UPWARD_BUS_THRESHOLD
 from src.maxpat.maxclass_map import PRESENTATION_CONTROLS
@@ -200,6 +200,8 @@ def _check_overlapping_boxes(
                 f"(within {COLLISION_PAD}px padding)",
                 "Adjust box positions to maintain at least "
                 f"{COLLISION_PAD}px clearance between objects",
+                rule="overlapping_boxes",
+                box_ids=finding_ids(id_a, id_b),
             ))
 
     return results
@@ -258,6 +260,8 @@ def _check_missing_midpoints(
                 f"{dst_id}[{dst_inlet}] has {hdist:.0f}px horizontal "
                 f"offset without segmented routing",
                 "Add midpoints for clean L-shaped cable routing",
+                rule="missing_midpoints",
+                box_ids=finding_ids(src_id, dst_id),
             ))
         # Check upward flow
         elif vdist > UPWARD_BUS_THRESHOLD:
@@ -267,6 +271,8 @@ def _check_missing_midpoints(
                 f"{dst_id}[{dst_inlet}] flows {vdist:.0f}px upward "
                 f"without bus routing midpoints",
                 "Add bus routing midpoints for upward-flowing cables",
+                rule="missing_midpoints",
+                box_ids=finding_ids(src_id, dst_id),
             ))
 
     return results
@@ -294,6 +300,8 @@ def _check_out_of_bounds(box_list: list[dict]) -> list[CriticResult]:
                 f"Out-of-bounds placement: '{label}' ({box_id}) at "
                 f"position ({x:.1f}, {y:.1f}) is outside the visible canvas",
                 "Move the object to a position with x >= 0 and y >= 0",
+                rule="out_of_bounds",
+                box_ids=finding_ids(box_id),
             ))
 
     return results
@@ -331,6 +339,8 @@ def _check_presentation_coverage(box_list: list[dict]) -> list[CriticResult]:
             "uses presentation mode",
             "Add it via Patcher.add_to_presentation(box, rect) with its "
             "label comment, or record a deliberate exclusion in context.md",
+            rule="presentation_coverage",
+            box_ids=finding_ids(box_id),
         ))
     return results
 
@@ -422,6 +432,8 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
                     "Give the panel an explicit bgcolor/bgfillcolor, then run "
                     "ensure_text_contrast() (new patches) or "
                     "repair_text_contrast(patcher) (existing patches)",
+                    rule="text_contrast",
+                    box_ids=finding_ids(box.get("id")),
                 ))
             else:
                 results.append(CriticResult(
@@ -432,6 +444,8 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
                     "Set textcolor via ensure_text_contrast() in the styling "
                     "pipeline, or repair_text_contrast(patcher) on an existing "
                     "patch",
+                    rule="text_contrast",
+                    box_ids=finding_ids(box.get("id")),
                 ))
             continue
 
@@ -447,6 +461,8 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
                     "chosen because it is the user-facing surface (D-1)",
                     "No action needed unless this label is primarily read while "
                     "editing; if so, move it onto a panel in patching space too",
+                    rule="text_contrast",
+                    box_ids=finding_ids(box.get("id")),
                 ))
 
     return results

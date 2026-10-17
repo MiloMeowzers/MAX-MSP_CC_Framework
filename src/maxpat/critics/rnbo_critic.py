@@ -35,7 +35,7 @@ from __future__ import annotations
 import re
 
 from src.maxpat import walk
-from src.maxpat.critics.base import CriticResult, tag_results
+from src.maxpat.critics.base import CriticResult, finding_ids, tag_results
 from src.maxpat.graph import PatchGraph
 from src.maxpat.io_resolvers import split_box_text
 
@@ -107,6 +107,8 @@ def review_rnbo(
                     "blocker",
                     f"rnbo~ box '{box.get('id', '?')}' has no inner patcher",
                     "Add an inner patcher with in~/out~ and param objects",
+                    rule="rnbo_missing_inner_patcher",
+                    box_ids=finding_ids(box.get("id")),
                 ))
                 continue
 
@@ -183,6 +185,8 @@ def _check_io_completeness(
             f"it takes no audio input, which is expected for a generator",
             "If the patch should process audio input, add an 'in~ 1' object "
             "to the inner RNBO patcher",
+            rule="io_completeness",
+            box_ids=finding_ids(rnbo_id),
         ))
 
     if not has_out:
@@ -191,6 +195,8 @@ def _check_io_completeness(
             f"rnbo~ '{rnbo_id}' inner patcher has no out~ object -- "
             f"audio output will not work",
             "Add at least one 'out~' object to the inner RNBO patcher",
+            rule="io_completeness",
+            box_ids=finding_ids(rnbo_id),
         ))
 
     return results
@@ -249,6 +255,8 @@ def _check_param_naming(
                 f"lowercase_with_underscores naming convention",
                 f"Rename to '{_to_snake_case(param_name)}' for consistency "
                 f"with RNBO parameter naming best practices",
+                rule="param_naming",
+                box_ids=finding_ids(box.get("id")),
             ))
 
     return results
@@ -285,6 +293,8 @@ def _check_duplicate_params(
                 f"'{seen_names[param_name]}' and '{box_id}'",
                 f"Each RNBO param must have a unique @name -- "
                 f"rename one of the duplicate '{param_name}' params",
+                rule="duplicate_params",
+                box_ids=finding_ids(*seen_names[param_name].split("/"), *box_id.split("/")),
             ))
         else:
             seen_names[param_name] = box_id
@@ -311,6 +321,7 @@ def _check_target_fitness(
             f"C++ embedded target has a practical limit of 128 params "
             f"(MIDI CC count), but patch has {param_count} params",
             "Reduce the number of params or use a different export target",
+            rule="target_fitness",
         ))
 
     return results

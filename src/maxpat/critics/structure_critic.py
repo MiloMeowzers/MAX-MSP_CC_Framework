@@ -44,7 +44,7 @@ import re
 from collections import defaultdict, deque
 
 from src.maxpat import walk
-from src.maxpat.critics.base import CriticResult, tag_results
+from src.maxpat.critics.base import CriticResult, finding_ids, tag_results
 from src.maxpat.graph import SIGNAL_OUTLET_TYPES, PatchGraph, outlet_is_signal
 
 
@@ -406,6 +406,9 @@ def _check_fan_out_without_trigger(
             finding,
             "Use a 'trigger' (t) object to explicitly control the order "
             "of execution for multiple destinations",
+            rule="fan_out_without_trigger",
+            box_ids=finding_ids(src_id, *(d for d, _ in branches), meet_id),
+            port=src_outlet,
         ))
 
     return results
@@ -597,7 +600,11 @@ def _check_hot_cold_ordering(scope, dbh, q21_targets=frozenset()) -> list[Critic
                     f"outlet {c}, which fans out to both in undefined order -- '{name}' "
                     f"may output with a stale cold value"
                 )
-            results.append(CriticResult("warning", finding, _HOT_COLD_SUGGESTION))
+            results.append(CriticResult(
+                "warning", finding, _HOT_COLD_SUGGESTION,
+                rule="hot_cold_ordering",
+                box_ids=finding_ids(dst_id, anc),
+            ))
             break
     return results
 
@@ -761,6 +768,8 @@ def _check_trigger_types(scope) -> list[CriticResult]:
                     "constant. For an anything message where order does not "
                     "matter, fan out directly; where order matters use "
                     "'t l l' or 't s s'.",
+                    rule="trigger_types",
+                    box_ids=finding_ids(box_id),
                 ))
     return results
 
@@ -822,6 +831,8 @@ def _check_dollar_arity(scope, dbh) -> list[CriticResult]:
             f"{k} keep their stored value (0 until set)",
             f"Feed it from an outlet that carries all {n} values (a 't l' "
             f"outlet, pack or another list source), or lower the highest $N.",
+            rule="dollar_arity",
+            box_ids=finding_ids(box_id, *(e.src for e in feeders)),
         ))
     return results
 
@@ -988,6 +999,8 @@ def _check_trigger_order(scope, dbh) -> list[CriticResult]:
                 f"outputs with stale cold values",
                 "Reorder the trigger so the hot inlet is fed by the lowest "
                 "outlet index (outlet 0 fires last), e.g. 't l b' -> 't b l'.",
+                rule="trigger_order",
+                box_ids=finding_ids(t_id, dst_id),
             ))
     return results
 
@@ -1013,6 +1026,8 @@ def _check_redundant_connections(
                 f"Duplicate patchline: {edge.src} outlet {edge.outlet} -> "
                 f"{edge.dst} inlet {edge.inlet} appears multiple times",
                 "Remove the duplicate connection",
+                rule="redundant_connections",
+                box_ids=finding_ids(edge.src, edge.dst),
             ))
         else:
             seen.add(key)
@@ -1338,5 +1353,9 @@ def _check_uninitialized_state(graph, scope, dbh, is_new, ctx) -> list[CriticRes
                 f"{_UNINIT_ROUTES} -- it shows its default until touched while "
                 "the DSP runs on its own value"
             )
-        results.append(CriticResult(severity, finding, _UNINIT_SUGGESTION))
+        results.append(CriticResult(
+            severity, finding, _UNINIT_SUGGESTION,
+            rule="uninitialized_state",
+            box_ids=finding_ids(box_id, dsp[1] if dsp is not None else None),
+        ))
     return results

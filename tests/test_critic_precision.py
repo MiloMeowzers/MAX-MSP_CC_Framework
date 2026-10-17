@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -28,12 +29,20 @@ from src.maxpat.critics.structure_critic import review_structure
 from src.maxpat.db_lookup import ObjectDatabase
 from src.maxpat.validation import validate_patch
 from tests.test_critics import _make_patch
-from tests.test_integration_patches import _FANOUT_RE
 from tests.test_validation import _make_box, _make_line, _make_patch_dict
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 _FAN_PREFIX = "Fan-out without trigger"
+
+# Fan-out finding-string format (moved verbatim from
+# tests/test_integration_patches.py, whose allowlist now keys on the
+# structured CriticResult fields; Q33):
+#   "Fan-out without trigger: '<name>' (<source_id>) outlet <N> ..."
+_FANOUT_RE = re.compile(
+    r"Fan-out without trigger: '[^']*' \(([^)]+)\) outlet (\d+) "
+    r"connected to \d+ destinations \((.*?)\) --"
+)
 
 
 @pytest.fixture(scope="module")

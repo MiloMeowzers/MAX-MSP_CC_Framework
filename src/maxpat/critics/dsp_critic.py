@@ -41,7 +41,7 @@ import re
 from collections import deque
 
 from src.maxpat import dsp_roles, gain_staging, walk
-from src.maxpat.critics.base import CriticResult, tag_results
+from src.maxpat.critics.base import CriticResult, finding_ids, tag_results
 from src.maxpat.codegen import parse_genexpr_io
 from src.maxpat.graph import SIGNAL_OUTLET_TYPES, PatchGraph
 from src.maxpat.io_resolvers import split_box_text
@@ -181,6 +181,8 @@ def _check_gen_io_match(
                 f"has only {gen_numinlets} inlet(s)",
                 f"Update gen~ box to have {code_inputs} inlets, or reduce "
                 f"the number of inputs in the GenExpr code",
+                rule="gen_io_match",
+                box_ids=finding_ids(box_id),
             ))
 
         # Compare outputs
@@ -192,6 +194,8 @@ def _check_gen_io_match(
                 f"has only {gen_numoutlets} outlet(s)",
                 f"Update gen~ box to have {code_outputs} outlets, or reduce "
                 f"the number of outputs in the GenExpr code",
+                rule="gen_io_match",
+                box_ids=finding_ids(box_id),
             ))
 
     return results
@@ -320,6 +324,8 @@ def _check_gain_staging(
             f"connected to '{next_name}' ({next_id}) without "
             f"passing through *~ or gain~",
             suggestion,
+            rule="gain_staging",
+            box_ids=finding_ids(osc_id, next_id),
         ))
 
     return results
@@ -742,5 +748,8 @@ def _trace_gain_inlet(box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds) -> 
             f"({gain_id}) inlet {inlet}{via} with values up to {peak:g} "
             f"(range {lo:g} to {hi:g}) -- gain inputs must stay within 0.0-1.0",
             _UNSAFE_GAIN_SUGGESTION,
+            rule="unsafe_gain_sources",
+            box_ids=finding_ids(src_id, gain_id),
+            port=inlet,
         ))
     return results

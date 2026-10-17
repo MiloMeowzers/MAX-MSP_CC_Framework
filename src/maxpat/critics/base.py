@@ -22,18 +22,60 @@ class CriticResult:
             :func:`tag_results`); top-level findings are unchanged. Part of
             the finding's identity: the save-gate key and the review
             allowlist key include it.
+        rule: Keyword-only. The emitting check's id: its function name
+            without ``_check_`` (``fan_out_without_trigger``,
+            ``gain_staging``, ...), or a per-finding ``ext_*`` /
+            ``rnbo_missing_inner_patcher`` id where one function emits
+            several kinds (fix-plan Q33 / review S7).
+        box_ids: Keyword-only. The real box ids the finding is about,
+            deduplicated, in the order the finding text names them (a
+            subject box the text names only by label may be included);
+            never a placeholder such as ``"?"``. Stored as a tuple.
+        port: Keyword-only. The port index that is part of the finding's
+            identity -- the source outlet for ``fan_out_without_trigger``,
+            the gain inlet for ``unsafe_gain_sources`` and the destination
+            inlet for ``bach_llll_types`` -- else None.
+
+    The review allowlist (tests/review_blocker_allowlist.json) keys on
+    ``(rule, box_ids, port, path)``.
     """
 
-    __slots__ = ("severity", "finding", "suggestion", "path")
+    __slots__ = ("severity", "finding", "suggestion", "path", "rule", "box_ids", "port")
 
-    def __init__(self, severity: str, finding: str, suggestion: str, path: str = ""):
+    def __init__(
+        self,
+        severity: str,
+        finding: str,
+        suggestion: str,
+        path: str = "",
+        *,
+        rule: str = "",
+        box_ids=(),
+        port: int | None = None,
+    ):
         self.severity = severity
         self.finding = finding
         self.suggestion = suggestion
         self.path = path
+        self.rule = rule
+        self.box_ids = tuple(box_ids)
+        self.port = port
 
     def __repr__(self) -> str:
         return f"[{self.severity}] {self.finding}"
+
+
+def finding_ids(*ids) -> tuple:
+    """Box ids for :attr:`CriticResult.box_ids` (Q33).
+
+    Keeps the str ids in order, drops duplicates, ``None`` and the ``"?"``
+    placeholder (a box without an id).
+    """
+    out: list[str] = []
+    for i in ids:
+        if isinstance(i, str) and i and i != "?" and i not in out:
+            out.append(i)
+    return tuple(out)
 
 
 def tag_results(results: list, path: tuple) -> list:

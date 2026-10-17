@@ -32,7 +32,7 @@ from __future__ import annotations
 from collections import deque
 
 from src.maxpat import walk
-from src.maxpat.critics.base import CriticResult, tag_results
+from src.maxpat.critics.base import CriticResult, finding_ids, tag_results
 from src.maxpat.graph import PatchGraph, outlet_is_signal
 
 
@@ -232,6 +232,8 @@ def _check_gain_plugout(scope) -> list[CriticResult]:
             f"device",
             f"Remove {name} and route the final processing stage directly "
             f"to plugout~",
+            rule="gain_plugout",
+            box_ids=finding_ids(stage_id, plugout_id),
         ))
 
     for box_id in order:
@@ -243,6 +245,8 @@ def _check_gain_plugout(scope) -> list[CriticResult]:
                 f"stage to plugout~",
                 "Remove ezdac~ and connect the final processing stage to "
                 "plugout~",
+                rule="gain_plugout",
+                box_ids=finding_ids(box_id),
             ))
 
     return results
@@ -272,6 +276,7 @@ def _check_device_completeness(
                 "blocker",
                 f"M4L {device_type} missing required object: {obj_name}",
                 f"Add {obj_name} to the device",
+                rule="device_completeness",
             ))
 
     return results
@@ -332,6 +337,8 @@ def _check_empty_longnames(scope) -> list[CriticResult]:
                 f"Parameter in box '{box_id}' has empty longname -- "
                 f"parameter_enable is set but no explicit parameter_longname",
                 "Set a descriptive parameter_longname for the control",
+                rule="empty_longnames",
+                box_ids=finding_ids(box_id),
             ))
     return results
 
@@ -354,6 +361,8 @@ def _check_parameter_uniqueness(
                 f"'{seen[longname]}' and '{box_id}' -- each parameter must "
                 f"have a unique longname",
                 f"Rename one of the duplicate '{longname}' parameters",
+                rule="parameter_uniqueness",
+                box_ids=finding_ids(*seen[longname].split("/"), *box_id.split("/")),
             ))
         else:
             seen[longname] = box_id
@@ -379,6 +388,7 @@ def _check_device_quality(
             "M4L device missing openinpresentation=1 -- device UI will not "
             "display in Ableton",
             "Set openinpresentation=1 on the patcher",
+            rule="device_quality",
         ))
 
     if not patcher.get("devicewidth"):
@@ -386,6 +396,7 @@ def _check_device_quality(
             "warning",
             "M4L device missing devicewidth -- Ableton will use default width",
             "Set devicewidth to control device width in Ableton (e.g., 300.0)",
+            rule="device_quality",
         ))
 
     results.extend(_check_parameter_enable(boxes))
@@ -410,6 +421,8 @@ def _check_parameter_enable(boxes: list) -> list[CriticResult]:
                 f"control will not be automatable or saveable in Ableton",
                 f"Set parameter_enable=1 on {maxclass} and add "
                 f"saved_attribute_attributes with longname/shortname",
+                rule="parameter_enable",
+                box_ids=finding_ids(box_id),
             ))
 
     return results
@@ -443,6 +456,8 @@ def _check_missing_info_text(
                     f"Ableton Info View will show no description",
                     "Run polish_m4l_device() or set annotation attribute "
                     "manually",
+                    rule="missing_info_text",
+                    box_ids=finding_ids(box_id),
                 ))
 
     return results
@@ -483,6 +498,7 @@ def _check_missing_live_banks(
             "Push controller layout will use Ableton defaults",
             "Run polish_m4l_device() or add live.banks for explicit "
             "Push bank control",
+            rule="missing_live_banks",
         )]
 
     return []

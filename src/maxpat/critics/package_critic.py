@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections import deque
 
 from src.maxpat import walk
-from src.maxpat.critics.base import CriticResult, tag_results
+from src.maxpat.critics.base import CriticResult, finding_ids, tag_results
 from src.maxpat.db_lookup import ObjectDatabase
 from src.maxpat.graph import PatchGraph
 
@@ -245,6 +245,8 @@ def _check_beap_output_termination(
                 f"does not reach a BEAP output module (bp.Stereo, bp.Mono, etc.)",
                 f"Add a bp.Stereo or bp.Mono at the end of the BEAP chain "
                 f"to properly terminate the signal",
+                rule="beap_output_termination",
+                box_ids=finding_ids(src_id),
             ))
 
     return results
@@ -306,6 +308,8 @@ def _check_beap_vca_staging(
                 f"without passing through a VCA or Level module for gain staging",
                 f"Insert a bp.VCA between '{osc_name}' and the output module "
                 f"for proper BEAP gain staging",
+                rule="beap_vca_staging",
+                box_ids=finding_ids(osc_id),
             ))
 
     return results
@@ -392,6 +396,9 @@ def _check_bach_llll_types(
                 f"use 'bach.flat', 'bach.iter', or 'bach.pack'; to extract an "
                 f"element use 'bach.nth N' (1-based, one call per index, with "
                 f"'@unwrap 1' when the element is itself a sublist)",
+                rule="bach_llll_types",
+                box_ids=finding_ids(src_id, dst_id),
+                port=dst_inlet,
             ))
 
     return results
@@ -461,6 +468,7 @@ def _check_community_extracted(
                 f"validation coverage may be incomplete",
                 f"Run package extraction for '{pkg}' to enable full validation "
                 f"and object database lookups",
+                rule="community_extracted",
             ))
 
     return results
@@ -520,6 +528,7 @@ def _check_install_state(
             f"Remove '{name}' or replace it with an object that exists in this "
             f"install; if the package really is installed, re-run package "
             f"extraction so the database records '{name}' as present",
+            rule="install_state",
         ))
 
     return results

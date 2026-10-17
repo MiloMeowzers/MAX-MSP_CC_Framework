@@ -73,6 +73,7 @@ def review_external(
             "blocker",
             'Missing #include "c74_min.h" -- required Min-DevKit header',
             'Add #include "c74_min.h" at the top of the source file',
+            rule="ext_missing_include",
         ))
 
     # Check 2: MIN_EXTERNAL macro (on the mask)
@@ -84,6 +85,7 @@ def review_external(
             "Missing MIN_EXTERNAL() macro -- MAX cannot load the external "
             "without this registration",
             "Add MIN_EXTERNAL(ClassName) at the end of the source file",
+            rule="ext_missing_min_external",
         ))
     else:
         ext_class_name = min_ext_match.group(1).strip()
@@ -92,6 +94,7 @@ def review_external(
                 "blocker",
                 "MIN_EXTERNAL() names no class -- MAX cannot load the external",
                 "Pass the object class: MIN_EXTERNAL(ClassName)",
+                rule="ext_min_external_no_class",
             ))
 
     # Check 3: the object class (the one deriving from object<...>, else the
@@ -112,6 +115,7 @@ def review_external(
                 f"Use '{cpp_identifier(tok)}' in both places -- a MAX name's "
                 f"'~' maps to '_tilde', and min-api's CMake builds the folder "
                 f"'{cmake_folder_name(tok)}' as the '~' external",
+                rule="ext_invalid_identifier",
             ))
 
     if declared_class and ext_class_name and declared_class != ext_class_name:
@@ -121,6 +125,7 @@ def review_external(
             f"class declaration '{declared_class}'",
             f"Change MIN_EXTERNAL to MIN_EXTERNAL({declared_class}) "
             f"or rename the class to '{ext_class_name}'",
+            rule="ext_class_mismatch",
         ))
 
     # Check 4: Inlet presence for message/scheduler archetypes (on the mask)
@@ -131,6 +136,7 @@ def review_external(
                 f"No inlet<> found for {archetype} archetype -- "
                 f"external will have no input",
                 "Add at least one inlet<> declaration to the class",
+                rule="ext_missing_inlet",
             ))
 
     # Check 5: DSP -- sample_operator or vector_operator
@@ -142,6 +148,7 @@ def review_external(
                 "but neither was found",
                 "Add a sample_operator or vector_operator method to process "
                 "audio samples",
+                rule="ext_missing_dsp_operator",
             ))
 
     # Check 6: Scheduler -- timer<>
@@ -151,6 +158,7 @@ def review_external(
                 "blocker",
                 "Scheduler archetype requires timer<> but none was found",
                 "Add a timer<> member to drive scheduled events",
+                rule="ext_missing_timer",
             ))
 
     # Check 7: TODO comments (informational; raw code -- they live in comments)
@@ -164,6 +172,7 @@ def review_external(
             "note",
             f"Found {len(todo_matches)} TODO comment(s): {todo_summary}",
             "Implement the TODO items before using the external",
+            rule="ext_todo",
         ))
 
     return results

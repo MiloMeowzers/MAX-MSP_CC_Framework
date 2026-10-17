@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import copy
 import json
-import re
 import shutil
 from pathlib import Path
 
@@ -76,25 +75,13 @@ def _generic_text(label, box_id, dsp_label, dsp_id):
     )
 
 
-def _strip_prefix(finding: str) -> str:
-    if finding.startswith("[") and "] " in finding:
-        return finding.split("] ", 1)[1]
-    return finding
-
-
 def _q24(results):
-    return [r for r in results if _strip_prefix(r.finding).startswith(_Q24)]
-
-
-_ID_RE = re.compile(r"Uninitialized state: '[^']*' \((obj-\d+)\)")
+    """Q24 findings, by the structured CriticResult rule (Q33)."""
+    return [r for r in results if getattr(r, "rule", "") == "uninitialized_state"]
 
 
 def _q24_ids(results):
-    out = []
-    for r in _q24(results):
-        m = _ID_RE.search(_strip_prefix(r.finding))
-        out.append(m.group(1) if m else None)
-    return out
+    return [r.box_ids[0] if r.box_ids else None for r in _q24(results)]
 
 
 def _review(boxes, lines, db, **kw):
@@ -1130,8 +1117,7 @@ def _corpus_q24(rel: str, db) -> list:
             res = review_patch(_load_rel(rel), db=db)
         out = []
         for r in _q24(res):
-            m = _ID_RE.search(_strip_prefix(r.finding))
-            out.append((r.path, m.group(1) if m else None, r.severity))
+            out.append((r.path, r.box_ids[0] if r.box_ids else None, r.severity))
         _CORPUS_CACHE[rel] = out
     return _CORPUS_CACHE[rel]
 
