@@ -61,7 +61,6 @@ _INDEX_MODULES = (
     "src.maxpat.hooks",
     "src.maxpat.layout",
     "src.maxpat.aesthetics",
-    "src.maxpat.memory",
     "src.maxpat.testing",
     "src.maxpat.m4l_polish",
 )

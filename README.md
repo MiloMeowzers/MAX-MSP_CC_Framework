@@ -196,7 +196,7 @@ The framework has four core layers:
 
 **Validation Pipeline** — Every patch passes through structure validation, `signal_role`-aware connection bounds and signal-type checking, package gating, domain-restriction guards, and an embedded GenExpr codebox walker, followed by seven domain-specific critics (DSP signal flow, structure, layout, RNBO compatibility, C++ code review, package conventions — BEAP signal standards, Bach llll type checking, community package extraction verification — and Max for Live device conventions). Blockers trigger automatic revision before output is written. As a backstop, `save_patch_roundtrip` and `write_gendsp` re-run validation and the critics before writing: they refuse any blocker the save would introduce (blockers already in the file being edited are allowed) and any change to a subpatcher's port order, and warn about removed cords; `force=True` overrides. Aesthetic styling (panels, comments, patcher colors) is applied automatically during generation.
 
-For full technical documentation — agent internals, validation details, object database schema, memory system, and architecture — see [TECHNICAL.md](TECHNICAL.md).
+For full technical documentation — agent internals, validation details, object database schema, and architecture — see [TECHNICAL.md](TECHNICAL.md).
 
 ## Project Structure
 

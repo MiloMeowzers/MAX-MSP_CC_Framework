@@ -1061,8 +1061,8 @@ def extract_all(
         if pkg_name:
             if pkg_name not in package_buckets:
                 package_buckets[pkg_name] = {}
-            # Ensure rnbo_compatible field exists (merge_sources.py adds it
-            # for domain files, but per-package output bypasses that step)
+            # Per-package entries are not enriched afterwards, so default
+            # rnbo_compatible here
             if "rnbo_compatible" not in obj:
                 obj["rnbo_compatible"] = False
             package_buckets[pkg_name][name] = obj

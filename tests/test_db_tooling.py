@@ -31,7 +31,6 @@ from tests.test_sync_max_bundle import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REAL_DB = REPO_ROOT / ".claude" / "max-objects"
 REAL_DOMAINS = ("max", "msp", "jitter", "mc", "gen", "m4l", "rnbo")
-VALIDATE_DB_PATH = REPO_ROOT / ".claude" / "scripts" / "validate_db.py"
 EXTRACTOR_PATH = REPO_ROOT / ".claude" / "scripts" / "extract_objects.py"
 
 
@@ -312,19 +311,6 @@ class TestI6StringVersions:
 
     def test_bundle_index_version_is_a_string(self, world: dict) -> None:
         assert sync.build_bundle_index(world["app"])["version"] == "9.7"
-
-
-class TestVersionTuple:
-    @pytest.fixture(scope="class")
-    def validate_db(self):
-        return _load_by_path("_q30_validate_db", VALIDATE_DB_PATH)
-
-    @pytest.mark.parametrize(
-        "value, expected",
-        [("9.10", (9, 10)), (8.1, (8, 1)), (9, (9,)), ("9", (9,)), (True, None), (None, None), ("x", None)],
-    )
-    def test_version_tuple(self, validate_db, value, expected) -> None:
-        assert validate_db._version_tuple(value) == expected
 
 
 # ══ I6 part 2: objectfile aliases (sync report, --apply aliases, audit_db) ══

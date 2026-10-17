@@ -1,6 +1,6 @@
 # Technical Documentation
 
-This document covers the internals of the MAX/MSP Claude Code Framework — the object database, agent system, validation pipeline, code generation, layout engine, and memory system.
+This document covers the internals of the MAX/MSP Claude Code Framework — the object database, agent system, validation pipeline, code generation, and layout engine.
 
 For setup and usage, see [README.md](README.md).
 
@@ -17,7 +17,6 @@ For setup and usage, see [README.md](README.md).
 - [DSP Pre-Flight Simulation](#dsp-pre-flight-simulation)
 - [Code Generation](#code-generation)
 - [Layout Engine](#layout-engine)
-- [Memory System](#memory-system)
 - [Project Lifecycle](#project-lifecycle)
 
 ---
@@ -286,8 +285,6 @@ After generation, the router passes output through the critic loop before writin
 |-------|------|----------|
 | **max-critic** | Quality assurance | Orchestrates generate-review-revise loop using Python critics. No hard round limit — loops until clean. |
 | **max-lifecycle** | Project management | Creates projects, tracks stages (ideation → discuss → research → build → verify), generates test checklists |
-
-> **No memory agent.** There is no `max-memory-agent` skill. Memory persistence is a **library only**: the `MemoryStore` API (`src/maxpat/memory.py`) and `patterns.md` files remain available, but nothing auto-injects memory into generation or writes new patterns back automatically.
 
 ---
 
@@ -701,48 +698,6 @@ Boxes with `presentation: 1` are separately laid out in a grid for the patch's p
 
 ---
 
-## Memory System
-
-A dual-scope persistent memory **library** (`src/maxpat/memory.py`) is available for storing patterns across sessions.
-
-> **Library, not agent.** There is no memory agent, and nothing drives auto-inject or auto-write-back. `MemoryStore` is a plain API — code that wants to persist or recall patterns calls it explicitly.
-
-### Scopes
-
-| Scope | Location | Contains |
-|-------|----------|----------|
-| **Global** | `~/.claude/max-memory/` | Cross-project patterns, organized by domain subdirectories |
-| **Project** | `patches/{project}/.max-memory/` | Project-specific patterns in a single `patterns.md` file |
-
-### Memory Entry
-
-```python
-MemoryEntry(
-    pattern: str,    # Pattern name (e.g., "prefer line~ for gain control")
-    domain: str,     # Domain category (dsp, patch, ui, js, routing, layout, node)
-    observed: str,   # ISO date when pattern was observed
-    context: str,    # How/where it was discovered
-    rule: str        # Actionable rule for future generations
-)
-```
-
-### Behavior
-
-- **Manual inject/recall**: There is no automatic injection. A caller reads project memory plus domain-filtered global memory via `MemoryStore.read()` when it wants prior patterns as context.
-- **Manual write-back**: New patterns are persisted only when a caller explicitly invokes `MemoryStore.write()` — nothing writes back automatically after generation.
-- **Deduplication**: Entries are deduplicated by pattern name (case-insensitive) within the same domain
-
-### MemoryStore API
-
-| Method | Purpose |
-|--------|---------|
-| `write(entry)` | Append entry (returns `False` if duplicate) |
-| `read(domain=None)` | Read entries, optionally filtered by domain |
-| `list_domains()` | List all domains with stored entries |
-| `delete(pattern, domain)` | Remove entry by pattern name |
-
----
-
 ## Project Lifecycle
 
 Projects follow a structured workflow managed by `src/maxpat/project.py` and the `max-lifecycle` agent.
@@ -763,8 +718,6 @@ Projects follow a structured workflow managed by `src/maxpat/project.py` and the
 patches/{project-name}/
 ├── context.md          # Vision, requirements, decisions, research notes
 ├── status.md           # Current stage, progress %, timestamps
-├── .max-memory/
-│   └── patterns.md     # Project-specific learned patterns
 ├── generated/          # All output from agents
 │   ├── *.maxpat        # MAX patches
 │   ├── *.gendsp        # Gen~ patches
@@ -819,5 +772,4 @@ Key test areas:
 - DSP pre-flight simulation (topologies, classifier verdicts, CLI exit codes)
 - Object database schema and lookup, including v5.0 schema-hardening fields and audit accessors
 - RNBO database and validation
-- Memory store operations
 - Write hooks and file operations
