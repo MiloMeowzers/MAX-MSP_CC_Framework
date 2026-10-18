@@ -165,6 +165,7 @@ The `patches/` directory contains example and user-created projects:
 | **kicksynth** | Kick drum synthesizer with Gen~ pitch envelopes, click/sub/noise layers, and drive/saturation | `.maxpat`, `.js` |
 | **knock** | Deep knocking-sound generator — a gen~ kick-style voice triggered by velocity, with randomness and bassiness controls that vary each hit | `.maxpat` |
 | **looper** | Pedal-style audio looper with one-button record/play/overdub cycling, overdub feedback, and a waveform display | `.maxpat`, `.gendsp` |
+| **max-bridge** | Spike: resident UDP/OSC bridge patch driven by tools/max_bridge.py — opens a patch in running MAX, captures console errors, records output for dsp_sim analysis, screenshots the window | `.maxpat` |
 | **minitaur** | Digital recreation of the Moog Minitaur bass synthesizer with dual VCOs, Moog ladder filter, and LFO modulation | `.maxpat`, `.js` |
 | **mixer** | Virtual mixing console with channel strips, aux buses, master section, and per-track sends | `.maxpat`, `.js` |
 | **performancepatchtest** | Live performance cue system with multiband compression, feedback delay, distortion, and soundfile playback | `.maxpat`, `.gendsp` |
