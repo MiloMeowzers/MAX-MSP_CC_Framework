@@ -415,3 +415,399 @@ class TestCli:
         assert (bridge.TAP_L, bridge.TAP_R) == ("__maxbridge_L", "__maxbridge_R")
         assert bridge.CLOSE_RECEIVE == "__maxbridge_close"
         assert bridge.COPY_PREFIX == "__maxbridge_"
+
+
+# ---------------------------------------------------------------------------
+# Task 2: instrument, analyze, shoot, check
+# ---------------------------------------------------------------------------
+
+def _tone_patch(path: Path, db, dac_args=None, both=True, dac="dac~") -> Path:
+    from src.maxpat.hooks import format_patch_text
+    p = Patcher(db=db)
+    osc = p.add_box("cycle~", ["440"], x=20, y=20)
+    g = p.add_box("*~", ["0.2"], x=20, y=60)
+    out = p.add_box(dac, dac_args or [], x=20, y=100)
+    p.add_connection(osc, 0, g, 0)
+    p.add_connection(g, 0, out, 0)
+    if both and out.numinlets > 1:
+        p.add_connection(g, 0, out, 1)
+    path.write_text(format_patch_text(p.to_dict()))
+    return path
+
+
+def _load(path: Path) -> Patcher:
+    return Patcher.from_dict(json.loads(path.read_text()))
+
+
+def _texts(p: Patcher) -> list[str]:
+    return [b.text for b in p.boxes]
+
+
+def _cords(p: Patcher) -> set:
+    return {(l.source_id, l.source_outlet, l.dest_id, l.dest_inlet) for l in p.lines}
+
+
+class TestInstrument:
+
+    def test_taps_both_channels(self, tmp_path, db):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        before = src.read_bytes()
+        copy, report = bridge.instrument(src)
+        assert copy == tmp_path / "__maxbridge_tone.maxpat"
+        assert src.read_bytes() == before
+        assert report["taps"] == {"L": 1, "R": 1}
+        assert report["no_output_tap"] is False and report["close_hook"] is True
+        orig, inst = _load(src), _load(copy)
+        assert _cords(orig) <= _cords(inst)
+        dac_cords = lambda p: sorted(c for c in _cords(p) if c[2] == next(
+            b.id for b in p.boxes if b.text == "dac~"))
+        assert dac_cords(orig) == dac_cords(inst)
+        by_id = {b.id: b for b in inst.boxes}
+        gain = next(b for b in inst.boxes if b.text == "*~ 0.2")
+        for tap in (bridge.TAP_L, bridge.TAP_R):
+            (send,) = [b for b in inst.boxes if b.text == f"send~ {tap}"]
+            assert [(by_id[l.source_id], l.source_outlet) for l in inst.lines
+                    if l.dest_id == send.id] == [(gain, 0)]
+        (rcv,) = [b for b in inst.boxes if b.text == f"receive {bridge.CLOSE_RECEIVE}"]
+        (msg,) = [b for b in inst.boxes if b.maxclass == "message" and b.text == "clean, wclose"]
+        (tp,) = [b for b in inst.boxes if b.text == "thispatcher"]
+        succ = {(l.source_id, l.dest_id) for l in inst.lines}
+        assert (rcv.id, msg.id) in succ and (msg.id, tp.id) in succ
+        copy.unlink()
+
+    def test_copy_validates_clean(self, tmp_path, db):
+        copy, _ = bridge.instrument(_tone_patch(tmp_path / "v.maxpat", db))
+        errors = [r for r in validate_patch(json.loads(copy.read_text()), db=db)
+                  if r.level == "error"]
+        copy.unlink()
+        assert errors == []
+
+    def test_channels_3_4_warn(self, tmp_path, db):
+        copy, report = bridge.instrument(_tone_patch(tmp_path / "q.maxpat", db, ["3", "4"]))
+        copy.unlink()
+        assert report["taps"] == {"L": 0, "R": 0}
+        assert len(report["warnings"]) == 2
+        assert report["no_output_tap"] is True
+
+    def test_dac_2_is_right(self, tmp_path, db):
+        copy, report = bridge.instrument(_tone_patch(tmp_path / "r.maxpat", db, ["2"]))
+        copy.unlink()
+        assert report["taps"] == {"L": 0, "R": 1}
+
+    def test_ezdac(self, tmp_path, db):
+        copy, report = bridge.instrument(_tone_patch(tmp_path / "e.maxpat", db, dac="ezdac~"))
+        copy.unlink()
+        assert report["taps"] == {"L": 1, "R": 1}
+
+    def test_dac_in_subpatcher(self, tmp_path, db):
+        from src.maxpat.hooks import format_patch_text
+        p = Patcher(db=db)
+        _box, inner = p.add_subpatcher("out", inlets=0, outlets=0, x=20, y=20)
+        osc = inner.add_box("cycle~", ["220"], x=20, y=20)
+        g = inner.add_box("*~", ["0.1"], x=20, y=60)
+        dac = inner.add_box("dac~", [], x=20, y=100)
+        inner.add_connection(osc, 0, g, 0)
+        inner.add_connection(g, 0, dac, 0)
+        src = tmp_path / "sub.maxpat"
+        src.write_text(format_patch_text(p.to_dict()))
+        copy, report = bridge.instrument(src)
+        inst = _load(copy)
+        copy.unlink()
+        assert report["taps"] == {"L": 1, "R": 0}
+        sub = next(b for b in inst.boxes if b._inner_patcher is not None)
+        assert f"send~ {bridge.TAP_L}" in _texts(sub._inner_patcher)
+        assert f"send~ {bridge.TAP_L}" not in _texts(inst)
+
+    @pytest.mark.parametrize("name,args", [
+        ("mc.dac~", []), ("plugout~", []), ("poly~", ["voice", "4"]), ("pfft~", ["fx", "1024"]),
+    ])
+    def test_unsupported(self, tmp_path, db, name, args):
+        from src.maxpat.hooks import format_patch_text
+        p = Patcher(db=db)
+        p.add_box(name, args, x=20, y=20)
+        src = tmp_path / "u.maxpat"
+        src.write_text(format_patch_text(p.to_dict()))
+        copy, report = bridge.instrument(src)
+        copy.unlink()
+        assert [u["name"] for u in report["unsupported"]] == [name]
+        assert "not tapped" in report["unsupported"][0]["reason"]
+
+    def test_bpatcher_unsupported(self, tmp_path):
+        d = {"patcher": {"fileversion": 1, "rect": [0, 0, 400, 300], "boxes": [
+            {"box": {"id": "obj-1", "maxclass": "bpatcher", "name": "x.maxpat",
+                     "numinlets": 0, "numoutlets": 0, "patching_rect": [10, 10, 100, 60]}}],
+            "lines": []}}
+        src = tmp_path / "b.maxpat"
+        src.write_text(json.dumps(d))
+        copy, report = bridge.instrument(src)
+        copy.unlink()
+        assert [u["name"] for u in report["unsupported"]] == ["bpatcher"]
+
+    def test_no_dac(self, tmp_path, db):
+        from src.maxpat.hooks import format_patch_text
+        p = Patcher(db=db)
+        p.add_box("loadbang", x=20, y=20)
+        src = tmp_path / "n.maxpat"
+        src.write_text(format_patch_text(p.to_dict()))
+        copy, report = bridge.instrument(src)
+        copy.unlink()
+        assert report["no_output_tap"] is True
+
+    def test_copies_are_gitignored(self):
+        import subprocess
+        r = subprocess.run(
+            ["git", "check-ignore", "-q", "patches/simple-fm/generated/__maxbridge_x.maxpat"],
+            cwd=bridge.REPO_ROOT)
+        assert r.returncode == 0
+
+
+def _wav(path: Path, data, sr: int = 44100) -> Path:
+    from scipy.io import wavfile
+    wavfile.write(str(path), sr, data)
+    return path
+
+
+class TestAnalyze:
+
+    def test_sine(self, tmp_path):
+        p = tmp_path / "s.wav"
+        _write_sine(p, 440.0, 0.2)
+        r = bridge.analyze(p)
+        for ch in ("L", "R"):
+            m = r["channels"][ch]
+            assert abs(m["pitch_hz"] - 440.0) < 1.0
+            assert abs(m["peak"] - 0.2) < 1e-3
+            assert abs(m["dc"]) < 1e-3
+            assert m["flags"] == []
+        assert r["flags"] == []
+
+    def test_dc(self, tmp_path):
+        import numpy as np
+        p = _wav(tmp_path / "d.wav", np.full((44100, 2), 0.5, dtype=np.float32))
+        r = bridge.analyze(p)
+        m = r["channels"]["L"]
+        assert {"dc_offset", "silent"} <= set(m["flags"])
+        assert m["pitch_hz"] == 0.0
+        assert abs(m["dc"] - 0.5) < 1e-6
+
+    def test_nan(self, tmp_path):
+        import numpy as np
+        t = np.arange(44100) / 44100
+        x = (0.2 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+        x[20000:20010] = np.nan
+        p = _wav(tmp_path / "n.wav", np.stack([x, x], axis=1))
+        m = bridge.analyze(p)["channels"]["L"]
+        assert m["nan"] == 10
+        assert "nonfinite" in m["flags"]
+        assert abs(m["peak"] - 0.2) < 1e-3
+
+    @pytest.mark.parametrize("amp,flag", [(1.5, "clipping"), (20.0, "runaway")])
+    def test_loud(self, tmp_path, amp, flag):
+        p = tmp_path / "l.wav"
+        _write_sine(p, 220.0, amp)
+        assert flag in bridge.analyze(p)["flags"]
+
+    def test_int16_scaled(self, tmp_path):
+        import numpy as np
+        t = np.arange(44100) / 44100
+        x = (0.5 * 32767 * np.sin(2 * np.pi * 440 * t)).astype(np.int16)
+        r = bridge.analyze(_wav(tmp_path / "i.wav", x))
+        assert abs(r["channels"]["L"]["peak"] - 0.5) < 1e-3
+        assert any("NaN" in w for w in r["warnings"])
+
+    def test_channels_l_only(self, tmp_path):
+        p = tmp_path / "c.wav"
+        _write_sine(p, 440.0, 0.2)
+        assert list(bridge.analyze(p, channels=["L"])["channels"]) == ["L"]
+
+    def test_cli(self, tmp_path, capsys):
+        p = tmp_path / "c.wav"
+        _write_sine(p, 440.0, 0.2)
+        assert bridge.main(["analyze", str(p), "--channels", "L"]) == 0
+        assert list(json.loads(capsys.readouterr().out)["channels"]) == ["L"]
+        _write_sine(p, 440.0, 1.5)
+        assert bridge.main(["analyze", str(p)]) == 1
+
+
+class FakeRun:
+    """Stands in for bridge._run: answers osascript with a window list (after
+    ``appear_after`` empty answers) and writes a png for screencapture."""
+
+    def __init__(self, rows, write_png=True, appear_after=0):
+        self.rows = rows
+        self.write_png = write_png
+        self.appear_after = appear_after
+        self.calls: list[list[str]] = []
+
+    def __call__(self, cmd, timeout):
+        import subprocess
+        self.calls.append(list(cmd))
+        out = ""
+        if cmd[0] == "osascript":
+            n = len([c for c in self.calls if c[0] == "osascript"])
+            if n > self.appear_after:
+                out = "\n".join("\t".join(str(v) for v in r) for r in self.rows)
+        elif cmd[0] == "screencapture" and self.write_png:
+            Path(cmd[-1]).write_bytes(b"\x89PNG fake")
+        return subprocess.CompletedProcess(cmd, 0, out, "")
+
+
+@pytest.fixture
+def fast_shot(monkeypatch):
+    monkeypatch.setattr(bridge, "SHOT_LOAD_SETTLE", 0.0)
+    monkeypatch.setattr(bridge, "SHOT_POLL", 0.01)
+
+
+class TestShoot:
+
+    ROWS = [(11, "other", 0, 0, 100, 100), (42, "__maxbridge_tone", 10, 20, 640, 480)]
+
+    def test_finds_window_and_captures(self, tmp_path, monkeypatch, fast_shot):
+        fake = FakeRun(self.ROWS, appear_after=1)
+        monkeypatch.setattr(bridge, "_run", fake)
+        png = tmp_path / "s.png"
+        r = bridge.shoot("__maxbridge_tone", png, timeout=2.0)
+        assert r == {"window_id": 42, "title": "__maxbridge_tone", "width": 640, "height": 480}
+        (cap,) = [c for c in fake.calls if c[0] == "screencapture"]
+        assert cap == ["screencapture", "-x", "-o", "-l", "42", str(png)]
+        jxa = next(c for c in fake.calls if c[0] == "osascript")
+        assert jxa[:3] == ["osascript", "-l", "JavaScript"]
+        assert '"Max"' in jxa[-1] and "kCGWindowLayer === 0" in jxa[-1]
+
+    def test_empty_png(self, tmp_path, monkeypatch, fast_shot):
+        monkeypatch.setattr(bridge, "_run", FakeRun(self.ROWS, write_png=False))
+        with pytest.raises(bridge.ShotError):
+            bridge.shoot("__maxbridge_tone", tmp_path / "s.png", timeout=1.0)
+
+    def test_no_window(self, tmp_path, monkeypatch, fast_shot):
+        monkeypatch.setattr(bridge, "_run", FakeRun([(11, "other", 0, 0, 1, 1)]))
+        t0 = time.monotonic()
+        with pytest.raises(bridge.ShotError):
+            bridge.shoot("__maxbridge_tone", tmp_path / "s.png", timeout=0.3)
+        assert time.monotonic() - t0 < 2.0
+
+    def test_wait_gone(self, monkeypatch, fast_shot):
+        monkeypatch.setattr(bridge, "_run", FakeRun(self.ROWS))
+        assert bridge.wait_gone(99, timeout=0.1) is True
+        assert bridge.wait_gone(42, timeout=0.1) is False
+
+
+@pytest.fixture
+def run_dir(tmp_path, monkeypatch):
+    d = tmp_path / "run"
+    d.mkdir()
+    monkeypatch.setattr(bridge, "_make_run_dir", lambda: d)
+    return d
+
+
+def _check(fb, patch, *extra, capsys):
+    argv = ["check", str(patch), "--port", str(fb.port), "--reply-port", "0",
+            "--settle", "0.1", "--load-timeout", "1.5", "--timeout", "1.0", *extra]
+    rc = bridge.main(argv)
+    return rc, json.loads(capsys.readouterr().out)
+
+
+class TestCheck:
+
+    def test_error_run(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        before = src.read_bytes()
+        with FakeBridge(errors=True) as fb:
+            rc, rep = _check(fb, src, "--record", "0.2", capsys=capsys)
+        assert rc == 1 and rep["exit_code"] == 1 and rep["verdict"] == "findings"
+        assert rep["errors"][0]["source"] == "error"
+        assert "No such object" in rep["errors"][0]["text"]
+        assert any(e["source"] == "console_write" for e in rep["errors"])
+        assert rep["record"] is not None and rep["record"]["flags"] == []
+        assert not (tmp_path / "__maxbridge_tone.maxpat").exists()
+        assert src.read_bytes() == before
+
+    def test_clean_run_and_order(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge() as fb:
+            rc, rep = _check(fb, src, "--record", "0.2", capsys=capsys)
+        assert rc == 0 and rep["verdict"] == "clean", rep
+        assert rep["errors"] == [] and rep["closed"] is None
+        copy = tmp_path / "__maxbridge_tone.maxpat"
+        opts = bridge.build_parser().parse_args(["check", str(src), "--record", "0.2"])
+        planned = [a for a, _ in bridge.plan_messages(copy, run_dir, opts)]
+        assert fb.addresses == planned
+        assert planned[:2] == ["/ping", "/console"]
+        assert "/open" in planned and "/sf" in planned and planned[-1] == "/ping"
+        assert ("/dsp", [0]) in fb.received
+
+    def test_bridge_stops_answering(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(mute_after_open=True) as fb:
+            rc, rep = _check(fb, src, capsys=capsys)
+        assert rc == 2 and rep["verdict"] == "bridge_failed"
+        assert not (tmp_path / "__maxbridge_tone.maxpat").exists()
+
+    def test_feedback_cap(self, tmp_path, db, run_dir, capsys, monkeypatch):
+        monkeypatch.setattr(bridge, "MAX_EVENTS", 50)
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(flood=80) as fb:
+            rc, rep = _check(fb, src, capsys=capsys)
+        assert rc == 1 and rep["feedback_suspected"] is True
+        assert len(rep["events_raw"]) == 50
+        assert fb.received.count(("/listen", [0])) >= 2
+
+    def test_openfile_mode(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge() as fb:
+            rc, _rep = _check(fb, src, "--open-mode", "openfile", capsys=capsys)
+        assert rc == 0
+        assert "/openfile" in fb.addresses and "/closefile" in fb.addresses
+        assert "/open" not in fb.addresses and "/close" not in fb.addresses
+
+    def test_dry_run(self, tmp_path, db, run_dir, capsys, monkeypatch):
+        def no_socket(*a, **k):
+            raise AssertionError("dry run opened a socket")
+        monkeypatch.setattr(bridge.socket, "socket", no_socket)
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        rc = bridge.main(["check", str(src), "--record", "1", "--dry-run"])
+        out = capsys.readouterr().out
+        assert rc == 0
+        assert "/open " in out and "/sf record 1000" in out
+        assert not (tmp_path / "__maxbridge_tone.maxpat").exists()
+
+    def test_refuses_outside_roots(self, tmp_path, db, monkeypatch, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        monkeypatch.setattr(bridge, "_allowed_roots", lambda: [tmp_path / "elsewhere"])
+        assert bridge.main(["check", str(src), "--dry-run"]) == 2
+        assert "refused" in capsys.readouterr().err
+        assert not (tmp_path / "__maxbridge_tone.maxpat").exists()
+
+    def test_refuses_non_maxpat(self, tmp_path):
+        f = tmp_path / "x.txt"
+        f.write_text("{}")
+        assert bridge.main(["check", str(f), "--dry-run"]) == 2
+
+    def test_open_requires_copy_prefix(self):
+        with bridge.Bridge(port=_free_port(), reply_port=0) as b:
+            with pytest.raises(ValueError):
+                b.send("/open", "/tmp/tone.maxpat")
+            with pytest.raises(ValueError):
+                b.send("/openfile", "/tmp/tone.maxpat")
+
+    def test_shot_and_closed(self, tmp_path, db, run_dir, capsys, monkeypatch):
+        shots = []
+
+        def fake_shoot(prefix, png, timeout=10.0):
+            shots.append((prefix, Path(png)))
+            return {"window_id": 7, "title": prefix, "width": 10, "height": 10}
+
+        monkeypatch.setattr(bridge, "shoot", fake_shoot)
+        monkeypatch.setattr(bridge, "wait_gone", lambda wid, timeout=5.0: True)
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge() as fb:
+            rc, rep = _check(fb, src, "--shot", capsys=capsys)
+        assert rc == 0, rep
+        assert shots == [("__maxbridge_tone", run_dir / "shot.png")]
+        assert rep["shot"]["window_id"] == 7 and rep["closed"] is True
+
+    def test_check_defaults(self):
+        a = bridge.build_parser().parse_args(["check", "x.maxpat"])
+        assert (a.settle, a.record, a.shot, a.open_mode, a.load_timeout) == (
+            3.0, None, None, "pcontrol", 30.0)
+        assert a.console_all is False and a.leave_dsp_on is False and a.dry_run is False
