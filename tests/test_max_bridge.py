@@ -806,8 +806,82 @@ class TestCheck:
         assert shots == [("__maxbridge_tone", run_dir / "shot.png")]
         assert rep["shot"]["window_id"] == 7 and rep["closed"] is True
 
+    def test_check_defaults_are_documented(self):
+        assert "--settle" in bridge.__doc__ and "--record" in bridge.__doc__
+
     def test_check_defaults(self):
         a = bridge.build_parser().parse_args(["check", "x.maxpat"])
         assert (a.settle, a.record, a.shot, a.open_mode, a.load_timeout) == (
             3.0, None, None, "pcontrol", 30.0)
         assert a.console_all is False and a.leave_dsp_on is False and a.dry_run is False
+
+
+# ---------------------------------------------------------------------------
+# Task 3: fixtures, checklist, open questions
+# ---------------------------------------------------------------------------
+
+PROJECT_DIR = bridge.REPO_ROOT / "patches" / "max-bridge"
+FIXTURES = ("fx-clean", "fx-dc", "fx-badargs", "fx-nosuchobj", "fx-genfail")
+CHECKLIST = PROJECT_DIR / "test-results" / "v0.1.0-bridge-checklist.md"
+OPEN_QUESTIONS = PROJECT_DIR / "open-questions.md"
+
+
+class TestFixtures:
+
+    def test_fixtures_exist_outside_generated(self):
+        for name in FIXTURES:
+            assert (PROJECT_DIR / "fixtures" / f"{name}.maxpat").is_file(), name
+        assert sorted(p.name for p in (PROJECT_DIR / "generated").iterdir()) == ["max-bridge.maxpat"]
+
+    @pytest.mark.parametrize("name,tapped", [
+        ("fx-clean", True), ("fx-dc", True), ("fx-genfail", True),
+        ("fx-nosuchobj", False), ("fx-badargs", False),
+    ])
+    def test_instrument_fixture(self, name, tapped):
+        src = PROJECT_DIR / "fixtures" / f"{name}.maxpat"
+        before = src.read_bytes()
+        copy, report = bridge.instrument(src)
+        try:
+            if tapped:
+                assert report["taps"] == {"L": 1, "R": 1}
+            else:
+                assert report["no_output_tap"] is True
+        finally:
+            copy.unlink()
+        assert src.read_bytes() == before
+        assert not copy.exists()
+
+    @pytest.mark.parametrize("name", FIXTURES)
+    def test_fixture_round_trips(self, name):
+        from src.maxpat.hooks import format_patch_text
+        text = (PROJECT_DIR / "fixtures" / f"{name}.maxpat").read_text()
+        d = json.loads(text)
+        assert format_patch_text(Patcher.from_dict(d).to_dict(), text) == text
+
+    def test_deliberate_errors_present(self):
+        nso = (PROJECT_DIR / "fixtures" / "fx-nosuchobj.maxpat").read_text()
+        assert '"osc~ 440"' in nso and "DELIBERATE ERROR FIXTURE" in nso
+        gen = json.loads((PROJECT_DIR / "fixtures" / "fx-genfail.maxpat").read_text())
+        codes = [ib["box"].get("code") for b in gen["patcher"]["boxes"] if "patcher" in b["box"]
+                 for ib in b["box"]["patcher"]["boxes"] if ib["box"]["maxclass"] == "codebox"]
+        assert codes == ["Param g(0.5);\ng = in1;\nout1 = g;"]
+
+    def test_checklist_names_every_fixture(self):
+        text = CHECKLIST.read_text()
+        for name in FIXTURES:
+            assert f"fixtures/{name}.maxpat" in text, name
+        assert "find patches -name '__maxbridge_*'" in text
+        assert "git status --porcelain patches/simple-fm" in text
+
+    def test_every_question_cites_a_checklist_step(self):
+        import re
+        text = OPEN_QUESTIONS.read_text()
+        steps = {int(n) for n in re.findall(r"^(\d+)\. \[ \]", CHECKLIST.read_text(), re.M)}
+        entries = re.split(r"\n(?=(?:\d+|A\d|N\d)\. )", text)
+        entries = [e for e in entries if re.match(r"(?:\d+|A\d|N\d)\. ", e)]
+        assert len(entries) == 10 + 6 + 5
+        for e in entries:
+            m = re.search(r"Answered by: checklist step (\d+)", e)
+            assert m, e[:60]
+            assert int(m.group(1)) in steps, e[:60]
+            assert "Answer:" in e

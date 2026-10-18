@@ -59,6 +59,16 @@ Fixtures live in `fixtures/`, never in `generated/`: `tests/test_integration_pat
 
 No allowlist entries are added for either.
 
+| Fixture | Content | Expected | Writer |
+|---|---|---|---|
+| `fx-clean` | `cycle~ 440` -> `*~ 0.2` -> `dac~` (both inlets) | no errors; peak ~0.2, pitch ~440 Hz, dc ~0 | A |
+| `fx-dc` | `sig~ 0.5` -> `*~ 1.` -> `dac~` (both inlets) | dc ~0.5; `dc_offset` + `silent`; pitch 0 | A |
+| `fx-badargs` | a lone `send 15` | `send: bad argument creating object`; `no_output_tap` | A (the gate accepted it) |
+| `fx-nosuchobj` | `cycle~ 440` renamed to `osc~ 440` after finalize (the sanctioned rename pattern) | `osc~: No such object`; `no_output_tap` | B (the gate refuses the Pure Data name) |
+| `fx-genfail` | `cycle~ 220` -> gen~ codebox `Param g(0.5); g = in1; out1 = g;` -> `*~ 0.2` -> `dac~` | `codebox: can't assign to parameter g` + `failed to compile genpatcher` | B (validate_genexpr blocks the Param assignment) |
+
+`fx-nosuchobj` breaks Rule #1 on purpose, for the console-capture test only.
+
 ## LAN caveat
 
 `udpreceive` has no bind-host option, so the bridge listens on UDP 7400 on **all** network interfaces. Any host on the network can send `/open`, and a patch containing js or node.script amounts to code execution.
