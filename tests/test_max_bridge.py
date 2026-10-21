@@ -62,13 +62,16 @@ class FakeBridge:
 
     def __init__(self, errors: bool = False, flood: int = 0,
                  mute_after_open: bool = False, dsp_on: int = 0,
-                 answers_query: bool = True, max_sr: float = 44100.0) -> None:
+                 answers_query: bool = True, max_sr: float = 44100.0,
+                 wav_sr: int | None = None) -> None:
         self.errors = errors
         self.flood = flood
         self.mute_after_open = mute_after_open
         self.dsp_on = dsp_on
         self.answers_query = answers_query
         self.max_sr = max_sr
+        # the wav header rate (None = max_sr); the samples are timed at max_sr
+        self.wav_sr = wav_sr
         self.received: list[tuple[str, list]] = []
         self.console = ["Max 9.2.0 (fake) started"]
         self.sf_path: str | None = None
@@ -130,7 +133,8 @@ class FakeBridge:
         elif address == "/sf" and args and args[0] == "open":
             self.sf_path = args[1]
         elif address == "/sf" and args == [0] and self.sf_path:
-            _write_sine(Path(self.sf_path), 440.0, 0.2, seconds=1.0)
+            _write_sine(Path(self.sf_path), 440.0, 0.2, seconds=1.0,
+                        sr=int(self.max_sr), header_sr=self.wav_sr)
         elif address == "/query" and self.answers_query:
             self._reply(addr, "/state/dsp", int(self.dsp_on))
             self._reply(addr, "/state/adsr", float(self.max_sr))
@@ -145,14 +149,15 @@ class FakeBridge:
 
 
 def _write_sine(path: Path, freq: float, amp: float, seconds: float = 1.0,
-                sr: int = 44100, stereo: bool = True) -> None:
+                sr: int = 44100, stereo: bool = True, header_sr: int | None = None) -> None:
+    """A sine whose samples are timed at *sr*; the header says *header_sr* (default sr)."""
     import numpy as np
     from scipy.io import wavfile
 
     t = np.arange(int(sr * seconds)) / sr
     x = (amp * np.sin(2 * np.pi * freq * t)).astype(np.float32)
     data = np.stack([x, x], axis=1) if stereo else x
-    wavfile.write(str(path), sr, data)
+    wavfile.write(str(path), header_sr or sr, data)
 
 
 # ---------------------------------------------------------------------------
@@ -660,6 +665,63 @@ class TestInstrument:
         copy.unlink()
         assert report["no_output_tap"] is True
 
+    @staticmethod
+    def _overlaps(p):
+        from src.maxpat.sizing import rendered_rect
+        rects = [(b.id, rendered_rect(b)) for b in p.boxes]
+
+        def hit(a, b):
+            return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+        return [(a, b) for i, (a, ra) in enumerate(rects) for b, rb in rects[i + 1:] if hit(ra, rb)]
+
+    def test_taps_under_dac(self, tmp_path, db):
+        copy, report = bridge.instrument(_tone_patch(tmp_path / "t.maxpat", db))
+        inst = _load(copy)
+        copy.unlink()
+        dac = next(b for b in inst.boxes if b.text == "dac~")
+        (L,) = [b for b in inst.boxes if b.text == f"send~ {bridge.TAP_L}"]
+        (R,) = [b for b in inst.boxes if b.text == f"send~ {bridge.TAP_R}"]
+        assert L.patching_rect[0] == dac.patching_rect[0]
+        assert L.patching_rect[1] >= dac.bottom_edge + 20
+        assert R.patching_rect[0] == L.right_edge + 15
+        assert R.patching_rect[1] == L.patching_rect[1]
+        assert not L.presentation and not R.presentation
+        assert self._overlaps(inst) == []
+        assert report["taps"] == {"L": 1, "R": 1}
+        assert [(t["dac_id"], t["side"]) for t in report["tap_boxes"]] == [(dac.id, "L"), (dac.id, "R")]
+        assert report["tap_boxes"][0]["rect"] == L.patching_rect
+
+    def test_two_dacs_two_tap_pairs(self, tmp_path, db):
+        from src.maxpat.hooks import format_patch_text
+        p = Patcher(db=db)
+        dacs = []
+        for x in (20, 400):
+            osc = p.add_box("cycle~", ["440"], x=x, y=20)
+            g = p.add_box("*~", ["0.1"], x=x, y=60)
+            dac = p.add_box("dac~", [], x=x, y=100)
+            p.add_connection(osc, 0, g, 0)
+            p.add_connection(g, 0, dac, 0)
+            p.add_connection(g, 0, dac, 1)
+            dacs.append(dac.id)
+        src = tmp_path / "two.maxpat"
+        src.write_text(format_patch_text(p.to_dict()))
+        copy, report = bridge.instrument(src)
+        inst = _load(copy)
+        copy.unlink()
+        by_id = {b.id: b for b in inst.boxes}
+        for tap in (bridge.TAP_L, bridge.TAP_R):
+            sends = [b for b in inst.boxes if b.text == f"send~ {tap}"]
+            assert len(sends) == 2
+        for t in report["tap_boxes"]:
+            dac = by_id[t["dac_id"]]
+            assert t["rect"][1] >= dac.bottom_edge + 20
+            assert dac.patching_rect[0] <= t["rect"][0] < dac.patching_rect[0] + 380
+        assert sorted((t["dac_id"], t["side"]) for t in report["tap_boxes"]) == sorted(
+            (d, s) for d in dacs for s in ("L", "R"))
+        assert report["taps"] == {"L": 2, "R": 2}
+        assert self._overlaps(inst) == []
+
     def test_copies_are_gitignored(self):
         import subprocess
         r = subprocess.run(
@@ -734,6 +796,106 @@ class TestAnalyze:
         assert list(json.loads(capsys.readouterr().out)["channels"]) == ["L"]
         _write_sine(p, 440.0, 1.5)
         assert bridge.main(["analyze", str(p)]) == 1
+
+
+class TestSampleRateGuard:
+    """D-03: analyze at MAX's own DSP rate when the wav header disagrees."""
+
+    def _mismatched(self, tmp_path) -> Path:
+        p = tmp_path / "m.wav"
+        _write_sine(p, 440.0, 0.2, sr=44100, header_sr=48000)
+        return p
+
+    def test_sr_override(self, tmp_path):
+        r = bridge.analyze(self._mismatched(tmp_path), max_sr=44100)
+        for ch in ("L", "R"):
+            assert abs(r["channels"][ch]["pitch_hz"] - 440.0) < 1.0
+        assert r["sample_rate"] == 44100 and r["header_sample_rate"] == 48000
+        assert r["seconds"] == 1.0
+        mism = [w for w in r["warnings"] if w.startswith("sr_header_mismatch")]
+        assert len(mism) == 1
+        assert mism[0].startswith("sr_header_mismatch: header 48000 Hz, MAX DSP 44100 Hz")
+        assert r["flags"] == []
+
+    def test_sr_match_no_warning(self, tmp_path):
+        p = self._mismatched(tmp_path)
+        for max_sr in (None, 48000, 48000.4):
+            r = bridge.analyze(p, max_sr=max_sr)
+            assert not [w for w in r["warnings"] if w.startswith("sr_header_mismatch")]
+            assert r["header_sample_rate"] == r["sample_rate"] == 48000
+        # read at the header rate, the 44.1 k-timed tone measures sharp (the v0.1.0 bug)
+        assert bridge.analyze(p)["channels"]["L"]["pitch_hz"] > 470
+
+    def test_cli_sr(self, tmp_path, capsys):
+        p = self._mismatched(tmp_path)
+        assert bridge.main(["analyze", str(p), "--sr", "44100"]) == 0
+        out = json.loads(capsys.readouterr().out)
+        assert abs(out["channels"]["L"]["pitch_hz"] - 440.0) < 1.0
+        assert any(w.startswith("sr_header_mismatch") for w in out["warnings"])
+        assert bridge.build_parser().parse_args(["analyze", "x.wav"]).sr is None
+
+    def test_sr_guard_end_to_end(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(max_sr=44100, wav_sr=48000) as fb:
+            rc, rep = _check(fb, src, "--record", "0.2", capsys=capsys)
+        assert rc == 0, rep
+        assert rep["max_sr"] == 44100
+        assert abs(rep["record"]["channels"]["L"]["pitch_hz"] - 440.0) < 1.0
+        assert rep["record"]["sample_rate"] == 44100
+        assert rep["record"]["header_sample_rate"] == 48000
+        assert any(w.startswith("sr_header_mismatch") for w in rep["record"]["warnings"])
+        assert rep["record"]["flags"] == []
+
+
+class TestDistinctErrors:
+    """D-05: one error seen on several channels counts once; raw kept."""
+
+    OSC = [
+        {"source": "error", "text": "osc~: osc~: No such object", "t": 0.5},
+        {"source": "console", "text": "osc~: No such object", "t": 0.51,
+         "obj": ["osc~"], "type": [1]},
+        {"source": "console", "text": "No such object", "t": 0.52,
+         "obj": ["osc~:"], "type": [1]},
+        {"source": "console_write", "text": "osc~: osc~: No such object", "t": None},
+    ]
+
+    def test_distinct_osc_triple(self):
+        import copy
+        raw = copy.deepcopy(self.OSC)
+        (d,) = bridge._distinct_errors(raw)
+        assert raw == self.OSC  # the raw list is never modified
+        assert d["key"] == "osc~: No such object"
+        assert d["sources"] == {"error": 1, "console": 2, "console_write": 1}
+        assert d["occurrences"] == max(d["sources"].values()) == 2
+        assert d["first_t"] == 0.5
+
+    def test_distinct_codebox_double(self):
+        text = "codebox: can't assign to parameter g"
+        errs = ([{"source": "error", "text": text, "t": 1.0}] * 2
+                + [{"source": "console", "text": "can't assign to parameter g", "t": 1.01,
+                    "obj": ["codebox"], "type": [1]}] * 2
+                + [{"source": "console_write", "text": text, "t": None}] * 2)
+        (d,) = bridge._distinct_errors(errs)
+        assert d["key"] == text and d["occurrences"] == 2
+        assert d["sources"] == {"error": 2, "console": 2, "console_write": 2}
+
+    def test_distinct_prefix_merge(self):
+        # research A4: console names gen~ while error says codebox: one error
+        errs = [{"source": "error", "text": "codebox: can't assign to parameter g", "t": 1.0},
+                {"source": "console", "text": "codebox: can't assign to parameter g", "t": 1.0,
+                 "obj": ["gen~"], "type": [1]}]
+        (d,) = bridge._distinct_errors(errs)
+        assert d["key"] == "gen~: codebox: can't assign to parameter g"
+        assert d["occurrences"] == 1
+
+    def test_distinct_two_errors(self):
+        errs = self.OSC + [{"source": "console_write",
+                            "text": "send: bad arguments creating object", "t": None}]
+        ds = bridge._distinct_errors(errs)
+        assert [d["key"] for d in ds] == ["osc~: No such object",
+                                          "send: bad arguments creating object"]
+        assert ds[1]["first_t"] is None and ds[1]["occurrences"] == 1
+        assert bridge._distinct_errors([]) == []
 
 
 class FakeRun:
@@ -811,7 +973,9 @@ def _check(fb, patch, *extra, capsys):
     argv = ["check", str(patch), "--port", str(fb.port), "--reply-port", "0",
             "--settle", "0.1", "--load-timeout", "1.5", "--timeout", "1.0", *extra]
     rc = bridge.main(argv)
-    return rc, json.loads(capsys.readouterr().out)
+    cap = capsys.readouterr()
+    _check.last_err = cap.err  # the stderr summary, for the tests that read it
+    return rc, json.loads(cap.out)
 
 
 class TestCheck:
@@ -828,6 +992,8 @@ class TestCheck:
         assert rep["record"] is not None and rep["record"]["flags"] == []
         assert not (tmp_path / "__maxbridge_tone.maxpat").exists()
         assert src.read_bytes() == before
+        assert len(rep["errors_distinct"]) == 1
+        assert "1 distinct error(s)" in _check.last_err
 
     def test_clean_run_and_order(self, tmp_path, db, run_dir, capsys):
         src = _tone_patch(tmp_path / "tone.maxpat", db)

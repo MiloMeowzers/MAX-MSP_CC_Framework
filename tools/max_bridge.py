@@ -52,7 +52,7 @@ Subcommands:
     python3 tools/max_bridge.py check PATCH.maxpat [--settle S] [--record N]
         [--shot [PNG]] [--open-mode pcontrol|openfile] [--console-all]
         [--leave-dsp-on] [--load-timeout S] [--dry-run]
-    python3 tools/max_bridge.py analyze OUT.wav [--channels L,R]
+    python3 tools/max_bridge.py analyze OUT.wav [--channels L,R] [--sr N]
 
 Exit codes (house convention, tools/audit_db.py): 0 clean, 1 findings
 (errors, analysis flags, unsupported outputs, shot failure, feedback cap),
@@ -370,6 +370,10 @@ def _dac_channel(box, inlet: int) -> int | None:
 
 
 def _instrument_patcher(p, path: str, report: dict) -> None:
+    import warnings
+
+    from src.maxpat.patcher import BoxMovedWarning
+
     by_id = {b.id: b for b in p.boxes}
     for box in list(p.boxes):
         if box.name in UNSUPPORTED_OUTPUTS or box.maxclass == "bpatcher":
@@ -383,9 +387,10 @@ def _instrument_patcher(p, path: str, report: dict) -> None:
 
     if not p.boxes:
         return
-    right = max(b.right_edge for b in p.boxes) + 30.0
-    top = min(b.patching_rect[1] for b in p.boxes)
-    sends: dict[str, object] = {}
+    # collect first, then place: each dac~/ezdac~ gets its own send~ pair
+    # directly below it (D-04). Several send~ with one name sum, so the
+    # recording is the same as one tap per side.
+    tapped: list[tuple] = []
     warned: set = set()
     for line in list(p.lines):
         dst = by_id.get(line.dest_id)
@@ -401,12 +406,29 @@ def _instrument_patcher(p, path: str, report: dict) -> None:
                     f"{path}/{dst.id} {dst.text!r} inlet {line.dest_inlet} plays channel "
                     f"{ch}: only channels 1 and 2 are recorded, not tapped")
             continue
-        if side not in sends:
-            tap = TAP_L if side == "L" else TAP_R
-            sends[side] = p.add_box("send~", [tap], x=right,
-                                    y=top + (0 if side == "L" else 30),
-                                    skip_overlap_check=True)
-        p.add_connection(src, line.source_outlet, sends[side], 0)
+        tapped.append((src, line.source_outlet, dst, side))
+
+    sends: dict[tuple, object] = {}
+    for dst in [d for d in p.boxes if any(t[2] is d for t in tapped)]:
+        sides = {t[3] for t in tapped if t[2] is dst}
+        x0, y0 = dst.patching_rect[0], dst.bottom_edge + 20.0
+        for side in ("L", "R"):
+            if side not in sides:
+                continue
+            if side == "R" and (dst.id, "L") in sends:
+                left = sends[(dst.id, "L")]
+                x, y = left.right_edge + 15.0, left.patching_rect[1]
+            else:
+                x, y = x0, y0
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", BoxMovedWarning)
+                box = p.add_box("send~", [TAP_L if side == "L" else TAP_R], x=x, y=y,
+                                skip_overlap_check=False)
+            sends[(dst.id, side)] = box
+            report["tap_boxes"].append({"path": path, "dac_id": dst.id, "side": side,
+                                        "rect": list(box.patching_rect)})
+    for src, outlet, dst, side in tapped:
+        p.add_connection(src, outlet, sends[(dst.id, side)], 0)
         report["taps"][side] += 1
 
 
@@ -414,7 +436,9 @@ def instrument(src: Path) -> tuple[Path, dict]:
     """Write the instrumented sibling copy of *src*; return (copy_path, report).
 
     The copy adds ``send~ __maxbridge_L/R`` taps fed from every dac~/ezdac~
-    input source (channel 1 -> L, 2 -> R; existing cords untouched), in the
+    input source (channel 1 -> L, 2 -> R; existing cords untouched), placed
+    directly below each dac~ (L at its x, R 15 px right of L; nudged down
+    only on a real overlap; v0.2.0), in the
     top patcher and every embedded ``p`` subpatcher, plus a cordless close
     hook (``receive __maxbridge_close`` -> ``clean, wclose`` ->
     ``thispatcher``) at the top level. It is built with the Patcher API and
@@ -422,7 +446,8 @@ def instrument(src: Path) -> tuple[Path, dict]:
     save_patch_roundtrip: the copy is ephemeral, gitignored and deleted by
     the caller (research A6). The source file is only read.
 
-    Report keys: taps {L, R} (cords tapped), unsupported (mc.dac~, plugout~,
+    Report keys: taps {L, R} (cords tapped), tap_boxes ([{path, dac_id,
+    side, rect}] per send~), unsupported (mc.dac~, plugout~,
     poly~, pfft~, bpatcher boxes), warnings (channels above 2),
     no_output_tap, close_hook.
     """
@@ -435,8 +460,8 @@ def instrument(src: Path) -> tuple[Path, dict]:
     src = Path(src)
     text = src.read_text()
     p = Patcher.from_dict(json.loads(text))
-    report: dict = {"taps": {"L": 0, "R": 0}, "unsupported": [], "warnings": [],
-                    "no_output_tap": False, "close_hook": False}
+    report: dict = {"taps": {"L": 0, "R": 0}, "tap_boxes": [], "unsupported": [],
+                    "warnings": [], "no_output_tap": False, "close_hook": False}
     _instrument_patcher(p, "top", report)
 
     right = (max(b.right_edge for b in p.boxes) if p.boxes else 0.0) + 30.0
@@ -462,8 +487,14 @@ DC_OFFSET_LIMIT = 0.01  # [ASSUMED] research A5: tune after real runs
 END_TRIM_MS = 50  # sfrecord~ endramp default is undocumented (research pitfall 6)
 
 
-def analyze(wav: Path, channels: list[str] | None = None) -> dict:
+def analyze(wav: Path, channels: list[str] | None = None, max_sr: float | None = None) -> dict:
     """dsp_sim measures of a recorded wav, per channel (index 0 = L, 1 = R).
+
+    *max_sr* is MAX's own DSP rate (D-03). When it differs from the wav
+    header by 1 Hz or more, every rate-dependent step (trims, pitch,
+    seconds) uses it, ``header_sample_rate`` keeps the header's rate and a
+    ``sr_header_mismatch`` warning (never a flag) is added. ``sample_rate``
+    is the rate actually used.
 
     NaN and inf are counted on the whole channel; the metrics come from the
     finite samples left after trimming ClassifierThresholds().settle_ms from
@@ -479,11 +510,17 @@ def analyze(wav: Path, channels: list[str] | None = None) -> dict:
     )
 
     th = ClassifierThresholds()
-    sr, x = wavfile.read(str(wav))
+    header_sr, x = wavfile.read(str(wav))
+    header_sr = int(header_sr)
+    sr = header_sr
     x = np.asarray(x)
     if x.ndim == 1:
         x = x[:, None]
     warnings_out: list[str] = []
+    if max_sr and abs(float(max_sr) - header_sr) >= 1:
+        sr = int(round(float(max_sr)))
+        warnings_out.append(f"sr_header_mismatch: header {header_sr} Hz, MAX DSP {sr} Hz; "
+                            f"analyzed at {sr} Hz")
     if x.dtype.kind == "u":
         half = float(2 ** (8 * x.dtype.itemsize - 1))
         x = (x.astype(np.float64) - half) / half
@@ -535,6 +572,7 @@ def analyze(wav: Path, channels: list[str] | None = None) -> dict:
     return {
         "wav": str(wav),
         "sample_rate": int(sr),
+        "header_sample_rate": header_sr,
         "seconds": round(n / float(sr), 4) if sr else 0.0,
         "channels": out,
         "flags": sorted({f for m in out.values() for f in m["flags"]}),
@@ -837,6 +875,79 @@ def _error_lines(events: list, console_all: bool, console_new: list[str]) -> lis
     return errors
 
 
+def _error_key(entry: dict) -> str:
+    """The canonical text of one raw error entry (D-05).
+
+    Console entries with an object name become ``"{obj}: {msg}"`` (the obj
+    words joined, a trailing ':' stripped); every other entry is its text.
+    Whitespace is collapsed, then a doubled leading ``"X: X: "`` collapses
+    to ``"X: "`` (repeatedly), so ``osc~: osc~: No such object`` on the
+    error and console_write channels meets the console's ``osc~`` +
+    ``No such object``.
+    """
+    import re
+
+    text = str(entry.get("text") or "")
+    obj = entry.get("obj")
+    if entry.get("source") == "console" and obj:
+        name = " ".join(str(a) for a in obj).strip().rstrip(":").strip()
+        if name:
+            text = f"{name}: {text}"
+    key = " ".join(text.split())
+    while True:
+        new = re.sub(r"^(\S+): \1: ", r"\1: ", key)
+        if new == key:
+            return key
+        key = new
+
+
+_ERROR_SOURCES = ("error", "console", "console_write")
+
+
+def _distinct_errors(errors: list[dict]) -> list[dict]:
+    """One entry per canonical error key, in first-seen order (D-05).
+
+    Each entry: ``key``, ``sources`` (counts per channel: error, console,
+    console_write), ``occurrences`` (the max over channels: every channel
+    sees every posting) and ``first_t`` (the earliest non-None t). A key
+    equal to another with one leading ``"word: "`` removed merges into that
+    longer key. *errors* is never modified.
+    """
+    import re
+
+    groups: dict[str, dict] = {}
+    for i, e in enumerate(errors):
+        key = _error_key(e)
+        g = groups.setdefault(key, {"key": key, "sources": dict.fromkeys(_ERROR_SOURCES, 0),
+                                    "ts": [], "first": i})
+        src = e.get("source")
+        g["sources"][src] = g["sources"].get(src, 0) + 1
+        if e.get("t") is not None:
+            g["ts"].append(e["t"])
+    merged = True
+    while merged:
+        merged = False
+        for key in list(groups):
+            short = re.sub(r"^\S+: ", "", key, count=1)
+            if short != key and short in groups:
+                long_g, short_g = groups[key], groups.pop(short)
+                for src, n in short_g["sources"].items():
+                    long_g["sources"][src] = long_g["sources"].get(src, 0) + n
+                long_g["ts"] += short_g["ts"]
+                long_g["first"] = min(long_g["first"], short_g["first"])
+                merged = True
+                break
+    return [
+        {
+            "key": g["key"],
+            "sources": g["sources"],
+            "occurrences": max(g["sources"].values()),
+            "first_t": min(g["ts"]) if g["ts"] else None,
+        }
+        for g in sorted(groups.values(), key=lambda g: g["first"])
+    ]
+
+
 def _console_diff(run_dir: Path) -> tuple[str, list[str]]:
     from collections import Counter
 
@@ -950,6 +1061,23 @@ def _execute(b: Bridge, plan: list[tuple], args, run_dir: Path, copy: Path, repo
         raise
 
 
+def _max_sr(events: list) -> int | None:
+    """MAX's own DSP rate from the /query replies (D-03): the last
+    ``/state/sr`` (dspstate~ outlet 1, the rate the oscillators run at),
+    else the last ``/state/adsr``; None when neither arrived."""
+    for address in ("/state/sr", "/state/adsr"):
+        for e in reversed(events):
+            if e[-2] != address or not e[-1]:
+                continue
+            try:
+                value = int(round(float(e[-1][0])))
+            except (TypeError, ValueError):
+                continue
+            if value > 0:
+                return value
+    return None
+
+
 def run_check(args) -> dict:
     """Run one check; return the JSON report (``exit_code`` included)."""
     report: dict = {
@@ -957,6 +1085,7 @@ def run_check(args) -> dict:
         "unsupported": [], "warnings": [], "load": {"open_s": None, "pong_s": None},
         "errors": [], "events_raw": [], "record": None, "shot": None, "closed": None,
         "feedback_suspected": False, "console_write": None,
+        "errors_distinct": [], "max_sr": None,
         "dsp_before": None, "dsp_stop_sent": False,
         "verdict": "bridge_failed", "exit_code": 2,
     }
@@ -967,8 +1096,8 @@ def run_check(args) -> dict:
         return report
     report["patch"] = str(src)
     copy, inst = instrument(src)
-    report.update(copy=str(copy), taps=inst["taps"], unsupported=inst["unsupported"],
-                  warnings=inst["warnings"])
+    report.update(copy=str(copy), taps=inst["taps"], tap_boxes=inst["tap_boxes"],
+                  unsupported=inst["unsupported"], warnings=inst["warnings"])
     try:
         run_dir = Path(_make_run_dir())
         report["run_dir"] = str(run_dir)
@@ -1004,10 +1133,15 @@ def run_check(args) -> dict:
     status, new_lines = _console_diff(run_dir)
     report["console_write"] = {"status": status, "new_lines": new_lines}
     report["errors"] = _error_lines(b.events, args.console_all, new_lines)
+    report["errors_distinct"] = _distinct_errors(report["errors"])
+    report["max_sr"] = _max_sr(b.events)
     wav = report.pop("_wav", None)
     if wav is not None:
-        a = analyze(wav)
-        report["record"] = {"wav": str(wav), "seconds": a["seconds"], "channels": a["channels"],
+        a = analyze(wav, max_sr=report["max_sr"])
+        report["record"] = {"wav": str(wav), "seconds": a["seconds"],
+                            "sample_rate": a["sample_rate"],
+                            "header_sample_rate": a["header_sample_rate"],
+                            "channels": a["channels"],
                             "flags": a["flags"], "warnings": a["warnings"]}
     findings = (
         bool(report["errors"])
@@ -1075,6 +1209,8 @@ def build_parser() -> argparse.ArgumentParser:
     sa = sub.add_parser("analyze", help="dsp_sim measures of a recorded wav")
     sa.add_argument("wav")
     sa.add_argument("--channels", default=None, help="comma list, e.g. L or L,R")
+    sa.add_argument("--sr", type=float, default=None,
+                    help="MAX's DSP rate: analyze at it when the wav header disagrees")
     return parser
 
 
@@ -1101,7 +1237,10 @@ def _cmd_check(args) -> int:
         print(report["error"], file=sys.stderr)
         return 2
     print(json.dumps(report, indent=2, default=str))
-    summary = (f"{report['verdict']}: {len(report['errors'])} error line(s), "
+    distinct = report.get("errors_distinct") or []
+    occurrences = sum(d["occurrences"] for d in distinct)
+    summary = (f"{report['verdict']}: {len(distinct)} distinct error(s) "
+               f"({occurrences} occurrence(s)), "
                f"record flags {report['record']['flags'] if report['record'] else None}, "
                f"unsupported {len(report['unsupported'])}, run dir {report['run_dir']}")
     if report["verdict"] == "bridge_failed":
@@ -1114,7 +1253,7 @@ def _cmd_analyze(args) -> int:
     import json
 
     channels = args.channels.split(",") if args.channels else None
-    result = analyze(Path(args.wav), channels)
+    result = analyze(Path(args.wav), channels, max_sr=args.sr)
     print(json.dumps(result, indent=2))
     return 1 if result["flags"] else 0
 
