@@ -18,7 +18,7 @@ Only MAX can answer these. Each one names the checklist step in `test-results/v0
 
 4. Do `pcontrol load` and `sfrecord~ open` accept absolute POSIX paths?
    - Answered by: checklist step 3
-   - Answer:
+   - Answer: Yes, both (step 3, 2026-10-21): the copy loaded via `pcontrol load <abs path>`, and sfrecord~ wrote `out.wav` to the absolute run-dir path.
 
 5. Must `samptype float32` come before `open`? Does a float32 wav keep NaN?
    - Answered by: checklist step 7 (header dtype)
@@ -48,7 +48,7 @@ Only MAX can answer these. Each one names the checklist step in `test-results/v0
 
 A1. verify: absolute POSIX paths work in `pcontrol load`, `sfrecord~ open` and `console write`. If they do not, fall back to `open -a Max`, or to Max-style paths via `conformpath`.
    - Answered by: checklist step 3 (pcontrol, sfrecord~) and step 4 (console write)
-   - Answer:
+   - Answer: pcontrol load and sfrecord~ open: yes (step 3). console write: `status ok` in step 3; confirm the file contents in step 4.
 
 A2. verify: `udpsend` encodes Max floats as OSC `f` or `d`. The decoder accepts both either way.
    - Answered by: checklist step 4 (the `/con/type` args in `events_raw`)
@@ -56,7 +56,7 @@ A2. verify: `udpsend` encodes Max floats as OSC `f` or `d`. The decoder accepts 
 
 A3. verify: a `route` remainder such as `open /x.wav` reaches sfrecord~ as the `open` selector. The same goes for the single-symbol remainder `/open <path>` -> `prepend load`, and for `/openfile <path>` -> `$1` in the message box.
    - Answered by: checklist step 3 (record works) and step 8 (openfile)
-   - Answer:
+   - Answer: Partly (step 3): `/open <path>` -> `prepend load` and the `/sf open|samptype|record` remainders all reached their targets. `/openfile` is still pending (step 8).
 
 A4. verify: signal fan-out to `send~` in the copy adds no audible change.
    - Answered by: checklist step 3 (listen)
@@ -64,7 +64,7 @@ A4. verify: signal fan-out to `send~` in the copy adds no audible change.
 
 A5. verify: 0.01 is a sensible `dc_offset` threshold.
    - Answered by: checklist step 3 (fx-clean `dc`) and step 7 (fx-dc)
-   - Answer:
+   - Answer: fx-clean `dc` is about 1e-18, far below 0.01 (step 3). Confirm with fx-dc in step 7.
 
 A6. verify: is an ephemeral, gitignored sibling copy written without `save_patch_roundtrip` acceptable? The alternative is copies in `$TMPDIR`, which breaks relative lookups.
    - Answered by: checklist step 9 (git status clean, no leftovers)
@@ -91,3 +91,8 @@ N4. Should the DSP state be restored to what it was before the check, rather tha
 N5. How is a presentation-mode window titled and captured (`<stem> (presentation)`)? Is the as-shown capture what you want?
    - Answered by: checklist step 9 (simple-fm, if it opens in presentation)
    - Answer:
+
+## Findings from the checklist run (2026-10-21)
+
+- **Sample-rate mismatch (step 3):** with MAX at 44.1 kHz and the interface at 48 kHz, sfrecord~ wrote a 48000 Hz header on 44.1 kHz-timed samples, so `analyze` reported 478.9 Hz and 2.756 s for a 440 Hz, 3 s tone. With MAX at 48 kHz it read 440.0 Hz and 3.0 s. Not yet fixed in the client: `analyze` still trusts the header. A follow-up could ask MAX for its own rate (adstatus / dspstate~) and flag a disagreement.
+- **Closed window lingers offscreen (step 3):** after `clean, wclose`, the copy's window disappears from the screen but stays in the CoreGraphics list with `kCGWindowIsOnscreen = 0`. `closed` read `false`, and a stale window could have been captured on the next run. Fixed in f00883c6: only onscreen windows are listed.
