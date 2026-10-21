@@ -34,7 +34,7 @@ Only MAX can answer these. Each one names the checklist step in `test-results/v0
 
 8. Does `max openfile` show the window (variant B), and does `max closefile` close it?
    - Answered by: checklist step 8
-   - Answer:
+   - Answer: Yes to both (step 8). `max openfile maxbridge <path>` shows the window (captured, no errors, the `/pong` barrier held at 12.8 ms), and `max closefile maxbridge` closes it (`closed: true`). Like pcontrol, the closed window lingers offscreen in the CG list. Both open modes work; pcontrol stays the default.
 
 9. How long after load does gen~ compile? This sets the `--settle` default (3 s today).
    - Answered by: checklist step 6
@@ -56,7 +56,7 @@ A2. verify: `udpsend` encodes Max floats as OSC `f` or `d`. The decoder accepts 
 
 A3. verify: a `route` remainder such as `open /x.wav` reaches sfrecord~ as the `open` selector. The same goes for the single-symbol remainder `/open <path>` -> `prepend load`, and for `/openfile <path>` -> `$1` in the message box.
    - Answered by: checklist step 3 (record works) and step 8 (openfile)
-   - Answer: Partly (step 3): `/open <path>` -> `prepend load` and the `/sf open|samptype|record` remainders all reached their targets. `/openfile` is still pending (step 8).
+   - Answer: Yes (steps 3 and 8): `/open <path>` -> `prepend load`, the `/sf open|samptype|record` remainders, and `/openfile <path>` -> `$1` in the message box all reached their targets.
 
 A4. verify: signal fan-out to `send~` in the copy adds no audible change.
    - Answered by: checklist step 3 (listen)
