@@ -74,7 +74,7 @@ A6. verify: is an ephemeral, gitignored sibling copy written without `save_patch
 
 N1. The bridge listens on UDP 7400 on all interfaces. Do you want a host filter (drop packets not from 127.0.0.1, if MAX exposes the sender) or a kill switch (a toggle that gates the route) before any `/max-verify --live` work?
    - Answered by: checklist step 1 (decide after seeing the firewall behaviour)
-   - Answer:
+   - Answer: User decision (2026-10-21): kill switch. A toggle in the bridge patch, off by default, that gates all incoming commands.
 
 N2. Does macOS show a firewall prompt for MAX when the bridge opens?
    - Answered by: checklist step 1
@@ -86,7 +86,7 @@ N3. `check` refuses patches outside the repo and the temp dir. Should it accept 
 
 N4. Should the DSP state be restored to what it was before the check, rather than forced off at the end? (`--leave-dsp-on` is the only escape today.)
    - Answered by: checklist step 7
-   - Answer:
+   - Answer: User decision (2026-10-21): restore the prior state. Leave DSP on if it was on before the check, off if it was off.
 
 N5. How is a presentation-mode window titled and captured (`<stem> (presentation)`)? Is the as-shown capture what you want?
    - Answered by: checklist step 9 (simple-fm, if it opens in presentation)
@@ -97,3 +97,4 @@ N5. How is a presentation-mode window titled and captured (`<stem> (presentation
 - **Sample-rate mismatch (step 3):** with MAX at 44.1 kHz and the interface at 48 kHz, sfrecord~ wrote a 48000 Hz header on 44.1 kHz-timed samples, so `analyze` reported 478.9 Hz and 2.756 s for a 440 Hz, 3 s tone. With MAX at 48 kHz it read 440.0 Hz and 3.0 s. Not yet fixed in the client: `analyze` still trusts the header. A follow-up could ask MAX for its own rate (adstatus / dspstate~) and flag a disagreement.
 - **Closed window lingers offscreen (step 3):** after `clean, wclose`, the copy's window disappears from the screen but stays in the CoreGraphics list with `kCGWindowIsOnscreen = 0`. `closed` read `false`, and a stale window could have been captured on the next run. Fixed in f00883c6: only onscreen windows are listed.
 - **One error is reported three times (step 4):** a single "No such object" appears once per channel (`error`, `console`, `console_write`), so the summary says "3 error line(s)". Follow-up: deduplicate by message text, or count distinct errors.
+- **Follow-ups chosen by the user (2026-10-21):** a sample-rate guard (read MAX's own rate and flag a header mismatch), tidy tap placement (taps right under each dac~), counting distinct errors, and a note stimulus so synths sound during `--record`. Also the N1 kill switch and the N4 DSP restore.
