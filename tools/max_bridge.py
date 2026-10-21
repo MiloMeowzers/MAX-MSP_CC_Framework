@@ -529,8 +529,12 @@ SHOT_POLL = 0.5
 SHOT_TITLE_TIMEOUT = 10.0
 OSA_TIMEOUT = 15
 
-# CoreGraphics window list: every layer-0 (document) window owned by Max, with
-# its window id and bounds. kCGWindowListOptionAll = 0, kCGNullWindowID = 0.
+# CoreGraphics window list: every onscreen layer-0 (document) window owned by
+# Max, with its window id and bounds. kCGWindowListOptionAll = 0,
+# kCGNullWindowID = 0. A closed patcher's window lingers offscreen
+# (kCGWindowIsOnscreen false), so offscreen windows are skipped: otherwise
+# wait_gone never sees the close and a stale window can be captured
+# (confirmed in MAX 9.2, 2026-10-21).
 _CG_WINDOWS_JXA = '''
 ObjC.import("CoreGraphics");
 var arr = ObjC.castRefToObject($.CGWindowListCopyWindowInfo(0, 0));
@@ -538,7 +542,7 @@ var info = ObjC.deepUnwrap(arr) || [];
 var out = [];
 for (var i = 0; i < info.length; i++) {
   var w = info[i];
-  if (w.kCGWindowOwnerName === "{app}" && w.kCGWindowLayer === 0) {
+  if (w.kCGWindowOwnerName === "{app}" && w.kCGWindowLayer === 0 && w.kCGWindowIsOnscreen) {
     var b = w.kCGWindowBounds;
     out.push([w.kCGWindowNumber, w.kCGWindowName || "", b.X, b.Y, b.Width, b.Height].join("\\t"));
   }

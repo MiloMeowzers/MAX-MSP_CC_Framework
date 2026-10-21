@@ -672,7 +672,7 @@ class TestShoot:
         assert cap == ["screencapture", "-x", "-o", "-l", "42", str(png)]
         jxa = next(c for c in fake.calls if c[0] == "osascript")
         assert jxa[:3] == ["osascript", "-l", "JavaScript"]
-        assert '"Max"' in jxa[-1] and "kCGWindowLayer === 0" in jxa[-1]
+        assert '"Max"' in jxa[-1] and "kCGWindowLayer === 0" in jxa[-1] and "kCGWindowIsOnscreen" in jxa[-1]
 
     def test_empty_png(self, tmp_path, monkeypatch, fast_shot):
         monkeypatch.setattr(bridge, "_run", FakeRun(self.ROWS, write_png=False))
@@ -876,7 +876,7 @@ class TestFixtures:
     def test_every_question_cites_a_checklist_step(self):
         import re
         text = OPEN_QUESTIONS.read_text()
-        steps = {int(n) for n in re.findall(r"^(\d+)\. \[ \]", CHECKLIST.read_text(), re.M)}
+        steps = {int(n) for n in re.findall(r"^(\d+)\. \[[^]]*\]", CHECKLIST.read_text(), re.M)}
         entries = re.split(r"\n(?=(?:\d+|A\d|N\d)\. )", text)
         entries = [e for e in entries if re.match(r"(?:\d+|A\d|N\d)\. ", e)]
         assert len(entries) == 10 + 6 + 5
