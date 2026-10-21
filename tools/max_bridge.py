@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Drive a running MAX 9.2 from Python through a resident bridge patch (Q34 spike).
 
-SPIKE STATUS: nothing here is confirmed in MAX yet. The manual checklist at
-patches/max-bridge/test-results/v0.1.0-bridge-checklist.md is how the user
-confirms (or refutes) each mechanism; patches/max-bridge/open-questions.md
-lists what only MAX can answer. There is no /max-verify integration until
+SPIKE STATUS: the v0.1.0 mechanisms were confirmed in MAX through
+patches/max-bridge/test-results/v0.1.0-bridge-checklist.md (2026-10-21); the
+v0.2.0 follow-ups are pending
+patches/max-bridge/test-results/v0.2.0-bridge-checklist.md.
+patches/max-bridge/open-questions.md lists what only MAX can answer. There is no /max-verify integration until
 the user confirms the bridge works.
 
 Protocol. The bridge patch (patches/max-bridge/generated/max-bridge.maxpat)
@@ -51,7 +52,8 @@ Subcommands:
     python3 tools/max_bridge.py ping
     python3 tools/max_bridge.py check PATCH.maxpat [--settle S] [--record N]
         [--shot [PNG]] [--open-mode pcontrol|openfile] [--console-all]
-        [--leave-dsp-on] [--load-timeout S] [--dry-run]
+        [--leave-dsp-on] [--load-timeout S] [--note PITCH VEL [--note-ms MS]]
+        [--dry-run]
     python3 tools/max_bridge.py analyze OUT.wav [--channels L,R] [--sr N]
 
 Exit codes (house convention, tools/audit_db.py): 0 clean, 1 findings
@@ -432,7 +434,84 @@ def _instrument_patcher(p, path: str, report: dict) -> None:
         report["taps"][side] += 1
 
 
-def instrument(src: Path) -> tuple[Path, dict]:
+def _walk_patchers(p, path: str):
+    """``(patcher, path)`` depth-first, top first, through embedded p/patcher
+    subpatchers (bpatchers are skipped, as for the taps)."""
+    yield p, path
+    for box in p.boxes:
+        if box.maxclass == "bpatcher":
+            continue
+        if box.name in ("p", "patcher") and box._inner_patcher is not None:
+            yield from _walk_patchers(box._inner_patcher, f"{path}/{box.id}")
+
+
+def _add_note_pair(p, x: float, y: float):
+    """``receive __maxbridge_note`` -> ``unpack 0 0 0`` at (x, y), nudged off overlaps."""
+    import warnings
+
+    from src.maxpat.patcher import BoxMovedWarning
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", BoxMovedWarning)
+        rcv = p.add_box("receive", [NOTE_RECEIVE], x=x, y=y, skip_overlap_check=False)
+        up = p.add_box("unpack", ["0", "0", "0"], x=rcv.patching_rect[0],
+                       y=rcv.patching_rect[1] + 40.0, skip_overlap_check=False)
+    p.add_connection(rcv, 0, up, 0)
+    return rcv, up
+
+
+def _inject_note(p, report: dict) -> None:
+    """D-06: let the bridge's ``/note p v ch`` play the copy.
+
+    In every patcher holding a notein, ``receive __maxbridge_note`` ->
+    ``unpack 0 0 0`` mirrors each notein cord (outlet k -> the same dest and
+    inlet, k < 3). unpack fires right to left (channel, velocity, pitch)
+    like notein, so cold-before-hot holds (Rule #3). Only when no notein
+    exists anywhere does it drive the first kslider instead (velocity into
+    the cold inlet 1, then pitch into the hot inlet 0; kslider has no list
+    method). Never both: that would be a double note-on.
+    """
+    tree = list(_walk_patchers(p, "top"))
+    targets = []
+    for q, path in tree:
+        noteins = [b for b in q.boxes if b.name == "notein"]
+        if noteins:
+            targets.append((q, path, noteins))
+    if targets:
+        names = []
+        for q, path, noteins in targets:
+            n0 = noteins[0]
+            _rcv, up = _add_note_pair(q, n0.right_edge + 15.0, n0.patching_rect[1])
+            by_id = {b.id: b for b in q.boxes}
+            ids = {n.id: n for n in noteins}
+            seen: set = set()
+            for line in list(q.lines):
+                n = ids.get(line.source_id)
+                if n is None or line.source_outlet >= min(3, n.numoutlets):
+                    continue
+                key = (line.source_outlet, line.dest_id, line.dest_inlet)
+                dst = by_id.get(line.dest_id)
+                if key in seen or dst is None:
+                    continue
+                seen.add(key)
+                q.add_connection(up, line.source_outlet, dst, line.dest_inlet)
+            names += [f"{path}/{n.id}" for n in noteins]
+        report["note_target"] = {"kind": "notein", "boxes": names}
+        return
+    for q, path in tree:
+        ks = next((b for b in q.boxes if b.maxclass == "kslider"), None)
+        if ks is None:
+            continue
+        _rcv, up = _add_note_pair(q, ks.right_edge + 15.0, ks.patching_rect[1])
+        q.add_connection(up, 1, ks, 1)  # velocity: cold, sets without output
+        q.add_connection(up, 0, ks, 0)  # pitch: hot, plays
+        report["note_target"] = {"kind": "kslider", "box": f"{path}/{ks.id}"}
+        return
+    report["warnings"].append("--note: no notein or kslider to drive")
+    report["note_target"] = None
+
+
+def instrument(src: Path, note: bool = False) -> tuple[Path, dict]:
     """Write the instrumented sibling copy of *src*; return (copy_path, report).
 
     The copy adds ``send~ __maxbridge_L/R`` taps fed from every dac~/ezdac~
@@ -446,8 +525,13 @@ def instrument(src: Path) -> tuple[Path, dict]:
     save_patch_roundtrip: the copy is ephemeral, gitignored and deleted by
     the caller (research A6). The source file is only read.
 
+    With *note* (check --note), ``receive __maxbridge_note`` ->
+    ``unpack 0 0 0`` is added to drive the notein cords (kslider fallback;
+    see _inject_note).
+
     Report keys: taps {L, R} (cords tapped), tap_boxes ([{path, dac_id,
-    side, rect}] per send~), unsupported (mc.dac~, plugout~,
+    side, rect}] per send~), note_target (None, or {kind: notein, boxes}
+    / {kind: kslider, box}), unsupported (mc.dac~, plugout~,
     poly~, pfft~, bpatcher boxes), warnings (channels above 2),
     no_output_tap, close_hook.
     """
@@ -461,8 +545,11 @@ def instrument(src: Path) -> tuple[Path, dict]:
     text = src.read_text()
     p = Patcher.from_dict(json.loads(text))
     report: dict = {"taps": {"L": 0, "R": 0}, "tap_boxes": [], "unsupported": [],
-                    "warnings": [], "no_output_tap": False, "close_hook": False}
+                    "warnings": [], "no_output_tap": False, "close_hook": False,
+                    "note_target": None}
     _instrument_patcher(p, "top", report)
+    if note:
+        _inject_note(p, report)
 
     right = (max(b.right_edge for b in p.boxes) if p.boxes else 0.0) + 30.0
     top = min((b.patching_rect[1] for b in p.boxes), default=20.0) + 70.0
@@ -775,6 +862,14 @@ def guard_input(path: Path) -> Path:
     return real
 
 
+def _resolve_note_ms(record_s: float, note_ms: int | None) -> int:
+    """The note-on length in ms (D-06): *note_ms*, else 75% of the record,
+    clamped to [1, record length]."""
+    total = max(1, int(round(record_s * 1000)))
+    ms = int(round(total * 0.75)) if note_ms is None else int(note_ms)
+    return max(1, min(ms, total))
+
+
 RESTORE_DSP = ("/dsp", (0,))  # the single restore slot (D-02); sent only when DSP was off before
 
 
@@ -804,6 +899,10 @@ def plan_messages(copy: Path, run_dir: Path, opts, tapped: bool = True) -> list[
             ("/sf", ("record", int(round(opts.record * 1000)))),
             ("/query", ()),  # DSP is surely on: dspstate~ reports the rate
         ]
+        note = getattr(opts, "note", None)
+        if note:
+            plan += [("/note", (int(note[0]), int(note[1]), 1)),
+                     ("/note", (int(note[0]), 0, 1))]
         plan += [
             ("/sf", (0,)),
             ("/ping", ()),
@@ -991,11 +1090,17 @@ def _execute(b: Bridge, plan: list[tuple], args, run_dir: Path, copy: Path, repo
     closers = ("/close", "/closefile")
     window_id = None
     dsp_resolved = False
+    t_rec = None  # when /sf record was sent: the note-off and /sf 0 are timed from it
+    note_ms = (_resolve_note_ms(args.record, getattr(args, "note_ms", None))
+               if getattr(args, "note", None) and args.record else None)
     try:
         for i, (address, margs) in enumerate(plan):
             prev = plan[i - 1][0] if i else None
+            if address == "/note" and len(margs) > 1 and margs[1] == 0 and t_rec is not None:
+                b.collect(max(0.0, note_ms / 1000.0 - (b.now() - t_rec)))
             if address == "/sf" and margs == (0,):
-                b.collect(args.record + 0.5)
+                elapsed = b.now() - t_rec if t_rec is not None else 0.0
+                b.collect(max(0.0, args.record + 0.5 - elapsed))
             if (address, margs) == RESTORE_DSP:
                 before = report.get("dsp_before")
                 if before == 0 or (before is None and report.get("_dsp_on")):
@@ -1013,6 +1118,8 @@ def _execute(b: Bridge, plan: list[tuple], args, run_dir: Path, copy: Path, repo
                     report["shot"] = {"error": str(exc), "png": str(png)}
             if address != "/ping":
                 b.send(address, *margs)
+                if address == "/sf" and margs[:1] == ("record",):
+                    t_rec = b.now()
                 if address in openers:
                     report["load"]["open_s"] = round(b.now(), 4)
                 elif address == "/dsp":
@@ -1085,7 +1192,7 @@ def run_check(args) -> dict:
         "unsupported": [], "warnings": [], "load": {"open_s": None, "pong_s": None},
         "errors": [], "events_raw": [], "record": None, "shot": None, "closed": None,
         "feedback_suspected": False, "console_write": None,
-        "errors_distinct": [], "max_sr": None,
+        "errors_distinct": [], "max_sr": None, "note": None, "note_target": None,
         "dsp_before": None, "dsp_stop_sent": False,
         "verdict": "bridge_failed", "exit_code": 2,
     }
@@ -1095,9 +1202,14 @@ def run_check(args) -> dict:
         report["error"] = str(exc)
         return report
     report["patch"] = str(src)
-    copy, inst = instrument(src)
+    note = getattr(args, "note", None)
+    copy, inst = instrument(src, note=bool(note))
     report.update(copy=str(copy), taps=inst["taps"], tap_boxes=inst["tap_boxes"],
-                  unsupported=inst["unsupported"], warnings=inst["warnings"])
+                  unsupported=inst["unsupported"], warnings=inst["warnings"],
+                  note_target=inst["note_target"])
+    if note:
+        report["note"] = {"pitch": int(note[0]), "vel": int(note[1]),
+                          "ms": _resolve_note_ms(args.record, getattr(args, "note_ms", None))}
     try:
         run_dir = Path(_make_run_dir())
         report["run_dir"] = str(run_dir)
@@ -1202,6 +1314,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help="do not switch DSP off after recording")
     sc.add_argument("--load-timeout", type=float, default=30.0,
                     help="seconds to wait for the /pong after the open (default 30)")
+    sc.add_argument("--note", nargs=2, type=int, default=None, metavar=("PITCH", "VEL"),
+                    help="play this note into the copy's notein (kslider fallback) while "
+                         "recording; needs --record")
+    sc.add_argument("--note-ms", type=int, default=None, metavar="MS",
+                    help="note-on length in ms (default 75%% of --record, clamped to it)")
     sc.add_argument("--dry-run", action="store_true",
                     help="print the message sequence; open no socket")
     _add_net_args(sc)
@@ -1259,7 +1376,16 @@ def _cmd_analyze(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.cmd == "check" and args.note is not None:
+        pitch, vel = args.note
+        if args.record is None:
+            parser.error("--note needs --record (the note plays while recording)")
+        if not 0 <= pitch <= 127:
+            parser.error(f"--note pitch {pitch} is outside 0-127")
+        if not 1 <= vel <= 127:
+            parser.error(f"--note velocity {vel} is outside 1-127")
     if args.cmd == "ping":
         return _cmd_ping(args)
     if args.cmd == "check":

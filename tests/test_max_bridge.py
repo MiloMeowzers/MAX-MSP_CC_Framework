@@ -73,6 +73,7 @@ class FakeBridge:
         # the wav header rate (None = max_sr); the samples are timed at max_sr
         self.wav_sr = wav_sr
         self.received: list[tuple[str, list]] = []
+        self.times: list[float] = []  # time.monotonic() per received packet (parallel list)
         self.console = ["Max 9.2.0 (fake) started"]
         self.sf_path: str | None = None
         self.muted = False
@@ -112,6 +113,7 @@ class FakeBridge:
                 continue
             address, args = msg
             self.received.append((address, list(args)))
+            self.times.append(time.monotonic())
             if self.muted:
                 continue
             self._handle(addr, address, list(args))
@@ -1141,6 +1143,144 @@ class TestCheck:
         assert a.console_all is False and a.leave_dsp_on is False and a.dry_run is False
 
 
+SIMPLE_FM = bridge.REPO_ROOT / "patches" / "simple-fm" / "generated" / "simple-fm.maxpat"
+
+
+def _note_boxes(p):
+    rcv = [b for b in p.boxes if b.text == f"receive {bridge.NOTE_RECEIVE}"]
+    up = [b for b in p.boxes if b.text == "unpack 0 0 0"]
+    return rcv, up
+
+
+class TestNote:
+    """D-06: --note drives the temp copy's notein cords (kslider fallback)."""
+
+    def test_note_mirror_simple_fm(self, db):
+        before = SIMPLE_FM.read_bytes()
+        copy, report = bridge.instrument(SIMPLE_FM, note=True)
+        try:
+            inst = _load(copy)
+            errors = [r for r in validate_patch(json.loads(copy.read_text()), db=db)
+                      if r.level == "error"]
+        finally:
+            copy.unlink()
+        assert SIMPLE_FM.read_bytes() == before
+        assert errors == []
+        orig = _load(SIMPLE_FM)
+        (rcv,), (up,) = _note_boxes(inst)
+        assert (rcv.id, 0, up.id, 0) in _cords(inst)
+        notein = next(b for b in orig.boxes if b.name == "notein")
+        mirrored = {(l.source_outlet, l.dest_id, l.dest_inlet) for l in orig.lines
+                    if l.source_id == notein.id and l.source_outlet < 3}
+        assert mirrored
+        assert {(l.source_outlet, l.dest_id, l.dest_inlet) for l in inst.lines
+                if l.source_id == up.id} == mirrored
+        kslider = next(b for b in orig.boxes if b.maxclass == "kslider")
+        into = lambda p: {c for c in _cords(p) if c[2] == kslider.id}
+        assert into(inst) == into(orig)
+        assert report["note_target"] == {"kind": "notein", "boxes": [f"top/{notein.id}"]}
+
+    def test_note_kslider_fallback(self, tmp_path, db):
+        from src.maxpat.hooks import format_patch_text
+        p = Patcher(db=db)
+        ks = p.add_box("kslider", x=20, y=20)
+        mk = p.add_box("makenote", ["100"], x=20, y=120)
+        p.add_connection(ks, 1, mk, 1)
+        p.add_connection(ks, 0, mk, 0)
+        src = tmp_path / "ks.maxpat"
+        src.write_text(format_patch_text(p.to_dict()))
+        copy, report = bridge.instrument(src, note=True)
+        inst = _load(copy)
+        copy.unlink()
+        (rcv,), (up,) = _note_boxes(inst)
+        assert {(l.source_outlet, l.dest_id, l.dest_inlet) for l in inst.lines
+                if l.source_id == up.id} == {(1, ks.id, 1), (0, ks.id, 0)}
+        assert report["note_target"] == {"kind": "kslider", "box": f"top/{ks.id}"}
+
+    def test_note_none_warns(self, tmp_path, db):
+        copy, report = bridge.instrument(_tone_patch(tmp_path / "t.maxpat", db), note=True)
+        inst = _load(copy)
+        copy.unlink()
+        assert "--note: no notein or kslider to drive" in report["warnings"]
+        assert report["note_target"] is None
+        assert _note_boxes(inst) == ([], [])
+
+    def test_note_off_by_default(self):
+        copy, report = bridge.instrument(SIMPLE_FM)
+        try:
+            text = copy.read_text()
+        finally:
+            copy.unlink()
+        assert bridge.NOTE_RECEIVE not in text
+        assert report["note_target"] is None
+
+    def test_note_in_subpatcher(self, tmp_path, db):
+        from src.maxpat.hooks import format_patch_text
+        p = Patcher(db=db)
+        _box, inner = p.add_subpatcher("voice", inlets=0, outlets=0, x=20, y=20)
+        n = inner.add_box("notein", x=20, y=20)
+        sn = inner.add_box("stripnote", x=20, y=80)
+        inner.add_connection(n, 1, sn, 1)
+        inner.add_connection(n, 0, sn, 0)
+        src = tmp_path / "sub.maxpat"
+        src.write_text(format_patch_text(p.to_dict()))
+        copy, report = bridge.instrument(src, note=True)
+        inst = _load(copy)
+        copy.unlink()
+        assert _note_boxes(inst) == ([], [])
+        sub = next(b for b in inst.boxes if b._inner_patcher is not None)
+        (rcv,), (up,) = _note_boxes(sub._inner_patcher)
+        assert {(l.source_outlet, l.dest_id, l.dest_inlet) for l in sub._inner_patcher.lines
+                if l.source_id == up.id} == {(0, sn.id, 0), (1, sn.id, 1)}
+        assert report["note_target"] == {"kind": "notein", "boxes": [f"top/{sub.id}/{n.id}"]}
+
+    def test_note_requires_record(self, tmp_path, db, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with pytest.raises(SystemExit) as exc:
+            bridge.main(["check", str(src), "--note", "60", "100", "--dry-run"])
+        assert exc.value.code == 2
+        assert "--record" in capsys.readouterr().err
+
+    @pytest.mark.parametrize("pitch,vel", [("128", "100"), ("60", "0"), ("60", "128")])
+    def test_note_range(self, tmp_path, db, pitch, vel):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with pytest.raises(SystemExit) as exc:
+            bridge.main(["check", str(src), "--record", "1", "--note", pitch, vel, "--dry-run"])
+        assert exc.value.code == 2
+
+    def test_note_ms_default(self):
+        assert bridge._resolve_note_ms(3, None) == 2250
+        assert bridge._resolve_note_ms(3, 2000) == 2000
+        assert bridge._resolve_note_ms(3, 5000) == 3000
+        assert bridge._resolve_note_ms(2, 0) == 1
+        assert bridge._resolve_note_ms(0.001, None) == 1
+
+    def test_note_run(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        extra = ["--record", "0.4", "--note", "60", "100", "--note-ms", "100"]
+        with FakeBridge() as fb:
+            rc, rep = _check(fb, src, *extra, capsys=capsys)
+        assert rc == 0, rep
+        opts = bridge.build_parser().parse_args(["check", str(src), *extra])
+        planned = [a for a, _ in bridge.plan_messages(tmp_path / "__maxbridge_tone.maxpat",
+                                                      run_dir, opts)]
+        assert fb.addresses == planned
+        on = fb.received.index(("/note", [60, 100, 1]))
+        off = fb.received.index(("/note", [60, 0, 1]))
+        rec = next(i for i, (a, m) in enumerate(fb.received) if a == "/sf" and m[:1] == ["record"])
+        stop = fb.received.index(("/sf", [0]))
+        assert rec < on < off < stop
+        assert fb.times[off] - fb.times[on] >= 0.08
+        assert rep["note"] == {"pitch": 60, "vel": 100, "ms": 100}
+
+    def test_note_dry_run(self, tmp_path, db, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        assert bridge.main(["check", str(src), "--record", "1", "--note", "60", "100",
+                            "--dry-run"]) == 0
+        lines = [l.strip() for l in capsys.readouterr().out.splitlines() if l.startswith("/note")]
+        assert lines == ["/note 60 100 1", "/note 60 0 1"]
+
+
 # ---------------------------------------------------------------------------
 # Task 3: fixtures, checklist, open questions
 # ---------------------------------------------------------------------------
@@ -1209,4 +1349,23 @@ class TestFixtures:
             m = re.search(r"Answered by: checklist step (\d+)", e)
             assert m, e[:60]
             assert int(m.group(1)) in steps, e[:60]
+            assert "Answer:" in e
+
+    def test_v020_checklist(self):
+        import re
+        path = PROJECT_DIR / "test-results" / "v0.2.0-bridge-checklist.md"
+        assert path.is_file()
+        text = path.read_text()
+        for needle in ("--note 60 100 --note-ms 2000", "sr_header_mismatch", "dsp_before", "toggle",
+                       "fixtures/fx-clean.maxpat", "fixtures/fx-nosuchobj.maxpat",
+                       "fixtures/fx-genfail.maxpat", "find patches -name '__maxbridge_*'",
+                       "git status --porcelain patches/simple-fm"):
+            assert needle in text, needle
+        steps = {int(n) for n in re.findall(r"^(\d+)\. \[[^]]*\]", text, re.M)}
+        assert steps == set(range(8))
+        entries = [e for e in re.split(r"\n(?=V\d+\. )", text) if re.match(r"V\d+\. ", e)]
+        assert len(entries) == 7
+        for e in entries:
+            m = re.search(r"Answered by: step (\d+)", e)
+            assert m and int(m.group(1)) in steps, e[:60]
             assert "Answer:" in e
