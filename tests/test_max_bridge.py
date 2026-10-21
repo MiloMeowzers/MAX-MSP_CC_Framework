@@ -54,14 +54,26 @@ class FakeBridge:
     - ``/sf open <p>`` remembers p; ``/sf 0`` writes a 0.2-amplitude 440 Hz
       float32 stereo wav there.
     - ``mute_after_open``: stop answering anything once /open arrives.
+    - ``/query`` -> ``/state/dsp dsp_on``, ``/state/adsr max_sr`` and, while
+      DSP is on, ``/state/sr max_sr`` (unless ``answers_query`` is False:
+      an older bridge patch); ``/dsp 1`` sets dsp_on and auto-reports
+      ``/state/sr`` (dspstate~); ``/dsp 0`` clears it.
     """
 
     def __init__(self, errors: bool = False, flood: int = 0,
-                 mute_after_open: bool = False) -> None:
+                 mute_after_open: bool = False, dsp_on: int = 0,
+                 answers_query: bool = True, max_sr: float = 44100.0,
+                 wav_sr: int | None = None) -> None:
         self.errors = errors
         self.flood = flood
         self.mute_after_open = mute_after_open
+        self.dsp_on = dsp_on
+        self.answers_query = answers_query
+        self.max_sr = max_sr
+        # the wav header rate (None = max_sr); the samples are timed at max_sr
+        self.wav_sr = wav_sr
         self.received: list[tuple[str, list]] = []
+        self.times: list[float] = []  # time.monotonic() per received packet (parallel list)
         self.console = ["Max 9.2.0 (fake) started"]
         self.sf_path: str | None = None
         self.muted = False
@@ -101,6 +113,7 @@ class FakeBridge:
                 continue
             address, args = msg
             self.received.append((address, list(args)))
+            self.times.append(time.monotonic())
             if self.muted:
                 continue
             self._handle(addr, address, list(args))
@@ -122,18 +135,31 @@ class FakeBridge:
         elif address == "/sf" and args and args[0] == "open":
             self.sf_path = args[1]
         elif address == "/sf" and args == [0] and self.sf_path:
-            _write_sine(Path(self.sf_path), 440.0, 0.2, seconds=1.0)
+            _write_sine(Path(self.sf_path), 440.0, 0.2, seconds=1.0,
+                        sr=int(self.max_sr), header_sr=self.wav_sr)
+        elif address == "/query" and self.answers_query:
+            self._reply(addr, "/state/dsp", int(self.dsp_on))
+            self._reply(addr, "/state/adsr", float(self.max_sr))
+            if self.dsp_on:
+                self._reply(addr, "/state/sr", float(self.max_sr))
+        elif address == "/dsp" and args == [1]:
+            self.dsp_on = 1
+            if self.answers_query:
+                self._reply(addr, "/state/sr", float(self.max_sr))
+        elif address == "/dsp" and args == [0]:
+            self.dsp_on = 0
 
 
 def _write_sine(path: Path, freq: float, amp: float, seconds: float = 1.0,
-                sr: int = 44100, stereo: bool = True) -> None:
+                sr: int = 44100, stereo: bool = True, header_sr: int | None = None) -> None:
+    """A sine whose samples are timed at *sr*; the header says *header_sr* (default sr)."""
     import numpy as np
     from scipy.io import wavfile
 
     t = np.arange(int(sr * seconds)) / sr
     x = (amp * np.sin(2 * np.pi * freq * t)).astype(np.float32)
     data = np.stack([x, x], axis=1) if stereo else x
-    wavfile.write(str(path), sr, data)
+    wavfile.write(str(path), header_sr or sr, data)
 
 
 # ---------------------------------------------------------------------------
@@ -270,14 +296,17 @@ class TestBridgePatch:
     def test_route_order(self):
         assert bridge.ROUTE_ADDRESSES == (
             "/ping", "/open", "/sf", "/console", "/dsp", "/listen",
-            "/close", "/openfile", "/closefile",
+            "/close", "/openfile", "/closefile", "/query", "/note",
         )
 
     def test_udpreceive_deferlow_route(self, patch):
         p, _ = patch
         udp = self._one(p, "udpreceive")
-        (dl, _i), = self._succ(p, udp)
-        assert _box_name(dl) == "deferlow"
+        (gate, inlet), = self._succ(p, udp)
+        # v0.2.0: the kill-switch gate's DATA inlet (1) sits before deferlow
+        assert _box_name(gate) == "gate" and _args(gate) == ["1", "0"] and inlet == 1
+        (dl, inlet), = self._succ(p, gate, 0)
+        assert _box_name(dl) == "deferlow" and inlet == 0
         (rt, _i), = self._succ(p, dl)
         assert _box_name(rt) == "route"
 
@@ -340,8 +369,9 @@ class TestBridgePatch:
 
     def test_listen_fanout_closed_at_load(self, patch):
         p, _ = patch
-        trig = self._one(p, "trigger") if any(_box_name(b) == "trigger" for b in p.boxes) \
-            else self._one(p, "t")
+        # v0.2.0 adds `t i i` and `t b b b`: pick the listen fan-out by its args
+        (trig,) = [b for b in p.boxes if _box_name(b) in ("t", "trigger")
+                   and _args(b) == ["i", "i", "i", "i"]]
         assert _args(trig) == ["i", "i", "i", "i"]
         loadmess = self._one(p, "loadmess")
         assert _args(loadmess) == ["0"]
@@ -363,6 +393,84 @@ class TestBridgePatch:
         texts = " ".join(b.text for b in p.boxes if b.maxclass == "comment")
         assert "ALL network interfaces" in texts
         assert "Never add print" in texts
+
+    # --- v0.2.0 (quick-261021-l26) ---
+
+    def test_kill_switch(self, patch):
+        p, _ = patch
+        (toggle,) = [b for b in p.boxes if b.maxclass == "toggle"]
+        raw = toggle._raw or {}
+        assert not raw.get("parameter_enable") and not toggle.presentation
+        # OFF at every load, explicitly: loadbang -> 0 -> toggle
+        (zero, inlet), = [(b, i) for b, i in self._succ(p, self._one(p, "loadbang"))]
+        assert zero.maxclass == "message" and zero.text == "0"
+        assert (toggle, 0) in self._succ(p, zero)
+        (tii, inlet), = self._succ(p, toggle)
+        assert _box_name(tii) in ("t", "trigger") and _args(tii) == ["i", "i"] and inlet == 0
+        gate = next(b for b in p.boxes if _box_name(b) == "gate" and _args(b) == ["1", "0"])
+        assert self._succ(p, tii, 1) == [(gate, 0)]
+        (sel, inlet), = self._succ(p, tii, 0)
+        assert _box_name(sel) in ("select", "sel") and _args(sel) == ["0"] and inlet == 0
+        (msg, _i), = self._succ(p, sel, 0)
+        assert msg.maxclass == "message" and msg.text == "/listen 0"
+        assert self._succ(p, msg) == [(self._one(p, "route"), 0)]
+
+    def test_query_branch(self, patch):
+        p, _ = patch
+        route = self._one(p, "route")
+        (tbbb, _i), = self._succ(p, route, bridge.ROUTE_ADDRESSES.index("/query"))
+        assert _box_name(tbbb) in ("t", "trigger") and _args(tbbb) == ["b", "b", "b"]
+        targets = {b.text for b, _i in self._succ(p, tbbb)}
+        assert targets == {"dspstate~", "adstatus sr", "adstatus switch"}
+        by_text = {b.text: b for b in p.boxes if b.maxclass == "newobj"}
+        (send,) = [b for b in p.boxes if _box_name(b) == "send"
+                   and _args(b) == [bridge.REPLY_RECEIVE]]
+        for src, outlet, addr in (("adstatus sr", 1, "/state/adsr"),
+                                  ("adstatus switch", 1, "/state/dsp"),
+                                  ("dspstate~", 1, "/state/sr")):
+            (pre, inlet), = self._succ(p, by_text[src], outlet)
+            assert pre.text == f"prepend {addr}" and inlet == 0
+            assert self._succ(p, pre) == [(send, 0)]
+        assert tuple(sorted(a for a in bridge.STATE_ADDRESSES)) == tuple(sorted(
+            ("/state/adsr", "/state/dsp", "/state/sr")))
+        (rcv,) = [b for b in p.boxes if _box_name(b) == "receive"
+                  and _args(b) == [bridge.REPLY_RECEIVE]]
+        assert self._succ(p, rcv) == [(self._one(p, "udpsend"), 0)]
+        # route reaches adstatus only through the trigger: args become bangs
+        for name in ("adstatus sr", "adstatus switch"):
+            assert not self._reaches(p, route, by_text[name], avoid=("t", "trigger"))
+
+    def test_note_branch(self, patch):
+        p, _ = patch
+        route = self._one(p, "route")
+        (snd, inlet), = self._succ(p, route, bridge.ROUTE_ADDRESSES.index("/note"))
+        assert _box_name(snd) == "send" and _args(snd) == [bridge.NOTE_RECEIVE] and inlet == 0
+
+    def test_layout_flows_down_without_overlap(self, patch):
+        from src.maxpat.sizing import rendered_rect
+        p, _ = patch
+        by_id = {b.id: b for b in p.boxes}
+        up = [(l.source_id, l.dest_id) for l in p.lines
+              if not by_id[l.dest_id].patching_rect[1] > by_id[l.source_id].patching_rect[1]]
+        assert up == []
+        rects = [(b.id, rendered_rect(b)) for b in p.boxes]
+
+        def hit(a, b):
+            return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+        overlaps = [(a, b) for i, (a, ra) in enumerate(rects) for b, rb in rects[i + 1:] if hit(ra, rb)]
+        assert overlaps == []
+
+    def test_internal_names_pinned(self):
+        assert bridge.NOTE_RECEIVE == "__maxbridge_note"
+        assert bridge.REPLY_RECEIVE == "__maxbridge_reply"
+        for name in (bridge.NOTE_RECEIVE, bridge.REPLY_RECEIVE):
+            assert name.startswith(bridge.COPY_PREFIX)
+        assert bridge.STATE_ADDRESSES == ("/state/dsp", "/state/adsr", "/state/sr")
+
+    def test_version_comment(self, patch):
+        p, _ = patch
+        assert "v0.2.0" in [b.text for b in p.boxes if b.maxclass == "comment"]
 
 
 class TestPing:
@@ -395,6 +503,12 @@ class TestPing:
             assert str(holder.getsockname()[1]) in str(exc.value)
         finally:
             holder.close()
+
+    def test_ping_hint_names_toggle(self, capsys):
+        rc = bridge.main(["ping", "--port", str(_free_port()), "--reply-port", "0",
+                          "--timeout", "0.5"])
+        assert rc == 2
+        assert "toggle" in capsys.readouterr().err
 
     def test_events_collected_during_ping(self):
         with FakeBridge(errors=True) as fb:
@@ -553,6 +667,63 @@ class TestInstrument:
         copy.unlink()
         assert report["no_output_tap"] is True
 
+    @staticmethod
+    def _overlaps(p):
+        from src.maxpat.sizing import rendered_rect
+        rects = [(b.id, rendered_rect(b)) for b in p.boxes]
+
+        def hit(a, b):
+            return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+        return [(a, b) for i, (a, ra) in enumerate(rects) for b, rb in rects[i + 1:] if hit(ra, rb)]
+
+    def test_taps_under_dac(self, tmp_path, db):
+        copy, report = bridge.instrument(_tone_patch(tmp_path / "t.maxpat", db))
+        inst = _load(copy)
+        copy.unlink()
+        dac = next(b for b in inst.boxes if b.text == "dac~")
+        (L,) = [b for b in inst.boxes if b.text == f"send~ {bridge.TAP_L}"]
+        (R,) = [b for b in inst.boxes if b.text == f"send~ {bridge.TAP_R}"]
+        assert L.patching_rect[0] == dac.patching_rect[0]
+        assert L.patching_rect[1] >= dac.bottom_edge + 20
+        assert R.patching_rect[0] == L.right_edge + 15
+        assert R.patching_rect[1] == L.patching_rect[1]
+        assert not L.presentation and not R.presentation
+        assert self._overlaps(inst) == []
+        assert report["taps"] == {"L": 1, "R": 1}
+        assert [(t["dac_id"], t["side"]) for t in report["tap_boxes"]] == [(dac.id, "L"), (dac.id, "R")]
+        assert report["tap_boxes"][0]["rect"] == L.patching_rect
+
+    def test_two_dacs_two_tap_pairs(self, tmp_path, db):
+        from src.maxpat.hooks import format_patch_text
+        p = Patcher(db=db)
+        dacs = []
+        for x in (20, 400):
+            osc = p.add_box("cycle~", ["440"], x=x, y=20)
+            g = p.add_box("*~", ["0.1"], x=x, y=60)
+            dac = p.add_box("dac~", [], x=x, y=100)
+            p.add_connection(osc, 0, g, 0)
+            p.add_connection(g, 0, dac, 0)
+            p.add_connection(g, 0, dac, 1)
+            dacs.append(dac.id)
+        src = tmp_path / "two.maxpat"
+        src.write_text(format_patch_text(p.to_dict()))
+        copy, report = bridge.instrument(src)
+        inst = _load(copy)
+        copy.unlink()
+        by_id = {b.id: b for b in inst.boxes}
+        for tap in (bridge.TAP_L, bridge.TAP_R):
+            sends = [b for b in inst.boxes if b.text == f"send~ {tap}"]
+            assert len(sends) == 2
+        for t in report["tap_boxes"]:
+            dac = by_id[t["dac_id"]]
+            assert t["rect"][1] >= dac.bottom_edge + 20
+            assert dac.patching_rect[0] <= t["rect"][0] < dac.patching_rect[0] + 380
+        assert sorted((t["dac_id"], t["side"]) for t in report["tap_boxes"]) == sorted(
+            (d, s) for d in dacs for s in ("L", "R"))
+        assert report["taps"] == {"L": 2, "R": 2}
+        assert self._overlaps(inst) == []
+
     def test_copies_are_gitignored(self):
         import subprocess
         r = subprocess.run(
@@ -627,6 +798,106 @@ class TestAnalyze:
         assert list(json.loads(capsys.readouterr().out)["channels"]) == ["L"]
         _write_sine(p, 440.0, 1.5)
         assert bridge.main(["analyze", str(p)]) == 1
+
+
+class TestSampleRateGuard:
+    """D-03: analyze at MAX's own DSP rate when the wav header disagrees."""
+
+    def _mismatched(self, tmp_path) -> Path:
+        p = tmp_path / "m.wav"
+        _write_sine(p, 440.0, 0.2, sr=44100, header_sr=48000)
+        return p
+
+    def test_sr_override(self, tmp_path):
+        r = bridge.analyze(self._mismatched(tmp_path), max_sr=44100)
+        for ch in ("L", "R"):
+            assert abs(r["channels"][ch]["pitch_hz"] - 440.0) < 1.0
+        assert r["sample_rate"] == 44100 and r["header_sample_rate"] == 48000
+        assert r["seconds"] == 1.0
+        mism = [w for w in r["warnings"] if w.startswith("sr_header_mismatch")]
+        assert len(mism) == 1
+        assert mism[0].startswith("sr_header_mismatch: header 48000 Hz, MAX DSP 44100 Hz")
+        assert r["flags"] == []
+
+    def test_sr_match_no_warning(self, tmp_path):
+        p = self._mismatched(tmp_path)
+        for max_sr in (None, 48000, 48000.4):
+            r = bridge.analyze(p, max_sr=max_sr)
+            assert not [w for w in r["warnings"] if w.startswith("sr_header_mismatch")]
+            assert r["header_sample_rate"] == r["sample_rate"] == 48000
+        # read at the header rate, the 44.1 k-timed tone measures sharp (the v0.1.0 bug)
+        assert bridge.analyze(p)["channels"]["L"]["pitch_hz"] > 470
+
+    def test_cli_sr(self, tmp_path, capsys):
+        p = self._mismatched(tmp_path)
+        assert bridge.main(["analyze", str(p), "--sr", "44100"]) == 0
+        out = json.loads(capsys.readouterr().out)
+        assert abs(out["channels"]["L"]["pitch_hz"] - 440.0) < 1.0
+        assert any(w.startswith("sr_header_mismatch") for w in out["warnings"])
+        assert bridge.build_parser().parse_args(["analyze", "x.wav"]).sr is None
+
+    def test_sr_guard_end_to_end(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(max_sr=44100, wav_sr=48000) as fb:
+            rc, rep = _check(fb, src, "--record", "0.2", capsys=capsys)
+        assert rc == 0, rep
+        assert rep["max_sr"] == 44100
+        assert abs(rep["record"]["channels"]["L"]["pitch_hz"] - 440.0) < 1.0
+        assert rep["record"]["sample_rate"] == 44100
+        assert rep["record"]["header_sample_rate"] == 48000
+        assert any(w.startswith("sr_header_mismatch") for w in rep["record"]["warnings"])
+        assert rep["record"]["flags"] == []
+
+
+class TestDistinctErrors:
+    """D-05: one error seen on several channels counts once; raw kept."""
+
+    OSC = [
+        {"source": "error", "text": "osc~: osc~: No such object", "t": 0.5},
+        {"source": "console", "text": "osc~: No such object", "t": 0.51,
+         "obj": ["osc~"], "type": [1]},
+        {"source": "console", "text": "No such object", "t": 0.52,
+         "obj": ["osc~:"], "type": [1]},
+        {"source": "console_write", "text": "osc~: osc~: No such object", "t": None},
+    ]
+
+    def test_distinct_osc_triple(self):
+        import copy
+        raw = copy.deepcopy(self.OSC)
+        (d,) = bridge._distinct_errors(raw)
+        assert raw == self.OSC  # the raw list is never modified
+        assert d["key"] == "osc~: No such object"
+        assert d["sources"] == {"error": 1, "console": 2, "console_write": 1}
+        assert d["occurrences"] == max(d["sources"].values()) == 2
+        assert d["first_t"] == 0.5
+
+    def test_distinct_codebox_double(self):
+        text = "codebox: can't assign to parameter g"
+        errs = ([{"source": "error", "text": text, "t": 1.0}] * 2
+                + [{"source": "console", "text": "can't assign to parameter g", "t": 1.01,
+                    "obj": ["codebox"], "type": [1]}] * 2
+                + [{"source": "console_write", "text": text, "t": None}] * 2)
+        (d,) = bridge._distinct_errors(errs)
+        assert d["key"] == text and d["occurrences"] == 2
+        assert d["sources"] == {"error": 2, "console": 2, "console_write": 2}
+
+    def test_distinct_prefix_merge(self):
+        # research A4: console names gen~ while error says codebox: one error
+        errs = [{"source": "error", "text": "codebox: can't assign to parameter g", "t": 1.0},
+                {"source": "console", "text": "codebox: can't assign to parameter g", "t": 1.0,
+                 "obj": ["gen~"], "type": [1]}]
+        (d,) = bridge._distinct_errors(errs)
+        assert d["key"] == "gen~: codebox: can't assign to parameter g"
+        assert d["occurrences"] == 1
+
+    def test_distinct_two_errors(self):
+        errs = self.OSC + [{"source": "console_write",
+                            "text": "send: bad arguments creating object", "t": None}]
+        ds = bridge._distinct_errors(errs)
+        assert [d["key"] for d in ds] == ["osc~: No such object",
+                                          "send: bad arguments creating object"]
+        assert ds[1]["first_t"] is None and ds[1]["occurrences"] == 1
+        assert bridge._distinct_errors([]) == []
 
 
 class FakeRun:
@@ -704,7 +975,9 @@ def _check(fb, patch, *extra, capsys):
     argv = ["check", str(patch), "--port", str(fb.port), "--reply-port", "0",
             "--settle", "0.1", "--load-timeout", "1.5", "--timeout", "1.0", *extra]
     rc = bridge.main(argv)
-    return rc, json.loads(capsys.readouterr().out)
+    cap = capsys.readouterr()
+    _check.last_err = cap.err  # the stderr summary, for the tests that read it
+    return rc, json.loads(cap.out)
 
 
 class TestCheck:
@@ -721,6 +994,8 @@ class TestCheck:
         assert rep["record"] is not None and rep["record"]["flags"] == []
         assert not (tmp_path / "__maxbridge_tone.maxpat").exists()
         assert src.read_bytes() == before
+        assert len(rep["errors_distinct"]) == 1
+        assert "1 distinct error(s)" in _check.last_err
 
     def test_clean_run_and_order(self, tmp_path, db, run_dir, capsys):
         src = _tone_patch(tmp_path / "tone.maxpat", db)
@@ -732,9 +1007,61 @@ class TestCheck:
         opts = bridge.build_parser().parse_args(["check", str(src), "--record", "0.2"])
         planned = [a for a, _ in bridge.plan_messages(copy, run_dir, opts)]
         assert fb.addresses == planned
-        assert planned[:2] == ["/ping", "/console"]
+        assert planned[:3] == ["/ping", "/query", "/ping"]
+        assert planned.index("/query") < planned.index("/open")
         assert "/open" in planned and "/sf" in planned and planned[-1] == "/ping"
         assert ("/dsp", [0]) in fb.received
+        assert rep["dsp_before"] == 0 and rep["dsp_stop_sent"] is True
+
+    def test_dsp_before_pure(self):
+        assert bridge._dsp_before([(0.1, "/state/dsp", [1])]) == 1
+        assert bridge._dsp_before([(0.1, "/state/dsp", [0]), (0.1, "/state/sr", [44100.0])]) == 0
+        assert bridge._dsp_before([(0.1, "/state/sr", [48000.0])]) == 1
+        assert bridge._dsp_before([(0.1, "/state/adsr", [44100.0])]) is None
+        assert bridge._dsp_before([]) is None
+
+    def test_dsp_restore_when_on(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(dsp_on=1) as fb:
+            rc, rep = _check(fb, src, "--record", "0.2", capsys=capsys)
+        assert rc == 0, rep
+        assert ("/dsp", [0]) not in fb.received
+        opts = bridge.build_parser().parse_args(["check", str(src), "--record", "0.2"])
+        plan = bridge.plan_messages(tmp_path / "__maxbridge_tone.maxpat", run_dir, opts)
+        assert bridge.RESTORE_DSP in plan
+        assert fb.addresses == [a for a, m in plan if (a, m) != bridge.RESTORE_DSP]
+        assert rep["dsp_before"] == 1 and rep["dsp_stop_sent"] is False
+        assert fb.dsp_on == 1
+
+    def test_dsp_unknown(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(answers_query=False) as fb:
+            rc, rep = _check(fb, src, "--record", "0.2", capsys=capsys)
+        assert rc == 0, rep
+        assert ("/dsp", [0]) in fb.received and rep["dsp_stop_sent"] is True
+        assert rep["dsp_before"] is None
+        assert any(w.startswith("dsp_state_unknown") for w in rep["warnings"])
+        with FakeBridge(answers_query=False) as fb:
+            rc, rep = _check(fb, src, capsys=capsys)
+        assert rc == 0, rep
+        assert ("/dsp", [0]) not in fb.received and rep["dsp_stop_sent"] is False
+
+    def test_dsp_off_restored_without_record(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(dsp_on=0) as fb:
+            rc, rep = _check(fb, src, capsys=capsys)
+        assert rc == 0, rep
+        assert ("/dsp", [0]) in fb.received and ("/dsp", [1]) not in fb.received
+        assert rep["dsp_before"] == 0 and rep["dsp_stop_sent"] is True
+
+    def test_leave_dsp_on(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        for dsp_on, answers in ((0, True), (1, True), (0, False)):
+            with FakeBridge(dsp_on=dsp_on, answers_query=answers) as fb:
+                rc, rep = _check(fb, src, "--record", "0.2", "--leave-dsp-on", capsys=capsys)
+            assert rc == 0, rep
+            assert ("/dsp", [0]) not in fb.received
+            assert rep["dsp_stop_sent"] is False
 
     def test_bridge_stops_answering(self, tmp_path, db, run_dir, capsys):
         src = _tone_patch(tmp_path / "tone.maxpat", db)
@@ -816,6 +1143,144 @@ class TestCheck:
         assert a.console_all is False and a.leave_dsp_on is False and a.dry_run is False
 
 
+SIMPLE_FM = bridge.REPO_ROOT / "patches" / "simple-fm" / "generated" / "simple-fm.maxpat"
+
+
+def _note_boxes(p):
+    rcv = [b for b in p.boxes if b.text == f"receive {bridge.NOTE_RECEIVE}"]
+    up = [b for b in p.boxes if b.text == "unpack 0 0 0"]
+    return rcv, up
+
+
+class TestNote:
+    """D-06: --note drives the temp copy's notein cords (kslider fallback)."""
+
+    def test_note_mirror_simple_fm(self, db):
+        before = SIMPLE_FM.read_bytes()
+        copy, report = bridge.instrument(SIMPLE_FM, note=True)
+        try:
+            inst = _load(copy)
+            errors = [r for r in validate_patch(json.loads(copy.read_text()), db=db)
+                      if r.level == "error"]
+        finally:
+            copy.unlink()
+        assert SIMPLE_FM.read_bytes() == before
+        assert errors == []
+        orig = _load(SIMPLE_FM)
+        (rcv,), (up,) = _note_boxes(inst)
+        assert (rcv.id, 0, up.id, 0) in _cords(inst)
+        notein = next(b for b in orig.boxes if b.name == "notein")
+        mirrored = {(l.source_outlet, l.dest_id, l.dest_inlet) for l in orig.lines
+                    if l.source_id == notein.id and l.source_outlet < 3}
+        assert mirrored
+        assert {(l.source_outlet, l.dest_id, l.dest_inlet) for l in inst.lines
+                if l.source_id == up.id} == mirrored
+        kslider = next(b for b in orig.boxes if b.maxclass == "kslider")
+        into = lambda p: {c for c in _cords(p) if c[2] == kslider.id}
+        assert into(inst) == into(orig)
+        assert report["note_target"] == {"kind": "notein", "boxes": [f"top/{notein.id}"]}
+
+    def test_note_kslider_fallback(self, tmp_path, db):
+        from src.maxpat.hooks import format_patch_text
+        p = Patcher(db=db)
+        ks = p.add_box("kslider", x=20, y=20)
+        mk = p.add_box("makenote", ["100"], x=20, y=120)
+        p.add_connection(ks, 1, mk, 1)
+        p.add_connection(ks, 0, mk, 0)
+        src = tmp_path / "ks.maxpat"
+        src.write_text(format_patch_text(p.to_dict()))
+        copy, report = bridge.instrument(src, note=True)
+        inst = _load(copy)
+        copy.unlink()
+        (rcv,), (up,) = _note_boxes(inst)
+        assert {(l.source_outlet, l.dest_id, l.dest_inlet) for l in inst.lines
+                if l.source_id == up.id} == {(1, ks.id, 1), (0, ks.id, 0)}
+        assert report["note_target"] == {"kind": "kslider", "box": f"top/{ks.id}"}
+
+    def test_note_none_warns(self, tmp_path, db):
+        copy, report = bridge.instrument(_tone_patch(tmp_path / "t.maxpat", db), note=True)
+        inst = _load(copy)
+        copy.unlink()
+        assert "--note: no notein or kslider to drive" in report["warnings"]
+        assert report["note_target"] is None
+        assert _note_boxes(inst) == ([], [])
+
+    def test_note_off_by_default(self):
+        copy, report = bridge.instrument(SIMPLE_FM)
+        try:
+            text = copy.read_text()
+        finally:
+            copy.unlink()
+        assert bridge.NOTE_RECEIVE not in text
+        assert report["note_target"] is None
+
+    def test_note_in_subpatcher(self, tmp_path, db):
+        from src.maxpat.hooks import format_patch_text
+        p = Patcher(db=db)
+        _box, inner = p.add_subpatcher("voice", inlets=0, outlets=0, x=20, y=20)
+        n = inner.add_box("notein", x=20, y=20)
+        sn = inner.add_box("stripnote", x=20, y=80)
+        inner.add_connection(n, 1, sn, 1)
+        inner.add_connection(n, 0, sn, 0)
+        src = tmp_path / "sub.maxpat"
+        src.write_text(format_patch_text(p.to_dict()))
+        copy, report = bridge.instrument(src, note=True)
+        inst = _load(copy)
+        copy.unlink()
+        assert _note_boxes(inst) == ([], [])
+        sub = next(b for b in inst.boxes if b._inner_patcher is not None)
+        (rcv,), (up,) = _note_boxes(sub._inner_patcher)
+        assert {(l.source_outlet, l.dest_id, l.dest_inlet) for l in sub._inner_patcher.lines
+                if l.source_id == up.id} == {(0, sn.id, 0), (1, sn.id, 1)}
+        assert report["note_target"] == {"kind": "notein", "boxes": [f"top/{sub.id}/{n.id}"]}
+
+    def test_note_requires_record(self, tmp_path, db, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with pytest.raises(SystemExit) as exc:
+            bridge.main(["check", str(src), "--note", "60", "100", "--dry-run"])
+        assert exc.value.code == 2
+        assert "--record" in capsys.readouterr().err
+
+    @pytest.mark.parametrize("pitch,vel", [("128", "100"), ("60", "0"), ("60", "128")])
+    def test_note_range(self, tmp_path, db, pitch, vel):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with pytest.raises(SystemExit) as exc:
+            bridge.main(["check", str(src), "--record", "1", "--note", pitch, vel, "--dry-run"])
+        assert exc.value.code == 2
+
+    def test_note_ms_default(self):
+        assert bridge._resolve_note_ms(3, None) == 2250
+        assert bridge._resolve_note_ms(3, 2000) == 2000
+        assert bridge._resolve_note_ms(3, 5000) == 3000
+        assert bridge._resolve_note_ms(2, 0) == 1
+        assert bridge._resolve_note_ms(0.001, None) == 1
+
+    def test_note_run(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        extra = ["--record", "0.4", "--note", "60", "100", "--note-ms", "100"]
+        with FakeBridge() as fb:
+            rc, rep = _check(fb, src, *extra, capsys=capsys)
+        assert rc == 0, rep
+        opts = bridge.build_parser().parse_args(["check", str(src), *extra])
+        planned = [a for a, _ in bridge.plan_messages(tmp_path / "__maxbridge_tone.maxpat",
+                                                      run_dir, opts)]
+        assert fb.addresses == planned
+        on = fb.received.index(("/note", [60, 100, 1]))
+        off = fb.received.index(("/note", [60, 0, 1]))
+        rec = next(i for i, (a, m) in enumerate(fb.received) if a == "/sf" and m[:1] == ["record"])
+        stop = fb.received.index(("/sf", [0]))
+        assert rec < on < off < stop
+        assert fb.times[off] - fb.times[on] >= 0.08
+        assert rep["note"] == {"pitch": 60, "vel": 100, "ms": 100}
+
+    def test_note_dry_run(self, tmp_path, db, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        assert bridge.main(["check", str(src), "--record", "1", "--note", "60", "100",
+                            "--dry-run"]) == 0
+        lines = [l.strip() for l in capsys.readouterr().out.splitlines() if l.startswith("/note")]
+        assert lines == ["/note 60 100 1", "/note 60 0 1"]
+
+
 # ---------------------------------------------------------------------------
 # Task 3: fixtures, checklist, open questions
 # ---------------------------------------------------------------------------
@@ -884,4 +1349,23 @@ class TestFixtures:
             m = re.search(r"Answered by: checklist step (\d+)", e)
             assert m, e[:60]
             assert int(m.group(1)) in steps, e[:60]
+            assert "Answer:" in e
+
+    def test_v020_checklist(self):
+        import re
+        path = PROJECT_DIR / "test-results" / "v0.2.0-bridge-checklist.md"
+        assert path.is_file()
+        text = path.read_text()
+        for needle in ("--note 60 100 --note-ms 2000", "sr_header_mismatch", "dsp_before", "toggle",
+                       "fixtures/fx-clean.maxpat", "fixtures/fx-nosuchobj.maxpat",
+                       "fixtures/fx-genfail.maxpat", "find patches -name '__maxbridge_*'",
+                       "git status --porcelain patches/simple-fm"):
+            assert needle in text, needle
+        steps = {int(n) for n in re.findall(r"^(\d+)\. \[[^]]*\]", text, re.M)}
+        assert steps == set(range(8))
+        entries = [e for e in re.split(r"\n(?=V\d+\. )", text) if re.match(r"V\d+\. ", e)]
+        assert len(entries) == 7
+        for e in entries:
+            m = re.search(r"Answered by: step (\d+)", e)
+            assert m and int(m.group(1)) in steps, e[:60]
             assert "Answer:" in e

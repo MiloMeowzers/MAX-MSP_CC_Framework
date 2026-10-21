@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Drive a running MAX 9.2 from Python through a resident bridge patch (Q34 spike).
 
-SPIKE STATUS: nothing here is confirmed in MAX yet. The manual checklist at
-patches/max-bridge/test-results/v0.1.0-bridge-checklist.md is how the user
-confirms (or refutes) each mechanism; patches/max-bridge/open-questions.md
-lists what only MAX can answer. There is no /max-verify integration until
+SPIKE STATUS: the v0.1.0 mechanisms were confirmed in MAX through
+patches/max-bridge/test-results/v0.1.0-bridge-checklist.md (2026-10-21); the
+v0.2.0 follow-ups are pending
+patches/max-bridge/test-results/v0.2.0-bridge-checklist.md.
+patches/max-bridge/open-questions.md lists what only MAX can answer. There is no /max-verify integration until
 the user confirms the bridge works.
 
 Protocol. The bridge patch (patches/max-bridge/generated/max-bridge.maxpat)
@@ -20,20 +21,40 @@ is a dumb UDP pass-through; this client owns all the sequencing:
       /listen 1|0           -> error on/off and the console gates
       /dsp 1|0              -> ; dsp start / ; dsp stop
       /close                -> ; __maxbridge_close bang  (the copy closes itself)
+      /query                -> t b b b -> dspstate~, adstatus sr, adstatus switch
+                               (any args become bangs: a query never changes a setting)
+      /note <pitch> <vel> <ch> -> send __maxbridge_note (the temp copy's
+                               receive -> unpack 0 0 0 drives its notein cords)
 
     MAX -> Python  (OSC over UDP to 127.0.0.1:7401)
       /err error <words...>     from error
       /con/obj, /con/msg, /con/type   from console outlets 0, 1, 2
+      /state/dsp 0|1, /state/adsr <sr>, /state/sr <sr>
+                                /query replies (adstatus switch, adstatus sr,
+                                dspstate~ outlet 1) via send/receive __maxbridge_reply
 
 The bridge's deferlow keeps commands in order, so the /pong after an /open
 means "the load returned".
+
+Kill switch (v0.2.0): a toggle in the bridge patch, OFF at every load
+(loadbang -> 0), drives a gate 1 0 between udpreceive and deferlow. While it
+is OFF every incoming command, /ping included, is dropped, so the client
+times out (exit 2) with a hint naming the toggle. Turning it OFF also sends
+/listen 0 into route, closing error and the console gates.
+
+DSP restore (v0.2.0): check sends /query before /open and resolves the DSP
+state it found (/state/dsp, else 1 when dspstate~ reported a rate, else
+unknown). After the record block it sends /dsp 0 only when DSP was off before
+(or unknown and this run switched it on: warning dsp_state_unknown); DSP that
+was on stays on. --leave-dsp-on never sends /dsp 0.
 
 Subcommands:
     python3 tools/max_bridge.py ping
     python3 tools/max_bridge.py check PATCH.maxpat [--settle S] [--record N]
         [--shot [PNG]] [--open-mode pcontrol|openfile] [--console-all]
-        [--leave-dsp-on] [--load-timeout S] [--dry-run]
-    python3 tools/max_bridge.py analyze OUT.wav [--channels L,R]
+        [--leave-dsp-on] [--load-timeout S] [--note PITCH VEL [--note-ms MS]]
+        [--dry-run]
+    python3 tools/max_bridge.py analyze OUT.wav [--channels L,R] [--sr N]
 
 Exit codes (house convention, tools/audit_db.py): 0 clean, 1 findings
 (errors, analysis flags, unsupported outputs, shot failure, feedback cap),
@@ -69,13 +90,20 @@ BRIDGE_PORT = 7400
 REPLY_PORT = 7401
 HOST = "127.0.0.1"
 # route arguments of the bridge patch, in outlet order (TestBridgePatch pins it)
+# (v0.2.0 appends /query and /note, so outlets 0-8 and their cords never move)
 ROUTE_ADDRESSES = (
     "/ping", "/open", "/sf", "/console", "/dsp", "/listen",
-    "/close", "/openfile", "/closefile",
+    "/close", "/openfile", "/closefile", "/query", "/note",
 )
 TAP_L = "__maxbridge_L"
 TAP_R = "__maxbridge_R"
 CLOSE_RECEIVE = "__maxbridge_close"
+# the bridge's /note branch -> the temp copy's receive -> unpack 0 0 0 (v0.2.0)
+NOTE_RECEIVE = "__maxbridge_note"
+# the bridge's /query replies -> receive -> udpsend (Rule #4: no cross-patch cords)
+REPLY_RECEIVE = "__maxbridge_reply"
+# /query reply addresses: adstatus switch, adstatus sr, dspstate~ outlet 1
+STATE_ADDRESSES = ("/state/dsp", "/state/adsr", "/state/sr")
 COPY_PREFIX = "__maxbridge_"
 BRIDGE_PATCH = REPO_ROOT / "patches" / "max-bridge" / "generated" / "max-bridge.maxpat"
 
@@ -344,6 +372,10 @@ def _dac_channel(box, inlet: int) -> int | None:
 
 
 def _instrument_patcher(p, path: str, report: dict) -> None:
+    import warnings
+
+    from src.maxpat.patcher import BoxMovedWarning
+
     by_id = {b.id: b for b in p.boxes}
     for box in list(p.boxes):
         if box.name in UNSUPPORTED_OUTPUTS or box.maxclass == "bpatcher":
@@ -357,9 +389,10 @@ def _instrument_patcher(p, path: str, report: dict) -> None:
 
     if not p.boxes:
         return
-    right = max(b.right_edge for b in p.boxes) + 30.0
-    top = min(b.patching_rect[1] for b in p.boxes)
-    sends: dict[str, object] = {}
+    # collect first, then place: each dac~/ezdac~ gets its own send~ pair
+    # directly below it (D-04). Several send~ with one name sum, so the
+    # recording is the same as one tap per side.
+    tapped: list[tuple] = []
     warned: set = set()
     for line in list(p.lines):
         dst = by_id.get(line.dest_id)
@@ -375,20 +408,116 @@ def _instrument_patcher(p, path: str, report: dict) -> None:
                     f"{path}/{dst.id} {dst.text!r} inlet {line.dest_inlet} plays channel "
                     f"{ch}: only channels 1 and 2 are recorded, not tapped")
             continue
-        if side not in sends:
-            tap = TAP_L if side == "L" else TAP_R
-            sends[side] = p.add_box("send~", [tap], x=right,
-                                    y=top + (0 if side == "L" else 30),
-                                    skip_overlap_check=True)
-        p.add_connection(src, line.source_outlet, sends[side], 0)
+        tapped.append((src, line.source_outlet, dst, side))
+
+    sends: dict[tuple, object] = {}
+    for dst in [d for d in p.boxes if any(t[2] is d for t in tapped)]:
+        sides = {t[3] for t in tapped if t[2] is dst}
+        x0, y0 = dst.patching_rect[0], dst.bottom_edge + 20.0
+        for side in ("L", "R"):
+            if side not in sides:
+                continue
+            if side == "R" and (dst.id, "L") in sends:
+                left = sends[(dst.id, "L")]
+                x, y = left.right_edge + 15.0, left.patching_rect[1]
+            else:
+                x, y = x0, y0
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", BoxMovedWarning)
+                box = p.add_box("send~", [TAP_L if side == "L" else TAP_R], x=x, y=y,
+                                skip_overlap_check=False)
+            sends[(dst.id, side)] = box
+            report["tap_boxes"].append({"path": path, "dac_id": dst.id, "side": side,
+                                        "rect": list(box.patching_rect)})
+    for src, outlet, dst, side in tapped:
+        p.add_connection(src, outlet, sends[(dst.id, side)], 0)
         report["taps"][side] += 1
 
 
-def instrument(src: Path) -> tuple[Path, dict]:
+def _walk_patchers(p, path: str):
+    """``(patcher, path)`` depth-first, top first, through embedded p/patcher
+    subpatchers (bpatchers are skipped, as for the taps)."""
+    yield p, path
+    for box in p.boxes:
+        if box.maxclass == "bpatcher":
+            continue
+        if box.name in ("p", "patcher") and box._inner_patcher is not None:
+            yield from _walk_patchers(box._inner_patcher, f"{path}/{box.id}")
+
+
+def _add_note_pair(p, x: float, y: float):
+    """``receive __maxbridge_note`` -> ``unpack 0 0 0`` at (x, y), nudged off overlaps."""
+    import warnings
+
+    from src.maxpat.patcher import BoxMovedWarning
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", BoxMovedWarning)
+        rcv = p.add_box("receive", [NOTE_RECEIVE], x=x, y=y, skip_overlap_check=False)
+        up = p.add_box("unpack", ["0", "0", "0"], x=rcv.patching_rect[0],
+                       y=rcv.patching_rect[1] + 40.0, skip_overlap_check=False)
+    p.add_connection(rcv, 0, up, 0)
+    return rcv, up
+
+
+def _inject_note(p, report: dict) -> None:
+    """D-06: let the bridge's ``/note p v ch`` play the copy.
+
+    In every patcher holding a notein, ``receive __maxbridge_note`` ->
+    ``unpack 0 0 0`` mirrors each notein cord (outlet k -> the same dest and
+    inlet, k < 3). unpack fires right to left (channel, velocity, pitch)
+    like notein, so cold-before-hot holds (Rule #3). Only when no notein
+    exists anywhere does it drive the first kslider instead (velocity into
+    the cold inlet 1, then pitch into the hot inlet 0; kslider has no list
+    method). Never both: that would be a double note-on.
+    """
+    tree = list(_walk_patchers(p, "top"))
+    targets = []
+    for q, path in tree:
+        noteins = [b for b in q.boxes if b.name == "notein"]
+        if noteins:
+            targets.append((q, path, noteins))
+    if targets:
+        names = []
+        for q, path, noteins in targets:
+            n0 = noteins[0]
+            _rcv, up = _add_note_pair(q, n0.right_edge + 15.0, n0.patching_rect[1])
+            by_id = {b.id: b for b in q.boxes}
+            ids = {n.id: n for n in noteins}
+            seen: set = set()
+            for line in list(q.lines):
+                n = ids.get(line.source_id)
+                if n is None or line.source_outlet >= min(3, n.numoutlets):
+                    continue
+                key = (line.source_outlet, line.dest_id, line.dest_inlet)
+                dst = by_id.get(line.dest_id)
+                if key in seen or dst is None:
+                    continue
+                seen.add(key)
+                q.add_connection(up, line.source_outlet, dst, line.dest_inlet)
+            names += [f"{path}/{n.id}" for n in noteins]
+        report["note_target"] = {"kind": "notein", "boxes": names}
+        return
+    for q, path in tree:
+        ks = next((b for b in q.boxes if b.maxclass == "kslider"), None)
+        if ks is None:
+            continue
+        _rcv, up = _add_note_pair(q, ks.right_edge + 15.0, ks.patching_rect[1])
+        q.add_connection(up, 1, ks, 1)  # velocity: cold, sets without output
+        q.add_connection(up, 0, ks, 0)  # pitch: hot, plays
+        report["note_target"] = {"kind": "kslider", "box": f"{path}/{ks.id}"}
+        return
+    report["warnings"].append("--note: no notein or kslider to drive")
+    report["note_target"] = None
+
+
+def instrument(src: Path, note: bool = False) -> tuple[Path, dict]:
     """Write the instrumented sibling copy of *src*; return (copy_path, report).
 
     The copy adds ``send~ __maxbridge_L/R`` taps fed from every dac~/ezdac~
-    input source (channel 1 -> L, 2 -> R; existing cords untouched), in the
+    input source (channel 1 -> L, 2 -> R; existing cords untouched), placed
+    directly below each dac~ (L at its x, R 15 px right of L; nudged down
+    only on a real overlap; v0.2.0), in the
     top patcher and every embedded ``p`` subpatcher, plus a cordless close
     hook (``receive __maxbridge_close`` -> ``clean, wclose`` ->
     ``thispatcher``) at the top level. It is built with the Patcher API and
@@ -396,7 +525,13 @@ def instrument(src: Path) -> tuple[Path, dict]:
     save_patch_roundtrip: the copy is ephemeral, gitignored and deleted by
     the caller (research A6). The source file is only read.
 
-    Report keys: taps {L, R} (cords tapped), unsupported (mc.dac~, plugout~,
+    With *note* (check --note), ``receive __maxbridge_note`` ->
+    ``unpack 0 0 0`` is added to drive the notein cords (kslider fallback;
+    see _inject_note).
+
+    Report keys: taps {L, R} (cords tapped), tap_boxes ([{path, dac_id,
+    side, rect}] per send~), note_target (None, or {kind: notein, boxes}
+    / {kind: kslider, box}), unsupported (mc.dac~, plugout~,
     poly~, pfft~, bpatcher boxes), warnings (channels above 2),
     no_output_tap, close_hook.
     """
@@ -409,9 +544,12 @@ def instrument(src: Path) -> tuple[Path, dict]:
     src = Path(src)
     text = src.read_text()
     p = Patcher.from_dict(json.loads(text))
-    report: dict = {"taps": {"L": 0, "R": 0}, "unsupported": [], "warnings": [],
-                    "no_output_tap": False, "close_hook": False}
+    report: dict = {"taps": {"L": 0, "R": 0}, "tap_boxes": [], "unsupported": [],
+                    "warnings": [], "no_output_tap": False, "close_hook": False,
+                    "note_target": None}
     _instrument_patcher(p, "top", report)
+    if note:
+        _inject_note(p, report)
 
     right = (max(b.right_edge for b in p.boxes) if p.boxes else 0.0) + 30.0
     top = min((b.patching_rect[1] for b in p.boxes), default=20.0) + 70.0
@@ -436,8 +574,14 @@ DC_OFFSET_LIMIT = 0.01  # [ASSUMED] research A5: tune after real runs
 END_TRIM_MS = 50  # sfrecord~ endramp default is undocumented (research pitfall 6)
 
 
-def analyze(wav: Path, channels: list[str] | None = None) -> dict:
+def analyze(wav: Path, channels: list[str] | None = None, max_sr: float | None = None) -> dict:
     """dsp_sim measures of a recorded wav, per channel (index 0 = L, 1 = R).
+
+    *max_sr* is MAX's own DSP rate (D-03). When it differs from the wav
+    header by 1 Hz or more, every rate-dependent step (trims, pitch,
+    seconds) uses it, ``header_sample_rate`` keeps the header's rate and a
+    ``sr_header_mismatch`` warning (never a flag) is added. ``sample_rate``
+    is the rate actually used.
 
     NaN and inf are counted on the whole channel; the metrics come from the
     finite samples left after trimming ClassifierThresholds().settle_ms from
@@ -453,11 +597,17 @@ def analyze(wav: Path, channels: list[str] | None = None) -> dict:
     )
 
     th = ClassifierThresholds()
-    sr, x = wavfile.read(str(wav))
+    header_sr, x = wavfile.read(str(wav))
+    header_sr = int(header_sr)
+    sr = header_sr
     x = np.asarray(x)
     if x.ndim == 1:
         x = x[:, None]
     warnings_out: list[str] = []
+    if max_sr and abs(float(max_sr) - header_sr) >= 1:
+        sr = int(round(float(max_sr)))
+        warnings_out.append(f"sr_header_mismatch: header {header_sr} Hz, MAX DSP {sr} Hz; "
+                            f"analyzed at {sr} Hz")
     if x.dtype.kind == "u":
         half = float(2 ** (8 * x.dtype.itemsize - 1))
         x = (x.astype(np.float64) - half) / half
@@ -509,6 +659,7 @@ def analyze(wav: Path, channels: list[str] | None = None) -> dict:
     return {
         "wav": str(wav),
         "sample_rate": int(sr),
+        "header_sample_rate": header_sr,
         "seconds": round(n / float(sr), 4) if sr else 0.0,
         "channels": out,
         "flags": sorted({f for m in out.values() for f in m["flags"]}),
@@ -711,11 +862,29 @@ def guard_input(path: Path) -> Path:
     return real
 
 
+def _resolve_note_ms(record_s: float, note_ms: int | None) -> int:
+    """The note-on length in ms (D-06): *note_ms*, else 75% of the record,
+    clamped to [1, record length]."""
+    total = max(1, int(round(record_s * 1000)))
+    ms = int(round(total * 0.75)) if note_ms is None else int(note_ms)
+    return max(1, min(ms, total))
+
+
+RESTORE_DSP = ("/dsp", (0,))  # the single restore slot (D-02); sent only when DSP was off before
+
+
 def plan_messages(copy: Path, run_dir: Path, opts, tapped: bool = True) -> list[tuple]:
-    """Every message check sends, in order (research Architecture)."""
+    """Every message check sends, in order (research Architecture).
+
+    /ping (existence), /query, /ping (barrier: the /state replies precede
+    the /pong) come before /open, so a patch that starts DSP at load cannot
+    hide the prior state. The ``("/dsp", (0,))`` restore slot follows the
+    record block whether or not --record was given (absent with
+    --leave-dsp-on); _execute decides whether to send it.
+    """
     run_dir = Path(run_dir)
     openfile = getattr(opts, "open_mode", "pcontrol") == "openfile"
-    plan: list[tuple] = [("/ping", ())]
+    plan: list[tuple] = [("/ping", ()), ("/query", ()), ("/ping", ())]
     plan.append(("/console", ("write", str(run_dir / "before.txt"))))
     if opts.console_all:
         plan.append(("/console", ("showonlyerrors", 0)))
@@ -728,11 +897,18 @@ def plan_messages(copy: Path, run_dir: Path, opts, tapped: bool = True) -> list[
             ("/sf", ("samptype", "float32")),
             ("/sf", ("open", str(run_dir / "out.wav"))),
             ("/sf", ("record", int(round(opts.record * 1000)))),
+            ("/query", ()),  # DSP is surely on: dspstate~ reports the rate
+        ]
+        note = getattr(opts, "note", None)
+        if note:
+            plan += [("/note", (int(note[0]), int(note[1]), 1)),
+                     ("/note", (int(note[0]), 0, 1))]
+        plan += [
             ("/sf", (0,)),
             ("/ping", ()),
         ]
-        if not opts.leave_dsp_on:
-            plan.append(("/dsp", (0,)))
+    if not opts.leave_dsp_on:
+        plan.append(RESTORE_DSP)
     plan.append(("/console", ("write", str(run_dir / "after.txt"))))
     plan.append(("/listen", (0,)))
     if opts.console_all:
@@ -798,6 +974,79 @@ def _error_lines(events: list, console_all: bool, console_new: list[str]) -> lis
     return errors
 
 
+def _error_key(entry: dict) -> str:
+    """The canonical text of one raw error entry (D-05).
+
+    Console entries with an object name become ``"{obj}: {msg}"`` (the obj
+    words joined, a trailing ':' stripped); every other entry is its text.
+    Whitespace is collapsed, then a doubled leading ``"X: X: "`` collapses
+    to ``"X: "`` (repeatedly), so ``osc~: osc~: No such object`` on the
+    error and console_write channels meets the console's ``osc~`` +
+    ``No such object``.
+    """
+    import re
+
+    text = str(entry.get("text") or "")
+    obj = entry.get("obj")
+    if entry.get("source") == "console" and obj:
+        name = " ".join(str(a) for a in obj).strip().rstrip(":").strip()
+        if name:
+            text = f"{name}: {text}"
+    key = " ".join(text.split())
+    while True:
+        new = re.sub(r"^(\S+): \1: ", r"\1: ", key)
+        if new == key:
+            return key
+        key = new
+
+
+_ERROR_SOURCES = ("error", "console", "console_write")
+
+
+def _distinct_errors(errors: list[dict]) -> list[dict]:
+    """One entry per canonical error key, in first-seen order (D-05).
+
+    Each entry: ``key``, ``sources`` (counts per channel: error, console,
+    console_write), ``occurrences`` (the max over channels: every channel
+    sees every posting) and ``first_t`` (the earliest non-None t). A key
+    equal to another with one leading ``"word: "`` removed merges into that
+    longer key. *errors* is never modified.
+    """
+    import re
+
+    groups: dict[str, dict] = {}
+    for i, e in enumerate(errors):
+        key = _error_key(e)
+        g = groups.setdefault(key, {"key": key, "sources": dict.fromkeys(_ERROR_SOURCES, 0),
+                                    "ts": [], "first": i})
+        src = e.get("source")
+        g["sources"][src] = g["sources"].get(src, 0) + 1
+        if e.get("t") is not None:
+            g["ts"].append(e["t"])
+    merged = True
+    while merged:
+        merged = False
+        for key in list(groups):
+            short = re.sub(r"^\S+: ", "", key, count=1)
+            if short != key and short in groups:
+                long_g, short_g = groups[key], groups.pop(short)
+                for src, n in short_g["sources"].items():
+                    long_g["sources"][src] = long_g["sources"].get(src, 0) + n
+                long_g["ts"] += short_g["ts"]
+                long_g["first"] = min(long_g["first"], short_g["first"])
+                merged = True
+                break
+    return [
+        {
+            "key": g["key"],
+            "sources": g["sources"],
+            "occurrences": max(g["sources"].values()),
+            "first_t": min(g["ts"]) if g["ts"] else None,
+        }
+        for g in sorted(groups.values(), key=lambda g: g["first"])
+    ]
+
+
 def _console_diff(run_dir: Path) -> tuple[str, list[str]]:
     from collections import Counter
 
@@ -814,16 +1063,51 @@ def _console_diff(run_dir: Path) -> tuple[str, list[str]]:
     return "ok", new
 
 
+def _dsp_before(events: list):
+    """The DSP state found before /open, from /query replies (D-02).
+
+    The first ``/state/dsp`` value (adstatus switch); else 1 when a
+    ``/state/sr`` arrived (dspstate~ is silent while DSP is off); else None
+    (an older bridge patch that ignores /query).
+    """
+    for e in events:
+        address, args = e[-2], e[-1]
+        if address == "/state/dsp" and args:
+            try:
+                return int(args[0])
+            except (TypeError, ValueError):
+                continue
+    return 1 if any(e[-2] == "/state/sr" for e in events) else None
+
+
+DSP_UNKNOWN_WARNING = ("dsp_state_unknown: the bridge did not answer /query (an older bridge "
+                       "patch?); DSP is switched off after --record as in v0.1.0")
+
+
 def _execute(b: Bridge, plan: list[tuple], args, run_dir: Path, copy: Path, report: dict) -> None:
     """Send *plan* with the barrier waits; fill *report* in place."""
     openers = ("/open", "/openfile")
     closers = ("/close", "/closefile")
     window_id = None
+    dsp_resolved = False
+    t_rec = None  # when /sf record was sent: the note-off and /sf 0 are timed from it
+    note_ms = (_resolve_note_ms(args.record, getattr(args, "note_ms", None))
+               if getattr(args, "note", None) and args.record else None)
     try:
         for i, (address, margs) in enumerate(plan):
             prev = plan[i - 1][0] if i else None
+            if address == "/note" and len(margs) > 1 and margs[1] == 0 and t_rec is not None:
+                b.collect(max(0.0, note_ms / 1000.0 - (b.now() - t_rec)))
             if address == "/sf" and margs == (0,):
-                b.collect(args.record + 0.5)
+                elapsed = b.now() - t_rec if t_rec is not None else 0.0
+                b.collect(max(0.0, args.record + 0.5 - elapsed))
+            if (address, margs) == RESTORE_DSP:
+                before = report.get("dsp_before")
+                if before == 0 or (before is None and report.get("_dsp_on")):
+                    b.send(address, *margs)
+                    report["_dsp_on"] = False
+                    report["dsp_stop_sent"] = True
+                continue
             if address in closers and args.shot is not None:
                 png = Path(args.shot) if args.shot else run_dir / "shot.png"
                 try:
@@ -834,6 +1118,8 @@ def _execute(b: Bridge, plan: list[tuple], args, run_dir: Path, copy: Path, repo
                     report["shot"] = {"error": str(exc), "png": str(png)}
             if address != "/ping":
                 b.send(address, *margs)
+                if address == "/sf" and margs[:1] == ("record",):
+                    t_rec = b.now()
                 if address in openers:
                     report["load"]["open_s"] = round(b.now(), 4)
                 elif address == "/dsp":
@@ -841,7 +1127,13 @@ def _execute(b: Bridge, plan: list[tuple], args, run_dir: Path, copy: Path, repo
                 elif address in closers:
                     report["_closed_sent"] = True
                 continue
-            if prev in openers:
+            if prev == "/query" and not dsp_resolved:
+                b.ping(args.timeout)
+                dsp_resolved = True
+                report["dsp_before"] = _dsp_before(b.events)
+                if report["dsp_before"] is None:
+                    report["warnings"].append(DSP_UNKNOWN_WARNING)
+            elif prev in openers:
                 b.ping(args.load_timeout)
                 report["load"]["pong_s"] = round(b.now(), 4)
                 b.collect(args.settle)
@@ -864,7 +1156,7 @@ def _execute(b: Bridge, plan: list[tuple], args, run_dir: Path, copy: Path, repo
     except BridgeError:
         # best effort: leave MAX as we found it, without waiting for answers
         cleanup: list[tuple] = [("/listen", (0,))]
-        if report.get("_dsp_on") and not args.leave_dsp_on:
+        if report.get("_dsp_on") and report.get("dsp_before") != 1 and not args.leave_dsp_on:
             cleanup.append(("/dsp", (0,)))
         if any(a in openers for a, _ in b.sent) and not report.get("_closed_sent"):
             cleanup.append(("/closefile", ()) if args.open_mode == "openfile" else ("/close", ()))
@@ -876,6 +1168,23 @@ def _execute(b: Bridge, plan: list[tuple], args, run_dir: Path, copy: Path, repo
         raise
 
 
+def _max_sr(events: list) -> int | None:
+    """MAX's own DSP rate from the /query replies (D-03): the last
+    ``/state/sr`` (dspstate~ outlet 1, the rate the oscillators run at),
+    else the last ``/state/adsr``; None when neither arrived."""
+    for address in ("/state/sr", "/state/adsr"):
+        for e in reversed(events):
+            if e[-2] != address or not e[-1]:
+                continue
+            try:
+                value = int(round(float(e[-1][0])))
+            except (TypeError, ValueError):
+                continue
+            if value > 0:
+                return value
+    return None
+
+
 def run_check(args) -> dict:
     """Run one check; return the JSON report (``exit_code`` included)."""
     report: dict = {
@@ -883,6 +1192,8 @@ def run_check(args) -> dict:
         "unsupported": [], "warnings": [], "load": {"open_s": None, "pong_s": None},
         "errors": [], "events_raw": [], "record": None, "shot": None, "closed": None,
         "feedback_suspected": False, "console_write": None,
+        "errors_distinct": [], "max_sr": None, "note": None, "note_target": None,
+        "dsp_before": None, "dsp_stop_sent": False,
         "verdict": "bridge_failed", "exit_code": 2,
     }
     try:
@@ -891,15 +1202,24 @@ def run_check(args) -> dict:
         report["error"] = str(exc)
         return report
     report["patch"] = str(src)
-    copy, inst = instrument(src)
-    report.update(copy=str(copy), taps=inst["taps"], unsupported=inst["unsupported"],
-                  warnings=inst["warnings"])
+    note = getattr(args, "note", None)
+    copy, inst = instrument(src, note=bool(note))
+    report.update(copy=str(copy), taps=inst["taps"], tap_boxes=inst["tap_boxes"],
+                  unsupported=inst["unsupported"], warnings=inst["warnings"],
+                  note_target=inst["note_target"])
+    if note:
+        report["note"] = {"pitch": int(note[0]), "vel": int(note[1]),
+                          "ms": _resolve_note_ms(args.record, getattr(args, "note_ms", None))}
     try:
         run_dir = Path(_make_run_dir())
         report["run_dir"] = str(run_dir)
         plan = plan_messages(copy, run_dir, args, tapped=not inst["no_output_tap"])
         if args.dry_run:
-            report["plan"] = [" ".join([a, *(str(x) for x in m)]) for a, m in plan]
+            report["plan"] = [
+                " ".join([a, *(str(x) for x in m)])
+                + ("  (restore: only if DSP was off before the check)" if (a, m) == RESTORE_DSP else "")
+                for a, m in plan
+            ]
             report["verdict"], report["exit_code"] = "dry_run", 0
             try:
                 run_dir.rmdir()  # nothing was written there
@@ -925,10 +1245,15 @@ def run_check(args) -> dict:
     status, new_lines = _console_diff(run_dir)
     report["console_write"] = {"status": status, "new_lines": new_lines}
     report["errors"] = _error_lines(b.events, args.console_all, new_lines)
+    report["errors_distinct"] = _distinct_errors(report["errors"])
+    report["max_sr"] = _max_sr(b.events)
     wav = report.pop("_wav", None)
     if wav is not None:
-        a = analyze(wav)
-        report["record"] = {"wav": str(wav), "seconds": a["seconds"], "channels": a["channels"],
+        a = analyze(wav, max_sr=report["max_sr"])
+        report["record"] = {"wav": str(wav), "seconds": a["seconds"],
+                            "sample_rate": a["sample_rate"],
+                            "header_sample_rate": a["header_sample_rate"],
+                            "channels": a["channels"],
                             "flags": a["flags"], "warnings": a["warnings"]}
     findings = (
         bool(report["errors"])
@@ -945,7 +1270,8 @@ def run_check(args) -> dict:
 def _bridge_hint(host: str, port: int) -> str:
     rel = BRIDGE_PATCH.relative_to(REPO_ROOT)
     return (f"MAX bridge at {host}:{port} did not answer: open {rel} in MAX "
-            f"(MAX 9.2 must be running)")
+            f"(MAX 9.2 must be running) and turn ON its enable toggle "
+            f"(the kill switch is OFF whenever the bridge patch opens)")
 
 
 # ---------------------------------------------------------------------------
@@ -988,6 +1314,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help="do not switch DSP off after recording")
     sc.add_argument("--load-timeout", type=float, default=30.0,
                     help="seconds to wait for the /pong after the open (default 30)")
+    sc.add_argument("--note", nargs=2, type=int, default=None, metavar=("PITCH", "VEL"),
+                    help="play this note into the copy's notein (kslider fallback) while "
+                         "recording; needs --record")
+    sc.add_argument("--note-ms", type=int, default=None, metavar="MS",
+                    help="note-on length in ms (default 75%% of --record, clamped to it)")
     sc.add_argument("--dry-run", action="store_true",
                     help="print the message sequence; open no socket")
     _add_net_args(sc)
@@ -995,6 +1326,8 @@ def build_parser() -> argparse.ArgumentParser:
     sa = sub.add_parser("analyze", help="dsp_sim measures of a recorded wav")
     sa.add_argument("wav")
     sa.add_argument("--channels", default=None, help="comma list, e.g. L or L,R")
+    sa.add_argument("--sr", type=float, default=None,
+                    help="MAX's DSP rate: analyze at it when the wav header disagrees")
     return parser
 
 
@@ -1021,7 +1354,10 @@ def _cmd_check(args) -> int:
         print(report["error"], file=sys.stderr)
         return 2
     print(json.dumps(report, indent=2, default=str))
-    summary = (f"{report['verdict']}: {len(report['errors'])} error line(s), "
+    distinct = report.get("errors_distinct") or []
+    occurrences = sum(d["occurrences"] for d in distinct)
+    summary = (f"{report['verdict']}: {len(distinct)} distinct error(s) "
+               f"({occurrences} occurrence(s)), "
                f"record flags {report['record']['flags'] if report['record'] else None}, "
                f"unsupported {len(report['unsupported'])}, run dir {report['run_dir']}")
     if report["verdict"] == "bridge_failed":
@@ -1034,13 +1370,22 @@ def _cmd_analyze(args) -> int:
     import json
 
     channels = args.channels.split(",") if args.channels else None
-    result = analyze(Path(args.wav), channels)
+    result = analyze(Path(args.wav), channels, max_sr=args.sr)
     print(json.dumps(result, indent=2))
     return 1 if result["flags"] else 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.cmd == "check" and args.note is not None:
+        pitch, vel = args.note
+        if args.record is None:
+            parser.error("--note needs --record (the note plays while recording)")
+        if not 0 <= pitch <= 127:
+            parser.error(f"--note pitch {pitch} is outside 0-127")
+        if not 1 <= vel <= 127:
+            parser.error(f"--note velocity {vel} is outside 1-127")
     if args.cmd == "ping":
         return _cmd_ping(args)
     if args.cmd == "check":

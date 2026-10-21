@@ -1,6 +1,6 @@
 # max-bridge
 
-**Spike (Q34, quick 261016-uy1).** There is no `/max-verify` integration until the user confirms the bridge works in MAX (see `test-results/v0.1.0-bridge-checklist.md`).
+**Spike (Q34, quick 261016-uy1; v0.2.0 follow-ups, quick 261021-l26).** There is no `/max-verify` integration until the user confirms the bridge works in MAX (see `test-results/v0.1.0-bridge-checklist.md`, confirmed 2026-10-21, and `test-results/v0.2.0-bridge-checklist.md`, pending).
 
 ## Purpose
 
@@ -32,19 +32,42 @@ Design source: `.planning/quick/261016-uy1-implement-q34-in-planning-reviews-202
 | `/listen 1/0` | route -> `t i i i i` -> `error` and the three console `gate`s (`loadmess 0` closes them at load) |
 | `/dsp 1/0` | route -> `select 1 0` -> `;\rdsp start` / `;\rdsp stop` |
 | `/close` | route -> `;\r__maxbridge_close bang` (the temp copy closes itself) |
+| `/query` (v0.2.0) | route -> `t b b b` -> `dspstate~`, `adstatus sr`, `adstatus switch` (any args become bangs, so a query never reaches adstatus's int "change a setting" method) |
+| `/note <pitch> <vel> <ch>` (v0.2.0) | route -> `send __maxbridge_note` (only the temp copy has the matching receive) |
+| kill switch (v0.2.0) | `toggle` (OFF at every load: `loadbang` -> `0` -> toggle) -> `t i i`: outlet 1 -> `gate 1 0` inlet 0; outlet 0 -> `select 0` -> msg `/listen 0` -> route inlet 0 -> the listen fan-out |
+
+Route addresses are appended, never inserted, so the outlet indices of the v0.1.0 addresses (0-8) and their cords never move.
 
 MAX -> Python (UDP 7401):
 - `/err error <words...>`, from `error`;
-- `/con/obj`, `/con/msg`, `/con/type`, from console outlets 0, 1 and 2, each through its gate.
+- `/con/obj`, `/con/msg`, `/con/type`, from console outlets 0, 1 and 2, each through its gate;
+- `/state/dsp 0|1` (adstatus switch, right outlet), `/state/adsr <sr>` (adstatus sr, right outlet), `/state/sr <sr>` (dspstate~ outlet 1): the `/query` replies, via `prepend /state/*` -> `send __maxbridge_reply` -> `receive __maxbridge_reply` -> udpsend (Rule #4: a named pair instead of a 1500 px cord). adstatus also reports at bridge load (its loadbang method) and dspstate~ whenever DSP starts or stops; these are harmless localhost packets that the client ignores outside a run.
 
-`udpreceive` -> `deferlow` puts loads on the low-priority queue and keeps `/open` then `/ping` in order.
+`udpreceive` -> `gate 1 0` (inlet 1, data) -> `deferlow` -> `route`. The gate drops every command while the kill switch is OFF, before anything is queued. `deferlow` puts loads on the low-priority queue and keeps `/open` then `/ping` in order.
+
+### Kill switch (v0.2.0, N1)
+
+The enable toggle at the top left is OFF whenever the bridge patch opens, so every incoming command, `/ping` included, is dropped. Turn it ON to let `tools/max_bridge.py` in. A gated bridge looks exactly like a closed one: `ping` and `check` time out (exit 2) with a hint naming both causes (open the patch, turn the toggle ON). Turning it OFF also closes listening (`error` off, console gates closed), the same path the client's `/listen 0` takes. The toggle is a plain toggle (no parameter mode, no presentation); `loadbang` -> `0` sets it OFF explicitly, which the save gate's uninitialized-state check requires.
+
+### DSP state (v0.2.0, N4)
+
+`check` sends `/query` (then a `/ping` barrier) before `/open`, so a patch that starts DSP at load cannot hide the prior state. `dsp_before` is the first `/state/dsp`, else 1 when a `/state/sr` arrived (dspstate~ is silent while DSP is off), else unknown (None). After the record block, `/dsp 0` is sent only when DSP was off before, or when the state is unknown and this run switched it on (then the warning `dsp_state_unknown`; an older bridge patch ignores `/query`). DSP that was on stays on. `--leave-dsp-on` never sends `/dsp 0`. The report carries `dsp_before` and `dsp_stop_sent`.
+
+### Sample rate (v0.2.0)
+
+A second `/query` right after `/sf record` (DSP is surely on) makes dspstate~ report the rate the oscillators actually run at. `max_sr` is the last `/state/sr`, else the last `/state/adsr`. When it differs from the wav header by 1 Hz or more, the recording is analyzed at `max_sr`, the record carries `header_sample_rate`, and `record.warnings` gets `sr_header_mismatch: ...`. It is a warning, not a flag: the exit code does not change. `analyze OUT.wav --sr N` reruns it by hand. (v0.1.0 measured a 440 Hz tone as 478.9 Hz: 48000/44100 x 440.)
+
+### Errors (v0.2.0)
+
+`errors` stays the raw list (one entry per channel per posting). `errors_distinct` groups it by a canonical key: console entries become `"{obj}: {msg}"`, whitespace is collapsed, a doubled leading `"X: X: "` becomes `"X: "`, and a key equal to another minus one leading `"word: "` merges into the longer one. Each entry has `sources` (error, console, console_write counts), `occurrences` (the max over channels: every channel sees every posting) and `first_t`. The stderr summary reads `N distinct error(s) (M occurrence(s))`.
 
 Audio: `receive~ __maxbridge_L` / `__maxbridge_R` -> `sfrecord~ 2` -> `snapshot~ 100` -> number box (elapsed ms).
 
 ## Temp-copy policy
 
 `check` never opens the patch under test. Instead, `instrument()` writes a sibling copy, `__maxbridge_<stem>.maxpat`, built with the Patcher API, and adds to it:
-- `send~ __maxbridge_L/R` taps on every `dac~`/`ezdac~` input source (the existing cords are kept);
+- `send~ __maxbridge_L/R` taps on every `dac~`/`ezdac~` input source (the existing cords are kept). Since v0.2.0 each output box gets its own pair directly below it: L at the dac's x, 20 px under its bottom; R 15 px right of L (or at the dac's x when there is no L); moved down only on a real overlap; presentation 0. Several `send~` with one name sum, so the recording is unchanged. The report lists them in `tap_boxes`;
+- with `check --note PITCH VEL [--note-ms MS]` (v0.2.0, needs `--record`): `receive __maxbridge_note` -> `unpack 0 0 0` in every patcher that holds a `notein`, mirroring each notein cord (outlet k -> the same destination). unpack fires right to left like notein, so cold-before-hot holds. Only when no notein exists anywhere does it drive the first `kslider` (velocity into the cold inlet 1, then pitch into the hot inlet 0; kslider has no list method). Never both: that would be a double note-on. Neither present: the warning `--note: no notein or kslider to drive`. The client sends `/note P V 1` after `/sf record` and `/note P 0 1` after MS ms (default 75% of the record). The report carries `note` and `note_target`;
 - a cordless close hook: `receive __maxbridge_close` -> `clean, wclose` -> `thispatcher`.
 
 The copy is written with `format_patch_text` + `atomic_write_bytes`, not `save_patch_roundtrip`: it is ephemeral, so it is neither committed nor gated (research A6). It is deleted in a `finally`, and `__maxbridge_*` is in `.gitignore` so a leftover copy can never be swept into a project auto-commit. Placing it as a sibling keeps relative lookups working (`.gendsp`, js, abstractions, audio files).
@@ -75,11 +98,11 @@ No allowlist entries are added for either.
 - Close the bridge patch when it is not in use.
 - Deny incoming connections if macOS asks.
 
-The Python client binds 127.0.0.1 only. A host filter or kill switch is an open question (`open-questions.md`).
+The Python client binds 127.0.0.1 only. The kill switch (v0.2.0, above) is implemented and OFF at every load, so nothing gets through until you turn it ON; still close the bridge patch when it is not in use. Any open patch can address `__maxbridge_reply` (its only sink is udpsend to 127.0.0.1:7401, which any patch could create anyway) and `__maxbridge_note` (which exists only in gitignored temp copies). There is no generic `/send`: `/note` reaches one fixed name.
 
 ## Presentation mode
 
-None. The bridge is a utility patch with no user-facing controls, so Rule #9 does not apply.
+None. The bridge is a utility patch whose one user control is the enable toggle (top left, patching mode); it has no presentation, so Rule #9 does not apply.
 
 ## Exit codes
 
