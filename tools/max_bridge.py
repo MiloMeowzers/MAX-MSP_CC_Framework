@@ -1120,6 +1120,7 @@ def _execute(b: Bridge, plan: list[tuple], args, run_dir: Path, copy: Path, repo
                 b.send(address, *margs)
                 if address == "/sf" and margs[:1] == ("record",):
                     t_rec = b.now()
+                    report["_t_rec"] = t_rec
                 if address in openers:
                     report["load"]["open_s"] = round(b.now(), 4)
                 elif address == "/dsp":
@@ -1185,6 +1186,43 @@ def _max_sr(events: list) -> int | None:
     return None
 
 
+SHORT_RECORDING_RATIO = 0.9  # a wav shorter than this share of --record is cut short
+
+
+def _sr_timeline(events: list) -> list[tuple[float, int]]:
+    """``[(t, rate)]`` from every positive ``/state/sr`` and ``/state/adsr``.
+
+    adstatus and dspstate~ also report unprompted when the driver changes
+    rate, so this is a timeline, not just the /query answers (confirmed in
+    MAX 9.2, 2026-10-21: 44100 -> 48000 -> 44100 while DSP started)."""
+    out = []
+    for e in events:
+        if e[-2] not in ("/state/sr", "/state/adsr") or not e[-1]:
+            continue
+        try:
+            value = int(round(float(e[-1][0])))
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            out.append((float(e[0]), value))
+    return out
+
+
+def _record_sr(events: list, t0: float, t1: float) -> tuple[int | None, list[int]]:
+    """MAX's rate for a recording from *t0* to *t1*: ``(rate at t1, distinct
+    rates in effect over the window)``. The rate in effect at *t0* is the
+    last report at or before it. ``(None, [])`` when no rate was reported."""
+    timeline = _sr_timeline(events)
+    if not timeline:
+        return None, []
+    before = [r for t, r in timeline if t <= t0]
+    inside = [r for t, r in timeline if t0 < t <= t1]
+    seen = before[-1:] + inside
+    if not seen:
+        seen = [timeline[0][1]]
+    return seen[-1], sorted(set(seen))
+
+
 def run_check(args) -> dict:
     """Run one check; return the JSON report (``exit_code`` included)."""
     report: dict = {
@@ -1247,14 +1285,33 @@ def run_check(args) -> dict:
     report["errors"] = _error_lines(b.events, args.console_all, new_lines)
     report["errors_distinct"] = _distinct_errors(report["errors"])
     report["max_sr"] = _max_sr(b.events)
+    t_rec = report.pop("_t_rec", None)
+    rec_rates: list[int] = []
+    if t_rec is not None and args.record:
+        rec_sr, rec_rates = _record_sr(b.events, t_rec, t_rec + float(args.record) + 0.5)
+        if rec_sr is not None:
+            report["max_sr"] = rec_sr
     wav = report.pop("_wav", None)
     if wav is not None:
         a = analyze(wav, max_sr=report["max_sr"])
+        flags = list(a["flags"])
+        warnings_out = list(a["warnings"])
+        if len(rec_rates) > 1:
+            flags.append("sr_changed_during_run")
+            warnings_out.append(
+                "sr_changed_during_run: MAX's sample rate changed while recording (rates seen: "
+                + ", ".join(str(r) for r in rec_rates)
+                + f" Hz); analyzed at {a['sample_rate']} Hz, measures unreliable")
+        if args.record and a["seconds"] < SHORT_RECORDING_RATIO * float(args.record):
+            flags.append("short_recording")
+            warnings_out.append(
+                f"short_recording: {a['seconds']} s recorded of {float(args.record):g} s requested "
+                "(the audio driver restarted, or DSP stopped, mid-recording)")
         report["record"] = {"wav": str(wav), "seconds": a["seconds"],
                             "sample_rate": a["sample_rate"],
                             "header_sample_rate": a["header_sample_rate"],
                             "channels": a["channels"],
-                            "flags": a["flags"], "warnings": a["warnings"]}
+                            "flags": sorted(set(flags)), "warnings": warnings_out}
     findings = (
         bool(report["errors"])
         or bool(report["record"] and report["record"]["flags"])

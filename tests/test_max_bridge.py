@@ -63,7 +63,8 @@ class FakeBridge:
     def __init__(self, errors: bool = False, flood: int = 0,
                  mute_after_open: bool = False, dsp_on: int = 0,
                  answers_query: bool = True, max_sr: float = 44100.0,
-                 wav_sr: int | None = None) -> None:
+                 wav_sr: int | None = None, sr_jump: float | None = None,
+                 wav_seconds: float = 1.0) -> None:
         self.errors = errors
         self.flood = flood
         self.mute_after_open = mute_after_open
@@ -72,6 +73,10 @@ class FakeBridge:
         self.max_sr = max_sr
         # the wav header rate (None = max_sr); the samples are timed at max_sr
         self.wav_sr = wav_sr
+        # sr_jump: report this rate unprompted once recording starts (a driver
+        # restart, as seen in MAX 9.2 on 2026-10-21); wav_seconds: wav length
+        self.sr_jump = sr_jump
+        self.wav_seconds = wav_seconds
         self.received: list[tuple[str, list]] = []
         self.times: list[float] = []  # time.monotonic() per received packet (parallel list)
         self.console = ["Max 9.2.0 (fake) started"]
@@ -134,8 +139,11 @@ class FakeBridge:
             Path(args[1]).write_text("\n".join(self.console) + "\n")
         elif address == "/sf" and args and args[0] == "open":
             self.sf_path = args[1]
+        elif address == "/sf" and args and args[0] == "record" and self.sr_jump:
+            self.max_sr = self.sr_jump  # later /query answers report the new rate too
+            self._reply(addr, "/state/adsr", float(self.sr_jump))
         elif address == "/sf" and args == [0] and self.sf_path:
-            _write_sine(Path(self.sf_path), 440.0, 0.2, seconds=1.0,
+            _write_sine(Path(self.sf_path), 440.0, 0.2, seconds=self.wav_seconds,
                         sr=int(self.max_sr), header_sr=self.wav_sr)
         elif address == "/query" and self.answers_query:
             self._reply(addr, "/state/dsp", int(self.dsp_on))
@@ -847,6 +855,49 @@ class TestSampleRateGuard:
         assert rep["record"]["header_sample_rate"] == 48000
         assert any(w.startswith("sr_header_mismatch") for w in rep["record"]["warnings"])
         assert rep["record"]["flags"] == []
+
+
+class TestRecordSampleRate:
+    """The rate in effect while recording wins, and a rate change or a cut
+    recording is flagged (MAX 9.2 run, 2026-10-21: 44100 -> 48000 -> 44100
+    while DSP started, 0.69 s recorded of 2 s, analyzed as 404 Hz)."""
+
+    # event timeline from that run, trimmed: (t, address, args)
+    EVENTS = [
+        (0.0028, "/state/dsp", [0]), (0.0029, "/state/adsr", [44100]),
+        (0.0041, "/state/sr", [44100.0]), (3.0739, "/state/dsp", [1]),
+        (3.074, "/state/sr", [44100.0]), (4.0705, "/state/sr", [48000.0]),
+        (4.0705, "/state/adsr", [48000]), (5.6104, "/state/sr", [44100.0]),
+        (7.7414, "/state/adsr", [48000]),
+    ]
+
+    def test_rate_change_inside_window(self):
+        sr, seen = bridge._record_sr(self.EVENTS, 3.08, 5.58)
+        assert seen == [44100, 48000] and sr == 48000
+
+    def test_stable_window(self):
+        sr, seen = bridge._record_sr(self.EVENTS, 0.01, 3.0)
+        assert seen == [44100] and sr == 44100
+
+    def test_no_reports(self):
+        assert bridge._record_sr([(0.1, "/pong", [])], 0.0, 1.0) == (None, [])
+
+    def test_sr_changed_end_to_end(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(max_sr=44100, sr_jump=48000) as fb:
+            rc, rep = _check(fb, src, "--record", "0.2", capsys=capsys)
+        assert rc == 1, rep
+        assert "sr_changed_during_run" in rep["record"]["flags"]
+        assert rep["max_sr"] == 48000
+        assert any(w.startswith("sr_changed_during_run") for w in rep["record"]["warnings"])
+
+    def test_short_recording_end_to_end(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(wav_seconds=0.3) as fb:
+            rc, rep = _check(fb, src, "--record", "0.5", capsys=capsys)
+        assert rc == 1, rep
+        assert rep["record"]["flags"] == ["short_recording"]
+        assert any(w.startswith("short_recording: 0.3 s") for w in rep["record"]["warnings"])
 
 
 class TestDistinctErrors:
