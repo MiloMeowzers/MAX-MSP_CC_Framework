@@ -6,15 +6,15 @@ Only MAX can answer these. Each one names the checklist step in `test-results/v0
 
 1. Does `error` see load-time errors (a "No such object" posted at instantiation), and gen~ compile errors raised in another top-level patcher? The refpage says "any object in any patch".
    - Answered by: checklist step 4 (and steps 5 and 6)
-   - Answer:
+   - Answer: Load-time errors: yes (step 4). `error` posted `osc~: osc~: No such object` 13 ms after load. gen~ compile errors: pending step 6.
 
 2. What do `console`'s three outlets fire, and in what order? What do the Message Type ints mean? Is "No such object" an error type, so that it passes `@showonlyerrors 1`?
    - Answered by: checklist step 4
-   - Answer:
+   - Answer: All three fire within one tick, arriving as `/con/type` then `/con/msg` then `/con/obj` (step 4). "No such object" is type 1, i.e. error. `@showonlyerrors 1` is presumably safe; not tested separately.
 
 3. What is the `console write` file format (plain lines, or with the object-name column?), and does it accept an absolute POSIX path?
    - Answered by: checklist step 4 (`console_write.status` and `new_lines`)
-   - Answer:
+   - Answer: Plain lines in the form `<object>: <message>`; the message itself already starts with `osc~:`, so the line reads `osc~: osc~: No such object`. An absolute POSIX path works (step 4).
 
 4. Do `pcontrol load` and `sfrecord~ open` accept absolute POSIX paths?
    - Answered by: checklist step 3
@@ -48,11 +48,11 @@ Only MAX can answer these. Each one names the checklist step in `test-results/v0
 
 A1. verify: absolute POSIX paths work in `pcontrol load`, `sfrecord~ open` and `console write`. If they do not, fall back to `open -a Max`, or to Max-style paths via `conformpath`.
    - Answered by: checklist step 3 (pcontrol, sfrecord~) and step 4 (console write)
-   - Answer: pcontrol load and sfrecord~ open: yes (step 3). console write: `status ok` in step 3; confirm the file contents in step 4.
+   - Answer: Yes for all three: pcontrol load and sfrecord~ open (step 3), and console write (step 4, a new line was written).
 
 A2. verify: `udpsend` encodes Max floats as OSC `f` or `d`. The decoder accepts both either way.
    - Answered by: checklist step 4 (the `/con/type` args in `events_raw`)
-   - Answer:
+   - Answer: `/con/type` arrived as an OSC int (`1`), not a float (step 4). Float encoding is not exercised yet; the decoder handles `i`, `f` and `d`.
 
 A3. verify: a `route` remainder such as `open /x.wav` reaches sfrecord~ as the `open` selector. The same goes for the single-symbol remainder `/open <path>` -> `prepend load`, and for `/openfile <path>` -> `$1` in the message box.
    - Answered by: checklist step 3 (record works) and step 8 (openfile)
@@ -96,3 +96,4 @@ N5. How is a presentation-mode window titled and captured (`<stem> (presentation
 
 - **Sample-rate mismatch (step 3):** with MAX at 44.1 kHz and the interface at 48 kHz, sfrecord~ wrote a 48000 Hz header on 44.1 kHz-timed samples, so `analyze` reported 478.9 Hz and 2.756 s for a 440 Hz, 3 s tone. With MAX at 48 kHz it read 440.0 Hz and 3.0 s. Not yet fixed in the client: `analyze` still trusts the header. A follow-up could ask MAX for its own rate (adstatus / dspstate~) and flag a disagreement.
 - **Closed window lingers offscreen (step 3):** after `clean, wclose`, the copy's window disappears from the screen but stays in the CoreGraphics list with `kCGWindowIsOnscreen = 0`. `closed` read `false`, and a stale window could have been captured on the next run. Fixed in f00883c6: only onscreen windows are listed.
+- **One error is reported three times (step 4):** a single "No such object" appears once per channel (`error`, `console`, `console_write`), so the summary says "3 error line(s)". Follow-up: deduplicate by message text, or count distinct errors.
