@@ -30,7 +30,7 @@ Only MAX can answer these. Each one names the checklist step in `test-results/v0
 
 7. Does `clean, wclose` free a top-level patcher loaded by pcontrol, so that its DSP chain and its `send~` are gone?
    - Answered by: checklist step 9
-   - Answer:
+   - Answer: The window closes (`closed: true`, steps 3, 8 and 9), and nothing lingered audibly between runs. Freeing of the DSP chain and `send~` was not checked directly in Audio Status.
 
 8. Does `max openfile` show the window (variant B), and does `max closefile` close it?
    - Answered by: checklist step 8
@@ -42,7 +42,7 @@ Only MAX can answer these. Each one names the checklist step in `test-results/v0
 
 10. Out of spike scope, but needed for `--live`: how should a patch that needs stimulus (MIDI or note messages) be driven? A possible route is a `/send <name> <msg>` via `forward`; it is deferred.
     - Answered by: checklist step 9 (note what simple-fm needed in order to sound)
-    - Answer:
+    - Answer: simple-fm recorded silent (step 9). Its oscillators run (the scope shows the FM waveform), but the output passes `line~ 0.` -> `*~`, an envelope opened only by `kslider`/`notein`. Driving a `--live` check needs a stimulus, e.g. `/send <name> <msg>` via `forward`, or a note injected into the kslider/notein path.
 
 ## Assumptions to verify
 
@@ -68,7 +68,7 @@ A5. verify: 0.01 is a sensible `dc_offset` threshold.
 
 A6. verify: is an ephemeral, gitignored sibling copy written without `save_patch_roundtrip` acceptable? The alternative is copies in `$TMPDIR`, which breaks relative lookups.
    - Answered by: checklist step 9 (git status clean, no leftovers)
-   - Answer:
+   - Answer: Works (step 9): `git status --porcelain patches/simple-fm` is empty, `find patches -name '__maxbridge_*'` is empty, and the relative lookups resolved because the sibling copy loaded with no errors.
 
 ## New questions for the user
 
@@ -90,7 +90,7 @@ N4. Should the DSP state be restored to what it was before the check, rather tha
 
 N5. How is a presentation-mode window titled and captured (`<stem> (presentation)`)? Is the as-shown capture what you want?
    - Answered by: checklist step 9 (simple-fm, if it opens in presentation)
-   - Answer:
+   - Answer: simple-fm opened in presentation; the title was `__maxbridge_simple-fm (presentation)`, and the prefix match found it. The as-shown presentation capture worked (step 9). Whether that is the view you want is your call.
 
 ## Findings from the checklist run (2026-10-21)
 
