@@ -12,6 +12,14 @@
       "files_changed": [
         "generated/max-bridge.maxpat"
       ]
+    },
+    {
+      "version": "0.2.0",
+      "description": "v0.2.0 follow-ups: kill switch, DSP restore, SR guard, taps under dac~, distinct errors, note stimulus",
+      "timestamp": "2026-10-21T22:42:47.832751+00:00",
+      "files_changed": [
+        "generated/max-bridge.maxpat"
+      ]
     }
   ]
 }

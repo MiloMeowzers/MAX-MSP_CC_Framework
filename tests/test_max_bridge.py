@@ -54,13 +54,21 @@ class FakeBridge:
     - ``/sf open <p>`` remembers p; ``/sf 0`` writes a 0.2-amplitude 440 Hz
       float32 stereo wav there.
     - ``mute_after_open``: stop answering anything once /open arrives.
+    - ``/query`` -> ``/state/dsp dsp_on``, ``/state/adsr max_sr`` and, while
+      DSP is on, ``/state/sr max_sr`` (unless ``answers_query`` is False:
+      an older bridge patch); ``/dsp 1`` sets dsp_on and auto-reports
+      ``/state/sr`` (dspstate~); ``/dsp 0`` clears it.
     """
 
     def __init__(self, errors: bool = False, flood: int = 0,
-                 mute_after_open: bool = False) -> None:
+                 mute_after_open: bool = False, dsp_on: int = 0,
+                 answers_query: bool = True, max_sr: float = 44100.0) -> None:
         self.errors = errors
         self.flood = flood
         self.mute_after_open = mute_after_open
+        self.dsp_on = dsp_on
+        self.answers_query = answers_query
+        self.max_sr = max_sr
         self.received: list[tuple[str, list]] = []
         self.console = ["Max 9.2.0 (fake) started"]
         self.sf_path: str | None = None
@@ -123,6 +131,17 @@ class FakeBridge:
             self.sf_path = args[1]
         elif address == "/sf" and args == [0] and self.sf_path:
             _write_sine(Path(self.sf_path), 440.0, 0.2, seconds=1.0)
+        elif address == "/query" and self.answers_query:
+            self._reply(addr, "/state/dsp", int(self.dsp_on))
+            self._reply(addr, "/state/adsr", float(self.max_sr))
+            if self.dsp_on:
+                self._reply(addr, "/state/sr", float(self.max_sr))
+        elif address == "/dsp" and args == [1]:
+            self.dsp_on = 1
+            if self.answers_query:
+                self._reply(addr, "/state/sr", float(self.max_sr))
+        elif address == "/dsp" and args == [0]:
+            self.dsp_on = 0
 
 
 def _write_sine(path: Path, freq: float, amp: float, seconds: float = 1.0,
@@ -270,14 +289,17 @@ class TestBridgePatch:
     def test_route_order(self):
         assert bridge.ROUTE_ADDRESSES == (
             "/ping", "/open", "/sf", "/console", "/dsp", "/listen",
-            "/close", "/openfile", "/closefile",
+            "/close", "/openfile", "/closefile", "/query", "/note",
         )
 
     def test_udpreceive_deferlow_route(self, patch):
         p, _ = patch
         udp = self._one(p, "udpreceive")
-        (dl, _i), = self._succ(p, udp)
-        assert _box_name(dl) == "deferlow"
+        (gate, inlet), = self._succ(p, udp)
+        # v0.2.0: the kill-switch gate's DATA inlet (1) sits before deferlow
+        assert _box_name(gate) == "gate" and _args(gate) == ["1", "0"] and inlet == 1
+        (dl, inlet), = self._succ(p, gate, 0)
+        assert _box_name(dl) == "deferlow" and inlet == 0
         (rt, _i), = self._succ(p, dl)
         assert _box_name(rt) == "route"
 
@@ -340,8 +362,9 @@ class TestBridgePatch:
 
     def test_listen_fanout_closed_at_load(self, patch):
         p, _ = patch
-        trig = self._one(p, "trigger") if any(_box_name(b) == "trigger" for b in p.boxes) \
-            else self._one(p, "t")
+        # v0.2.0 adds `t i i` and `t b b b`: pick the listen fan-out by its args
+        (trig,) = [b for b in p.boxes if _box_name(b) in ("t", "trigger")
+                   and _args(b) == ["i", "i", "i", "i"]]
         assert _args(trig) == ["i", "i", "i", "i"]
         loadmess = self._one(p, "loadmess")
         assert _args(loadmess) == ["0"]
@@ -363,6 +386,84 @@ class TestBridgePatch:
         texts = " ".join(b.text for b in p.boxes if b.maxclass == "comment")
         assert "ALL network interfaces" in texts
         assert "Never add print" in texts
+
+    # --- v0.2.0 (quick-261021-l26) ---
+
+    def test_kill_switch(self, patch):
+        p, _ = patch
+        (toggle,) = [b for b in p.boxes if b.maxclass == "toggle"]
+        raw = toggle._raw or {}
+        assert not raw.get("parameter_enable") and not toggle.presentation
+        # OFF at every load, explicitly: loadbang -> 0 -> toggle
+        (zero, inlet), = [(b, i) for b, i in self._succ(p, self._one(p, "loadbang"))]
+        assert zero.maxclass == "message" and zero.text == "0"
+        assert (toggle, 0) in self._succ(p, zero)
+        (tii, inlet), = self._succ(p, toggle)
+        assert _box_name(tii) in ("t", "trigger") and _args(tii) == ["i", "i"] and inlet == 0
+        gate = next(b for b in p.boxes if _box_name(b) == "gate" and _args(b) == ["1", "0"])
+        assert self._succ(p, tii, 1) == [(gate, 0)]
+        (sel, inlet), = self._succ(p, tii, 0)
+        assert _box_name(sel) in ("select", "sel") and _args(sel) == ["0"] and inlet == 0
+        (msg, _i), = self._succ(p, sel, 0)
+        assert msg.maxclass == "message" and msg.text == "/listen 0"
+        assert self._succ(p, msg) == [(self._one(p, "route"), 0)]
+
+    def test_query_branch(self, patch):
+        p, _ = patch
+        route = self._one(p, "route")
+        (tbbb, _i), = self._succ(p, route, bridge.ROUTE_ADDRESSES.index("/query"))
+        assert _box_name(tbbb) in ("t", "trigger") and _args(tbbb) == ["b", "b", "b"]
+        targets = {b.text for b, _i in self._succ(p, tbbb)}
+        assert targets == {"dspstate~", "adstatus sr", "adstatus switch"}
+        by_text = {b.text: b for b in p.boxes if b.maxclass == "newobj"}
+        (send,) = [b for b in p.boxes if _box_name(b) == "send"
+                   and _args(b) == [bridge.REPLY_RECEIVE]]
+        for src, outlet, addr in (("adstatus sr", 1, "/state/adsr"),
+                                  ("adstatus switch", 1, "/state/dsp"),
+                                  ("dspstate~", 1, "/state/sr")):
+            (pre, inlet), = self._succ(p, by_text[src], outlet)
+            assert pre.text == f"prepend {addr}" and inlet == 0
+            assert self._succ(p, pre) == [(send, 0)]
+        assert tuple(sorted(a for a in bridge.STATE_ADDRESSES)) == tuple(sorted(
+            ("/state/adsr", "/state/dsp", "/state/sr")))
+        (rcv,) = [b for b in p.boxes if _box_name(b) == "receive"
+                  and _args(b) == [bridge.REPLY_RECEIVE]]
+        assert self._succ(p, rcv) == [(self._one(p, "udpsend"), 0)]
+        # route reaches adstatus only through the trigger: args become bangs
+        for name in ("adstatus sr", "adstatus switch"):
+            assert not self._reaches(p, route, by_text[name], avoid=("t", "trigger"))
+
+    def test_note_branch(self, patch):
+        p, _ = patch
+        route = self._one(p, "route")
+        (snd, inlet), = self._succ(p, route, bridge.ROUTE_ADDRESSES.index("/note"))
+        assert _box_name(snd) == "send" and _args(snd) == [bridge.NOTE_RECEIVE] and inlet == 0
+
+    def test_layout_flows_down_without_overlap(self, patch):
+        from src.maxpat.sizing import rendered_rect
+        p, _ = patch
+        by_id = {b.id: b for b in p.boxes}
+        up = [(l.source_id, l.dest_id) for l in p.lines
+              if not by_id[l.dest_id].patching_rect[1] > by_id[l.source_id].patching_rect[1]]
+        assert up == []
+        rects = [(b.id, rendered_rect(b)) for b in p.boxes]
+
+        def hit(a, b):
+            return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+        overlaps = [(a, b) for i, (a, ra) in enumerate(rects) for b, rb in rects[i + 1:] if hit(ra, rb)]
+        assert overlaps == []
+
+    def test_internal_names_pinned(self):
+        assert bridge.NOTE_RECEIVE == "__maxbridge_note"
+        assert bridge.REPLY_RECEIVE == "__maxbridge_reply"
+        for name in (bridge.NOTE_RECEIVE, bridge.REPLY_RECEIVE):
+            assert name.startswith(bridge.COPY_PREFIX)
+        assert bridge.STATE_ADDRESSES == ("/state/dsp", "/state/adsr", "/state/sr")
+
+    def test_version_comment(self, patch):
+        p, _ = patch
+        assert "v0.2.0" in [b.text for b in p.boxes if b.maxclass == "comment"]
 
 
 class TestPing:
@@ -395,6 +496,12 @@ class TestPing:
             assert str(holder.getsockname()[1]) in str(exc.value)
         finally:
             holder.close()
+
+    def test_ping_hint_names_toggle(self, capsys):
+        rc = bridge.main(["ping", "--port", str(_free_port()), "--reply-port", "0",
+                          "--timeout", "0.5"])
+        assert rc == 2
+        assert "toggle" in capsys.readouterr().err
 
     def test_events_collected_during_ping(self):
         with FakeBridge(errors=True) as fb:
@@ -732,9 +839,61 @@ class TestCheck:
         opts = bridge.build_parser().parse_args(["check", str(src), "--record", "0.2"])
         planned = [a for a, _ in bridge.plan_messages(copy, run_dir, opts)]
         assert fb.addresses == planned
-        assert planned[:2] == ["/ping", "/console"]
+        assert planned[:3] == ["/ping", "/query", "/ping"]
+        assert planned.index("/query") < planned.index("/open")
         assert "/open" in planned and "/sf" in planned and planned[-1] == "/ping"
         assert ("/dsp", [0]) in fb.received
+        assert rep["dsp_before"] == 0 and rep["dsp_stop_sent"] is True
+
+    def test_dsp_before_pure(self):
+        assert bridge._dsp_before([(0.1, "/state/dsp", [1])]) == 1
+        assert bridge._dsp_before([(0.1, "/state/dsp", [0]), (0.1, "/state/sr", [44100.0])]) == 0
+        assert bridge._dsp_before([(0.1, "/state/sr", [48000.0])]) == 1
+        assert bridge._dsp_before([(0.1, "/state/adsr", [44100.0])]) is None
+        assert bridge._dsp_before([]) is None
+
+    def test_dsp_restore_when_on(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(dsp_on=1) as fb:
+            rc, rep = _check(fb, src, "--record", "0.2", capsys=capsys)
+        assert rc == 0, rep
+        assert ("/dsp", [0]) not in fb.received
+        opts = bridge.build_parser().parse_args(["check", str(src), "--record", "0.2"])
+        plan = bridge.plan_messages(tmp_path / "__maxbridge_tone.maxpat", run_dir, opts)
+        assert bridge.RESTORE_DSP in plan
+        assert fb.addresses == [a for a, m in plan if (a, m) != bridge.RESTORE_DSP]
+        assert rep["dsp_before"] == 1 and rep["dsp_stop_sent"] is False
+        assert fb.dsp_on == 1
+
+    def test_dsp_unknown(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(answers_query=False) as fb:
+            rc, rep = _check(fb, src, "--record", "0.2", capsys=capsys)
+        assert rc == 0, rep
+        assert ("/dsp", [0]) in fb.received and rep["dsp_stop_sent"] is True
+        assert rep["dsp_before"] is None
+        assert any(w.startswith("dsp_state_unknown") for w in rep["warnings"])
+        with FakeBridge(answers_query=False) as fb:
+            rc, rep = _check(fb, src, capsys=capsys)
+        assert rc == 0, rep
+        assert ("/dsp", [0]) not in fb.received and rep["dsp_stop_sent"] is False
+
+    def test_dsp_off_restored_without_record(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(dsp_on=0) as fb:
+            rc, rep = _check(fb, src, capsys=capsys)
+        assert rc == 0, rep
+        assert ("/dsp", [0]) in fb.received and ("/dsp", [1]) not in fb.received
+        assert rep["dsp_before"] == 0 and rep["dsp_stop_sent"] is True
+
+    def test_leave_dsp_on(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        for dsp_on, answers in ((0, True), (1, True), (0, False)):
+            with FakeBridge(dsp_on=dsp_on, answers_query=answers) as fb:
+                rc, rep = _check(fb, src, "--record", "0.2", "--leave-dsp-on", capsys=capsys)
+            assert rc == 0, rep
+            assert ("/dsp", [0]) not in fb.received
+            assert rep["dsp_stop_sent"] is False
 
     def test_bridge_stops_answering(self, tmp_path, db, run_dir, capsys):
         src = _tone_patch(tmp_path / "tone.maxpat", db)

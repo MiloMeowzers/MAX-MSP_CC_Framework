@@ -20,13 +20,32 @@ is a dumb UDP pass-through; this client owns all the sequencing:
       /listen 1|0           -> error on/off and the console gates
       /dsp 1|0              -> ; dsp start / ; dsp stop
       /close                -> ; __maxbridge_close bang  (the copy closes itself)
+      /query                -> t b b b -> dspstate~, adstatus sr, adstatus switch
+                               (any args become bangs: a query never changes a setting)
+      /note <pitch> <vel> <ch> -> send __maxbridge_note (the temp copy's
+                               receive -> unpack 0 0 0 drives its notein cords)
 
     MAX -> Python  (OSC over UDP to 127.0.0.1:7401)
       /err error <words...>     from error
       /con/obj, /con/msg, /con/type   from console outlets 0, 1, 2
+      /state/dsp 0|1, /state/adsr <sr>, /state/sr <sr>
+                                /query replies (adstatus switch, adstatus sr,
+                                dspstate~ outlet 1) via send/receive __maxbridge_reply
 
 The bridge's deferlow keeps commands in order, so the /pong after an /open
 means "the load returned".
+
+Kill switch (v0.2.0): a toggle in the bridge patch, OFF at every load
+(loadbang -> 0), drives a gate 1 0 between udpreceive and deferlow. While it
+is OFF every incoming command, /ping included, is dropped, so the client
+times out (exit 2) with a hint naming the toggle. Turning it OFF also sends
+/listen 0 into route, closing error and the console gates.
+
+DSP restore (v0.2.0): check sends /query before /open and resolves the DSP
+state it found (/state/dsp, else 1 when dspstate~ reported a rate, else
+unknown). After the record block it sends /dsp 0 only when DSP was off before
+(or unknown and this run switched it on: warning dsp_state_unknown); DSP that
+was on stays on. --leave-dsp-on never sends /dsp 0.
 
 Subcommands:
     python3 tools/max_bridge.py ping
@@ -69,13 +88,20 @@ BRIDGE_PORT = 7400
 REPLY_PORT = 7401
 HOST = "127.0.0.1"
 # route arguments of the bridge patch, in outlet order (TestBridgePatch pins it)
+# (v0.2.0 appends /query and /note, so outlets 0-8 and their cords never move)
 ROUTE_ADDRESSES = (
     "/ping", "/open", "/sf", "/console", "/dsp", "/listen",
-    "/close", "/openfile", "/closefile",
+    "/close", "/openfile", "/closefile", "/query", "/note",
 )
 TAP_L = "__maxbridge_L"
 TAP_R = "__maxbridge_R"
 CLOSE_RECEIVE = "__maxbridge_close"
+# the bridge's /note branch -> the temp copy's receive -> unpack 0 0 0 (v0.2.0)
+NOTE_RECEIVE = "__maxbridge_note"
+# the bridge's /query replies -> receive -> udpsend (Rule #4: no cross-patch cords)
+REPLY_RECEIVE = "__maxbridge_reply"
+# /query reply addresses: adstatus switch, adstatus sr, dspstate~ outlet 1
+STATE_ADDRESSES = ("/state/dsp", "/state/adsr", "/state/sr")
 COPY_PREFIX = "__maxbridge_"
 BRIDGE_PATCH = REPO_ROOT / "patches" / "max-bridge" / "generated" / "max-bridge.maxpat"
 
@@ -711,11 +737,21 @@ def guard_input(path: Path) -> Path:
     return real
 
 
+RESTORE_DSP = ("/dsp", (0,))  # the single restore slot (D-02); sent only when DSP was off before
+
+
 def plan_messages(copy: Path, run_dir: Path, opts, tapped: bool = True) -> list[tuple]:
-    """Every message check sends, in order (research Architecture)."""
+    """Every message check sends, in order (research Architecture).
+
+    /ping (existence), /query, /ping (barrier: the /state replies precede
+    the /pong) come before /open, so a patch that starts DSP at load cannot
+    hide the prior state. The ``("/dsp", (0,))`` restore slot follows the
+    record block whether or not --record was given (absent with
+    --leave-dsp-on); _execute decides whether to send it.
+    """
     run_dir = Path(run_dir)
     openfile = getattr(opts, "open_mode", "pcontrol") == "openfile"
-    plan: list[tuple] = [("/ping", ())]
+    plan: list[tuple] = [("/ping", ()), ("/query", ()), ("/ping", ())]
     plan.append(("/console", ("write", str(run_dir / "before.txt"))))
     if opts.console_all:
         plan.append(("/console", ("showonlyerrors", 0)))
@@ -728,11 +764,14 @@ def plan_messages(copy: Path, run_dir: Path, opts, tapped: bool = True) -> list[
             ("/sf", ("samptype", "float32")),
             ("/sf", ("open", str(run_dir / "out.wav"))),
             ("/sf", ("record", int(round(opts.record * 1000)))),
+            ("/query", ()),  # DSP is surely on: dspstate~ reports the rate
+        ]
+        plan += [
             ("/sf", (0,)),
             ("/ping", ()),
         ]
-        if not opts.leave_dsp_on:
-            plan.append(("/dsp", (0,)))
+    if not opts.leave_dsp_on:
+        plan.append(RESTORE_DSP)
     plan.append(("/console", ("write", str(run_dir / "after.txt"))))
     plan.append(("/listen", (0,)))
     if opts.console_all:
@@ -814,16 +853,45 @@ def _console_diff(run_dir: Path) -> tuple[str, list[str]]:
     return "ok", new
 
 
+def _dsp_before(events: list):
+    """The DSP state found before /open, from /query replies (D-02).
+
+    The first ``/state/dsp`` value (adstatus switch); else 1 when a
+    ``/state/sr`` arrived (dspstate~ is silent while DSP is off); else None
+    (an older bridge patch that ignores /query).
+    """
+    for e in events:
+        address, args = e[-2], e[-1]
+        if address == "/state/dsp" and args:
+            try:
+                return int(args[0])
+            except (TypeError, ValueError):
+                continue
+    return 1 if any(e[-2] == "/state/sr" for e in events) else None
+
+
+DSP_UNKNOWN_WARNING = ("dsp_state_unknown: the bridge did not answer /query (an older bridge "
+                       "patch?); DSP is switched off after --record as in v0.1.0")
+
+
 def _execute(b: Bridge, plan: list[tuple], args, run_dir: Path, copy: Path, report: dict) -> None:
     """Send *plan* with the barrier waits; fill *report* in place."""
     openers = ("/open", "/openfile")
     closers = ("/close", "/closefile")
     window_id = None
+    dsp_resolved = False
     try:
         for i, (address, margs) in enumerate(plan):
             prev = plan[i - 1][0] if i else None
             if address == "/sf" and margs == (0,):
                 b.collect(args.record + 0.5)
+            if (address, margs) == RESTORE_DSP:
+                before = report.get("dsp_before")
+                if before == 0 or (before is None and report.get("_dsp_on")):
+                    b.send(address, *margs)
+                    report["_dsp_on"] = False
+                    report["dsp_stop_sent"] = True
+                continue
             if address in closers and args.shot is not None:
                 png = Path(args.shot) if args.shot else run_dir / "shot.png"
                 try:
@@ -841,7 +909,13 @@ def _execute(b: Bridge, plan: list[tuple], args, run_dir: Path, copy: Path, repo
                 elif address in closers:
                     report["_closed_sent"] = True
                 continue
-            if prev in openers:
+            if prev == "/query" and not dsp_resolved:
+                b.ping(args.timeout)
+                dsp_resolved = True
+                report["dsp_before"] = _dsp_before(b.events)
+                if report["dsp_before"] is None:
+                    report["warnings"].append(DSP_UNKNOWN_WARNING)
+            elif prev in openers:
                 b.ping(args.load_timeout)
                 report["load"]["pong_s"] = round(b.now(), 4)
                 b.collect(args.settle)
@@ -864,7 +938,7 @@ def _execute(b: Bridge, plan: list[tuple], args, run_dir: Path, copy: Path, repo
     except BridgeError:
         # best effort: leave MAX as we found it, without waiting for answers
         cleanup: list[tuple] = [("/listen", (0,))]
-        if report.get("_dsp_on") and not args.leave_dsp_on:
+        if report.get("_dsp_on") and report.get("dsp_before") != 1 and not args.leave_dsp_on:
             cleanup.append(("/dsp", (0,)))
         if any(a in openers for a, _ in b.sent) and not report.get("_closed_sent"):
             cleanup.append(("/closefile", ()) if args.open_mode == "openfile" else ("/close", ()))
@@ -883,6 +957,7 @@ def run_check(args) -> dict:
         "unsupported": [], "warnings": [], "load": {"open_s": None, "pong_s": None},
         "errors": [], "events_raw": [], "record": None, "shot": None, "closed": None,
         "feedback_suspected": False, "console_write": None,
+        "dsp_before": None, "dsp_stop_sent": False,
         "verdict": "bridge_failed", "exit_code": 2,
     }
     try:
@@ -899,7 +974,11 @@ def run_check(args) -> dict:
         report["run_dir"] = str(run_dir)
         plan = plan_messages(copy, run_dir, args, tapped=not inst["no_output_tap"])
         if args.dry_run:
-            report["plan"] = [" ".join([a, *(str(x) for x in m)]) for a, m in plan]
+            report["plan"] = [
+                " ".join([a, *(str(x) for x in m)])
+                + ("  (restore: only if DSP was off before the check)" if (a, m) == RESTORE_DSP else "")
+                for a, m in plan
+            ]
             report["verdict"], report["exit_code"] = "dry_run", 0
             try:
                 run_dir.rmdir()  # nothing was written there
@@ -945,7 +1024,8 @@ def run_check(args) -> dict:
 def _bridge_hint(host: str, port: int) -> str:
     rel = BRIDGE_PATCH.relative_to(REPO_ROOT)
     return (f"MAX bridge at {host}:{port} did not answer: open {rel} in MAX "
-            f"(MAX 9.2 must be running)")
+            f"(MAX 9.2 must be running) and turn ON its enable toggle "
+            f"(the kill switch is OFF whenever the bridge patch opens)")
 
 
 # ---------------------------------------------------------------------------
