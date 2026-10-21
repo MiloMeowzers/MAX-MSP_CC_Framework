@@ -22,11 +22,11 @@ Only MAX can answer these. Each one names the checklist step in `test-results/v0
 
 5. Must `samptype float32` come before `open`? Does a float32 wav keep NaN?
    - Answered by: checklist step 7 (header dtype)
-   - Answer:
+   - Answer: Sending `samptype float32` before `open` gives a float32 wav (step 7: 48000 Hz, float32, 96000 x 2). The reverse order is untested. NaN round-trip is untested, since no fixture produces NaN; float32 can store it.
 
 6. Does `record <ms>` close the file when it finishes, or is `0` still required? Does `0` after an auto-stop post an error?
    - Answered by: checklist step 7
-   - Answer:
+   - Answer: `record 2000` gives exactly 2.000 s (96000 samples at 48 kHz) and a readable file. The trailing `0` after the auto-stop posts no error, and console write showed no new lines (steps 3 and 7). Whether `0` is strictly needed is untested; keeping it is harmless.
 
 7. Does `clean, wclose` free a top-level patcher loaded by pcontrol, so that its DSP chain and its `send~` are gone?
    - Answered by: checklist step 9
@@ -64,7 +64,7 @@ A4. verify: signal fan-out to `send~` in the copy adds no audible change.
 
 A5. verify: 0.01 is a sensible `dc_offset` threshold.
    - Answered by: checklist step 3 (fx-clean `dc`) and step 7 (fx-dc)
-   - Answer: fx-clean `dc` is about 1e-18, far below 0.01 (step 3). Confirm with fx-dc in step 7.
+   - Answer: Yes: fx-clean `dc` is about 1e-18 (step 3) and fx-dc is 0.5, flagged `dc_offset` (step 7). 0.01 separates them cleanly.
 
 A6. verify: is an ephemeral, gitignored sibling copy written without `save_patch_roundtrip` acceptable? The alternative is copies in `$TMPDIR`, which breaks relative lookups.
    - Answered by: checklist step 9 (git status clean, no leftovers)
