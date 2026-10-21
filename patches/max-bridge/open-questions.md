@@ -6,7 +6,7 @@ Only MAX can answer these. Each one names the checklist step in `test-results/v0
 
 1. Does `error` see load-time errors (a "No such object" posted at instantiation), and gen~ compile errors raised in another top-level patcher? The refpage says "any object in any patch".
    - Answered by: checklist step 4 (and steps 5 and 6)
-   - Answer: Load-time errors: yes (step 4). `error` posted `osc~: osc~: No such object` 13 ms after load. gen~ compile errors: pending step 6.
+   - Answer: Load-time errors: yes. Step 4 gave `osc~: osc~: No such object` 13 ms after load, and step 5 gave `send: bad arguments creating object` 9 ms after load. Both arrived as console type 1, and the result was the same on a rerun. gen~ compile errors: pending step 6.
 
 2. What do `console`'s three outlets fire, and in what order? What do the Message Type ints mean? Is "No such object" an error type, so that it passes `@showonlyerrors 1`?
    - Answered by: checklist step 4
