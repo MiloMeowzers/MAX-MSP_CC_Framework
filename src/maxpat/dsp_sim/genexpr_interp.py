@@ -70,21 +70,62 @@ math domain errors          a ValueError becomes nan (log/log10/log2 of 0 give
                             Python exception escapes ``Program.run``
 ``wrap / fold``             1 argument (range 0..1) or 3; ``hi == lo`` returns
                             ``lo``; ``lo > hi`` is swapped [ASSUMED, A4]
+``for``                     ``for (i = a; i <op> BOUND; i += s) { ... }``;
+                            BOUND must fold to a constant at build time (a
+                            Param bound folds per corner); more than LOOP_CAP
+                            iterations in one sample raises Unsupported; a
+                            nested for is Unsupported
+``Delay d(N)``              ring of N+2 floats; ``d.write(x)`` stores at the
+                            head (the last write in a sample wins);
+                            ``d.read(t)`` clamps t to [1, N] and interpolates
+                            linearly between taps floor(t) and floor(t)+1;
+                            every head advances once at the end of the sample,
+                            so a write-then-read in one sample still sees the
+                            previous samples [Delay defaults per refpage:
+                            interp linear, feedback 1; ring details ASSUMED]
+``Data n(frames[, ch])``    zero-filled, one list per channel
+``Buffer n("name")``        MAX's buffer~ contents are not available offline:
+                            backed by 48000 frames x 1 channel of
+                            0.25 * sin(2*pi*220*n/samplerate), resizable per
+                            buffer~ name with ``buffers={name: (frames, ch)}``
+``peek(buf, i[, ch])``      no interpolation, index floored [ASSUMED, A4];
+                            an index or channel out of range (or a non-finite
+                            index) gives 0.0 (refpage boundmode ignore)
+``poke(buf, v, i[, ch])``   out of range writes nothing (refpage)
+``dim / channels``          frame / channel count, constants
+``noise()``                 one ``random.Random(seed)`` per Program; each call
+                            returns ``-1 + 2 * rng.random()`` (genrun's
+                            ``random.uniform(-1, 1)`` stream) [ASSUMED range]
+``phasor(f[, reset])``      returns the current phase, then advances by
+                            f/samplerate wrapped into [0, 1); a non-zero reset
+                            sets the phase to 0 first
+``cycle(f)``                sin(2*pi*phase) of an internal phase [ASSUMED]
+``latch(x, c)``             holds while c == 0; initial value 0
+``dcblock(x)``              y = x - x1 + 0.9997 * y1 (refpage GenExpr)
+``triangle(p[, duty])``     pure; up to the duty point and back down
+``selector(i, a, b, ...)``  floor(i); i <= 0 gives 0.0, i above the count
+                            clamps to the last [ASSUMED]
+``mc_channel(count)``       1.0 (one simulated channel)
 ==========================  ==================================================
+
+Stateful built-ins keep one state cell per call site, created at build time.
 
 Not supported (Unsupported): ``while``, ``return``, ``break``, ``continue``,
 user functions, ``else if`` (nest ``else { if ... }``), brace-less if/else,
 ``!``, ``++``/``--``, bitwise operators, ``[]``, ``@`` attributes,
 multi-assignment ``a, b = ...``, chained ``a = b = c``, keyword arguments in
-calls, declarations after a statement or inside a block, and every Gen
-operator the interpreter does not implement. In this build, for loops,
-Delay / Data / Buffer and the stateful built-ins are still Unsupported.
+calls, declarations after a statement or inside a block, multi-tap Delay,
+Delay methods other than read/write, more than STATE_CAP Delay/Data/Buffer
+samples, and every name in GEN_OPERATOR_NAMES the interpreter does not
+implement ("Gen operator not implemented"). Any other unknown call is
+"unknown function"; any other unknown name is "unknown identifier".
 """
 
 from __future__ import annotations
 
 import math
 import operator
+import random
 import re
 from dataclasses import dataclass, field
 
@@ -94,6 +135,7 @@ from src.maxpat.genexpr_parse import CONSTANTS, io_counts, mask, parse_params
 
 __all__ = [
     "GEN_CONSTANTS",
+    "GEN_OPERATOR_NAMES",
     "LOOP_CAP",
     "STATE_CAP",
     "Codebox",
@@ -155,6 +197,37 @@ GEN_CONSTANTS: dict[str, float] = {
 
 LOOP_CAP = 100_000          # for-loop iterations per loop per sample
 STATE_CAP = 50_000_000      # total Delay + Data + Buffer samples
+
+# Every `<c74object name='...'>` in the installed Gen refpages under
+# /Applications/Max.app/Contents/Resources/C74/packages/Gen/docs/refpages/common
+# and .../dsp, Max 9.2.0 (162 names, generated once at implementation time;
+# the Max bundle is never read at runtime). A call to one of these that the
+# interpreter does not implement is "Gen operator not implemented"; any
+# other unknown call is "unknown function".
+GEN_OPERATOR_NAMES = frozenset({
+    "abs", "absdiff", "accum", "acos", "acosh", "add", "and", "asin", "asinh",
+    "atan", "atan2", "atanh", "atodb", "bool", "buffer", "cartopol", "ceil",
+    "change", "channels", "clamp", "clip", "constant", "cos", "cosh",
+    "counter", "cycle", "data", "dbtoa", "dcblock", "degrees", "degtorad",
+    "delay", "delta", "dim", "div", "elapsed", "eq", "eqp", "exp", "exp2",
+    "expr", "fastcos", "fastexp", "fastpow", "fastsin", "fasttan",
+    "fftfullspect", "ffthop", "fftinfo", "fftoffset", "fftsize", "fixdenorm",
+    "fixnan", "float", "floor", "fold", "fract", "ftom", "gate", "gen", "gt",
+    "gte", "gtep", "gtp", "halfpi", "history", "hypot", "in", "int", "interp",
+    "invpi", "isdenorm", "isnan", "latch", "ln", "ln10", "ln2", "log", "log10",
+    "log10e", "log2", "log2e", "lookup", "lt", "lte", "ltep", "ltp", "max",
+    "maximum", "mc_channel", "mc_channelcount", "min", "minimum", "mix", "mod",
+    "mstosamps", "mtof", "mul", "mulequals", "nearest", "neg", "neq", "neqp",
+    "noise", "not", "or", "out", "param", "pass", "peek", "phasewrap",
+    "phasor", "phi", "pi", "plusequals", "poke", "poltocar", "pow", "radians",
+    "radtodeg", "rate", "rdiv", "read", "receive", "rmod", "round", "rsub",
+    "sah", "sample", "samplerate", "sampstoms", "scale", "selector", "send",
+    "setparam", "sign", "sin", "sinh", "slide", "smoothstep", "splat", "sqrt",
+    "sqrt1_2", "sqrt2", "step", "sub", "switch", "t60", "t60time", "tan",
+    "tanh", "train", "triangle", "trunc", "twopi", "vectorsize", "voice",
+    "voicecount", "wave", "wrap", "write", "xor",
+})
+assert len(GEN_OPERATOR_NAMES) == 162
 
 _MAX_DEPTH = 200            # expression nesting (closure depth) limit
 _INF = float("inf")
@@ -964,6 +1037,23 @@ def _fixdenorm(x):
     return 0.0 if 0.0 < abs(x) < 2.2250738585072014e-308 else x
 
 
+def _triangle(phase, duty=0.5):
+    p = _wrap(phase)
+    if p != p:
+        return _NAN
+    d = min(max(duty, 0.0), 1.0)
+    if p < d:
+        return p / d
+    return (1.0 - p) / (1.0 - d) if d < 1.0 else 0.0
+
+
+def _selector(i, *vals):
+    if not (i >= 1.0):          # nan and values <= 0 give 0.0
+        return 0.0
+    k = len(vals) if i >= len(vals) else int(i)
+    return vals[k - 1]
+
+
 # name -> (function, allowed arg counts). Functions are pure: same args, same
 # result, so all-constant calls fold at build time.
 _PURE: dict[str, tuple] = {
@@ -999,16 +1089,17 @@ _PURE: dict[str, tuple] = {
     "fold": (_fold, (1, 3)),
     "fixnan": (_fixnan, (1,)),
     "fixdenorm": (_fixdenorm, (1,)),
+    "triangle": (_triangle, (1, 2)),
     # mstosamps / sampstoms are bound to the build samplerate in _Builder.
     "mstosamps": (None, (1,)),
     "sampstoms": (None, (1,)),
 }
 
-# Operators that are part of Gen but come in Task 2 of 261021-urs.
-_STATEFUL_LATER = frozenset({
-    "peek", "poke", "dim", "channels", "noise", "phasor", "latch", "dcblock",
-    "cycle", "triangle", "selector", "mc_channel", "mc_channelcount",
-})
+_MC_NAMES = ("mc_channel", "mc_channelcount")   # simulated as one channel
+_BUFFER_FRAMES = 48000                            # default Buffer backing
+_BUFFER_CHANS = 1
+_BUFFER_HZ = 220.0
+_BUFFER_AMP = 0.25
 
 
 # ===========================================================================
@@ -1236,7 +1327,11 @@ class _Builder:
         self.out_range = (o_lo, o_lo + cb.n_out)
         self.reset_hi = nxt
         self.init: list = [0.0] * nxt
-        self.post: list = []   # end-of-sample callbacks (Delay heads, Task 2)
+        self.post: list = []   # end-of-sample callbacks (Delay heads)
+        self.delays: dict = {}  # name -> (ring, head cell, N, L)
+        self.bufs: dict = {}    # name -> (channel lists, frames, chans)
+        self.state_total = 0
+        self.rng = random.Random(seed)
 
     def err(self, construct, off):
         return Unsupported(construct, _line_of(self.code, off))
@@ -1261,7 +1356,80 @@ class _Builder:
                 self.slots[d.name] = len(self.init)
                 self.init.append(float(v))
                 continue
-            raise self.err(f"{d.dtype} declaration '{d.name}'", d.off)
+            if d.kwargs:
+                raise self.err(f"keyword arguments in the {d.dtype} '{d.name}'", d.off)
+            if d.dtype == "Delay":
+                self._delay_decl(d)
+            elif d.dtype == "Data":
+                self._data_decl(d)
+            else:
+                self._buffer_decl(d)
+
+    def _const_int(self, node, what, d) -> int:
+        ce = self.expr(node)
+        if ce[0] != _C or not math.isfinite(ce[1]):
+            raise self.err(f"non-constant {what} for {d.dtype} '{d.name}'", d.off)
+        v = int(math.ceil(ce[1]))
+        if v < 1:
+            raise self.err(f"{what} of {d.dtype} '{d.name}' must be >= 1", d.off)
+        return v
+
+    def _reserve(self, count: int, d) -> None:
+        self.state_total += count
+        if self.state_total > STATE_CAP:
+            raise self.err(
+                f"state cap exceeded: {self.state_total} Delay/Data/Buffer samples "
+                f"> STATE_CAP {STATE_CAP}",
+                d.off,
+            )
+
+    def _delay_decl(self, d) -> None:
+        if not d.args or len(d.args) > 2:
+            raise self.err(f"Delay '{d.name}' needs one size argument", d.off)
+        size = self._const_int(d.args[0], "size", d)
+        if len(d.args) == 2:
+            ce = self.expr(d.args[1])
+            if ce != (_C, 1.0):
+                raise self.err(f"multi-tap Delay '{d.name}' (second argument)", d.off)
+        length = size + 2
+        self._reserve(length, d)
+        ring = [0.0] * length
+        head = [0]
+
+        def advance():
+            h = head[0] + 1
+            if h == length:
+                h = 0
+            head[0] = h
+            ring[h] = 0.0       # an unwritten sample reads as 0
+        self.post.append(advance)
+        self.delays[d.name] = (ring, head, size, length)
+
+    def _data_decl(self, d) -> None:
+        if not d.args or len(d.args) > 2:
+            raise self.err(f"Data '{d.name}' needs a frame count", d.off)
+        frames = self._const_int(d.args[0], "frame count", d)
+        chans = self._const_int(d.args[1], "channel count", d) if len(d.args) == 2 else 1
+        self._reserve(frames * chans, d)
+        self.bufs[d.name] = ([[0.0] * frames for _ in range(chans)], frames, chans)
+
+    def _buffer_decl(self, d) -> None:
+        if len(d.args) > 1 or (d.args and not isinstance(d.args[0], Str)):
+            raise self.err(
+                f"Buffer '{d.name}' takes one string argument (the buffer~ name)", d.off
+            )
+        bufname = d.args[0].value if d.args else d.name
+        spec = self.buffers.get(bufname, (_BUFFER_FRAMES, _BUFFER_CHANS))
+        try:
+            frames, chans = int(spec[0]), int(spec[1])
+        except (TypeError, ValueError, IndexError):
+            raise ValueError(f"buffers[{bufname!r}] must be (frames, channels)") from None
+        if frames < 1 or chans < 1:
+            raise ValueError(f"buffers[{bufname!r}] needs frames >= 1 and channels >= 1")
+        self._reserve(frames * chans, d)
+        n = np.arange(frames, dtype=float)
+        wave = (_BUFFER_AMP * np.sin(2.0 * np.pi * _BUFFER_HZ * n / self.samplerate)).tolist()
+        self.bufs[d.name] = ([list(wave) for _ in range(chans)], frames, chans)
 
     # -- expressions ----------------------------------------------------------
 
@@ -1318,9 +1486,9 @@ class _Builder:
             raise self.err(f"{d.dtype} '{n}' used as a value", node.off)
         if _OUT_NAME.match(n):
             raise self.err(f"output '{n}' read but never assigned", node.off)
-        if _IN_NAME.match(n):
-            raise self.err(f"unknown identifier: {n}", node.off)
-        if n in _STATEFUL_LATER:
+        if n in _MC_NAMES:
+            return (_C, 1.0)
+        if n in GEN_OPERATOR_NAMES and not _IN_NAME.match(n):
             raise self.err(f"Gen operator not implemented: {n}", node.off)
         raise self.err(f"unknown identifier: {n}", node.off)
 
@@ -1373,12 +1541,84 @@ class _Builder:
                 return (_F, lambda env: fn(f0(env), f1(env)))
             f0, f1, f2 = fs
             return (_F, lambda env: fn(f0(env), f1(env), f2(env)))
-        if name in _STATEFUL_LATER:
+        handler = _STATEFUL_CALLS.get(name)
+        if handler is not None:
+            return handler(self, node)
+        if name in GEN_OPERATOR_NAMES:
             raise self.err(f"Gen operator not implemented: {name}", node.off)
         raise self.err(f"unknown function: {name}", node.off)
 
+    def arity(self, node, *allowed) -> None:
+        if len(node.args) not in allowed:
+            want = " or ".join(str(a) for a in allowed)
+            raise self.err(
+                f"{node.name}() takes {want} argument(s), got {len(node.args)}", node.off
+            )
+
+    def buf_arg(self, node, arg):
+        if not isinstance(arg, Name) or arg.name not in self.bufs:
+            raise self.err(
+                f"{node.name}() needs a Data or Buffer name as its first argument",
+                node.off,
+            )
+        return self.bufs[arg.name]
+
     def method(self, node: Method):
-        raise self.err(f"method call '{node.obj}.{node.method}()'", node.off)
+        if node.obj not in self.delays:
+            d = self.declared.get(node.obj)
+            what = f"{d.dtype} '{node.obj}'" if d else f"'{node.obj}'"
+            raise self.err(f"method call {what}.{node.method}()", node.off)
+        ring, head, size, length = self.delays[node.obj]
+        nargs = len(node.args)
+        if node.method == "read":
+            if nargs != 1:
+                raise self.err(
+                    f"Delay read() takes 1 argument, got {nargs}", node.off
+                )
+            t = self.expr(node.args[0])
+            if t[0] == _C:
+                tv = t[1]
+                if tv != tv:
+                    return (_C, _NAN)
+                tv = min(max(tv, 1.0), float(size))
+                i = int(tv)
+                f = tv - i
+                if f == 0.0:
+                    return (_F, lambda env: ring[(head[0] - i) % length])
+                g = 1.0 - f
+                return (_F, lambda env: g * ring[(head[0] - i) % length]
+                        + f * ring[(head[0] - i - 1) % length])
+            ft = _as_fn(t)
+            top = float(size)
+
+            def read(env):
+                tv = ft(env)
+                if tv != tv:
+                    return _NAN
+                if tv < 1.0:
+                    tv = 1.0
+                elif tv > top:
+                    tv = top
+                i = int(tv)
+                f = tv - i
+                h = head[0]
+                a = ring[(h - i) % length]
+                if f == 0.0:
+                    return a
+                return (1.0 - f) * a + f * ring[(h - i - 1) % length]
+            return (_F, read)
+        if node.method == "write":
+            if nargs != 1:
+                raise self.err(
+                    f"Delay write() takes 1 argument, got {nargs}", node.off
+                )
+            fx = _as_fn(self.expr(node.args[0]))
+
+            def write(env):
+                ring[head[0]] = fx(env)
+                return 0.0
+            return (_F, write)
+        raise self.err(f"Delay method '{node.obj}.{node.method}()'", node.off)
 
     # -- statements -----------------------------------------------------------
 
@@ -1430,8 +1670,52 @@ class _Builder:
                         fels(env)
             return [if_]
         if isinstance(s, For):
-            raise self.err("for loop", s.off)
+            return [self.for_loop(s)]
         raise self.err(f"statement {type(s).__name__}", getattr(s, "off", 0))
+
+    def for_loop(self, s: For):
+        counter = s.init.name
+        if s.init.op != "=" or counter not in self.cb._locals:
+            raise self.err(
+                "for loop init must assign a local counter ('i = 0')", s.off
+            )
+        cond = s.cond
+        if not (isinstance(cond, Bin) and cond.op in ("<", "<=", ">", ">=", "!=", "==")):
+            raise self.err("for loop condition must compare the counter", s.off)
+        if isinstance(cond.a, Name) and cond.a.name == counter:
+            bound = cond.b
+        elif isinstance(cond.b, Name) and cond.b.name == counter:
+            bound = cond.a
+        else:
+            raise self.err(
+                f"for loop condition must compare the counter '{counter}'", s.off
+            )
+        if self.expr(bound)[0] != _C:
+            raise self.err("for loop bound is not constant", s.off)
+        if s.step.name != counter:
+            raise self.err(
+                f"for loop step must update the counter '{counter}'", s.off
+            )
+        (finit,) = self.stmt(s.init)
+        (fstep,) = self.stmt(s.step)
+        fcond = _as_fn(self.expr(cond))
+        body = tuple(self.stmts(s.body))
+        line = _line_of(self.code, s.off)
+        cap = LOOP_CAP
+
+        def loop(env):
+            finit(env)
+            k = 0
+            while fcond(env) != 0.0:
+                k += 1
+                if k > cap:
+                    raise Unsupported(
+                        f"for loop exceeded {cap} iterations in one sample", line
+                    )
+                for st in body:
+                    st(env)
+                fstep(env)
+        return loop
 
     def program(self) -> "Program":
         self._decls()
@@ -1445,6 +1729,186 @@ class _Builder:
             stmts=stmts,
             post=tuple(self.post),
         )
+
+
+# ===========================================================================
+# Stateful and buffer built-ins (one state cell per call site)
+# ===========================================================================
+
+
+def _call_peek(b: _Builder, node: Call):
+    b.arity(node, 2, 3)
+    chs, frames, nch = b.buf_arg(node, node.args[0])
+    fi = _as_fn(b.expr(node.args[1]))
+    top = float(frames)
+    if len(node.args) == 2:
+        c = (_C, 0.0)
+    else:
+        c = b.expr(node.args[2])
+    if c[0] == _C:
+        cv = c[1]
+        if not (0.0 <= cv < nch):
+            def peek_off(env):
+                fi(env)
+                return 0.0
+            return (_F, peek_off)
+        ch = chs[int(cv)]
+
+        def peek(env):
+            x = fi(env)
+            return ch[int(x)] if 0.0 <= x < top else 0.0
+        return (_F, peek)
+    fc = _as_fn(c)
+
+    def peek_ch(env):
+        x = fi(env)
+        cv = fc(env)
+        if 0.0 <= x < top and 0.0 <= cv < nch:
+            return chs[int(cv)][int(x)]
+        return 0.0
+    return (_F, peek_ch)
+
+
+def _call_poke(b: _Builder, node: Call):
+    b.arity(node, 3, 4)
+    chs, frames, nch = b.buf_arg(node, node.args[0])
+    fv = _as_fn(b.expr(node.args[1]))
+    fi = _as_fn(b.expr(node.args[2]))
+    fc = _as_fn(b.expr(node.args[3])) if len(node.args) == 4 else (lambda env: 0.0)
+    top = float(frames)
+
+    def poke(env):
+        v = fv(env)
+        x = fi(env)
+        cv = fc(env)
+        if 0.0 <= x < top and 0.0 <= cv < nch:
+            chs[int(cv)][int(x)] = v
+        return 0.0
+    return (_F, poke)
+
+
+def _call_dim(b: _Builder, node: Call):
+    b.arity(node, 1)
+    _chs, frames, _nch = b.buf_arg(node, node.args[0])
+    return (_C, float(frames))
+
+
+def _call_channels(b: _Builder, node: Call):
+    b.arity(node, 1)
+    _chs, _frames, nch = b.buf_arg(node, node.args[0])
+    return (_C, float(nch))
+
+
+def _call_noise(b: _Builder, node: Call):
+    b.arity(node, 0)
+    r = b.rng.random
+    # Same stream as genrun's random.uniform(-1, 1) after random.seed(seed).
+    return (_F, lambda env: -1 + 2 * r())
+
+
+def _advance_phase(p: float, inc: float) -> float:
+    q = p + inc
+    if q >= 1.0 or q < 0.0:
+        try:
+            q -= math.floor(q)
+        except (ValueError, OverflowError):
+            return _NAN
+        if q >= 1.0:
+            q = 0.0
+    return q
+
+
+def _call_phasor(b: _Builder, node: Call):
+    b.arity(node, 1, 2)
+    ff = _as_fn(b.expr(node.args[0]))
+    fr = _as_fn(b.expr(node.args[1])) if len(node.args) == 2 else None
+    sr = b.samplerate
+    cell = [0.0]
+
+    def phasor(env):
+        f = ff(env)
+        if fr is not None and fr(env) != 0.0:
+            cell[0] = 0.0
+        p = cell[0]
+        cell[0] = _advance_phase(p, f / sr)
+        return p
+    return (_F, phasor)
+
+
+def _call_cycle(b: _Builder, node: Call):
+    b.arity(node, 1)
+    ff = _as_fn(b.expr(node.args[0]))
+    sr = b.samplerate
+    cell = [0.0]
+    twopi = 2 * math.pi
+
+    def cycle(env):
+        f = ff(env)
+        p = cell[0]
+        cell[0] = _advance_phase(p, f / sr)
+        return _sin(twopi * p)
+    return (_F, cycle)
+
+
+def _call_latch(b: _Builder, node: Call):
+    b.arity(node, 2)
+    fx = _as_fn(b.expr(node.args[0]))
+    fc = _as_fn(b.expr(node.args[1]))
+    cell = [0.0]
+
+    def latch(env):
+        x = fx(env)
+        if fc(env) != 0.0:
+            cell[0] = x
+        return cell[0]
+    return (_F, latch)
+
+
+def _call_dcblock(b: _Builder, node: Call):
+    b.arity(node, 1)
+    fx = _as_fn(b.expr(node.args[0]))
+    st = [0.0, 0.0]   # x1, y1
+
+    def dcblock(env):
+        x = fx(env)
+        y = x - st[0] + 0.9997 * st[1]
+        st[0] = x
+        st[1] = y
+        return y
+    return (_F, dcblock)
+
+
+def _call_selector(b: _Builder, node: Call):
+    if len(node.args) < 2:
+        raise b.err(
+            f"selector() takes at least 2 arguments, got {len(node.args)}", node.off
+        )
+    args = [b.expr(a) for a in node.args]
+    if all(k == _C for k, _x in args):
+        return (_C, _selector(*[x for _k, x in args]))
+    fs = tuple(_as_fn(a) for a in args)
+    return (_F, lambda env: _selector(*[f(env) for f in fs]))
+
+
+def _call_mc(b: _Builder, node: Call):
+    b.arity(node, 0)
+    return (_C, 1.0)
+
+
+_STATEFUL_CALLS = {
+    "peek": _call_peek,
+    "poke": _call_poke,
+    "dim": _call_dim,
+    "channels": _call_channels,
+    "noise": _call_noise,
+    "phasor": _call_phasor,
+    "cycle": _call_cycle,
+    "latch": _call_latch,
+    "dcblock": _call_dcblock,
+    "selector": _call_selector,
+    "mc_channel": _call_mc,
+    "mc_channelcount": _call_mc,
+}
 
 
 # ===========================================================================

@@ -257,8 +257,11 @@ def _corners(params: list, mode: str) -> list:
 # ===========================================================================
 
 
-def _driven_checks(run: _Run, samplerate: float) -> tuple:
-    """Driven-window checks on one run. Returns (findings, finite_outputs)."""
+def _driven_checks(run: _Run, samplerate: float, full: bool = True) -> tuple:
+    """Driven-window checks on one run. Returns (findings, finite_outputs).
+
+    ``full=False`` runs only the nonfinite and peak checks (the self-sustain
+    small run)."""
     findings: list = []
     finite: list = []
     d0, d1 = run.driven
@@ -280,6 +283,8 @@ def _driven_checks(run: _Run, samplerate: float) -> tuple:
                 "peak", "fail", run.corner, k,
                 f"peak {pk:.4g} > {PEAK_LIMIT:g} at n={i} ({i / samplerate:.4f} s)",
             ))
+        if not full:
+            continue
         if pk <= ACTIVITY_FLOOR:
             findings.append(Finding(
                 "silent", "warn", run.corner, k,
@@ -305,6 +310,52 @@ def _driven_checks(run: _Run, samplerate: float) -> tuple:
                     f"mean {mean:+.4g} over the driven window (|mean| > {DC_DRIVEN_LIMIT:g})",
                 ))
     return findings, finite
+
+
+def _tail(y: np.ndarray, ring: tuple) -> np.ndarray:
+    r0, r1 = ring
+    tail_n = max(2, int((r1 - r0) * TAIL_FRACTION))
+    return y[r1 - tail_n:r1]
+
+
+def _detrended_rms(y: np.ndarray) -> float:
+    """RMS after removing a least-squares line (np.polyfit degree 1)."""
+    if y.size < 2:
+        return 0.0
+    x = np.arange(y.size, dtype=float)
+    x -= x.mean()
+    slope, intercept = np.polyfit(x, y, 1)
+    r = y - (slope * x + intercept)
+    return float(np.sqrt(np.mean(r * r)))
+
+
+def _ringout_checks(run: _Run, small_outputs: list, finite: list, samplerate: float) -> list:
+    """dc latch (WARN) and self_sustain (FAIL, D-05) on the ring-out window."""
+    findings: list = []
+    r0, r1 = run.ring
+    for k in finite:
+        y = run.outputs[k - 1]
+        tail = _tail(y, run.ring)
+        mean = float(np.mean(tail))
+        if abs(mean) > DC_TAIL_LIMIT:
+            findings.append(Finding(
+                "dc", "warn", run.corner, k,
+                f"dc latch: mean {mean:+.4g} over the last {tail.size / samplerate:.3f} s "
+                f"of the ring-out (|mean| > {DC_TAIL_LIMIT:g})",
+            ))
+        ys = small_outputs[k - 1]
+        if not np.all(np.isfinite(ys)):
+            continue
+        nom = _detrended_rms(tail)
+        small = _detrended_rms(_tail(ys, run.ring))
+        if small > SUSTAIN_ABS and small / max(nom, 1e-12) > SUSTAIN_RATIO:
+            findings.append(Finding(
+                "self_sustain", "fail", run.corner, k,
+                f"sustains with zero input (small {small:.3g} at {SUSTAIN_SCALE:g}x vs "
+                f"{nom:.3g} at 1x): self-oscillation, latched feedback or a generator "
+                "with an inlet; --no-ringout skips this check",
+            ))
+    return findings
 
 
 # ===========================================================================
@@ -376,8 +427,22 @@ def smoke_codebox(
             prog = cb.build(params=cparams, samplerate=samplerate, seed=seed, buffers=buffers)
             outs = prog.run(signals, n)
             run = _Run(corner, cparams, outs, driven, ring)
-            f, _finite = _driven_checks(run, samplerate)
+            f, finite = _driven_checks(run, samplerate)
             findings.extend(f)
+            if ring is None:
+                continue
+            # Self-sustain rerun (D-05): fresh Program, every inlet's default
+            # stimulus x SUSTAIN_SCALE, same seeds.
+            small_prog = cb.build(
+                params=cparams, samplerate=samplerate, seed=seed, buffers=buffers
+            )
+            small_outs = small_prog.run([x * SUSTAIN_SCALE for x in signals], n)
+            small_run = _Run(
+                f"{corner} @{SUSTAIN_SCALE:g}x", cparams, small_outs, driven, ring
+            )
+            f_small, _ = _driven_checks(small_run, samplerate, full=False)
+            findings.extend(f_small)
+            findings.extend(_ringout_checks(run, small_outs, finite, samplerate))
     except Unsupported as exc:
         return CodeboxResult(label, "unsupported", str(exc), 0, [])
     except Exception as exc:  # never pass on an interpreter error
