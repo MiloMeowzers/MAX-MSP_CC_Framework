@@ -681,8 +681,10 @@ class TestResolution:
 
 class TestOpenOriginal:
 
+    # "(unlocked presentation)": MAX 9.2 title of an unlocked presentation window, 2026-10-21
     @pytest.mark.parametrize("title", ["tone", "tone (presentation)", "tone*", "tone.maxpat",
-                                       " tone* "])
+                                       " tone* ", "tone (unlocked presentation)",
+                                       "tone* (unlocked)", "tone (presentation)*"])
     def test_open_original_skipped(self, title, tmp_path, db, monkeypatch, capsys):
         monkeypatch.setattr(live.sys, "platform", "darwin")
         monkeypatch.setattr(bridge, "cg_windows", lambda: [(5, title, 0, 0, 100, 100)])
@@ -694,6 +696,11 @@ class TestOpenOriginal:
         assert entry["findings"][0]["severity"] == "note"
         assert entry["findings"][0]["finding"].startswith("original is open in MAX")
         assert "/open" not in fb.addresses and rc == 0
+
+    def test_norm_title_keeps_a_name_with_its_own_group(self):
+        assert live._norm_title("mix (v2)") == "mix (v2)"
+        assert live._norm_title("mix (v2) (unlocked presentation)") == "mix (v2)"
+        assert live._norm_title("mix (old copy)") == "mix"  # _open_titles keeps the raw title too
 
     def test_other_titles_run(self, tmp_path, db, monkeypatch, capsys):
         monkeypatch.setattr(live.sys, "platform", "darwin")

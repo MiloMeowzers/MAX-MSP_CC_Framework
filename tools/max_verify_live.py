@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -427,13 +428,21 @@ def _finish(result: dict, status: str | None = None, hint: str | None = None) ->
     return result
 
 
+_MODE_SUFFIX = re.compile(r"\s*\([a-z]+(?: [a-z]+)*\)$")
+
+
 def _norm_title(title: str) -> str:
-    """A MAX window title without the edited ``*`` and `` (presentation)``."""
+    """A MAX window title without the edited ``*`` and the view-mode suffix.
+
+    MAX 9.2 appends the mode in lowercase parentheses: `` (presentation)``,
+    `` (unlocked presentation)`` (seen 2026-10-21), and so on; any trailing
+    ``(lowercase words)`` group is dropped. _open_titles also keeps the
+    title with only ``*`` stripped, so a patch whose own name ends in such
+    a group still matches.
+    """
     t = str(title).strip()
     while True:
-        new = t.rstrip("*").strip()
-        if new.endswith(" (presentation)"):
-            new = new[: -len(" (presentation)")].strip()
+        new = _MODE_SUFFIX.sub("", t.rstrip("*").strip()).strip()
         if new == t:
             return t
         t = new
@@ -450,7 +459,11 @@ def _open_titles(result: dict) -> set[str]:
         result["notes"].append(f"could not list MAX windows ({exc}): "
                                "close any open original by hand")
         return set()
-    return {_norm_title(row[1]) for row in rows}
+    titles = set()
+    for row in rows:
+        titles.add(_norm_title(row[1]))
+        titles.add(str(row[1]).strip().rstrip("*").strip())
+    return titles
 
 
 def run_live(patches, opts, *, project=None, excluded=None) -> dict:
