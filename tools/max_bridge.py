@@ -576,7 +576,8 @@ DC_OFFSET_LIMIT = 0.01  # [ASSUMED] research A5: tune after real runs
 END_TRIM_MS = 50  # sfrecord~ endramp default is undocumented (research pitfall 6)
 
 
-def analyze(wav: Path, channels: list[str] | None = None, max_sr: float | None = None) -> dict:
+def analyze(wav: Path, channels: list[str] | None = None, max_sr: float | None = None,
+            expected_seconds: float | None = None) -> dict:
     """dsp_sim measures of a recorded wav, per channel (index 0 = L, 1 = R).
 
     *max_sr* is MAX's own DSP rate (D-03). When it differs from the wav
@@ -584,6 +585,13 @@ def analyze(wav: Path, channels: list[str] | None = None, max_sr: float | None =
     seconds) uses it, ``header_sample_rate`` keeps the header's rate and a
     ``sr_header_mismatch`` warning (never a flag) is added. ``sample_rate``
     is the rate actually used.
+
+    Either side can be the wrong one (MAX 9.2): with MAX at 44.1k on a 48k
+    interface sfrecord~ stamped 48k on 44.1k audio, and later adstatus
+    reported 44.1k while the audio ran at 48k. sfrecord~'s ``record <ms>``
+    counts samples at the rate the audio really runs, so with
+    *expected_seconds* (the requested length) the mismatch is settled by the
+    frame count: the rate whose duration is closer to it is used.
 
     NaN and inf are counted on the whole channel; the metrics come from the
     finite samples left after trimming ClassifierThresholds().settle_ms from
@@ -607,9 +615,16 @@ def analyze(wav: Path, channels: list[str] | None = None, max_sr: float | None =
         x = x[:, None]
     warnings_out: list[str] = []
     if max_sr and abs(float(max_sr) - header_sr) >= 1:
-        sr = int(round(float(max_sr)))
-        warnings_out.append(f"sr_header_mismatch: header {header_sr} Hz, MAX DSP {sr} Hz; "
-                            f"analyzed at {sr} Hz")
+        dsp_sr = int(round(float(max_sr)))
+        sr = dsp_sr
+        why = ""
+        if expected_seconds:
+            n_frames = x.shape[0]
+            if abs(n_frames / header_sr - expected_seconds) < abs(n_frames / dsp_sr - expected_seconds):
+                sr = header_sr
+            why = f" (the frame count matches {float(expected_seconds):g} s at {sr} Hz)"
+        warnings_out.append(f"sr_header_mismatch: header {header_sr} Hz, MAX DSP {dsp_sr} Hz; "
+                            f"analyzed at {sr} Hz{why}")
     if x.dtype.kind == "u":
         half = float(2 ** (8 * x.dtype.itemsize - 1))
         x = (x.astype(np.float64) - half) / half
@@ -1315,7 +1330,8 @@ def run_check(args) -> dict:
             report["max_sr"] = rec_sr
     wav = report.pop("_wav", None)
     if wav is not None:
-        a = analyze(wav, max_sr=report["max_sr"])
+        a = analyze(wav, max_sr=report["max_sr"],
+                    expected_seconds=float(args.record) if args.record else None)
         flags = list(a["flags"])
         warnings_out = list(a["warnings"])
         if len(rec_rates) > 1:

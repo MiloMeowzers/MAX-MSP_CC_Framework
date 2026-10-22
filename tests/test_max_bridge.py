@@ -64,7 +64,7 @@ class FakeBridge:
                  mute_after_open: bool = False, dsp_on: int = 0,
                  answers_query: bool = True, max_sr: float = 44100.0,
                  wav_sr: int | None = None, sr_jump: float | None = None,
-                 wav_seconds: float = 1.0) -> None:
+                 wav_seconds: float = 1.0, audio_sr: int | None = None) -> None:
         self.errors = errors
         self.flood = flood
         self.mute_after_open = mute_after_open
@@ -77,6 +77,9 @@ class FakeBridge:
         # restart, as seen in MAX 9.2 on 2026-10-21); wav_seconds: wav length
         self.sr_jump = sr_jump
         self.wav_seconds = wav_seconds
+        # audio_sr: the rate the samples really run at when MAX reports a
+        # stale max_sr (MAX 9.2, 2026-10-21: adstatus 44100, audio and header 48000)
+        self.audio_sr = audio_sr
         self.received: list[tuple[str, list]] = []
         self.times: list[float] = []  # time.monotonic() per received packet (parallel list)
         self.console = ["Max 9.2.0 (fake) started"]
@@ -144,7 +147,7 @@ class FakeBridge:
             self._reply(addr, "/state/adsr", float(self.sr_jump))
         elif address == "/sf" and args == [0] and self.sf_path:
             _write_sine(Path(self.sf_path), 440.0, 0.2, seconds=self.wav_seconds,
-                        sr=int(self.max_sr), header_sr=self.wav_sr)
+                        sr=int(self.audio_sr or self.max_sr), header_sr=self.wav_sr)
         elif address == "/query" and self.answers_query:
             self._reply(addr, "/state/dsp", int(self.dsp_on))
             self._reply(addr, "/state/adsr", float(self.max_sr))
@@ -846,7 +849,7 @@ class TestSampleRateGuard:
 
     def test_sr_guard_end_to_end(self, tmp_path, db, run_dir, capsys):
         src = _tone_patch(tmp_path / "tone.maxpat", db)
-        with FakeBridge(max_sr=44100, wav_sr=48000) as fb:
+        with FakeBridge(max_sr=44100, wav_sr=48000, wav_seconds=0.2) as fb:
             rc, rep = _check(fb, src, "--record", "0.2", capsys=capsys)
         assert rc == 0, rep
         assert rep["max_sr"] == 44100
@@ -854,6 +857,35 @@ class TestSampleRateGuard:
         assert rep["record"]["sample_rate"] == 44100
         assert rep["record"]["header_sample_rate"] == 48000
         assert any(w.startswith("sr_header_mismatch") for w in rep["record"]["warnings"])
+        assert rep["record"]["flags"] == []
+
+    def test_frame_count_picks_the_header_when_max_is_stale(self, tmp_path):
+        # MAX 9.2, 2026-10-21: adstatus said 44100 while the audio and the header were 48000
+        p = tmp_path / "h.wav"
+        _write_sine(p, 440.0, 0.2, seconds=3.0, sr=48000)
+        r = bridge.analyze(p, max_sr=44100, expected_seconds=3.0)
+        assert r["sample_rate"] == 48000 and r["seconds"] == 3.0
+        assert abs(r["channels"]["L"]["pitch_hz"] - 440.0) < 1.0
+        mism = [w for w in r["warnings"] if w.startswith("sr_header_mismatch")]
+        assert mism == ["sr_header_mismatch: header 48000 Hz, MAX DSP 44100 Hz; analyzed at "
+                        "48000 Hz (the frame count matches 3 s at 48000 Hz)"]
+
+    def test_frame_count_picks_max_when_the_header_is_wrong(self, tmp_path):
+        # MAX 9.2 v0.1.0 run: 44.1 k audio stamped 48 k
+        p = tmp_path / "m.wav"
+        _write_sine(p, 440.0, 0.2, seconds=3.0, sr=44100, header_sr=48000)
+        r = bridge.analyze(p, max_sr=44100, expected_seconds=3.0)
+        assert r["sample_rate"] == 44100 and r["seconds"] == 3.0
+        assert abs(r["channels"]["L"]["pitch_hz"] - 440.0) < 1.0
+
+    def test_stale_max_rate_end_to_end(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(max_sr=44100, audio_sr=48000, wav_sr=48000, wav_seconds=0.5) as fb:
+            rc, rep = _check(fb, src, "--record", "0.5", capsys=capsys)
+        assert rc == 0, rep
+        assert rep["record"]["sample_rate"] == 48000
+        assert rep["record"]["seconds"] == 0.5
+        assert abs(rep["record"]["channels"]["L"]["pitch_hz"] - 440.0) < 1.0
         assert rep["record"]["flags"] == []
 
 
