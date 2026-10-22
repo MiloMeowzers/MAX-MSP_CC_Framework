@@ -41,7 +41,11 @@ numbers                     float64 throughout; ``1``, ``1.``, ``.5``, ``1e-1``
 ``in1..inN``                read-only input slots (assigning one is
                             Unsupported)
 ``out1..outN``              reset to 0.0 at the start of every sample
-locals                      any other assigned name; reset to 0.0 every sample
+locals                      any other assigned name; reset to 0.0 every sample;
+                            must be assigned on every path before being read
+                            (checked at parse time; gen's 'not defined');
+                            names first assigned inside an if/else or for
+                            block are local to it
 History                     persists across samples; sequential: a read before
                             the assignment sees the previous sample, a read
                             after it sees the new value [ASSUMED, A5; genrun
@@ -109,6 +113,11 @@ math domain errors          a ValueError becomes nan (log/log10/log2 of 0 give
 ==========================  ==================================================
 
 Stateful built-ins keep one state cell per call site, created at build time.
+
+``Codebox.lint`` holds build-time WARNs as (check, detail) pairs: ``tab_char``
+(a tab anywhere in the code; the project's safe-construct rules say spaces
+only) and ``output_typo`` (a local such as ``ou2`` or ``Out1`` that looks like
+a misspelled output and so never reaches an outlet).
 
 Not supported (Unsupported): ``while``, ``return``, ``break``, ``continue``,
 user functions, ``else if`` (nest ``else { if ... }``), brace-less if/else,
@@ -733,6 +742,88 @@ def _stmt_exprs(s):
 
 _IN_NAME = re.compile(r"in(\d+)$")
 _OUT_NAME = re.compile(r"out(\d+)$")
+_OUT_LIKE = re.compile(r"([A-Za-z]+)(\d+)$")
+
+
+def _names_read(expr):
+    """Yield every Name node an expression reads. Call names and Method
+    objects are plain strings, never Name nodes, so they are not yielded."""
+    if isinstance(expr, Name):
+        yield expr
+    elif isinstance(expr, Unary):
+        yield from _names_read(expr.a)
+    elif isinstance(expr, Bin):
+        yield from _names_read(expr.a)
+        yield from _names_read(expr.b)
+    elif isinstance(expr, Tern):
+        yield from _names_read(expr.c)
+        yield from _names_read(expr.a)
+        yield from _names_read(expr.b)
+    elif isinstance(expr, (Call, Method)):
+        for a in expr.args:
+            yield from _names_read(a)
+
+
+def _check_definite_assignment(stmts, defined: set, local_names: set, code: str,
+                               ignored: frozenset = frozenset()) -> None:
+    """CR-01: raise Unsupported when a local is read before it is assigned on
+    every path (gen~ 'not defined').
+
+    ``defined`` is updated in place with the names definitely assigned by
+    ``stmts``. Names first assigned inside an if/else or for block are local
+    to that block (gen variables are local-to-scope), so they never flow back
+    out: the branches are checked on copies and not merged, and a for loop's
+    counter and body names do not leak past the loop. Only names in
+    ``local_names`` are checked; inN, outN, History, Param, constants and
+    buffer names never are."""
+
+    def fail(name, off):
+        raise Unsupported(
+            f"local '{name}' is read before it is assigned on every path "
+            "(gen~ 'not defined'); assign it before the first read, outside "
+            "any if/else or for block that sets it",
+            _line_of(code, off),
+        )
+
+    def check(expr, scope):
+        for node in _names_read(expr):
+            if node.name in local_names and node.name not in scope:
+                fail(node.name, node.off)
+
+    def assign(s, scope):
+        check(s.expr, scope)
+        if s.op != "=" and s.name in local_names and s.name not in scope:
+            fail(s.name, s.off)        # a compound assignment reads its target
+        if id(s) not in ignored:
+            scope.add(s.name)
+
+    for s in stmts:
+        if isinstance(s, Assign):
+            assign(s, defined)
+        elif isinstance(s, ExprStmt):
+            check(s.expr, defined)
+        elif isinstance(s, If):
+            check(s.cond, defined)
+            _check_definite_assignment(s.then, set(defined), local_names, code, ignored)
+            if s.els:
+                _check_definite_assignment(s.els, set(defined), local_names, code, ignored)
+        elif isinstance(s, For):
+            inner = set(defined)
+            assign(s.init, inner)
+            check(s.cond, inner)
+            _check_definite_assignment(s.body, inner, local_names, code, ignored)
+            assign(s.step, inner)
+
+
+def _edit_distance(a: str, b: str) -> int:
+    """Levenshtein distance (stdlib only; the names are short)."""
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb_ in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb_)))
+        prev = cur
+    return prev[-1]
 
 
 # ===========================================================================
@@ -753,6 +844,7 @@ class Codebox:
     body: tuple
     _locals: tuple = field(default=(), repr=False)
     _ignored: frozenset = field(default=frozenset(), repr=False)
+    lint: list = field(default_factory=list)   # [(check, detail)] build-time WARNs
 
     def build(
         self,
@@ -825,7 +917,7 @@ def parse_codebox(code: str) -> Codebox:
     warnings: list = []
     locals_: list = []
     ignored: set = set()
-    seen_local: set = set()
+    first_off: dict = {}
     for s in _walk_stmts(body):
         if not isinstance(s, Assign):
             continue
@@ -850,9 +942,30 @@ def parse_codebox(code: str) -> Codebox:
             continue
         if _OUT_NAME.match(name):
             continue
-        if name not in seen_local:
-            seen_local.add(name)
+        if name not in first_off:
+            first_off[name] = s.off
             locals_.append(name)
+
+    # CR-01: every local read must follow an assignment on every path.
+    _check_definite_assignment(body, set(), set(locals_), code, frozenset(ignored))
+
+    # Build-time lint (WARN findings in smoke).
+    lint: list = []
+    tab_at = code.find("\t")
+    if tab_at >= 0:
+        lint.append((
+            "tab_char",
+            f"line {_line_of(code, tab_at)}: tab character in the codebox; "
+            "the codebox safe-construct rules say spaces only (genexpr-rules.md)",
+        ))
+    for name in locals_:
+        m = _OUT_LIKE.match(name)
+        if m and not _OUT_NAME.match(name) and _edit_distance(m.group(1).lower(), "out") <= 1:
+            lint.append((
+                "output_typo",
+                f"line {_line_of(code, first_off[name])}: local '{name}' looks like a "
+                "misspelled output (outputs are out1..outN); it never reaches an outlet",
+            ))
 
     n_in, n_out = io_counts(code)
     return Codebox(
@@ -865,6 +978,7 @@ def parse_codebox(code: str) -> Codebox:
         body=body,
         _locals=tuple(locals_),
         _ignored=frozenset(ignored),
+        lint=lint,
     )
 
 

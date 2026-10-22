@@ -114,9 +114,75 @@ def test_history_is_sequential():
     assert o2.tolist() == x.tolist()
 
 
-def test_locals_reset_every_sample():
-    (o,) = run("x = x + 1; out1 = x;", n=4)
-    assert o.tolist() == [1.0] * 4
+@pytest.mark.parametrize(
+    "code,name,line",
+    [
+        ("if (in1 > 0) {\n y = 1;\n} else {\n y = 0.5;\n}\nout1 = y * in1;", "y", 6),
+        ("out1 = y;\ny = in1;", "y", 1),
+        ("if (in1 > 0) { y = 1; } out1 = y;", "y", 1),
+        ("y += in1; out1 = y;", "y", 1),
+        ("for (i = 0; i < 4; i += 1) { acc += 1; } out1 = acc;", "acc", 1),
+        ("for (i = 0; i < 4; i += 1) { t = i; } out1 = i;", "i", 1),
+        ("x = x + 1; out1 = x;", "x", 1),
+    ],
+    ids=["if-else-only", "read-then-assign", "if-only", "compound", "for-body",
+         "for-counter-leak", "self-read"],
+)
+def test_local_read_before_assignment_is_unsupported(code, name, line):
+    """CR-01: gen~ refuses a local read before it is assigned on every path
+    ('not defined'); names first assigned in an if/else or for block do not
+    leak out of it. Replaces test_locals_reset_every_sample, whose codebox
+    ``x = x + 1; out1 = x;`` is exactly this read-before-assign form."""
+    with pytest.raises(Unsupported, match=rf"local '{name}' is read before it is assigned") as ei:
+        parse_codebox(code)
+    assert ei.value.line == line
+
+
+def test_definitely_assigned_locals_still_run():
+    x = np.array([1.0, -1.0])
+    (o,) = run(
+        "y = 0; if (in1 > 0) { y = 1; } else { y = 0.5; } out1 = y * in1;", inputs=[x], n=2
+    )
+    assert o.tolist() == [1.0, -0.5]
+    # Block-local: first assigned and read inside the same block.
+    (o,) = run("if (in1 > 0) { t = in1 * 2; out1 = t; }", inputs=[x], n=2)
+    assert o.tolist() == [2.0, 0.0]
+    # Loop-carried locals assigned before the loop (the terrain-cheby form).
+    (o,) = run(
+        "x = in1; t0 = 1; t1 = x; acc = t0 + t1; "
+        "for (i = 2; i < 6; i += 1) { t2 = 2 * x * t1 - t0; t0 = t1; t1 = t2; acc += t2; } "
+        "out1 = acc;",
+        inputs=[np.ones(2)], n=2,
+    )
+    assert o.tolist() == [6.0, 6.0]
+    cb = parse_codebox("e = 5; out1 = e;")
+    assert cb.build().run([], 1)[0][0] == math.e and len(cb.warnings) == 1
+
+
+def test_tab_char_lint():
+    """WR-03: a tab is a WARN naming its first line (not Unsupported)."""
+    lint = parse_codebox("out1 =\tin1 * 0.5;").lint
+    assert [c for c, _d in lint] == ["tab_char"]
+    assert "line 1" in lint[0][1]
+    lint = parse_codebox("x = in1;\nout1 =\tx;\ny =\tx;").lint
+    assert [c for c, _d in lint] == ["tab_char"]
+    assert "line 2" in lint[0][1]
+    assert parse_codebox("out1 = in1;").lint == []
+
+
+@pytest.mark.parametrize(
+    "code,name",
+    [("out1 = in1; ou2 = in1 * 2;", "ou2"), ("Out1 = in1; out1 = in1;", "Out1")],
+)
+def test_output_typo_lint(code, name):
+    """CR-02: a local that looks like a misspelled output warns."""
+    lint = parse_codebox(code).lint
+    assert [c for c, _d in lint] == ["output_typo"]
+    assert f"'{name}'" in lint[0][1]
+
+
+def test_output_typo_lint_ignores_ordinary_locals():
+    assert parse_codebox("t1 = in1; t0 = t1; out1 = t0;").lint == []
 
 
 # ===========================================================================

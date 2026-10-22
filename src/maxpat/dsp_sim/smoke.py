@@ -82,7 +82,8 @@ _DEFAULT_SPEC = ("impulse+noise", 0.0)
 class Finding:
     """One check result. ``output`` is 1-based; 0 means the whole codebox."""
 
-    check: str        # nonfinite | peak | silence | silent | dc | self_sustain | constant_assign
+    check: str        # nonfinite | peak | silence | silent | dc | self_sustain |
+                      # constant_assign | tab_char | output_typo
     severity: str     # fail | warn
     corner: str
     output: int
@@ -498,6 +499,10 @@ def smoke_codebox(
         return CodeboxResult(
             label, "unsupported", f"interpreter error: {type(exc).__name__}: {exc}", 0, []
         )
+    if cb.n_out == 0:  # CR-02: nothing would be checked, so never a pass
+        return CodeboxResult(
+            label, "unsupported", "codebox has no outN outputs: nothing to check", 0, []
+        )
 
     specs = [parsed_inputs.get(k, _DEFAULT_SPEC) for k in range(1, cb.n_in + 1)]
     any_default = any(s == _DEFAULT_SPEC for s in specs)
@@ -512,6 +517,7 @@ def smoke_codebox(
     findings: list = [
         Finding("constant_assign", "warn", "build", 0, w) for w in cb.warnings
     ]
+    findings.extend(Finding(check, "warn", "build", 0, detail) for check, detail in cb.lint)
     corner_list = _corners(cb.params, corners)
     try:
         for corner, cparams in corner_list:

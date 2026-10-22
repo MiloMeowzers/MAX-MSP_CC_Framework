@@ -15,7 +15,7 @@ import pytest
 
 from src.maxpat import generate_gendsp
 from src.maxpat.dsp_sim.cli import main
-from src.maxpat.dsp_sim.smoke import smoke_file
+from src.maxpat.dsp_sim.smoke import smoke_codebox, smoke_file
 
 _REPO = Path(__file__).resolve().parents[2]
 _SAFE_GAIN = _REPO / "patterns" / "gen" / "gain" / "safe-gain.gendsp"
@@ -420,3 +420,73 @@ def test_smoke_is_not_imported_outside_dsp_sim():
             else:
                 continue
             assert not banned.intersection(names), (str(path), node.lineno, names)
+
+
+# ===========================================================================
+# Q35 review fixes (quick 261022-cmr)
+# ===========================================================================
+
+_CR01_IF_ELSE = "if (in1 > 0) {\n y = 1;\n} else {\n y = 0.5;\n}\nout1 = y * in1;"
+_CR01_READ_FIRST = "out1 = y;\ny = in1;"
+
+
+@pytest.mark.parametrize("code", [_CR01_IF_ELSE, _CR01_READ_FIRST], ids=["if-else", "read-first"])
+def test_cr01_uninitialized_local_is_unsupported(code):
+    r = smoke_codebox(code, seconds=0.1)
+    assert r.verdict == "unsupported", (r.verdict, r.reason, r.findings)
+    assert "local 'y'" in r.reason and r.corners == 0
+
+
+def test_cr01_cli_exits_3(tmp_path, capsys):
+    path = _gendsp(tmp_path, "cr01", _CR01_IF_ELSE)
+    rc = main(["smoke", str(path), "--seconds", "0.1"])
+    out = capsys.readouterr().out
+    assert rc == 3, out
+    assert "UNSUPPORTED" in out and "'y'" in out
+
+
+@pytest.mark.parametrize(
+    "code", ["ou1 = in1;", "Data d(10);\npoke(d, in1, 0, 0);"], ids=["typo", "poke-only"]
+)
+def test_cr02_zero_output_codebox_is_unsupported(code):
+    r = smoke_codebox(code, seconds=0.1)
+    assert r.verdict == "unsupported", (r.verdict, r.reason, r.findings)
+    assert "no outN outputs" in r.reason
+    assert r.corners == 0
+
+
+def test_cr02_cli_exits_3(tmp_path, capsys):
+    path = _gendsp(tmp_path, "cr02", "ou1 = in1;")
+    rc = main(["smoke", str(path), "--seconds", "0.1"])
+    out = capsys.readouterr().out
+    assert rc == 3, out
+
+
+@pytest.mark.parametrize(
+    "code,name",
+    [("out1 = in1; ou2 = in1 * 2;", "ou2"), ("Out1 = in1; out1 = in1;", "Out1")],
+)
+def test_cr02_output_typo_warns(code, name):
+    r = smoke_codebox(code, seconds=0.1)
+    assert r.verdict == "pass", r.findings
+    typos = [f for f in r.findings if f.check == "output_typo"]
+    assert len(typos) == 1, r.findings
+    assert typos[0].severity == "warn" and typos[0].corner == "build"
+    assert f"'{name}'" in typos[0].detail
+
+
+def test_cr02_no_output_typo_for_ordinary_locals():
+    r = smoke_codebox("t1 = in1; out1 = t1;", seconds=0.1)
+    assert not [f for f in r.findings if f.check == "output_typo"], r.findings
+
+
+def test_wr03_tab_char_warns(tmp_path, capsys):
+    r = smoke_codebox("out1 =\tin1 * 0.5;", seconds=0.1)
+    assert r.verdict == "pass", r.findings
+    tabs = [f for f in r.findings if f.check == "tab_char"]
+    assert len(tabs) == 1 and tabs[0].severity == "warn" and "line 1" in tabs[0].detail
+    path = _gendsp(tmp_path, "tab", "out1 =\tin1 * 0.5;")
+    rc = main(["smoke", str(path), "--seconds", "0.1"])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert "WARN tab_char" in out
