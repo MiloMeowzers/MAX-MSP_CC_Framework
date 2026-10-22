@@ -39,7 +39,12 @@ from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from src.maxpat import dsp_roles, gain_staging, walk
-from src.maxpat.db_lookup import DOMAIN_SCOPES, ObjectDatabase, detect_patcher_scope
+from src.maxpat.db_lookup import (
+    DOMAIN_SCOPES,
+    ObjectDatabase,
+    detect_patcher_scope,
+    outlet_signal_class,
+)
 from src.maxpat.maxclass_map import is_ui_object, UI_MAXCLASSES
 
 if TYPE_CHECKING:
@@ -983,9 +988,13 @@ def _validate_connections(
     Pure: never writes to *patch_dict*. A cord considered invalid is
     reported as an error carrying ``proposed_removal`` (its 4-tuple key);
     removal happens only via ``apply_fixes``. Check order per cord:
-    bounds (always, even for containers and known pairs) -> known pair
-    from relationships.json (e.g. tapin~ -> tapout~; no type/role checks)
-    -> container destination (no type/role checks) -> role dispatch
+    bounds (always, even for containers, known pairs and shipped idioms)
+    -> known pair from relationships.json (e.g. tapin~ -> tapout~; no
+    type/role checks) -> shipped idiom from idioms.json (Q38: a cord the
+    bundle's help patches ship, keyed by both names, both ports and the
+    source outlet's signal class from the box's own outlettype; no
+    type/role checks) -> container destination (no type/role checks) ->
+    role dispatch
     (skipped for container sources; mismatches warn, cord kept) -> legacy
     signal/control check. With ``type_checks=False`` (nested rnbo~ scopes,
     Q19) a cord whose bounds pass is not checked further.
@@ -1069,6 +1078,14 @@ def _validate_connections(
         if (
             src_name is not None and dst_name is not None
             and db.is_known_pair(src_name, dst_name)
+        ):
+            continue
+
+        # --- Shipped idiom (idioms.json, Q38): MAX ships this exact cord ---
+        src_class = outlet_signal_class(src_box.get("outlettype"), src_outlet)
+        if (
+            src_name and dst_name and src_class
+            and db.is_shipped_idiom(src_name, src_outlet, src_class, dst_name, dst_inlet)
         ):
             continue
 

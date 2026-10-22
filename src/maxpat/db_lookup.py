@@ -215,6 +215,39 @@ def merge_override_ports(base_ports: list, override_ports: list) -> list:
     return merged
 
 
+# Q38: optional bundle-mined DB files (tools/sync_max_bundle.py writes them).
+IDIOMS_FILE = "idioms.json"
+
+_SIGNAL_OUTLET_TYPES = ("signal", "multichannelsignal")
+
+
+def _is_port_token(text: str) -> bool:
+    """A non-negative ASCII decimal port index."""
+    return text.isascii() and text.isdigit()
+
+
+def outlet_signal_class(outlettype, index) -> str | None:
+    """Signal class of outlet *index* of a saved ``outlettype`` list (Q38).
+
+    ``"signal"`` for ``signal`` / ``multichannelsignal``, ``"control"`` for
+    any other string, None when *outlettype* is not a list, *index* is not
+    an int (bools excluded) or is out of range, or the entry is not a str.
+    The help-cord miner (``tools/help_io.py``) and the idiom query
+    (validation Layer 3, ``Patcher._rewire_type_gated``) share this one
+    definition, so a mined key and a queried key always agree.
+    """
+    if not isinstance(outlettype, list):
+        return None
+    if not isinstance(index, int) or isinstance(index, bool):
+        return None
+    if not 0 <= index < len(outlettype):
+        return None
+    value = outlettype[index]
+    if not isinstance(value, str):
+        return None
+    return "signal" if value in _SIGNAL_OUTLET_TYPES else "control"
+
+
 class ObjectDatabase:
     """Interface to the MAX object knowledge base.
 
@@ -269,6 +302,9 @@ class ObjectDatabase:
         self._group_members: dict[str, list[str]] = {}
         self._group_profiles: dict[str, dict] = {}
         self._group_attribute_definitions: dict[str, dict] = {}
+        # Q38: cords the bundle's help patches ship, alias-canonical
+        # (src, outlet, class, dst, inlet). Layer 3 never type/role-checks one.
+        self._idioms: set[tuple[str, int, str, str, int]] = set()
         self._load(db_root)
 
     def _load(self, db_root: Path) -> None:
@@ -363,6 +399,12 @@ class ObjectDatabase:
         if groups_path.exists():
             self._load_groups(json.loads(groups_path.read_text(encoding="utf-8")))
 
+        # Shipped idioms (Q38). Optional file, written only by
+        # tools/sync_max_bundle.py --apply idioms.
+        idioms_path = db_root / IDIOMS_FILE
+        if idioms_path.exists():
+            self._load_idioms(json.loads(idioms_path.read_text(encoding="utf-8")))
+
         # Fail-fast on the v5.0 schema-extension fields (signal_role,
         # domain_restricted, verified_installed). Runs AFTER the merge so
         # the validator sees the final merged shape, BEFORE package_info
@@ -442,6 +484,37 @@ class ObjectDatabase:
                 else:
                     obj[field] = value
             self._overridden_objects.add(canonical)
+
+    def _load_idioms(self, data) -> None:
+        """Index idioms.json ``pairs`` into :attr:`_idioms` (Q38).
+
+        Each ``pairs[src]`` item is ``"<outlet> <class> <dst> <inlet>"``
+        (single spaces, int ports, class ``signal`` / ``control``); both
+        names canonicalise through aliases.json. Anything else raises
+        ValueError naming the file (fail fast, the variable_io_rules policy).
+        """
+        pairs = data.get("pairs") if isinstance(data, dict) else None
+        if not isinstance(pairs, dict):
+            raise ValueError(f"{IDIOMS_FILE} must be an object with a `pairs` object")
+        for src, items in pairs.items():
+            if not isinstance(items, list):
+                raise ValueError(f"{IDIOMS_FILE} pairs[{src!r}] must be a list")
+            csrc = self._aliases.get(src, src)
+            for item in items:
+                parts = item.split(" ") if isinstance(item, str) else []
+                if (
+                    len(parts) != 4
+                    or not _is_port_token(parts[0]) or not _is_port_token(parts[3])
+                    or parts[1] not in ("signal", "control") or not parts[2]
+                ):
+                    raise ValueError(
+                        f"{IDIOMS_FILE} pairs[{src!r}] item {item!r} is not "
+                        f"'<outlet> <signal|control> <dst> <inlet>'"
+                    )
+                dst = parts[2]
+                self._idioms.add(
+                    (csrc, int(parts[0]), parts[1], self._aliases.get(dst, dst), int(parts[3]))
+                )
 
     def _load_groups(self, data: dict) -> None:
         """Index groups.json members / profiles; never touches ``_objects``.
@@ -920,6 +993,32 @@ class ObjectDatabase:
         if ca == cb:
             return False
         return frozenset((ca, cb)) in self._known_pairs
+
+    def is_shipped_idiom(
+        self,
+        src_name: str,
+        src_outlet: int,
+        src_class: str | None,
+        dst_name: str,
+        dst_inlet: int,
+    ) -> bool:
+        """True if a bundle help patch ships this cord (idioms.json, Q38).
+
+        The key is (source name, outlet, the source outlet's signal class,
+        destination name, inlet); both names are alias-canonical (a pair
+        stored under ``sel`` matches a query for ``select`` and the
+        reverse). *src_class* is :func:`outlet_signal_class` of the
+        validated box's own ``outlettype``; None never matches. Like
+        :meth:`is_known_pair` this exempts type/role checks only -- index
+        bounds are always enforced. False when idioms.json is absent.
+        """
+        if src_class is None or not self._idioms:
+            return False
+        key = (
+            self._aliases.get(src_name, src_name), src_outlet, src_class,
+            self._aliases.get(dst_name, dst_name), dst_inlet,
+        )
+        return key in self._idioms
 
     def is_overridden(self, name: str) -> bool:
         """Check whether an object has expert-verified overrides applied.

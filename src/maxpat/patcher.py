@@ -84,6 +84,7 @@ from src.maxpat.db_lookup import (
     ObjectDatabase,
     detect_patcher_scope,
     inner_patcher_scope,
+    outlet_signal_class,
 )
 
 
@@ -1465,7 +1466,8 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         Mirrors validation's "Signal outlet to control-only inlet" removal
         proposal (Q29 / B4): a signal outlet, from a source that is not a
         lenient (non-overridden ``~``) MSP object, into an inlet that does
-        not accept signal.
+        not accept signal. A shipped idiom (idioms.json, Q38) is never
+        gated, exactly as Layer 3 never flags it.
         """
         types = src.outlettype or []
         if so >= len(types) or types[so] != "signal":
@@ -1473,6 +1475,11 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         if self.db is None:
             return False
         name = walk.object_name({"maxclass": src.maxclass, "text": src.text})
+        dst_name = walk.object_name({"maxclass": dst.maxclass, "text": dst.text})
+        if name and dst_name and self.db.is_shipped_idiom(
+            name, so, outlet_signal_class(src.outlettype, so), dst_name, di
+        ):
+            return False
         if name and name.endswith("~") and not self.db.is_overridden(name):
             return False
         return not inlet_accepts_signal(

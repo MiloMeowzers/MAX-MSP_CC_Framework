@@ -21,8 +21,10 @@ What this is, and is not
   into the DB tree -- accepts only the core domain object files, the
   per-package object files and ``package_info.json``. The only other writers
   into the DB tree are :func:`write_groups_file` (``--apply groups``), which
-  can only write ``<db-root>/groups.json``, and :func:`write_aliases_file`
-  (``--apply aliases``), which can only add to ``<db-root>/aliases.json``.
+  can only write ``<db-root>/groups.json``, :func:`write_aliases_file`
+  (``--apply aliases``), which can only add to ``<db-root>/aliases.json``,
+  and :func:`write_idioms_file` (``--apply idioms``, Q38), which can only
+  additively write ``<db-root>/idioms.json``.
   The other write sites
   are :func:`write_report` (``--json`` / ``--snapshot-io`` targets), which
   refuses any path inside ``patches/`` or the DB tree, and
@@ -74,6 +76,11 @@ Sources of shape
   aliases to ``aliases.json`` through :func:`write_aliases_file`, its only
   writer (additive, style- and mode-preserving, rolled back if the DB then
   fails to load or resolve them).
+* Shipped idioms (Q38): every cord a bundle ``*.maxhelp`` ships between two
+  idiom-eligible boxes, keyed (source, outlet, source-outlet signal class,
+  destination, inlet) by ``tools/help_io.scan_help_idioms``. Section
+  ``idioms``; ``--apply idioms`` writes ``idioms.json`` (additive, canonical).
+  Validation Layer 3 never type/role-checks a listed cord; bounds always.
 * UI maxclasses: every box maxclass the bundle's .maxpat/.maxhelp files carry
   (section ``ui_maxclasses``, review C5 / Q13), diffed against UI_MAXCLASSES;
   report-only.
@@ -92,6 +99,7 @@ Usage
     python3 tools/sync_max_bundle.py --apply inherited --attributes alpha_mode
     python3 tools/sync_max_bundle.py --apply groups
     python3 tools/sync_max_bundle.py --apply aliases --names hslider mc.times~
+    python3 tools/sync_max_bundle.py --apply idioms
     python3 tools/sync_max_bundle.py --refresh-log           # after an apply
     python3 tools/sync_max_bundle.py --snapshot-io /tmp/io.json
     python3 tools/sync_max_bundle.py --compare-io /tmp/io.json
@@ -127,6 +135,7 @@ sys.path.insert(0, str(ROOT))
 from src.maxpat.atomic_io import atomic_write_bytes, atomic_write_many, json_style  # noqa: E402
 from src.maxpat.db_lookup import ObjectDatabase  # noqa: E402
 from src.maxpat.maxclass_map import UI_MAXCLASSES  # noqa: E402
+from tools import help_io  # noqa: E402
 from tools.audit_db import (  # noqa: E402
     CORE_DOMAIN_DIRS,
     CORE_REFPAGE_DIRS,
@@ -172,7 +181,7 @@ _WHOLE_VALUE_TOKENS = ("undefined", "Dummy")
 # Bound on recursion into nested patchers when walking help patches (T-hwb-06).
 MAX_PATCHER_DEPTH = 32
 
-APPLY_MODES = ("new", "define", "deltas", "inherited", "groups", "aliases")
+APPLY_MODES = ("new", "define", "deltas", "inherited", "groups", "aliases", "idioms")
 
 SECTION_KEYS = [
     "install",
@@ -182,6 +191,7 @@ SECTION_KEYS = [
     "deltas",
     "inherited_attributes",
     "groups",
+    "idioms",
     "collisions",
     "alias_docs",
     "shadowed_by_override",
@@ -1866,6 +1876,7 @@ def run_report(db_root: str | Path, max_app: str | Path, index: dict | None = No
     groups = compute_groups(index, classified, db, raw_db, existing_groups)
     groups.pop("_target")
     sections["groups"] = groups
+    sections["idioms"] = section_idioms(index, db_root)
     sections["collisions"] = {
         "available": True,
         "count": len(classified["collisions"]),
@@ -2111,6 +2122,140 @@ def write_groups_file(path: str | Path, data: dict, db_root: str | Path) -> bool
             return False
     atomic_write_bytes(target, payload)
     return True
+
+
+IDIOMS_FILE = "idioms.json"
+
+IDIOMS_COMMENT = (
+    "Cords the installed Max bundle's own help patches ship (Q38): validation "
+    "Layer 3 never type/role-checks a listed (source, outlet, class, "
+    "destination, inlet) cord while index bounds are always checked, and only "
+    "tools/sync_max_bundle.py --apply idioms writes this file, additively."
+)
+IDIOMS_GENERATOR = "tools/sync_max_bundle.py --apply idioms"
+IDIOMS_SOURCE = "bundle help (*.maxhelp under Contents/Resources/C74)"
+
+
+def _sorted_idiom_pairs(pairs: dict) -> dict:
+    return {
+        name: sorted(set(items), key=help_io._idiom_sort_key)
+        for name, items in sorted(pairs.items())
+    }
+
+
+def canonical_idioms_bytes(data: dict) -> bytes:
+    """The one serialization idioms.json is ever written in.
+
+    Indent 2, ``ensure_ascii=False``, a trailing newline, top-level keys in
+    the order given, ``pairs`` keys sorted and each list sorted by (outlet,
+    class, destination, inlet).
+    """
+    out = dict(data)
+    out["pairs"] = _sorted_idiom_pairs(data.get("pairs") or {})
+    return (json.dumps(out, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def load_idioms(db_root: str | Path) -> dict | None:
+    """The idioms.json on disk, or None when there is none.
+
+    Raises StyleUnreproducible for a file that is not an object with a
+    ``pairs`` object (this tool could not rewrite it faithfully).
+    """
+    path = Path(db_root) / IDIOMS_FILE
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not isinstance(data.get("pairs"), dict):
+        raise StyleUnreproducible(f"{path}: not an idioms file (object with a `pairs` object)")
+    return data
+
+
+def _idiom_items(data: dict | None) -> set[tuple[str, str]]:
+    pairs = (data or {}).get("pairs") or {}
+    return {(name, item) for name, items in pairs.items() for item in items}
+
+
+def check_idioms_additive(old: dict, new: dict) -> None:
+    """Raise AdditiveViolation if any committed pair is missing from `new`."""
+    lost = sorted(_idiom_items(old) - _idiom_items(new))
+    if lost:
+        shown = ", ".join(f"{n}: {i}" for n, i in lost[:5])
+        more = f" (+{len(lost) - 5} more)" if len(lost) > 5 else ""
+        raise AdditiveViolation(f"{IDIOMS_FILE}: {len(lost)} pairs would be removed: {shown}{more}")
+
+
+def write_idioms_file(path: str | Path, data: dict, db_root: str | Path) -> bool:
+    """Write <db_root>/idioms.json -- its only writer (Q38).
+
+    Refuses any other path (WriteRefused), refuses to drop a committed pair
+    (:func:`check_idioms_additive`), writes :func:`canonical_idioms_bytes`
+    atomically keeping the file's mode. Returns False (writes nothing) on
+    identical bytes.
+    """
+    root = Path(db_root).resolve()
+    target = Path(path).resolve()
+    if target != root / IDIOMS_FILE:
+        raise WriteRefused(f"refusing to write {target}: the idioms writer only writes {root / IDIOMS_FILE}")
+    payload = canonical_idioms_bytes(data)
+    if target.exists():
+        old = load_idioms(root)
+        check_idioms_additive(old, data)
+        if payload == target.read_bytes():
+            return False
+    atomic_write_bytes(target, payload)
+    return True
+
+
+def build_idioms_target(scan: dict, existing: dict | None, install: dict) -> dict:
+    """The idioms.json document: committed pairs united with the mined ones."""
+    merged: dict[str, set[str]] = {}
+    for source in ((existing or {}).get("pairs") or {}, scan.get("pairs") or {}):
+        for name, items in source.items():
+            merged.setdefault(name, set()).update(items)
+    return {
+        "_comment": IDIOMS_COMMENT,
+        "generator": IDIOMS_GENERATOR,
+        "max_version": install.get("short_version"),
+        "source": IDIOMS_SOURCE,
+        "pairs": _sorted_idiom_pairs(merged),
+    }
+
+
+_IDIOM_STATS = (
+    "files", "cords", "recorded_cords", "excluded_cords", "unclassified_cords",
+    "malformed_cords", "internal_patchers_skipped", "depth_capped",
+)
+
+
+def section_idioms(index: dict, db_root: str | Path) -> dict:
+    """Dry-run section: mined pair count, committed count, pending pairs."""
+    scan = help_io.scan_help_idioms(index["install"]["app_path"])
+    if not scan.get("available"):
+        return _unavailable(scan.get("reason") or "help scan unavailable")
+    existing = load_idioms(db_root)
+    mined = _idiom_items(scan)
+    committed = _idiom_items(existing)
+    return {
+        "available": True,
+        **{k: scan[k] for k in _IDIOM_STATS},
+        "bad_files": scan["bad_files"],
+        "pairs": len(mined),
+        "committed": len(committed),
+        "pending": len(mined - committed),
+        "file": IDIOMS_FILE,
+    }
+
+
+def apply_idioms(index: dict, db_root: Path) -> dict:
+    """--apply idioms: add every mined help cord key to idioms.json (additive)."""
+    scan = help_io.scan_help_idioms(index["install"]["app_path"])
+    if not scan.get("available"):
+        raise OSError(f"cannot mine help cords: {scan.get('reason')}")
+    existing = load_idioms(db_root)
+    target = build_idioms_target(scan, existing, index["install"])
+    added = len(_idiom_items(target) - _idiom_items(existing))
+    written = write_idioms_file(Path(db_root) / IDIOMS_FILE, target, db_root)
+    return {"written": written, "pairs": len(_idiom_items(target)), "added": added, "file": IDIOMS_FILE}
 
 
 ALIASES_FILE = "aliases.json"
@@ -2884,6 +3029,15 @@ def format_summary(report: dict) -> str:
         f"{groups['profiles']} profiles, +{groups['pending_names']} names pending "
         "(--apply groups)"
     )
+    idioms = s["idioms"]
+    if idioms.get("available"):
+        lines.append(
+            f"  idioms          : {idioms['pairs']} pairs from {idioms['recorded_cords']} help cords "
+            f"({idioms['excluded_cords']} excluded, {idioms['unclassified_cords']} unclassified), "
+            f"+{idioms['pending']} pending (--apply idioms)"
+        )
+    else:
+        lines.append(f"  idioms          : unavailable ({idioms.get('reason')})")
     lines.append(f"  collisions      : {s['collisions']['count']} (reported, ignored)")
     lines.append(f"  alias documents : {s['alias_docs']['count']}")
     shadow = s["shadowed_by_override"]
@@ -2934,7 +3088,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Apply mode; repeatable. new / define / aliases require --names; inherited "
             "requires --attributes; groups takes no allow-list and writes only "
-            "groups.json; aliases writes only aliases.json."
+            "groups.json; aliases writes only aliases.json; idioms takes no "
+            "allow-list and writes only idioms.json."
         ),
     )
     parser.add_argument(
@@ -3041,6 +3196,8 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 if "groups" in modes:
                     applied["groups"] = apply_groups(index, db_root)
+                if "idioms" in modes:
+                    applied["idioms"] = apply_idioms(index, db_root)
                 if "aliases" in modes:
                     applied["aliases"] = apply_aliases(index, db_root, args.names)
                     if any(r["status"] == "aborted" for r in applied["aliases"]):
@@ -3092,6 +3249,13 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             print(f"  applied groups  : {a['file']} unchanged")
+
+    if "idioms" in applied:
+        a = applied["idioms"]
+        if a["written"]:
+            print(f"  applied idioms  : {a['file']} -- {a['pairs']} pairs, +{a['added']} added")
+        else:
+            print(f"  applied idioms  : {a['file']} unchanged ({a['pairs']} pairs)")
 
     if args.refresh_log:
         if not index["available"]:

@@ -52,6 +52,20 @@ Comparison definition
 * Report and baseline keys are the literal box name (``sel`` and ``select``
   stay separate) so they do not move when aliases.json changes; the full
   report adds the alias-resolved ``canonical`` name.
+
+Bundle-mining scans (Q38, quick 261022-mis)
+-------------------------------------------
+* :func:`scan_help_idioms` collects every cord the bundle's help patches
+  ship, keyed ``(source name, outlet, source-outlet signal class,
+  destination name, inlet)``; ``tools/sync_max_bundle.py --apply idioms``
+  writes it to ``idioms.json`` (validation Layer 3 never type/role-checks a
+  listed cord).
+* :func:`scan_version_io` collects per-version I/O changes from help boxes
+  whose saving Max versions disagree; ``--apply version-io`` writes it to
+  ``version_io.json``.
+* Both read the bundle only (never a packages dir), walk exactly like the
+  oracle above and are read-only in the same way: JSON only, no writes,
+  no subprocess, no ``tools.audit_db`` / ``tools.sync_max_bundle`` import.
 """
 
 from __future__ import annotations
@@ -68,7 +82,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.maxpat import io_resolvers  # noqa: E402
+from src.maxpat import io_resolvers, walk as _walk  # noqa: E402
+from src.maxpat.db_lookup import outlet_signal_class  # noqa: E402
 from src.maxpat.patcher import CONTENT_DEFINED_NAMES  # noqa: E402
 from src.maxpat.validation import _CONTAINER_NAMES  # noqa: E402
 
@@ -627,6 +642,183 @@ def diff_baselines(baseline: dict, live: dict) -> dict:
         "stale_sources": stale,
         "new_sources": sorted(set(l_src) - set(b_src)),
         "missing_sources": sorted(set(b_src) - set(l_src)),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Shipped idioms (Q38)
+# ---------------------------------------------------------------------------
+
+
+def idiom_endpoint(box) -> str | None:
+    """The name a help cord endpoint is keyed by, or None when ineligible.
+
+    None for structural boxes (``walk.object_name`` is None: inlet, outlet,
+    patcher, bpatcher, empty newobj), content-defined names
+    (:data:`CONTENT_DEFINED`: ``p``, ``poly~``, ``js``, ``gen~`` ...),
+    any name containing ``codebox`` and any box with an embedded
+    ``patcher`` dict -- their I/O comes from their content, so a cord on
+    them says nothing about the name.
+    """
+    if not isinstance(box, dict):
+        return None
+    name = _walk.object_name(box)
+    if not name:
+        return None
+    first = name.split()[0] if name.split() else name
+    if name in CONTENT_DEFINED or first in CONTENT_DEFINED or "codebox" in name:
+        return None
+    if isinstance(box.get("patcher"), dict):
+        return None
+    return name
+
+
+def _bundle_help_files(max_app) -> tuple[Path, list[tuple[str, Path]]] | None:
+    """(C74 dir, sorted bundle ``*.maxhelp`` files) or None without a C74 dir."""
+    c74 = Path(max_app) / "Contents" / "Resources" / "C74"
+    if not c74.is_dir():
+        return None
+    return c74, _sorted_files(c74, c74.rglob("*.maxhelp"))
+
+
+def _load_help(path: Path, rel: str, bad_files: list) -> dict | None:
+    try:
+        top = json.loads(path.read_bytes())
+    except (OSError, ValueError) as exc:
+        bad_files.append({"file": rel, "reason": f"{type(exc).__name__}: {exc}"})
+        return None
+    if not isinstance(top, dict):
+        bad_files.append({"file": rel, "reason": f"top level is {type(top).__name__}"})
+        return None
+    return top
+
+
+def _iter_scopes(patcher, depth: int, stats: dict):
+    """Yield every patcher the oracle walks (gen / rnbo internals skipped).
+
+    Mirrors :meth:`_SourceScan.walk`: a box named in
+    :data:`GEN_RNBO_CONTAINERS`, or an inner patcher whose
+    ``classnamespace`` is in :data:`SKIPPED_NAMESPACES`, is counted in
+    ``internal_patchers_skipped``; nesting past :data:`MAX_PATCHER_DEPTH`
+    is counted in ``depth_capped``.
+    """
+    if not isinstance(patcher, dict):
+        return
+    if depth > MAX_PATCHER_DEPTH:
+        stats["depth_capped"] += 1
+        return
+    yield patcher
+    boxes = patcher.get("boxes")
+    if not isinstance(boxes, list):
+        return
+    for entry in boxes:
+        box = entry.get("box") if isinstance(entry, dict) else None
+        if not isinstance(box, dict):
+            continue
+        inner = box.get("patcher")
+        if not isinstance(inner, dict):
+            continue
+        if _walk.box_name(box) in GEN_RNBO_CONTAINERS or \
+                inner.get("classnamespace") in SKIPPED_NAMESPACES:
+            stats["internal_patchers_skipped"] += 1
+            continue
+        yield from _iter_scopes(inner, depth + 1, stats)
+
+
+def _scope_boxes(patcher: dict) -> dict:
+    """Box id -> box dict for one patcher (non-dict entries ignored)."""
+    out: dict = {}
+    boxes = patcher.get("boxes")
+    for entry in boxes if isinstance(boxes, list) else []:
+        box = entry.get("box") if isinstance(entry, dict) else None
+        if isinstance(box, dict) and isinstance(box.get("id"), str):
+            out[box["id"]] = box
+    return out
+
+
+def _port(value) -> bool:
+    return _is_count(value) and value >= 0
+
+
+def _idiom_sort_key(item: str) -> tuple:
+    outlet, cls, dst, inlet = item.split(" ")
+    return (int(outlet), cls, dst, int(inlet))
+
+
+def scan_help_idioms(max_app) -> dict:
+    """Every cord the bundle's help patches ship, keyed for idioms.json (Q38).
+
+    Bundle only: ``<max_app>/Contents/Resources/C74/**/*.maxhelp`` in sorted
+    relative-path order, never a packages dir. Per walked patcher, each
+    ``patchline`` whose source / destination are lists of length >= 2 with
+    non-negative int ports and boxes present in that patcher is:
+
+    * ``excluded_cords`` when either endpoint fails :func:`idiom_endpoint`;
+    * ``unclassified_cords`` when the source box records no outlettype at
+      that outlet (:func:`outlet_signal_class` is None);
+    * otherwise recorded as ``"<outlet> <class> <dst> <inlet>"`` under
+      ``pairs[<src>]``. Names are literal; ObjectDatabase canonicalises them
+      through aliases.json at load.
+
+    Every other patchline is ``malformed_cords``. Unparsable files go to
+    ``bad_files``; nothing raises.
+    """
+    found = _bundle_help_files(max_app)
+    if found is None:
+        c74 = Path(max_app) / "Contents" / "Resources" / "C74"
+        return unavailable_section(f"no C74 resources directory at {c74}")
+    _c74, files = found
+    stats = {k: 0 for k in (
+        "cords", "recorded_cords", "excluded_cords", "unclassified_cords",
+        "malformed_cords", "internal_patchers_skipped", "depth_capped",
+    )}
+    bad_files: list[dict] = []
+    pairs: dict[str, set[str]] = {}
+    for rel, path in files:
+        top = _load_help(path, rel, bad_files)
+        if top is None:
+            continue
+        for patcher in _iter_scopes(top.get("patcher"), 0, stats):
+            lines = patcher.get("lines")
+            if not isinstance(lines, list) or not lines:
+                continue
+            boxes = _scope_boxes(patcher)
+            for line in lines:
+                stats["cords"] += 1
+                pl = line.get("patchline") if isinstance(line, dict) else None
+                src_ref = pl.get("source") if isinstance(pl, dict) else None
+                dst_ref = pl.get("destination") if isinstance(pl, dict) else None
+                if not (
+                    isinstance(src_ref, list) and isinstance(dst_ref, list)
+                    and len(src_ref) >= 2 and len(dst_ref) >= 2
+                    and _port(src_ref[1]) and _port(dst_ref[1])
+                    and isinstance(src_ref[0], str) and isinstance(dst_ref[0], str)
+                    and src_ref[0] in boxes and dst_ref[0] in boxes
+                ):
+                    stats["malformed_cords"] += 1
+                    continue
+                src_box, dst_box = boxes[src_ref[0]], boxes[dst_ref[0]]
+                src = idiom_endpoint(src_box)
+                dst = idiom_endpoint(dst_box)
+                if src is None or dst is None:
+                    stats["excluded_cords"] += 1
+                    continue
+                outlet, inlet = src_ref[1], dst_ref[1]
+                cls = outlet_signal_class(src_box.get("outlettype"), outlet)
+                if cls is None:
+                    stats["unclassified_cords"] += 1
+                    continue
+                stats["recorded_cords"] += 1
+                pairs.setdefault(src, set()).add(f"{outlet} {cls} {dst} {inlet}")
+    return {
+        "available": True,
+        "reason": None,
+        "files": len(files),
+        "bad_files": bad_files,
+        **stats,
+        "pairs": {
+            name: sorted(items, key=_idiom_sort_key) for name, items in sorted(pairs.items())
+        },
     }
 
 
