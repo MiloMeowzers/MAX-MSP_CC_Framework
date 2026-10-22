@@ -584,3 +584,69 @@ def test_wr06_unused_input_warns(tmp_path, capsys):
     out = capsys.readouterr().out
     assert rc == 0, out
     assert "WARN unused_input" in out
+
+
+_WR02_PROBE = "History c; if (c > 1e9) { out1 = noise(); } out1 = in1;"
+
+
+def _non_info(r):
+    return [(f.check, f.severity, f.corner, f.output, f.detail)
+            for f in r.findings if f.severity != "info"]
+
+
+def test_wr02_branch_state_is_info_and_verdict_neutral():
+    r = smoke_codebox(_WR02_PROBE, seconds=0.1)
+    assert r.verdict == "pass", r.findings
+    assert not [f for f in r.findings if f.severity == "fail"]
+    bs = [f for f in r.findings if f.check == "branch_state"]
+    assert len(bs) == 1, r.findings
+    assert (bs[0].severity, bs[0].corner, bs[0].output) == ("info", "build", 0)
+    assert "noise()" in bs[0].detail
+    twin = smoke_codebox(_WR02_PROBE.replace("noise()", "0"), seconds=0.1)
+    assert not [f for f in twin.findings if f.check == "branch_state"]
+    assert (twin.verdict, _non_info(twin)) == (r.verdict, _non_info(r))
+
+
+def test_wr02_fail_stays_fail_with_advisory():
+    r = smoke_codebox(
+        "History c; if (c > 1e9) { out1 = noise(); } out1 = in1/0*0 + pow(10,400);",
+        seconds=0.1,
+    )
+    assert r.verdict == "fail"
+    assert [f.severity for f in r.findings if f.check == "branch_state"] == ["info"]
+
+
+def test_wr02_cli_text_and_json(tmp_path, capsys):
+    path = _gendsp(tmp_path, "wr02", _WR02_PROBE)
+    rc = main(["smoke", str(path), "--seconds", "0.1"])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    lines = out.splitlines()
+    head = next(i for i, ln in enumerate(lines) if ": PASS" in ln)
+    info = next(i for i, ln in enumerate(lines) if "INFO branch_state [build] codebox:" in ln)
+    assert info > head, out
+    (r,) = smoke_file(path, seconds=0.1)
+    n_warn = sum(1 for f in r.findings if f.severity == "warn")
+    assert f"{n_warn} warning(s)" in lines[-1], out
+    rc = main(["smoke", str(path), "--seconds", "0.1", "--json"])
+    report = json.loads(capsys.readouterr().out)
+    assert rc == 0 and report["exit_code"] == 0
+    (cb,) = report["codeboxes"]
+    assert any(f["check"] == "branch_state" and f["severity"] == "info" for f in cb["findings"])
+
+
+@pytest.mark.parametrize(
+    "rel,where",
+    [
+        ("buffer/buffer-recorder.gendsp", "poke() (line 14)"),
+        ("random/random-walk.gendsp", "noise() (line 18)"),
+        ("random/sample-and-hold.gendsp", "noise() (line 14)"),
+    ],
+    ids=["buffer-recorder", "random-walk", "sample-and-hold"],
+)
+def test_wr02_branch_stateful_patterns_pass_with_advisory(rel, where):
+    (r,) = smoke_file(_REPO / "patterns" / "gen" / rel, seconds=0.25)
+    assert r.verdict == "pass", r.findings
+    bs = [f for f in r.findings if f.check == "branch_state"]
+    assert len(bs) == 1 and bs[0].severity == "info", r.findings
+    assert where in bs[0].detail, bs[0].detail

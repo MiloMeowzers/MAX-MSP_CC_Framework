@@ -10,11 +10,16 @@ broken or unstable behaviour before MAX opens the patch.
 * Stimulus (D-03, D-06): every inlet gets a 0.25 impulse plus seeded +-0.1
   noise for the first half of the run, then zeros. ``--input K=SPEC``
   replaces one inlet's signal for the whole run.
-* Checks: NaN/inf, peak > 4, permanent silence after excitation and
-  self-sustain are FAIL; DC offset and an all-silent output are WARN.
+* Checks: NaN/inf, peak > 4, permanent silence while an input still changes
+  and self-sustain are FAIL; DC offset, an all-silent output, a tab character
+  (tab_char), a local that looks like a misspelled output (output_typo) and an
+  ``--input`` key above the inlet count (unused_input) are WARN. A stateful
+  call inside an if/else branch is an INFO advisory (branch_state) that never
+  changes the verdict.
 * Unsupported never passes (D-04): unsupported constructs, unknown names,
-  non-codebox gen operators and interpreter errors give the verdict
-  ``unsupported``.
+  locals read before they are assigned, non-codebox gen operators, a codebox
+  with no outN and interpreter errors give the verdict ``unsupported``. An
+  error at one corner is recorded at that corner; a FAIL elsewhere still wins.
 
 Advisory only: nothing in the save path imports this module (D-07).
 See src/maxpat/dsp_sim/README.md for the full contract.
@@ -84,8 +89,9 @@ class Finding:
 
     check: str        # nonfinite | peak | silence | silent | dc | self_sustain |
                       # constant_assign | tab_char | output_typo | unused_input |
-                      # unsupported (an error at one corner, or "all corners")
-    severity: str     # fail | warn | unsupported
+                      # unsupported (an error at one corner, or "all corners") |
+                      # branch_state (INFO: stateful call inside an if/else body)
+    severity: str     # fail | warn | unsupported | info
     corner: str
     output: int
     detail: str
@@ -534,6 +540,8 @@ def smoke_codebox(
         Finding("constant_assign", "warn", "build", 0, w) for w in cb.warnings
     ]
     findings.extend(Finding(check, "warn", "build", 0, detail) for check, detail in cb.lint)
+    # INFO advisories never change the verdict, the exit code or the warning count.
+    findings.extend(Finding(check, "info", "build", 0, detail) for check, detail in cb.advisories)
     for k in sorted(parsed_inputs):  # WR-06
         if k > cb.n_in:
             raw = next(v for kk, v in raw_inputs.items() if int(kk) == k)

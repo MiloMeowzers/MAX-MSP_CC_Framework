@@ -121,7 +121,7 @@ python3 -m src.maxpat.dsp_sim smoke engine.gendsp --seconds 0.25 --input 1=phaso
 | `--seed N` | `1` | stimulus noise and `noise()` seed |
 | `--corners all\|default` | `all` | `default` runs only the default corner |
 | `--no-ringout` | off | skip the ring-out checks (self_sustain, dc latch) |
-| `--input K=SPEC` | `impulse+noise` | per-inlet stimulus override, repeatable |
+| `--input K=SPEC` | `impulse+noise` | per-inlet stimulus override, repeatable; a K above a codebox's inlet count is not applied and gives an `unused_input` WARN on that codebox |
 | `--buffer NAME=FRAMES[:CHANS]` | `48000:1` | size of the Buffer bound to buffer~ NAME, repeatable |
 | `--json` | off | print one JSON object (path, seconds, samplerate, seed, corners, exit_code, codeboxes[label, verdict, reason, corners, findings[check, severity, corner, output, detail]]) |
 
@@ -157,6 +157,9 @@ inlet is on the default stimulus and `--no-ringout` is off.
 **Corners (D-02).** `default` (every Param at its default), then per Param in declaration order
 `NAME=min (V)` and `NAME=max (V)` with the other Params at default: 1 + 2N runs. A side whose
 min/max is undeclared or equal to the default is skipped. Every finding names its corner.
+Param defaults and `params=` overrides are clamped to the declared [min, max] (the gen `param`
+refpage: "Incoming values out of range will be clamped"; RNBO genexpr_js clamps the initial
+value the same way), so `Param p(min=0.5, max=1);` runs at 0.5, not 0.
 
 **Checks** (per output; the small self-sustain run is labelled `<corner> @0.01x`):
 
@@ -164,15 +167,27 @@ min/max is undeclared or equal to the default is skipped. Every finding names it
 |-------|------------|------------------|----------|
 | `nonfinite` | any NaN / inf sample; reports the first index | - | FAIL (skips the other checks for that output) |
 | `peak` | max abs > limit | `PEAK_LIMIT` (4.0) | FAIL |
-| `silence` | the last `TAIL_FRACTION` of the driven window stays below the floor after the earlier driven window exceeded `ACTIVITY_FLOOR` (1e-6) | `SILENCE_FLOOR` (1e-9), `TAIL_FRACTION` (0.1) | FAIL |
+| `silence` | the last `TAIL_FRACTION` of the driven window stays below the floor after the earlier driven window exceeded `ACTIVITY_FLOOR` (1e-6). Runs only when some inlet still changes over that tail (ptp > `ACTIVITY_FLOOR`), so it is skipped for 0-inlet codeboxes and all-const/zero inputs; the detail ends "while an input is still changing" | `SILENCE_FLOOR` (1e-9), `TAIL_FRACTION` (0.1) | FAIL |
 | `silent` | the output never exceeds `ACTIVITY_FLOOR` | `ACTIVITY_FLOOR` (1e-6) | WARN |
 | `dc` | abs mean over the driven window | `DC_DRIVEN_LIMIT` (0.1) | WARN |
 | `dc` (dc latch) | abs mean over the last 10% of the ring-out | `DC_TAIL_LIMIT` (0.05) | WARN |
 | `self_sustain` | rerun at `SUSTAIN_SCALE` x the stimulus (same seeds); small = detrended RMS (linear fit removed, `np.polyfit` degree 1) of the last 10% of the ring-out; FAIL when small > `SUSTAIN_ABS` and small / nominal > `SUSTAIN_RATIO`; nonfinite and peak also run on the small run | `SUSTAIN_SCALE` (0.01), `SUSTAIN_ABS` (0.01), `SUSTAIN_RATIO` (0.5) | FAIL |
 | `constant_assign` | an assignment to a built-in constant name (ignored; the constant wins) | - | WARN |
+| `unsupported` | an interpreter error or unsupported construct at one corner (printed `UNSUPPORTED [<corner>] codebox: <detail>`); the other corners still run; an identical error at every corner collapses to one finding at `all corners` | - | UNSUPPORTED |
+| `tab_char` | a tab character anywhere in the codebox; names its first line (the project's safe-construct rules say spaces only; a WARN, not unsupported, because 26 of the 54 codeboxes in Max 9.2's own Examples/gen contain tabs) | - | WARN |
+| `output_typo` | a local such as `ou2` or `Out1` (letters within edit distance 1 of `out`, then digits) that looks like a misspelled output and never reaches an outlet | - | WARN |
+| `unused_input` | an `--input K=SPEC` with K above this codebox's inlet count | - | WARN |
+| `branch_state` | a stateful call or write inside an if/else body: `noise phasor cycle latch dcblock poke` and `<delay>.write()`, aggregated per construct with its (first) line. Top-level if conditions, `?:` operands, History assignments and pure reads (`peek dim channels selector`) are not flagged. See the `if` limit below | - | INFO (never changes the verdict or the exit code) |
 
 DC is a warning, never a fail (D-06): phasors, envelopes, random walks and sample-and-hold sit
 off zero by design.
+
+**Verdict rules.** Fail beats unsupported beats pass: any FAIL finding gives `fail` (reason
+`<n> failing check(s)`, plus `; unsupported at <k> corner(s)` when a corner errored); else any
+corner error gives `unsupported` (reason: the first error's text, plus ` (<k> of <M> corners)`
+when only some corners errored); else `pass`. `corners` counts the corners that completed. The
+severity values are `fail`, `warn`, `unsupported` and `info`, in the text report and the JSON;
+`info` never changes the verdict, the exit code or the summary's warning count.
 
 **Why self-sustain (D-05).** A `tanh(x*g)/tanh(g)` feedback loop is bounded by tanh, so it never
 peaks above 4 or goes NaN; it latches into a limit cycle instead. genexpr-rules.md "In-loop
@@ -195,6 +210,11 @@ on the bassoon codebox within 1e-12. Supported: Param, History (sequential), Del
 read/write, Data / Buffer peek / poke / dim / channels, if / else, constant-bound for,
 `+= -= *= /=`, ternary, the math built-ins, `noise phasor cycle latch dcblock triangle selector
 mc_channel`, the lowercase constants plus `phi` and the uppercase `PI TWOPI HALFPI`.
+Definite assignment is checked at parse time: a local read before it is assigned on every path
+is unsupported (gen's "not defined"). Names first assigned inside an if/else or for block are
+local to that block, and a for loop's counter and body names do not leak past the loop, so a
+value used after the block must be assigned before it. A codebox with no `outN` is unsupported
+(nothing to check).
 Semantics assumptions (full table in the module docstring):
 - `[ASSUMED]` `/` is safediv (0 for a zero divisor); `%` is C `fmod`, 0 for a zero divisor.
 - `[ASSUMED]` `noise()` is uniform in [-1, 1); `wrap` / `fold` with `hi == lo` return `lo`.
@@ -205,6 +225,8 @@ Semantics assumptions (full table in the module docstring):
 - `[ASSUMED]` History is sequential: a read before the assignment sees the previous sample.
 - `[ASSUMED]` comparisons, `&&`, `||` evaluate both sides and give 1.0 / 0.0; `cycle` is
   `sin(2*pi*phase)`; `selector` clamps an index above the count to the last input.
+- `[ASSUMED]` a Param's initial value is clamped to [min, max] like incoming values (RNBO
+  genexpr_js does this).
 
 **Exit codes.** `0` every codebox passed (warnings allowed); `1` any FAIL; `2` usage or read
 error; `3` any unsupported codebox (and no FAIL), or nothing to smoke (no gen~, only skipped
@@ -214,8 +236,16 @@ jit.gen).
 - Codeboxes only: gen patchers with other operators, and constructs outside the subset
   (`while`, `else if`, user functions, unimplemented Gen operators such as `sah` / `accum`,
   ...), are **unsupported**, never pass.
-- `if` runs only the taken branch, so a stateful call (`noise()`, `phasor()`, a Delay write)
-  inside an untaken branch differs from gen, which executes both branches.
+- `if` runs only the taken branch. This is the simulator's choice and is unconfirmed in MAX.
+  The Max 9.2 GenExpr guide, RNBO genexpr_js and shipped Examples/gen (e.g.
+  gen~.chopper_repeat) point to conditional execution, while genexpr-rules.md says both
+  branches always execute. So a stateful call in a branch advances or writes only when that
+  branch runs, and smoke flags each such codebox with an INFO `branch_state` finding. A MAX
+  test is pending.
+- A constant-driven generator that dies (every inlet `const`/`zero`) is not caught by
+  `silence`: the check needs an inlet that still changes.
+- `--input` keys above a codebox's inlet count warn `unused_input` (in a multi-codebox file a
+  smaller codebox warns too).
 - Any `--input` override (or `--no-ringout`) disables the ring-out checks: an overridden inlet
   never goes quiet, so self-sustain cannot be judged. A generator with an inlet (an LFO with a
   reset inlet) can trip self_sustain by design; use `--no-ringout` for it.

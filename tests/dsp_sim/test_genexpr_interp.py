@@ -194,6 +194,104 @@ def test_param_default_and_overrides_are_clamped():
     assert cb.build(params={"p": -40}).run([], 1)[0][0] == -40.0
 
 
+# ===========================================================================
+# WR-02: taken-branch if/else (pinned) and the branch_state advisory
+# ===========================================================================
+
+_WR02_PROBE = "History c; if (c > 1e9) { out1 = noise(); } out1 = in1;"
+
+
+def test_untaken_noise_does_not_advance_the_stream():
+    """Taken-branch semantics are the simulator's choice (unconfirmed in MAX):
+    an untaken noise() draws nothing."""
+    code = "if (in1 > 0) { y = noise(); out2 = y; } out1 = noise();"
+    rng = random.Random(7)
+    draws = [-1 + 2 * rng.random() for _ in range(8)]
+    o1, o2 = run(code, inputs=[np.zeros(4)], n=4, seed=7)
+    assert o1.tolist() == draws[:4]
+    assert o2.tolist() == [0.0] * 4
+    o1, o2 = run(code, inputs=[np.ones(4)], n=4, seed=7)
+    assert o2.tolist() == draws[0::2]
+    assert o1.tolist() == draws[1::2]
+
+
+def test_conditional_poke_writes_only_when_taken():
+    (o,) = run(
+        "Data d(4); if (in1 > 0) { poke(d, 1, 0, 0); } out1 = peek(d, 0, 0);",
+        inputs=[np.array([0.0, 0.0, 1.0, 0.0])], n=4,
+    )
+    assert o.tolist() == [0.0, 0.0, 1.0, 1.0]
+
+
+def test_branch_state_advisory_on_review_probe():
+    adv = parse_codebox(_WR02_PROBE).advisories
+    assert [c for c, _d in adv] == ["branch_state"]
+    assert "noise() (line 1)" in adv[0][1]
+    assert "unconfirmed in MAX" in adv[0][1]
+
+
+@pytest.mark.parametrize(
+    "decl,stmt,named",
+    [
+        ("", "noise();", "noise()"),
+        ("", "phasor(1);", "phasor()"),
+        ("", "cycle(1);", "cycle()"),
+        ("", "latch(in1, 1);", "latch()"),
+        ("", "dcblock(in1);", "dcblock()"),
+        ("Data d(4); ", "poke(d, 1, 0, 0);", "poke()"),
+        ("Delay dl(10); ", "dl.write(in1);", "dl.write()"),
+    ],
+    ids=["noise", "phasor", "cycle", "latch", "dcblock", "poke", "delay-write"],
+)
+def test_branch_state_flags_each_construct(decl, stmt, named):
+    adv = parse_codebox(f"{decl}if (in1 > 0) {{ {stmt} out1 = 1; }}").advisories
+    assert [c for c, _d in adv] == ["branch_state"], adv
+    assert f"{named} (line 1)" in adv[0][1]
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "if (in1 > 0) { out1 = 1; } else { out1 = noise(); }",
+        "if (in1 > 0) { if (in1 > 1) { out1 = noise(); } }",
+        "if (in1 > 0) { for (i = 0; i < 4; i += 1) { out1 += noise(); } }",
+    ],
+    ids=["else-body", "nested-if", "for-in-if"],
+)
+def test_branch_state_fires_from_every_branch_position(code):
+    adv = parse_codebox(code).advisories
+    assert [c for c, _d in adv] == ["branch_state"], adv
+    assert "noise() (line 1)" in adv[0][1]
+
+
+def test_branch_state_aggregates_per_construct():
+    code = (
+        "Data d(4);\nif (in1 > 0) {\n poke(d, 1, 0, 0);\n poke(d, 2, 1, 0);\n"
+        " out1 = noise();\n}"
+    )
+    (adv,) = parse_codebox(code).advisories
+    detail = adv[1]
+    assert "poke() x2 (first at line 3)" in detail
+    assert "noise() (line 5)" in detail
+    assert detail.index("poke()") < detail.index("noise()")
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "out1 = noise();",
+        "if (noise() > 0) { out1 = 1; }",
+        "out1 = in1 > 0 ? noise() : 0;",
+        "History h; if (in1 > 0) { h = in1; } out1 = h;",
+        "Data d(4); if (in1 > 0) { out1 = peek(d, 0, 0) + dim(d) + channels(d) "
+        "+ selector(1, in1, 0); }",
+    ],
+    ids=["no-if", "if-condition", "ternary", "history-assign", "pure-reads"],
+)
+def test_branch_state_not_flagged(code):
+    assert parse_codebox(code).advisories == []
+
+
 def test_output_typo_lint_ignores_ordinary_locals():
     assert parse_codebox("t1 = in1; t0 = t1; out1 = t0;").lint == []
 

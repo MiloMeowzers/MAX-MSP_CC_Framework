@@ -70,9 +70,18 @@ constants                   ``e pi twopi halfpi invpi ln2 ln10 log10e log2e
                             [ASSUMED, A4]
 comparisons ``&& ||``       both sides evaluated, result 1.0 / 0.0 [ASSUMED]
 ``c ? a : b``               all three evaluated (gen switch semantics)
-``if / else``               only the taken branch's statements run; a
-                            stateful call inside the untaken branch therefore
-                            differs from gen, which executes both branches
+``if / else``               only the taken branch's statements run. This is
+                            the simulator's choice and is unconfirmed in MAX.
+                            The Max 9.2 GenExpr guide ('Branching and
+                            Looping'), RNBO genexpr_js (it emits an
+                            IfStatement) and shipped Examples/gen such as
+                            gen~.chopper_repeat point to conditional
+                            execution, while genexpr-rules.md says both
+                            branches always execute. A stateful call (noise,
+                            phasor, cycle, latch, dcblock, poke, Delay write)
+                            inside a branch therefore advances or writes only
+                            when that branch runs. smoke reports each such
+                            codebox with an INFO ``branch_state`` finding
 math domain errors          a ValueError becomes nan (log/log10/log2 of 0 give
                             -inf); an OverflowError becomes +-inf; no numeric
                             Python exception escapes ``Program.run``
@@ -121,7 +130,10 @@ Stateful built-ins keep one state cell per call site, created at build time.
 ``Codebox.lint`` holds build-time WARNs as (check, detail) pairs: ``tab_char``
 (a tab anywhere in the code; the project's safe-construct rules say spaces
 only) and ``output_typo`` (a local such as ``ou2`` or ``Out1`` that looks like
-a misspelled output and so never reaches an outlet).
+a misspelled output and so never reaches an outlet). ``Codebox.advisories``
+holds build-time INFOs the same way: ``branch_state`` names each stateful call
+or write inside an if/else body (see the ``if / else`` row); it never changes a
+smoke verdict.
 
 Not supported (Unsupported): ``while``, ``return``, ``break``, ``continue``,
 user functions, ``else if`` (nest ``else { if ... }``), brace-less if/else,
@@ -819,6 +831,80 @@ def _check_definite_assignment(stmts, defined: set, local_names: set, code: str,
             assign(s.step, inner)
 
 
+# WR-02: the subset of _STATEFUL_CALLS whose call site keeps state or writes.
+# peek, dim, channels, selector and mc_* are pure reads. Any ``<obj>.write()``
+# Method is flagged too.
+_BRANCH_STATEFUL_CALLS = frozenset({"noise", "phasor", "cycle", "latch", "dcblock", "poke"})
+
+
+def _branch_state_advisory(body, code: str) -> list:
+    """WR-02: an INFO advisory naming every stateful call or write that sits
+    inside an if/else body. Returns ``[]`` or one ``("branch_state", detail)``.
+
+    The simulator runs only the taken branch, so such a call advances or
+    writes only when its branch runs. A top-level if condition runs every
+    sample and is not flagged; neither are ``?:`` operands (all evaluated)
+    nor History assignments (both readings of the gen rule land the
+    assignment only when the condition holds). Sites aggregate per construct
+    in first-occurrence order, because a codebox can hold hundreds of pokes."""
+    sites: dict = {}    # construct -> [count, first line], insertion-ordered
+
+    def scan(expr):
+        if isinstance(expr, Unary):
+            scan(expr.a)
+        elif isinstance(expr, Bin):
+            scan(expr.a)
+            scan(expr.b)
+        elif isinstance(expr, Tern):
+            scan(expr.c)
+            scan(expr.a)
+            scan(expr.b)
+        elif isinstance(expr, (Call, Method)):
+            if isinstance(expr, Call) and expr.name in _BRANCH_STATEFUL_CALLS:
+                construct = f"{expr.name}()"
+            elif isinstance(expr, Method) and expr.method == "write":
+                construct = f"{expr.obj}.write()"
+            else:
+                construct = None
+            if construct is not None:
+                entry = sites.setdefault(construct, [0, _line_of(code, expr.off)])
+                entry[0] += 1
+            for a in expr.args:
+                scan(a)
+
+    def walk(stmts, inside: bool):
+        for st in stmts:
+            if isinstance(st, If):
+                if inside:
+                    scan(st.cond)
+                walk(st.then, True)
+                if st.els:
+                    walk(st.els, True)
+            elif isinstance(st, For):
+                if inside:
+                    scan(st.init.expr)
+                    scan(st.cond)
+                    scan(st.step.expr)
+                walk(st.body, inside)
+            elif isinstance(st, (Assign, ExprStmt)) and inside:
+                scan(st.expr)
+
+    walk(body, False)
+    if not sites:
+        return []
+    entries = ", ".join(
+        f"{c} (line {line})" if k == 1 else f"{c} x{k} (first at line {line})"
+        for c, (k, line) in sites.items()
+    )
+    return [(
+        "branch_state",
+        f"{entries} inside an if/else branch: the simulator runs only the taken "
+        "branch, so a stateful call there advances or writes only when its branch "
+        "runs (simulator's choice, unconfirmed in MAX; genexpr-rules.md says both "
+        "branches execute)",
+    )]
+
+
 def _edit_distance(a: str, b: str) -> int:
     """Levenshtein distance (stdlib only; the names are short)."""
     prev = list(range(len(b) + 1))
@@ -849,6 +935,7 @@ class Codebox:
     _locals: tuple = field(default=(), repr=False)
     _ignored: frozenset = field(default=frozenset(), repr=False)
     lint: list = field(default_factory=list)   # [(check, detail)] build-time WARNs
+    advisories: list = field(default_factory=list)  # [(check, detail)] build-time INFOs
 
     def build(
         self,
@@ -983,6 +1070,9 @@ def parse_codebox(code: str) -> Codebox:
                 "misspelled output (outputs are out1..outN); it never reaches an outlet",
             ))
 
+    # Build-time advisories (INFO findings in smoke; never move a verdict).
+    advisories: list = _branch_state_advisory(body, code)
+
     n_in, n_out = io_counts(code)
     return Codebox(
         code=code,
@@ -995,6 +1085,7 @@ def parse_codebox(code: str) -> Codebox:
         _locals=tuple(locals_),
         _ignored=frozenset(ignored),
         lint=lint,
+        advisories=advisories,
     )
 
 
@@ -2040,6 +2131,7 @@ _STATEFUL_CALLS = {
     "mc_channel": _call_mc,
     "mc_channelcount": _call_mc,
 }
+assert _BRANCH_STATEFUL_CALLS <= set(_STATEFUL_CALLS)
 
 
 # ===========================================================================
