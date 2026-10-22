@@ -574,6 +574,25 @@ def _cords(p: Patcher) -> set:
 
 class TestInstrument:
 
+    def test_control_cord_into_dac_is_not_tapped(self, tmp_path, db):
+        # gen-eq-test, MAX 9.2 2026-10-21: toggle -> dac~ (start/stop) was mirrored
+        # onto send~ and MAX posted "error connecting outlet 1 to send~ inlet 1"
+        from src.maxpat.hooks import format_patch_text
+        p = Patcher(db=db)
+        osc = p.add_box("cycle~", ["440"], x=20, y=20)
+        tog = p.add_box("toggle", x=120, y=20)
+        out = p.add_box("dac~", x=20, y=100)
+        p.add_connection(osc, 0, out, 0)
+        p.add_connection(tog, 0, out, 0)
+        src = tmp_path / "ctl.maxpat"
+        src.write_text(format_patch_text(p.to_dict()))
+        _copy, report = bridge.instrument(src)
+        assert report["taps"] == {"L": 1, "R": 0}
+        inst = _load(_copy)
+        (send,) = [b for b in inst.boxes if b.text == f"send~ {bridge.TAP_L}"]
+        by_id = {b.id: b for b in inst.boxes}
+        assert [by_id[l.source_id].text for l in inst.lines if l.dest_id == send.id] == ["cycle~ 440"]
+
     def test_taps_both_channels(self, tmp_path, db):
         src = _tone_patch(tmp_path / "tone.maxpat", db)
         before = src.read_bytes()

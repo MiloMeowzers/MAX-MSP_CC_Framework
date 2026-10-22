@@ -373,6 +373,16 @@ def _dac_channel(box, inlet: int) -> int | None:
         return None
 
 
+def _may_carry_audio(box, outlet: int) -> bool:
+    """False only for an outlet known not to carry audio: typed non-signal
+    (``int``, ``bang``, ...) or untyped on a box that cannot output signal."""
+    types = getattr(box, "outlettype", None) or []
+    kind = types[outlet] if 0 <= outlet < len(types) else ""
+    if kind:
+        return kind in ("signal", "multichannelsignal")
+    return (box.name or "").endswith("~") or box.name in ("p", "patcher", "inlet")
+
+
 def _instrument_patcher(p, path: str, report: dict) -> None:
     import warnings
 
@@ -400,6 +410,12 @@ def _instrument_patcher(p, path: str, report: dict) -> None:
         dst = by_id.get(line.dest_id)
         src = by_id.get(line.source_id)
         if dst is None or src is None or dst.name not in OUTPUT_BOXES:
+            continue
+        # a control cord into dac~ (toggle -> dac~ start/stop) carries no
+        # audio, and MAX refuses it on send~ ("error connecting outlet 1 to
+        # send~ inlet 1", gen-eq-test, MAX 9.2 2026-10-21). An untyped
+        # outlet is audio only for a ~ object, a p subpatcher or an inlet.
+        if not _may_carry_audio(src, line.source_outlet):
             continue
         ch = _dac_channel(dst, line.dest_inlet)
         side = {1: "L", 2: "R"}.get(ch)
