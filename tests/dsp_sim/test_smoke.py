@@ -200,3 +200,213 @@ def test_dc_latch_warns_and_passes(tmp_path):
     assert res.verdict == "pass"
     latch = [f for f in res.findings if f.check == "dc" and "dc latch" in f.detail]
     assert latch and all(f.severity == "warn" for f in latch)
+
+
+# ===========================================================================
+# Q35 acceptance (Task 3)
+# ===========================================================================
+
+_PATTERN_FILES = sorted((_REPO / "patterns" / "gen").glob("**/*.gendsp"))
+# Phasor-domain patterns: bipolar noise at swing=min maps -0.1 to -5, so they
+# get a 0..1 ramp on in1 (D-06; no verdict allowlist).
+_PATTERN_INPUTS = {
+    "swing-generator": {1: "phasor:2"},
+    "subdivider": {1: "phasor:2"},
+}
+_BASSOON_GENDSP = _REPO / "patches" / "bassoon-model" / "generated" / "bassoon.gendsp"
+_BASSOON_MAXPAT = _REPO / "patches" / "bassoon-model" / "generated" / "bassoon-model.maxpat"
+_TERRAIN = _REPO / "patches" / "terrain-synth" / "generated" / "terrain-synth.maxpat"
+_BASSOON_INPUTS = {1: "const:220", 2: "const:0.6"}
+
+
+def test_pattern_glob_finds_19_files():
+    assert len(_PATTERN_FILES) == 19, [p.name for p in _PATTERN_FILES]
+
+
+@pytest.mark.parametrize("path", _PATTERN_FILES, ids=[p.stem for p in _PATTERN_FILES])
+def test_pattern_passes(path):
+    results = smoke_file(path, seconds=0.25, inputs=_PATTERN_INPUTS.get(path.stem, {}))
+    assert results, path
+    for r in results:
+        detail = "\n".join(
+            f"  {f.severity} {f.check} [{f.corner}] out{f.output}: {f.detail}"
+            for f in r.findings
+        )
+        assert r.verdict == "pass", f"{r.label}: {r.verdict} {r.reason}\n{detail}"
+
+
+def test_corners_default_runs_one_corner():
+    (r,) = smoke_file(_PATTERN_FILES[0], seconds=0.1, corners="default")
+    assert r.corners == 1
+
+
+def test_bassoon_gendsp_runs():
+    results = smoke_file(
+        _BASSOON_GENDSP, seconds=0.1, corners="default", inputs=_BASSOON_INPUTS
+    )
+    assert len(results) == 1
+    (r,) = results
+    assert r.verdict != "unsupported", r.reason
+    assert r.corners == 1
+    assert not [f for f in r.findings if f.check == "nonfinite"], r.findings
+
+
+def test_bassoon_maxpat_runs_through_sibling_gendsp():
+    results = smoke_file(
+        _BASSOON_MAXPAT, seconds=0.1, corners="default", inputs=_BASSOON_INPUTS
+    )
+    assert len(results) == 1, [r.label for r in results]
+    (r,) = results
+    assert "bassoon.gendsp" in r.label
+    assert r.verdict != "unsupported", r.reason
+    assert not [f for f in r.findings if f.check == "nonfinite"], r.findings
+
+
+def _safe_gain_code() -> str:
+    data = json.loads(_SAFE_GAIN.read_text())
+    (code,) = [
+        e["box"]["code"] for e in data["patcher"]["boxes"]
+        if e["box"].get("maxclass") == "codebox"
+    ]
+    return code
+
+
+def _maxpat(tmp_path: Path, name: str, boxes: list) -> Path:
+    data = {"patcher": {"fileversion": 1, "boxes": [{"box": b} for b in boxes], "lines": []}}
+    path = tmp_path / f"{name}.maxpat"
+    path.write_text(json.dumps(data))
+    return path
+
+
+def test_non_codebox_gen_operator_is_unsupported(tmp_path, capsys):
+    path = _gendsp(tmp_path, "mixed", _safe_gain_code(), extra_boxes=["* 0.5"])
+    (r,) = smoke_file(path, seconds=0.1)
+    assert r.verdict == "unsupported"
+    assert "non-codebox" in r.reason and "* 0.5" in r.reason
+    assert main(["smoke", str(path), "--seconds", "0.1"]) == 3
+
+
+def test_embedded_gen_maxpat_is_discovered_and_passes(tmp_path):
+    from src.maxpat import Patcher
+
+    patcher = Patcher()
+    patcher.add_gen(_safe_gain_code(), 1, 1)
+    path = tmp_path / "embedded.maxpat"
+    path.write_text(json.dumps(patcher.to_dict()))
+    results = smoke_file(path, seconds=0.1)
+    assert len(results) == 1
+    assert results[0].verdict == "pass", results[0]
+    assert "codebox 1" in results[0].label
+
+
+def test_external_gendsp_not_found(tmp_path):
+    path = _maxpat(tmp_path, "ext", [{"maxclass": "newobj", "text": "gen~ no-such-engine"}])
+    (r,) = smoke_file(path, seconds=0.1)
+    assert r.verdict == "unsupported"
+    assert "external gendsp not found" in r.reason
+
+
+@pytest.mark.parametrize(
+    "text", ["gen~ ../evil", "gen~ sub/engine", "mc.gen~ @gen ../x.gendsp"],
+    ids=["dotdot", "slash", "at-gen-dotdot"],
+)
+def test_external_gendsp_name_must_be_plain(tmp_path, text):
+    path = _maxpat(tmp_path, "ext", [{"maxclass": "newobj", "text": text}])
+    (r,) = smoke_file(path, seconds=0.1)
+    assert r.verdict == "unsupported"
+    assert "not a plain file name" in r.reason
+
+
+def test_terrain_synth_discovery():
+    from src.maxpat.dsp_sim.smoke import discover_codeboxes
+
+    entries = discover_codeboxes(_TERRAIN)
+    ok = [e for e in entries if e.status == "ok"]
+    skipped = [e for e in entries if e.status == "skipped"]
+    assert len(ok) == 4, [e.label for e in entries]
+    assert len(skipped) == 2, [e.label for e in entries]
+    assert all("jit.gen" in e.reason for e in skipped)
+    assert len(entries) == 6
+
+
+def test_maxpat_without_gen_exits_3(tmp_path, capsys):
+    path = _maxpat(tmp_path, "plain", [
+        {"maxclass": "newobj", "text": "cycle~ 440"},
+        {"maxclass": "comment", "text": "gen~ not really"},
+    ])
+    assert main(["smoke", str(path), "--seconds", "0.1"]) == 3
+
+
+def test_json_report(capsys):
+    rc = main(["smoke", str(_SAFE_GAIN), "--seconds", "0.1", "--json"])
+    report = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert set(report) >= {
+        "path", "seconds", "samplerate", "seed", "corners", "exit_code", "codeboxes",
+    }
+    assert report["exit_code"] == 0
+    (cb,) = report["codeboxes"]
+    assert set(cb) >= {"label", "verdict", "reason", "corners", "findings"}
+    assert cb["findings"], cb
+    assert set(cb["findings"][0]) >= {"check", "severity", "corner", "output", "detail"}
+
+
+def test_buffer_option_resizes_buffer(tmp_path, capsys):
+    # dim 1000 and 2 channels -> out1 = 4.0 (passes); anything else peaks > 4.
+    code = 'Buffer buf("bufname"); out1 = dim(buf) / 250 + (channels(buf) != 2) * 10;'
+    path = _gendsp(tmp_path, "bufdim", code)
+    assert main(["smoke", str(path), "--seconds", "0.1"]) == 1
+    assert main(["smoke", str(path), "--seconds", "0.1", "--buffer", "bufname=1000:2"]) == 0
+    (r,) = smoke_file(path, seconds=0.1, buffers={"bufname": (1000, 2)})
+    assert r.verdict == "pass"
+    player = _REPO / "patterns" / "gen" / "buffer" / "buffer-player.gendsp"
+    assert main(["smoke", str(player), "--seconds", "0.1", "--buffer", "bufname=1000:2"]) == 0
+
+
+@pytest.mark.parametrize("spec", ["bufname=abc", "bufname=0", "nofmt", "bufname=10:0"])
+def test_malformed_buffer_exits_2(spec, capsys):
+    assert main(["smoke", str(_SAFE_GAIN), "--buffer", spec]) == 2
+
+
+# ===========================================================================
+# Guards: no string evaluation (T-urs-01) and no save gate (D-07)
+# ===========================================================================
+
+_DSP_SIM = _REPO / "src" / "maxpat" / "dsp_sim"
+
+
+def test_no_string_evaluation_in_smoke_modules():
+    import ast
+
+    for name in ("genexpr_interp.py", "smoke.py", "cli.py"):
+        tree = ast.parse((_DSP_SIM / name).read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                assert node.func.id not in {"eval", "exec", "compile", "__import__"}, (
+                    name, node.lineno, node.func.id,
+                )
+            if name != "cli.py" and isinstance(node, (ast.Import, ast.ImportFrom)):
+                mods = (
+                    [a.name for a in node.names] if isinstance(node, ast.Import)
+                    else [node.module or ""]
+                )
+                assert not any(m.split(".")[0] == "importlib" for m in mods), (name, mods)
+
+
+def test_smoke_is_not_imported_outside_dsp_sim():
+    import ast
+
+    banned = {"src.maxpat.dsp_sim.smoke", "src.maxpat.dsp_sim.genexpr_interp"}
+    for path in sorted((_REPO / "src" / "maxpat").rglob("*.py")):
+        if _DSP_SIM in path.parents:
+            continue
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                mod = node.module or ""
+                names = [mod] + [f"{mod}.{a.name}" for a in node.names]
+            else:
+                continue
+            assert not banned.intersection(names), (str(path), node.lineno, names)
