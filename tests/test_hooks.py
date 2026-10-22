@@ -362,3 +362,65 @@ class TestWriteAndSync:
             fpath.write_text(code)
             write_js(code, fpath)
             mock_sync.assert_called_once()
+
+
+class TestAtomicWrite:
+    """_write_and_sync goes through atomic_io.atomic_write_bytes (Q36, D-05)."""
+
+    def test_replace_failure_keeps_original(self, tmp_path, monkeypatch):
+        from src.maxpat.hooks import _write_and_sync
+
+        p = tmp_path / "f.maxpat"
+        p.write_bytes(b"original")
+
+        def _fail(*a, **k):
+            raise OSError("replace failed")
+
+        monkeypatch.setattr("src.maxpat.atomic_io.os.replace", _fail)
+        with pytest.raises(OSError):
+            _write_and_sync(p, "new")
+        assert p.read_bytes() == b"original"
+        assert list(p.parent.glob(".atomic-*.tmp")) == []
+
+    def test_mode_kept(self, tmp_path):
+        import os
+        import stat
+        from src.maxpat.hooks import _write_and_sync
+
+        p = tmp_path / "f.maxpat"
+        p.write_text("old")
+        os.chmod(p, 0o640)
+        _write_and_sync(p, "new")
+        assert stat.S_IMODE(os.stat(p).st_mode) == 0o640
+        assert p.read_text() == "new"
+
+    def test_symlink_replaced_through_link(self, tmp_path):
+        from src.maxpat.hooks import _write_and_sync
+
+        target = tmp_path / "target.maxpat"
+        target.write_text("old")
+        link = tmp_path / "link.maxpat"
+        link.symlink_to(target)
+        _write_and_sync(link, "x")
+        assert link.is_symlink()
+        assert target.read_text() == "x"
+
+    @pytest.mark.filterwarnings("ignore:.*not auto-committed:UserWarning")
+    def test_save_patch_roundtrip_writes_atomically(self, tmp_path, monkeypatch):
+        import src.maxpat.atomic_io as atomic_io
+        from src.maxpat.hooks import save_patch_roundtrip, format_patch_text
+
+        calls = []
+        real = atomic_io.atomic_write_bytes
+
+        def _spy(path, payload):
+            calls.append((path, payload))
+            return real(path, payload)
+
+        monkeypatch.setattr("src.maxpat.hooks.atomic_write_bytes", _spy)
+        d = {"patcher": {"boxes": [], "lines": []}}
+        fpath = tmp_path / "tiny.maxpat"
+        save_patch_roundtrip(d, fpath)
+        assert len(calls) == 1
+        assert calls[0][1] == format_patch_text(d).encode("utf-8")
+        assert fpath.read_bytes() == format_patch_text(d).encode("utf-8")

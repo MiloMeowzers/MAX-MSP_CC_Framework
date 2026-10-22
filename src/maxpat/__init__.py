@@ -43,6 +43,8 @@ from src.maxpat.hooks import (
     StaleFileError,
     SaveGateWarning,
 )
+from src.maxpat.edit_session import edit_patch, EditSession
+from src.maxpat.patch_diff import PatchDiff, DiffEntry, diff_patch_dicts, DIFF_KINDS
 from src.maxpat.codegen import (
     build_genexpr,
     parse_genexpr_io,
@@ -97,6 +99,11 @@ __all__ = [
     "format_patch_text",
     "save_patch_roundtrip",
     "read_patch",
+    "edit_patch",
+    "EditSession",
+    "PatchDiff",
+    "DiffEntry",
+    "diff_patch_dicts",
     # Code generation
     "build_genexpr",
     "parse_genexpr_io",

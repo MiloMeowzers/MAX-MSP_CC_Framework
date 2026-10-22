@@ -37,7 +37,8 @@ only under ``patches/<project>/`` of a git repository, and return the commit
 hash (write_gendsp/write_js as a ``commit_hash`` attribute on their usual
 return value) or None with a UserWarning giving the reason. save_patch_roundtrip
 raises StaleFileError when original_text no longer matches the file on disk;
-``force=True`` overwrites with a warning.
+``force=True`` overwrites with a warning. All three writers write atomically
+(temp file + fsync + os.replace through atomic_io.atomic_write_bytes; Q36).
 """
 
 from __future__ import annotations
@@ -45,7 +46,7 @@ from __future__ import annotations
 import copy
 import functools
 import json
-import os
+import os  # noqa: F401 -- tests patch src.maxpat.hooks.os.fsync (the global os.fsync)
 import re
 import warnings
 from collections import Counter
@@ -54,6 +55,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from src.maxpat.validation import validate_patch, has_blocking_errors, ValidationResult
 from src.maxpat.db_lookup import SCOPE_BY_SUFFIX
+from src.maxpat.atomic_io import atomic_write_bytes
 
 if TYPE_CHECKING:
     from src.maxpat.patcher import Patcher
@@ -135,11 +137,19 @@ def _auto_commit_saved_file(path: Path) -> str | None:
 
 
 def _write_and_sync(path: Path, content: str) -> None:
-    """Write content to file and fsync to ensure Finder/MAX see changes."""
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(content)
-        f.flush()
-        os.fsync(f.fileno())
+    """Write content atomically and fsync it, so Finder/MAX see the change (Q36).
+
+    The one writer behind save_patch_roundtrip, write_gendsp and write_js:
+    ``atomic_io.atomic_write_bytes`` writes a temp file in the target's
+    directory, fsyncs it, gives it the existing file's mode (the umask
+    default for a new file) and ``os.replace``s the target, so a crash or
+    failure never leaves a partial file and no temp file is left behind.
+    The path is resolved first: a symlink keeps its link and the real file
+    is replaced. The bytes are ``content`` encoded as UTF-8, identical to
+    the old text-mode write on POSIX. The file gets a new inode, so extended
+    attributes on the old file are dropped.
+    """
+    atomic_write_bytes(Path(path).resolve(), content.encode("utf-8"))
 
 
 def finalize_patch(
