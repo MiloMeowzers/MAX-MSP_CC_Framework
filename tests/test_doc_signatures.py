@@ -63,6 +63,7 @@ _INDEX_MODULES = (
     "src.maxpat.aesthetics",
     "src.maxpat.testing",
     "src.maxpat.m4l_polish",
+    "src.maxpat.diagnose",
 )
 
 
