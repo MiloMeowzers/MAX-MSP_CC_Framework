@@ -489,6 +489,58 @@ class TestI6ApplyAliases:
         assert results["nope.obj"]["status"] == "aborted"
         assert results["jit.gl.fresh"]["status"] == "aborted"
 
+    def test_shadowed_flag_aliases_an_rnbo_shadowed_name(self, world: dict) -> None:
+        from src.maxpat.db_lookup import ObjectDatabase
+
+        _objectfile_world(world)
+        path = self._seed_aliases(world)
+        assert ObjectDatabase(world["db_root"]).lookup("list.len")["domain"] == "RNBO"
+        assert _run(world, "--apply", "aliases", "--shadowed", "--names", "list.len") == 0
+        assert json.loads(path.read_text())["aliases"]["list.len"] == "zl.len"
+        assert ObjectDatabase(world["db_root"]).lookup("list.len")["name"] == "zl.len"
+
+    def test_shadowed_flag_still_skips_a_max_resolution(self, world: dict) -> None:
+        _objectfile_world(world)
+        path = self._seed_aliases(world)
+        before = path.read_bytes()
+        out = world["repo"].parent / "aliases-report.json"
+        code = _run(
+            world, "--apply", "aliases", "--shadowed", "--names", "old", "--json", str(out),
+        )
+        assert code == 0
+        assert path.read_bytes() == before
+        results = {r["name"]: r for r in json.loads(out.read_text())["applied"]["aliases"]}
+        assert results["old"]["status"] == "skipped"
+
+    def test_an_override_keyed_name_is_aborted(self, world: dict) -> None:
+        # An alias would silently retarget this override onto the candidate.
+        # The override needs a base entry to load, so the realistic shape is
+        # an RNBO-shadowed name (the list.* family before Q38).
+        _objectfile_world(world)
+        path = self._seed_aliases(world)
+        overrides = world["db_root"] / "overrides.json"
+        data = json.loads(overrides.read_text())
+        data["objects"]["list.len"] = {"digest": "expert note"}
+        overrides.write_text(json.dumps(data, indent=2, ensure_ascii=True))
+        before = path.read_bytes()
+        out = world["repo"].parent / "aliases-report.json"
+        code = _run(
+            world, "--apply", "aliases", "--shadowed", "--names", "list.len", "--json", str(out),
+        )
+        assert code == 1
+        assert path.read_bytes() == before
+        result = json.loads(out.read_text())["applied"]["aliases"][0]
+        assert result["status"] == "aborted"
+        assert "overrides.json" in result["reason"]
+        assert "list.len" in result["reason"] and "zl.len" in result["reason"]
+
+    def test_shadowed_requires_apply_aliases(self, world: dict) -> None:
+        _objectfile_world(world)
+        before = _tree_bytes(world["db_root"])
+        assert _run(world, "--shadowed") == 2
+        assert _run(world, "--apply", "groups", "--shadowed") == 2
+        assert _tree_bytes(world["db_root"]) == before
+
     def test_a_failed_reload_restores_the_file(
         self, world: dict, monkeypatch: pytest.MonkeyPatch
     ) -> None:

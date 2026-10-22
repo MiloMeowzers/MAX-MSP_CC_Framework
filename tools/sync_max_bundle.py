@@ -99,6 +99,7 @@ Usage
     python3 tools/sync_max_bundle.py --apply inherited --attributes alpha_mode
     python3 tools/sync_max_bundle.py --apply groups
     python3 tools/sync_max_bundle.py --apply aliases --names hslider mc.times~
+    python3 tools/sync_max_bundle.py --apply aliases --shadowed --names list.len
     python3 tools/sync_max_bundle.py --apply idioms
     python3 tools/sync_max_bundle.py --refresh-log           # after an apply
     python3 tools/sync_max_bundle.py --snapshot-io /tmp/io.json
@@ -2720,24 +2721,41 @@ def apply_inherited(
     return applied
 
 
-def apply_aliases(index: dict, db_root: Path, names: list[str]) -> list[dict]:
+def _override_keys(db_root: Path) -> set[str]:
+    """The literal ``objects`` keys of <db_root>/overrides.json (read only)."""
+    path = Path(db_root) / "overrides.json"
+    if not path.exists():
+        return set()
+    data = json.loads(path.read_text(encoding="utf-8"))
+    objects = data.get("objects") if isinstance(data, dict) else None
+    return set(objects) if isinstance(objects, dict) else set()
+
+
+def apply_aliases(index: dict, db_root: Path, names: list[str], shadowed: bool = False) -> list[dict]:
     """--apply aliases: add NAMED objectfile aliases to aliases.json (Q30 PD-6).
 
-    Per name: a name lookup() already resolves (any domain, the RNBO-shadowed
-    list.* included) is skipped; no objectfile line, no candidate, or help
-    boxes that disagree with the candidate's counts abort it; otherwise
-    ``aliases[name] = candidate``. After the write the DB must load and
-    resolve every written alias to its candidate, else the original bytes are
-    restored and AliasVerificationFailed is raised.
+    Per name: a name lookup() already resolves is skipped -- except, with
+    ``shadowed`` (``--shadowed``, Q38), a name whose only resolution is an
+    RNBO / Gen entry (the list.* family Max instantiates as zl.*), which
+    proceeds as if unresolved and is aborted when its candidate is itself
+    RNBO / Gen. A name keyed in overrides.json ``objects`` is always aborted:
+    override keys canonicalise through aliases, so an alias would silently
+    retarget that override onto the candidate. No objectfile line, no
+    candidate, or help boxes that disagree with the candidate's counts abort
+    it; otherwise ``aliases[name] = candidate``. After the write the DB must
+    load and resolve every written alias to its candidate, else the original
+    bytes are restored and AliasVerificationFailed is raised.
     """
     db = load_db(db_root)
     records = (index.get("objectfiles") or {}).get("records", {})
+    override_keys = _override_keys(db_root)
     results: list[dict] = []
     additions: dict[str, str] = {}
     for name in names:
         result: dict = {"name": name, "status": "aborted", "notes": {}}
         hit = _muted_lookup(db, name)
-        if hit is not None:
+        shadow_hit = hit is not None and shadowed and hit.get("domain") in _RNBO_GEN_DOMAINS
+        if hit is not None and not shadow_hit:
             results.append(
                 {
                     "name": name,
@@ -2746,6 +2764,8 @@ def apply_aliases(index: dict, db_root: Path, names: list[str]) -> list[dict]:
                 }
             )
             continue
+        if shadow_hit:
+            result["notes"]["shadowed_domain"] = hit.get("domain")
         record = records.get(name)
         if record is None:
             results.append(_abort(result, f"no `max objectfile {name} ...` line in the bundle"))
@@ -2756,6 +2776,26 @@ def apply_aliases(index: dict, db_root: Path, names: list[str]) -> list[dict]:
         if candidate is None:
             results.append(_abort(result, "no candidate target the DB resolves"))
             continue
+        if name in override_keys:
+            results.append(
+                _abort(
+                    result,
+                    f"overrides.json has an entry keyed {name}; an alias would retarget "
+                    f"it onto {candidate} -- remove or move it first",
+                )
+            )
+            continue
+        if shadow_hit:
+            cand_domain = (_muted_lookup(db, candidate) or {}).get("domain")
+            if cand_domain in _RNBO_GEN_DOMAINS:
+                results.append(
+                    _abort(
+                        result,
+                        f"candidate {candidate!r} is itself a {cand_domain} entry; "
+                        "an alias would not reach a Max object",
+                    )
+                )
+                continue
         evidence = objectfile_evidence(index, db, name, candidate)
         result["notes"].update(evidence)
         if evidence["help_io_agrees"] is False:
@@ -3099,6 +3139,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicit allow-list of object names (mandatory for new, define and aliases).",
     )
     parser.add_argument(
+        "--shadowed",
+        action="store_true",
+        help=(
+            "With --apply aliases only: let an alias replace an RNBO/Gen-only "
+            "resolution, for names `max objectfile` maps to a Max object (the "
+            "list.* family -> zl.*)."
+        ),
+    )
+    parser.add_argument(
         "--attributes",
         nargs="+",
         default=None,
@@ -3160,6 +3209,9 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    if args.shadowed and "aliases" not in modes:
+        print("error: --shadowed applies only to --apply aliases.", file=sys.stderr)
+        return 2
     if "inherited" in modes and not args.attributes:
         print(
             "error: --apply inherited requires --attributes: inherited group "
@@ -3199,7 +3251,9 @@ def main(argv: list[str] | None = None) -> int:
                 if "idioms" in modes:
                     applied["idioms"] = apply_idioms(index, db_root)
                 if "aliases" in modes:
-                    applied["aliases"] = apply_aliases(index, db_root, args.names)
+                    applied["aliases"] = apply_aliases(
+                        index, db_root, args.names, shadowed=args.shadowed
+                    )
                     if any(r["status"] == "aborted" for r in applied["aliases"]):
                         exit_code = 1
             except (
