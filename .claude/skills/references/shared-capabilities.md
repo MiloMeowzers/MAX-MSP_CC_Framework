@@ -228,7 +228,9 @@ yourself or use `add_overlay_readout` explicitly.
 
 ## Editing Functions
 
-- `read_patch(path)` -- load .maxpat into (Patcher, original_text) tuple
+- `with edit_patch(path) as patcher:` -- edit session on an existing patch (Q36): re-reads the file on entry; a clean exit routes touched cords, sets contrast on touched boxes and saves through the gate (keep `session = edit_patch(path)` to read `session.diff`, `session.saved`, `session.commit_hash`)
+- `patcher.diff(other)` -- semantic diff from this Patcher to `other` (boxes added/removed/moved/resized, text, attrs, presentation, cords, nested paths); `.render()` gives the compact text
+- `read_patch(path)` -- load .maxpat into (Patcher, original_text) tuple (analysis, or the manual path)
 - `patcher.analyze()` -- structured 7-facet summary of patch contents
 - `patcher.find_box(name=..., maxclass=..., text=...)` -- search for a single object
 - `patcher.find_boxes(name=..., maxclass=..., text=...)` -- search for multiple objects
@@ -237,25 +239,34 @@ yourself or use `add_overlay_readout` explicitly.
 - `patcher.replace_box_safe(box, new_name, args=[...])` -- swap object type keeping the box's identity (list position, presentation rect, varname, colours, parameter blocks); rewires every cord whose outlet/inlet index still exists on the new box and returns the rest in `result.orphaned` (CLAUDE.md Rule #8). Plain `replace_box(box, new_name, args=...)` keeps the identity too but orphans every connection.
 - `patcher.remove_box(box)` -- remove object and clean up connections
 - `patcher.connected_components()` -- identify groups for section rebuild scope
-- `save_patch_roundtrip(patcher.to_dict(), path, original_text)` -- save preserving positions
+- `save_patch_roundtrip(patcher.to_dict(), path, original_text)` -- save preserving positions (manual path; the session calls it for you)
 
 ## Edit Workflow
 
-1. Load patch: `patcher, original_text = read_patch(path)`
-2. Analyze: `summary = patcher.analyze()`
-3. Find targets: `box = patcher.find_box(name="target_object")`
-4. Make changes: `result = patcher.modify_box(box, args=["new_value"])`
-5. Validate: `results = validate_patch(patcher)`
-6. Save: `save_patch_roundtrip(patcher.to_dict(), path, original_text)`
+One Python script, one session (a `with` block cannot span separate tool calls):
+
+```python
+session = edit_patch(path)
+with session as patcher:
+    summary = patcher.analyze()                        # analyze
+    box = patcher.find_box(name="target_object")       # find targets
+    result = patcher.modify_box(box, args=["new_value"])  # make changes
+    results = validate_patch(patcher)                  # validate; raise here to discard
+print(session.diff.render())                           # show the user what changed
+```
+
+Leaving the block saves: touched-cord routing, contrast on touched boxes, stale check + save gate, atomic write in the file's own layout, path-scoped commit. A no-op session writes nothing. `StaleFileError` / `PatchValidationError` propagate with the file untouched -- re-run the session after fixing; `edit_patch(path, force=True)` only with user confirmation.
 
 ## Output Protocol (Edited Patches)
 
 1. Load and analyze existing patch via `read_patch()` and `patcher.analyze()`
-2. Make surgical edits or section rebuild using find/modify/replace/insert/remove
-3. Finalize patch: `finalize_patch(patcher, is_new=False)` -- never clears existing midpoints: it routes only cords that have none and are new or touch a box you added or moved, and fills empty inlet/outlet assistance comments (saved to disk), without repositioning existing objects
-4. Validate via `validate_patch(patcher)`
-5. Return for critic review
-6. Save via `save_patch_roundtrip()`
+2. Make surgical edits or section rebuild using find/modify/replace/insert/remove, inside one session: `with edit_patch(path) as patcher:`
+3. Validate via `validate_patch(patcher)` inside the block (raise to discard on blockers)
+4. Return for critic review
+5. Leave the block to save: exit routes touched cords (never clears existing midpoints), sets text contrast on touched boxes (added, moved, presentation-changed) and saves through the gate with `save_patch_roundtrip()`; show `session.diff.render()` to the user
+6. Manual path (no session): `finalize_patch(patcher, is_new=False)` then `save_patch_roundtrip(patcher.to_dict(), path, original_text)` -- finalize also fills empty inlet/outlet assistance comments, which the session does not
+
+Moving or adding a panel does not recolour untouched text over it: treat the layout critic's "Low contrast text" warnings as must-fix (Rule #9).
 
 ## Version Comment
 
@@ -268,7 +279,7 @@ yourself or use `add_overlay_readout` explicitly.
 
 Every `save_patch_roundtrip()`, `write_gendsp()`, and `write_js()` call automatically commits the saved file to git via `auto_commit_patch()`. This prevents work loss from stash operations, branch switches, or concurrent Claude instances.
 
-Before writing, `save_patch_roundtrip()` and `write_gendsp()` also run a save gate (validation + critics against the `original_text` / HEAD / on-disk baseline): a save that introduces a blocker or reorders a subpatcher's inlets/outlets raises `PatchValidationError` and nothing is written or committed; removed cords emit a `SaveGateWarning`. Fix the findings; `force=True` bypasses only with user confirmation. See CLAUDE.md Rule #7.
+Before writing, `save_patch_roundtrip()` and `write_gendsp()` (and the `edit_patch` session exit, which calls `save_patch_roundtrip()`) also run a save gate (validation + critics against the `original_text` / HEAD / on-disk baseline): a save that introduces a blocker or reorders a subpatcher's inlets/outlets raises `PatchValidationError` and nothing is written or committed; removed cords emit a `SaveGateWarning`. Fix the findings; `force=True` bypasses only with user confirmation. See CLAUDE.md Rule #7. All writers write atomically (temp file + fsync + `os.replace`), so a crash never leaves a partial file.
 
 ### Rules
 

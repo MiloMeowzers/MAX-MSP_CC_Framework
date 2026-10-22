@@ -569,7 +569,7 @@ def _set_textcolor(box: Box, color: list[float]) -> None:
     box.extra_attrs["textcolor"] = list(color)
 
 
-def _apply_text_contrast(patcher: Patcher) -> int:
+def _apply_text_contrast(patcher: Patcher, *, only_ids=None) -> int:
     """Shared engine behind ensure_text_contrast() and repair_text_contrast().
 
     Panel layers and the patcher background come from the same helpers the
@@ -577,6 +577,13 @@ def _apply_text_contrast(patcher: Patcher) -> int:
     :func:`resolve_patcher_background`; Q26 / E7). Each box's color comes
     from :func:`choose_text_color`; only changed colors are written and
     counted. Returns the number of boxes whose textcolor changed.
+
+    ``only_ids`` (private, keyword-only; Q36 / D-03): when not None, only
+    top-level boxes whose id is in it are considered; panel layers and the
+    patcher background still come from every panel. It exists for
+    ``edit_patch`` sessions, which set contrast on the boxes they added,
+    moved or put into presentation and never restyle the rest of an
+    approved patch. The public wrappers never pass it.
     """
     panels = [b for b in patcher.boxes if b.maxclass == "panel"]
     patcher_bg = resolve_patcher_background(patcher.props)
@@ -588,6 +595,8 @@ def _apply_text_contrast(patcher: Patcher) -> int:
 
     changed = 0
     for box in patcher.boxes:
+        if only_ids is not None and box.id not in only_ids:
+            continue
         if box.maxclass == "panel":
             continue
         if not is_text_contrast_target(box.maxclass, box.extra_attrs):

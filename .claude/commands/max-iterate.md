@@ -46,11 +46,11 @@ Apply modifications to existing .maxpat patches using the analyze-first protocol
    - Multiple .maxpat files: infer from the user's change description (match keywords to filenames)
    - Ambiguous: ask the user which file to edit
 
-5. **Load patch** -- load the target file using read_patch:
+5. **Load patch for analysis** -- load the target file using read_patch:
    ```python
    patcher, original_text = read_patch(path)
    ```
-   This returns a Patcher instance for editing and the original text for round-trip saving.
+   This read is for analysis and discussion only. The edit itself happens later in one `edit_patch(path)` session (step 14), which re-reads the file on entry, so a MAX save in between is picked up rather than overwritten.
 
 6. **Analyze patch** (mandatory before any edits) -- run structural analysis and display it to the user:
    ```python
@@ -94,7 +94,23 @@ After all flagged phases complete, proceed to the standard edit flow (steps 10+)
     - The analysis summary as context
     - Project context
 
-14. **Execute edits** -- the specialist agent applies changes via Patcher API methods:
+14. **Execute edits inside one edit_patch session** -- the specialist agent applies changes via Patcher API methods inside a single `with` block; steps 15-17 run inside the same block, and leaving it is the save (step 18):
+    ```python
+    from src.maxpat import edit_patch, validate_patch
+    from src.maxpat.critics import review_patch
+    from src.maxpat.project import bump_version, update_version_comment
+
+    session = edit_patch(path)
+    with session as patcher:
+        box = patcher.find_box(name="cycle~")        # find / modify / replace / insert / remove
+        patcher.modify_box(box, args=["220"])
+        results = validate_patch(patcher)            # step 15
+        review = review_patch(patcher.to_dict())     # step 15 (blockers: raise here to discard)
+        new_version = bump_version(project_dir, "patch", description, files_changed=[path.name])  # step 16
+        update_version_comment(patcher, new_version)  # step 17
+    print(session.diff.render())                     # step 18: show the user what changed
+    ```
+    Run the whole block in ONE Python script: a `with` block cannot span separate tool calls. API inside the block:
     - `find_box()` / `find_boxes()` for locating targets
     - `modify_box()` for in-place attribute changes
     - `replace_box_safe()` for swapping object types (auto-rewires only on matching inlet/outlet counts; otherwise rewire `result.orphaned`, Rule #8)
@@ -106,18 +122,24 @@ After all flagged phases complete, proceed to the standard edit flow (steps 10+)
     - Run `validate_patch(patcher)` for structural validation
     - Run `review_patch(patcher.to_dict())` via the max-critic skill
     - Same quality gate as `/max-build` -- blockers require revision; warnings and notes are listed in the summary, never written into the patch or code
+    - On blockers, raise inside the `with` block to discard the edit (nothing is routed, written or committed), then fix and re-run the session
 
 16. **Bump version** -- call `bump_version(project_dir, "patch", description, files_changed=[path.name])` where `description` is a short summary of the change. Use `"minor"` for significant reworks, `"major"` for breaking changes. Store the returned version string for the next step.
 
 17. **Embed version comment** -- call `update_version_comment(patcher, new_version)` to add or update the version comment box in the patch. This MUST happen after bump (to get the new string) and before save (so the comment is in the saved file). The version comment is a visible `v0.1.0`-style comment placed in the top-right of the patch. Agents MUST NOT skip this step.
 
-18. **Save patch** -- write back using round-trip save to preserve positions and indentation:
-    ```python
-    save_patch_roundtrip(patcher.to_dict(), path, original_text)
-    ```
-    This preserves the original file's indentation, key ordering, and any metadata that the Patcher model does not explicitly track.
+18. **Save = leaving the with-block** -- a clean exit from `with session as patcher:` saves:
+    - routes touched cords only (new cords, and cords of boxes added or moved, that have no midpoints; existing midpoints are never cleared);
+    - sets text contrast on added, moved and presentation-changed boxes only (no whole-patch restyle);
+    - runs the save gate, including the stale check, and writes atomically through `save_patch_roundtrip` in the file's own JSON layout (indentation, key ordering and untracked metadata preserved);
+    - commits only that path (`session.commit_hash`). A no-op session writes and commits nothing (`session.saved` is False).
 
-19. **Commit to git** -- `save_patch_roundtrip()` auto-commits the .maxpat file, but also explicitly commit the version bump and any other changed files:
+    Show `session.diff.render()` to the user as "what changed".
+    - `StaleFileError`: MAX saved the file in the meantime -- re-run the session (it re-reads the file).
+    - `PatchValidationError`: fix the findings and re-run. `versions.json` was already bumped in step 16, so reuse the stored `new_version` and do not bump twice.
+    - `edit_patch(path, force=True)` bypasses the gate -- only with user confirmation (CLAUDE.md Rule #7).
+
+19. **Commit to git** -- the session already committed the .maxpat; also explicitly commit the version bump (`versions.json`) and any other changed files:
     ```python
     from src.maxpat.project import auto_commit_patch
     auto_commit_patch(project_dir, base_dir, description=f"v{new_version}: {change_description}", files=[str(path), str(project_dir / "versions.json")])
@@ -134,7 +156,7 @@ After all flagged phases complete, proceed to the standard edit flow (steps 10+)
 ## Python Modules
 
 ```python
-from src.maxpat import read_patch, save_patch_roundtrip, validate_patch, Patcher
+from src.maxpat import edit_patch, read_patch, save_patch_roundtrip, validate_patch, Patcher
 from src.maxpat.project import get_active_project, set_active_project, list_projects, update_status, bump_version, update_version_comment, auto_commit_patch
 from src.maxpat.critics import review_patch, CriticResult
 ```
