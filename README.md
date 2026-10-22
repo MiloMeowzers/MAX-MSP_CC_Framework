@@ -170,6 +170,7 @@ The `patches/` directory contains example and user-created projects:
 | **mixer** | Virtual mixing console with channel strips, aux buses, master section, and per-track sends | `.maxpat`, `.js` |
 | **performancepatchtest** | Live performance cue system with multiband compression, feedback delay, distortion, and soundfile playback | `.maxpat`, `.gendsp` |
 | **physics-composition** | Audiovisual instrument where a 2D bouncing-ball simulation (dada.bounce) drives microtonal note generation with bach.roll score display | `.maxpat` |
+| **q29-check** | Throwaway MAX check patch for the Q29 fixes: write_gendsp in-place grow, replace_box_safe identity + rewire, add_box companion placement, no-op save byte-identity | `.maxpat`, `.gendsp` |
 | **reverse-delay** | gen~ granular reverse delay ported from the O-ReverseDelay VST, with tempo sync, factory presets, and mono or stereo input | `.maxpat` |
 | **rhythmic-corpus-chopper** | Sample-accurate beat slicer and re-sequencer using FluCoMa onset detection and the Rhythmic Time Toolkit for signal-rate sequencing | `.maxpat`, `.js` |
 | **rhythmic-sampler** | 8-slot sampler with slice-based sequencing, time-stretching, and per-slot FX | `.maxpat`, `.js` |

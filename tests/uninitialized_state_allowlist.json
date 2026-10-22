@@ -323,6 +323,16 @@
         "reason": "On/off toggle with no init route: off at load until clicked, while the DSP keeps its own default. Committed baseline, never edited (fix-plan rule 3); listed in the Q24 SUMMARY."
       }
     ],
+    "patches/q29-check/generated/q29-check.maxpat": [
+      {
+        "severity": "warning",
+        "kind": "uninitialized_state",
+        "box_id": "obj-32",
+        "maxclass": "gain~",
+        "path": "",
+        "reason": "Plain gain~ with parameter_enable 0 and no init route in the Q29 throwaway check patch, so it loads at 0 (silent) until the fader is touched. Committed MAX-confirmed baseline, never edited."
+      }
+    ],
     "patches/reverse-delay/generated/reverse-delay-mono.maxpat": [
       {
         "severity": "warning",
