@@ -103,3 +103,100 @@ def test_legacy_help_still_lists_topology(capsys):
     out = capsys.readouterr().out
     assert "--topology" in out
     assert "smoke" in out
+
+
+# ===========================================================================
+# Ring-out checks (Task 2): self-sustain (D-05) and dc latch (D-06)
+# ===========================================================================
+
+# The real bug class: tanh(x*g)/tanh(g) normalisation inside a feedback loop
+# (genexpr-rules.md "In-loop saturation"). Its small-signal loop gain is
+# feedback * drive / tanh(drive), above unity at the default corner.
+_HISTORY_LATCH = """\
+Param drive(4, min=1, max=10);
+Param feedback(0.6, min=0, max=0.95);
+History y(0);
+y = tanh((in1 - feedback * y) * drive) / tanh(drive);
+out1 = y;
+"""
+
+_UNSTABLE_DELAY = """\
+Param drive(4, min=1, max=10);
+Param feedback(0.6, min=0, max=0.95);
+Delay d(4410);
+tap = d.read(441);
+sat = tanh(tap * drive) / tanh(drive);
+d.write(in1 + feedback * sat);
+out1 = tap;
+"""
+
+_STABLE_TWIN = _UNSTABLE_DELAY.replace(
+    "sat = tanh(tap * drive) / tanh(drive);", "sat = tanh(tap * drive) / drive;"
+)
+
+
+def _sustain_corners(res) -> list:
+    return [f.corner for f in res.findings if f.check == "self_sustain"]
+
+
+def _assert_sustain_pattern(res) -> None:
+    corners = _sustain_corners(res)
+    for prefix in ("default", "drive=max", "feedback=max"):
+        assert any(c.startswith(prefix) for c in corners), (prefix, res.findings)
+    for prefix in ("drive=min", "feedback=min"):
+        assert not any(c.startswith(prefix) for c in corners), (prefix, res.findings)
+    assert all(
+        f.severity == "fail" for f in res.findings if f.check == "self_sustain"
+    )
+
+
+def test_history_latch_fails_self_sustain(tmp_path, capsys):
+    path = _gendsp(tmp_path, "latch", _HISTORY_LATCH)
+    rc = main(["smoke", str(path), "--seconds", "0.25"])
+    out = capsys.readouterr().out
+    assert rc == 1, out
+    (res,) = smoke_file(path, seconds=0.25)
+    assert res.verdict == "fail"
+    _assert_sustain_pattern(res)
+
+
+def test_tanh_over_tanh_delay_fixture_fails_self_sustain(tmp_path, capsys):
+    """The required unstable fixture FAILs at the 1 s default (D-05)."""
+    assert "tanh(tap * drive) / tanh(drive)" in _UNSTABLE_DELAY
+    path = _gendsp(tmp_path, "unstable", _UNSTABLE_DELAY)
+    (res,) = smoke_file(path)
+    assert res.verdict == "fail"
+    _assert_sustain_pattern(res)
+    assert main(["smoke", str(path)]) == 1
+
+
+def test_stable_twin_passes(tmp_path, capsys):
+    path = _gendsp(tmp_path, "stable", _STABLE_TWIN)
+    (res,) = smoke_file(path)
+    assert res.verdict == "pass", res.findings
+    assert main(["smoke", str(path)]) == 0
+
+
+@pytest.mark.parametrize(
+    "kwargs,argv",
+    [
+        ({"inputs": {1: "const:0.1"}}, ["--input", "1=const:0.1"]),
+        ({"ringout": False}, ["--no-ringout"]),
+    ],
+    ids=["const-input", "no-ringout"],
+)
+def test_ringout_needs_default_stimulus(tmp_path, capsys, kwargs, argv):
+    """Documented limit: an override or --no-ringout disables self_sustain."""
+    path = _gendsp(tmp_path, "unstable", _UNSTABLE_DELAY)
+    (res,) = smoke_file(path, seconds=0.25, **kwargs)
+    assert _sustain_corners(res) == [], res.findings
+    main(["smoke", str(path), "--seconds", "0.25"] + argv)
+    assert "self_sustain" not in capsys.readouterr().out
+
+
+def test_dc_latch_warns_and_passes(tmp_path):
+    path = _gendsp(tmp_path, "dc", "out1 = in1 + 0.5;")
+    (res,) = smoke_file(path, seconds=0.25)
+    assert res.verdict == "pass"
+    latch = [f for f in res.findings if f.check == "dc" and "dc latch" in f.detail]
+    assert latch and all(f.severity == "warn" for f in latch)
