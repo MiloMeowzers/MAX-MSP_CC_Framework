@@ -32,7 +32,10 @@ from src.maxpat.project import (
     init_versions, get_version, bump_version, list_versions,
     load_project_config, save_project_config, get_allowed_packages,
 )
-from src.maxpat.testing import generate_test_checklist, save_test_results
+from src.maxpat.testing import (
+    generate_test_checklist, save_test_results,
+    record_confirmation, format_proven_form, append_proven_form,
+)
 ```
 
 ## Capabilities
@@ -101,6 +104,15 @@ This is informational guidance only -- do not auto-scaffold template code into p
 - Save test results with `save_test_results(project_dir, test_name, results_md)`
 - See `references/test-protocol.md` for checklist format and result recording
 
+### Confirmation Lifecycle
+- **Trigger:** the user says a feature works in MAX (a passing checklist item, or in conversation, including after a `/max-iterate` fix).
+- **Record:** `record_confirmation(project_dir, feature, evidence, version=None, max_version=None, files=None)` with the user's own words as `evidence`. It writes `test-results/v<version>-<slug>-confirmed.md` (`<date>-<slug>-confirmed.md` when the project has no versions.json), never overwrites (`-2`, `-3`, ...), rejects private paths and files outside the project, and commits only that path (Rule #7).
+- **Offer:** when the confirmation teaches general MAX knowledge (valid beyond this project), draft a lesson with `format_proven_form(title, rule, form, why, evidence)`, evidence `[confirmed] <project> v<version> (<date>)`.
+- **Evidence tiers:** `[confirmed]`, `[bundle]`, `[code]`, `[observed]`, as defined in `.claude/skills/references/proven-forms.md`; `[confirmed]` needs a version and a date.
+- **Consent:** show the entry verbatim and ask (multiple choice): append as drafted / edit first / skip. Only on append call `append_proven_form(section, title, rule, form, why, evidence)`; it refuses duplicate titles, unknown sections and private paths.
+- **Commit:** `append_proven_form` never commits. Commit `.claude/skills/references/proven-forms.md` by explicit path (`git commit -- .claude/skills/references/proven-forms.md`), never `git add -A`.
+- The full flow is `/max-test` steps 6-7.
+
 ## References
 
 - `references/project-structure.md` -- Standard directory layout for MAX projects
@@ -113,6 +125,7 @@ This is informational guidance only -- do not auto-scaffold template code into p
 - `/max-status` -- Show project overview and progress
 - `/max-switch` -- Change active project
 - `/max-test` -- Generate test checklist from generated patches
+- Whenever the user says a feature works in MAX -- record the confirmation and offer a proven-forms lesson (Confirmation Lifecycle)
 - Any command that needs to read/update project state
 
 ## When NOT to Use
