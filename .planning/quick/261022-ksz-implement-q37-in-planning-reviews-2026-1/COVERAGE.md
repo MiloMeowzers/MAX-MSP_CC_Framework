@@ -1,0 +1,1 @@
+No external API integration: Q37 adds a local console-text matcher over troubleshooting.md, a test-results/proven-forms writer and router markdown; the detector's only signal is the router doc naming "Live API scripting" as a dispatch keyword for max-js-agent, which integrates nothing.
