@@ -181,6 +181,19 @@ def test_output_typo_lint(code, name):
     assert f"'{name}'" in lint[0][1]
 
 
+def test_param_default_and_overrides_are_clamped():
+    """WR-04: gen~ clamps a Param to its declared range (param refpage)."""
+    cb = parse_codebox("Param p(5, min=0, max=1); out1 = p;")
+    assert cb.params[0]["default"] == 1.0
+    assert cb.build().run([], 1)[0][0] == 1.0
+    assert cb.build(params={"p": 9}).run([], 1)[0][0] == 1.0
+    assert cb.build(params={"p": -3}).run([], 1)[0][0] == 0.0
+    assert parse_codebox("Param p(min=0.5, max=1); out1 = p;").params[0]["default"] == 0.5
+    cb = parse_codebox("Param p(7); out1 = p;")
+    assert cb.params[0]["default"] == 7.0
+    assert cb.build(params={"p": -40}).run([], 1)[0][0] == -40.0
+
+
 def test_output_typo_lint_ignores_ordinary_locals():
     assert parse_codebox("t1 = in1; t0 = t1; out1 = t0;").lint == []
 

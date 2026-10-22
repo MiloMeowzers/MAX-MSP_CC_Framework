@@ -83,8 +83,9 @@ class Finding:
     """One check result. ``output`` is 1-based; 0 means the whole codebox."""
 
     check: str        # nonfinite | peak | silence | silent | dc | self_sustain |
-                      # constant_assign | tab_char | output_typo
-    severity: str     # fail | warn
+                      # constant_assign | tab_char | output_typo | unused_input |
+                      # unsupported (an error at one corner, or "all corners")
+    severity: str     # fail | warn | unsupported
     corner: str
     output: int
     detail: str
@@ -349,11 +350,15 @@ def _corners(params: list, mode: str) -> list:
 # ===========================================================================
 
 
-def _driven_checks(run: _Run, samplerate: float, full: bool = True) -> tuple:
+def _driven_checks(run: _Run, samplerate: float, full: bool = True,
+                   excited: bool = True) -> tuple:
     """Driven-window checks on one run. Returns (findings, finite_outputs).
 
     ``full=False`` runs only the nonfinite and peak checks (the self-sustain
-    small run)."""
+    small run). ``excited=False`` skips the permanent-silence check (WR-05):
+    no inlet still changes over the tail of the driven window, so an output
+    that decays there (a 0-inlet decay, a const-driven DC blocker, a finished
+    one-shot player) is correct."""
     findings: list = []
     finite: list = []
     d0, d1 = run.driven
@@ -388,12 +393,13 @@ def _driven_checks(run: _Run, samplerate: float, full: bool = True) -> tuple:
             tail_n = max(1, int(d.size * TAIL_FRACTION))
             early = np.abs(d[:-tail_n])
             tail = np.abs(d[-tail_n:])
-            if early.size and early.max() > ACTIVITY_FLOOR and tail.max() < SILENCE_FLOOR:
+            if (excited and early.size and early.max() > ACTIVITY_FLOOR
+                    and tail.max() < SILENCE_FLOOR):
                 findings.append(Finding(
                     "silence", "fail", run.corner, k,
                     "permanent silence after excitation: last "
                     f"{tail_n / samplerate:.3f} s of the driven window below "
-                    f"{SILENCE_FLOOR:g} while the inputs are still active",
+                    f"{SILENCE_FLOOR:g} while an input is still changing",
                 ))
             mean = float(np.mean(d))
             if abs(mean) > DC_DRIVEN_LIMIT:
@@ -481,8 +487,11 @@ def smoke_codebox(
 ) -> CodeboxResult:
     """Smoke one codebox at every corner and return its verdict.
 
-    ``inputs`` maps a 1-based inlet to a SPEC string (keys beyond the
-    codebox's inlet count are ignored). Raises ValueError on bad arguments.
+    ``inputs`` maps a 1-based inlet to a SPEC string (a key beyond the
+    codebox's inlet count is not applied and gives an ``unused_input`` WARN).
+    An error at one corner is an ``unsupported`` finding at that corner; the
+    other corners still run, so a FAIL is never lost. Raises ValueError on
+    bad arguments.
     """
     n = _validate_run_args(seconds, samplerate)
     samplerate = float(samplerate)
@@ -513,18 +522,34 @@ def smoke_codebox(
     driven = (0, nd) if any_default else (0, n)
     ring = (nd, n) if (ringout and all_default) else None
     signals = [_signal(s, k, n, samplerate, seed) for k, s in enumerate(specs, 1)]
+    # WR-05: permanent silence only means something while an input still
+    # changes over the tail of the driven window.
+    d0, d1 = driven
+    tail_n = max(1, int((d1 - d0) * TAIL_FRACTION))
+    excited = cb.n_in >= 1 and any(
+        float(np.ptp(sig[d1 - tail_n:d1])) > ACTIVITY_FLOOR for sig in signals
+    )
 
     findings: list = [
         Finding("constant_assign", "warn", "build", 0, w) for w in cb.warnings
     ]
     findings.extend(Finding(check, "warn", "build", 0, detail) for check, detail in cb.lint)
+    for k in sorted(parsed_inputs):  # WR-06
+        if k > cb.n_in:
+            raw = next(v for kk, v in raw_inputs.items() if int(kk) == k)
+            findings.append(Finding(
+                "unused_input", "warn", "build", 0,
+                f"--input {k}={raw} not applied: this codebox has {cb.n_in} inlet(s)",
+            ))
+
     corner_list = _corners(cb.params, corners)
-    try:
-        for corner, cparams in corner_list:
+    errors: list = []   # (finding, legacy reason text), one per errored corner
+    for corner, cparams in corner_list:
+        try:
             prog = cb.build(params=cparams, samplerate=samplerate, seed=seed, buffers=buffers)
             outs = prog.run(signals, n)
             run = _Run(corner, cparams, outs, driven, ring)
-            f, finite = _driven_checks(run, samplerate)
+            f, finite = _driven_checks(run, samplerate, excited=excited)
             findings.extend(f)
             if ring is None:
                 continue
@@ -540,22 +565,33 @@ def smoke_codebox(
             f_small, _ = _driven_checks(small_run, samplerate, full=False)
             findings.extend(f_small)
             findings.extend(_ringout_checks(run, small_outs, finite, samplerate))
-    except Unsupported as exc:
-        return CodeboxResult(label, "unsupported", str(exc), 0, [])
-    except Exception as exc:  # never pass on an interpreter error
-        return CodeboxResult(
-            label, "unsupported", f"interpreter error: {type(exc).__name__}: {exc}", 0, []
-        )
+        except Unsupported as exc:  # WR-01: record per corner, keep earlier findings
+            legacy = str(exc)
+            detail = legacy[len("unsupported: "):] if legacy.startswith("unsupported: ") else legacy
+            errors.append((Finding("unsupported", "unsupported", corner, 0, detail), legacy))
+        except Exception as exc:  # never pass on an interpreter error
+            legacy = f"interpreter error: {type(exc).__name__}: {exc}"
+            errors.append((Finding("unsupported", "unsupported", corner, 0, legacy), legacy))
 
-    failed = any(f.severity == "fail" for f in findings)
-    if failed:
-        n_fail = sum(1 for f in findings if f.severity == "fail")
-        reason = f"{n_fail} failing check(s)"
+    n_corners = len(corner_list)
+    completed = n_corners - len(errors)
+    if errors and len(errors) == n_corners and len({f.detail for f, _ in errors}) == 1:
+        findings.append(Finding("unsupported", "unsupported", "all corners", 0, errors[0][0].detail))
     else:
-        reason = ""
-    return CodeboxResult(
-        label, "fail" if failed else "pass", reason, len(corner_list), findings
-    )
+        findings.extend(f for f, _ in errors)
+
+    n_fail = sum(1 for f in findings if f.severity == "fail")
+    if n_fail:
+        reason = f"{n_fail} failing check(s)"
+        if errors:
+            reason += f"; unsupported at {len(errors)} corner(s)"
+        return CodeboxResult(label, "fail", reason, completed, findings)
+    if errors:
+        reason = errors[0][1]
+        if len(errors) < n_corners:
+            reason += f" ({len(errors)} of {n_corners} corners)"
+        return CodeboxResult(label, "unsupported", reason, completed, findings)
+    return CodeboxResult(label, "pass", "", completed, findings)
 
 
 def smoke_file(path, **kwargs) -> list:
@@ -715,7 +751,10 @@ def _format_text(path, args, results: list, code: int) -> str:
         lines.append(head)
         for f in r.findings:
             where = f"out{f.output}" if f.output else "codebox"
-            lines.append(f"  {f.severity.upper()} {f.check} [{f.corner}] {where}: {f.detail}")
+            if f.severity == "unsupported":
+                lines.append(f"  UNSUPPORTED [{f.corner}] {where}: {f.detail}")
+            else:
+                lines.append(f"  {f.severity.upper()} {f.check} [{f.corner}] {where}: {f.detail}")
     counts = {v: sum(1 for r in results if r.verdict == v)
               for v in ("pass", "fail", "unsupported", "skipped")}
     warns = sum(1 for r in results for f in r.findings if f.severity == "warn")

@@ -53,7 +53,11 @@ History                     persists across samples; sequential: a read before
 Param                       bound as a constant per corner, so Param-only
                             subexpressions fold (as gen hoists them);
                             ``Param p;`` defaults to 0.0; a non-literal
-                            default is Unsupported
+                            default is Unsupported; default and overrides
+                            clamped to [min, max] (gen param refpage:
+                            'Incoming values out of range will be clamped';
+                            initial-value clamp [ASSUMED for gen~, RNBO
+                            genexpr_js clamps it])
 constants                   ``e pi twopi halfpi invpi ln2 ln10 log10e log2e
                             sqrt2 sqrt1_2 degtorad radtodeg phi`` plus the
                             MAX-confirmed uppercase ``PI TWOPI HALFPI``;
@@ -863,6 +867,17 @@ class Codebox:
         return _Builder(self, params or {}, float(samplerate), seed, buffers or {}).program()
 
 
+def _clamp_param(value, p: dict) -> float:
+    """WR-04: clamp a Param value to its declared [min, max] the RNBO
+    genexpr_js way (below min -> min, then above max -> max)."""
+    v = float(value)
+    if p.get("min") is not None and v < p["min"]:
+        v = float(p["min"])
+    if p.get("max") is not None and v > p["max"]:
+        v = float(p["max"])
+    return v
+
+
 def parse_codebox(code: str) -> Codebox:
     """Parse codebox text. Raises Unsupported on any syntax outside the subset."""
     if not isinstance(code, str):
@@ -911,6 +926,7 @@ def parse_codebox(code: str) -> Codebox:
             if d.args:
                 raise err(f"non-literal default for Param '{d.name}'", d.off)
             p["default"] = 0.0
+        p["default"] = _clamp_param(p["default"], p)
         params.append(p)
 
     # Assignment targets.
@@ -1420,10 +1436,11 @@ class _Builder:
         self.seed = seed
         self.buffers = buffers
         pvals = {p["name"]: float(p["default"]) for p in cb.params}
+        by_name = {p["name"]: p for p in cb.params}
         for k, v in params.items():
             if k not in pvals:
                 raise ValueError(f"not a declared Param: {k!r}")
-            pvals[k] = float(v)
+            pvals[k] = _clamp_param(v, by_name[k])
         self.pvals = pvals
         self.declared = {d.name: d for d in cb.decls}
 

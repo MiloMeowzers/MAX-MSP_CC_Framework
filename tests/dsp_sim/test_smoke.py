@@ -360,17 +360,17 @@ def test_buffer_option_resizes_buffer(tmp_path, capsys):
     (r,) = smoke_file(path, seconds=0.1, buffers={"bufname": (1000, 2)})
     assert r.verdict == "pass"
     # buffer-player's one-shot corner (loop=min) runs off the end of a
-    # 1000-frame Buffer within 0.1 s, but not off the default 48000 frames.
+    # 1000-frame Buffer within 0.1 s. A finished one-shot player is correct
+    # and the player has no inlets, so silence is not checked (WR-05; the
+    # old assertion here expected a silence FAIL and encoded that bug).
     player = _REPO / "patterns" / "gen" / "buffer" / "buffer-player.gendsp"
     (r,) = smoke_file(player, seconds=0.1)
     assert r.verdict == "pass", r.findings
     (r,) = smoke_file(player, seconds=0.1, buffers={"bufname": (1000, 2)})
-    assert [(f.check, f.corner) for f in r.findings if f.severity == "fail"] == [
-        ("silence", "loop=min (0)")
-    ], r.findings
+    assert r.verdict == "pass", r.findings
+    assert not [f for f in r.findings if f.check == "silence"], r.findings
     capsys.readouterr()
-    assert main(["smoke", str(player), "--seconds", "0.1", "--buffer", "bufname=1000:2"]) == 1
-    assert "FAIL silence [loop=min (0)]" in capsys.readouterr().out
+    assert main(["smoke", str(player), "--seconds", "0.1", "--buffer", "bufname=1000:2"]) == 0
 
 
 @pytest.mark.parametrize("spec", ["bufname=abc", "bufname=0", "nofmt", "bufname=10:0"])
@@ -490,3 +490,97 @@ def test_wr03_tab_char_warns(tmp_path, capsys):
     out = capsys.readouterr().out
     assert rc == 0, out
     assert "WARN tab_char" in out
+
+
+_WR01_PROBE = (
+    "Param g(1, min=0, max=200000); out1 = in1/0*0 + pow(10,400); "
+    "for (i = 0; i < g; i += 1) { out1 += 0; }"
+)
+
+
+def test_wr01_corner_error_keeps_fail(tmp_path, capsys):
+    """WR-01: an interpreter error at one corner no longer discards FAILs."""
+    r = smoke_codebox(_WR01_PROBE, seconds=0.1)
+    assert r.verdict == "fail", (r.verdict, r.reason, r.findings)
+    assert any(f.check == "nonfinite" and f.severity == "fail" and f.corner == "default"
+               for f in r.findings), r.findings
+    errs = [f for f in r.findings if f.severity == "unsupported"]
+    assert len(errs) == 1, r.findings
+    assert errs[0].check == "unsupported" and errs[0].corner == "g=max (200000)"
+    assert "100000 iterations" in errs[0].detail
+    assert r.corners == 2
+    assert "unsupported at 1 corner(s)" in r.reason
+    path = _gendsp(tmp_path, "wr01", _WR01_PROBE)
+    rc = main(["smoke", str(path), "--seconds", "0.1"])
+    out = capsys.readouterr().out
+    assert rc == 1, out
+    assert "UNSUPPORTED [g=max (200000)]" in out
+
+
+def test_wr01_partial_error_without_fail_is_unsupported():
+    r = smoke_codebox(
+        "Param g(1, min=0, max=200000); out1 = in1 * 0.5; "
+        "for (i = 0; i < g; i += 1) { out1 += 0; }",
+        seconds=0.1,
+    )
+    assert r.verdict == "unsupported", (r.verdict, r.reason, r.findings)
+    assert "1 of 3 corners" in r.reason
+    assert r.corners == 2
+
+
+def test_wr01_identical_errors_collapse_to_all_corners():
+    r = smoke_codebox("Param a(1, min=0, max=2); out1 = frobnicate(in1) * a;", seconds=0.1)
+    assert r.verdict == "unsupported"
+    errs = [f for f in r.findings if f.check == "unsupported"]
+    assert [(f.severity, f.corner) for f in errs] == [("unsupported", "all corners")], r.findings
+    assert r.reason == "unsupported: unknown function: frobnicate (line 1)"
+    assert r.corners == 0
+
+
+def test_wr04_param_default_clamped_in_smoke():
+    r = smoke_codebox("Param p(min=0.5, max=1); out1 = in1 / p;", seconds=0.1)
+    assert r.verdict == "pass", r.findings
+    assert r.corners == 2
+    assert not [f for f in r.findings if f.check == "silent"], r.findings
+
+
+def test_wr05_zero_inlet_decay_passes(tmp_path, capsys):
+    code = "History h(1); out1 = h; h = h * 0.99;"
+    r = smoke_codebox(code, seconds=0.1)
+    assert r.verdict == "pass", r.findings
+    assert not [f for f in r.findings if f.check == "silence"]
+    path = _gendsp(tmp_path, "decay", code)
+    assert main(["smoke", str(path), "--seconds", "0.1"]) == 0
+
+
+def test_wr05_const_driven_dc_blocker_passes():
+    r = smoke_codebox(
+        "History x1(0); History y1(0); y = in1 - x1 + 0.99 * y1; x1 = in1; y1 = y; out1 = y;",
+        seconds=0.1, inputs={1: "const:1"},
+    )
+    assert r.verdict == "pass", r.findings
+    assert not [f for f in r.findings if f.check == "silence"]
+
+
+def test_wr05_silence_still_fails_while_input_active():
+    """Positive control: silent while the default noise still runs."""
+    r = smoke_codebox("History n(0); n = n + 1; out1 = in1 * (n < 2000);", seconds=0.25)
+    assert r.verdict == "fail"
+    sil = [f for f in r.findings if f.check == "silence" and f.corner == "default"]
+    assert sil and sil[0].severity == "fail", r.findings
+    assert sil[0].detail.endswith("while an input is still changing")
+
+
+def test_wr06_unused_input_warns(tmp_path, capsys):
+    r = smoke_codebox("out1 = in1;", seconds=0.1, inputs={5: "const:1"})
+    assert r.verdict == "pass", r.findings
+    unused = [f for f in r.findings if f.check == "unused_input"]
+    assert len(unused) == 1 and unused[0].severity == "warn" and unused[0].corner == "build"
+    assert "--input 5=const:1" in unused[0].detail and "1 inlet" in unused[0].detail
+    r = smoke_codebox("out1 = in1;", seconds=0.1, inputs={1: "const:1"})
+    assert not [f for f in r.findings if f.check == "unused_input"]
+    path = _gendsp(tmp_path, "unused", "out1 = in1;")
+    rc = main(["smoke", str(path), "--seconds", "0.1", "--input", "5=const:1"])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert "WARN unused_input" in out
