@@ -40,6 +40,14 @@ Analyze the user's task description for domain keywords and intent. See `referen
 | Externals | max-ext-agent | external, sdk, c++, compile, mxo, min-devkit |
 | UI/Layout | max-ui-agent | layout, presentation, ui, controls, dial, slider, panel, display, visual |
 
+**Domain Overlays** -- not agents: a matched overlay sets the lead, adds secondaries, and passes its required reading and checks to every specialist. Full rules (detect keywords, DB-checked object references, checks) are in `references/dispatch-rules.md` "Domain Overlays".
+
+| Overlay | Lead | Also | Detect |
+|---------|------|------|--------|
+| Jitter | max-patch-agent | max-dsp-agent (jit.gen / jit.pix codeboxes, audio bridges), max-ui-agent, max-js-agent | jitter, video, camera, texture, OpenGL, shader, mesh, any `jit.*` ("matrix" alone is not Jitter) |
+| M4L (experimental) | max-dsp-agent (audio effect / instrument), max-patch-agent (MIDI effect) | max-ui-agent, max-js-agent | max for live, m4l, ableton, Live device, amxd, `plugin~` / `plugout~` / `live.thisdevice` ("live" alone is not M4L) |
+| poly~ | max-dsp-agent (voice) | max-patch-agent (host), max-ui-agent | poly~, polyphony, N-voice synth, voice allocation / stealing, thispoly~ |
+
 ## Multi-Domain Dispatch
 
 Many tasks span multiple domains. When this happens:
@@ -53,6 +61,9 @@ Many tasks span multiple domains. When this happens:
 - "gen~ waveshaper with knobs" -> DSP (lead) + UI
 - "step sequencer with MIDI" -> Patch (lead) + js
 - "audio effect with preset system" -> DSP (lead) + Patch + js
+- "audio-reactive 3D visuals" -> Patch (lead, Jitter overlay) + DSP
+- "M4L audio effect with Live-automatable knobs" -> DSP (lead, M4L overlay) + UI
+- "8-voice poly synth with a filter envelope" -> DSP (lead, poly~ overlay) + Patch
 
 ## Context Budget
 
@@ -102,7 +113,7 @@ When dispatching to multiple agents, minimize total SKILL.md context loaded.
 
 1. Analyze the task and determine agent(s)
 2. Log dispatch decision: which agent(s) and why
-3. Load and pass relevant context (project context) to specialist(s)
+3. Load and pass relevant context (project context) to specialist(s); when a domain overlay matched, also pass that overlay's required reading and checks (`references/dispatch-rules.md` "Domain Overlays")
 3b. Pass `allowed_packages` from project config to specialist agent(s) -- they use it when constructing Patcher instances
 4. Invoke specialist skill(s)
 5. If multi-agent: merge outputs per merge-protocol.md
@@ -119,5 +130,6 @@ When dispatching to multiple agents, minimize total SKILL.md context loaded.
 
 - `/max-verify` -- invokes critics directly, not the router
 - `/max-test` -- generates test checklists, not patches
+- `/max-diagnose` -- read-only console diagnosis; its proposed fix runs through `/max-iterate`, which routes
 - `/max-status`, `/max-switch` -- project management, no generation
 - `/max-discuss`, `/max-research` -- conversation phases, no generation

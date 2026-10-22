@@ -897,3 +897,80 @@ def test_dsp_agent_loads_genexpr_rules() -> None:
 def test_ui_agent_points_to_uicontrast_section() -> None:
     """Q18: the contrast algorithm moved to ui-presets.md is reachable from the UI agent."""
     assert "Text Contrast Resolution" in _read_skill("max-ui-agent")
+
+
+# ── Q37: router domain overlays (Jitter, M4L, poly~) ──────────────
+
+_DISPATCH_RULES = SKILLS_DIR / "max-router" / "references" / "dispatch-rules.md"
+_OVERLAY_HEADINGS = (
+    "### Jitter (video, matrices, OpenGL)",
+    "### Max for Live (M4L)",
+    "### poly~ (polyphonic voices)",
+)
+_OVERLAY_LABELS = (
+    "**Detect (keywords):**",
+    "**Object references:**",
+    "**Agents:**",
+    "**Pass to specialists:**",
+    "**Checks:**",
+)
+
+
+def _overlay_section(heading: str) -> str:
+    text = _DISPATCH_RULES.read_text(encoding="utf-8")
+    assert heading in text, heading
+    body = text.split(heading, 1)[1]
+    lines = []
+    for line in body.splitlines()[1:]:
+        if line.startswith("### ") or line.startswith("## "):
+            break
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _labelled_line(section: str, label: str) -> str:
+    for line in section.splitlines():
+        if line.startswith(label):
+            return line
+    raise AssertionError(f"{label} line missing")
+
+
+def test_dispatch_rules_has_domain_overlays() -> None:
+    text = _DISPATCH_RULES.read_text(encoding="utf-8")
+    assert "## Domain Overlays" in text
+    overlays = text.split("## Domain Overlays", 1)[1].split("\n## ", 1)[0]
+    for heading in _OVERLAY_HEADINGS:
+        assert heading in overlays, heading
+        section = _overlay_section(heading)
+        for label in _OVERLAY_LABELS:
+            assert label in section, (heading, label)
+        agents = _labelled_line(section, "**Agents:**") + section.split("**Agents:**", 1)[1]
+        assert "lead max-patch-agent" in agents or "lead max-dsp-agent" in agents, heading
+
+
+def test_dispatch_overlay_objects_exist_in_db() -> None:
+    import re
+
+    from src.maxpat.db_lookup import ObjectDatabase
+
+    db = ObjectDatabase()
+    for heading in _OVERLAY_HEADINGS:
+        line = _labelled_line(_overlay_section(heading), "**Object references:**")
+        names = re.findall(r"`([^`]+)`", line)
+        assert len(names) >= 5, heading
+        for name in names:
+            assert db.lookup(name) is not None, (heading, name)
+            assert db.get_effective_restrictions(name) == [], (heading, name)
+
+
+def test_m4l_overlay_experimental_and_critic_trigger() -> None:
+    section = _overlay_section("### Max for Live (M4L)")
+    for frag in ("Experimental", "detect_m4l_device_type", "plugin~", "plugout~",
+                 "live.thisdevice"):
+        assert frag in section, frag
+
+
+def test_router_quick_reference_lists_overlays() -> None:
+    content = _read_skill("max-router")
+    for frag in ("Domain Overlays", "Jitter", "M4L", "poly~"):
+        assert frag in content, frag
