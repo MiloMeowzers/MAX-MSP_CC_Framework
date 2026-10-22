@@ -961,11 +961,25 @@ def _error_lines(events: list, console_all: bool, console_new: list[str]) -> lis
         text = " ".join(str(a) for a in args)
         if console_all and not _is_error_text(text):
             continue
+        # console's outlets fire type -> msg -> obj for one message (MAX 9.2,
+        # 2026-10-21), so the type is the nearest /con/type BEFORE this msg
+        # and the obj the nearest /con/obj AFTER it, never crossing another
+        # /con/msg (a burst of messages otherwise takes its neighbour's obj)
         near = {}
-        for j in range(max(0, k - 2), min(len(events), k + 3)):
+        for j in range(k - 1, -1, -1):
             tj, aj, argsj = events[j]
-            if aj in ("/con/obj", "/con/type") and abs(tj - t) <= 0.05 and aj not in near:
+            if aj == "/con/msg" or abs(tj - t) > 0.05:
+                break
+            if aj == "/con/type":
                 near[aj] = argsj
+                break
+        for j in range(k + 1, len(events)):
+            tj, aj, argsj = events[j]
+            if aj == "/con/msg" or abs(tj - t) > 0.05:
+                break
+            if aj == "/con/obj":
+                near[aj] = argsj
+                break
         errors.append({"source": "console", "text": text, "t": t,
                        "obj": near.get("/con/obj"), "type": near.get("/con/type")})
     for line in console_new:
@@ -979,7 +993,7 @@ def _error_key(entry: dict) -> str:
 
     Console entries with an object name become ``"{obj}: {msg}"`` (the obj
     words joined, a trailing ':' stripped); every other entry is its text.
-    Whitespace is collapsed, then a doubled leading ``"X: X: "`` collapses
+    Double quotes are dropped and whitespace is collapsed, then a doubled leading ``"X: X: "`` collapses
     to ``"X: "`` (repeatedly), so ``osc~: osc~: No such object`` on the
     error and console_write channels meets the console's ``osc~`` +
     ``No such object``.
@@ -992,7 +1006,9 @@ def _error_key(entry: dict) -> str:
         name = " ".join(str(a) for a in obj).strip().rstrip(":").strip()
         if name:
             text = f"{name}: {text}"
-    key = " ".join(text.split())
+    # the console file keeps double quotes that the UDP stream drops
+    # (`[string "-- main2.lua..."]` vs `[string -- main2.lua...]`)
+    key = " ".join(text.replace('"', "").split())
     while True:
         new = re.sub(r"^(\S+): \1: ", r"\1: ", key)
         if new == key:

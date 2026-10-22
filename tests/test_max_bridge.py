@@ -951,6 +951,41 @@ class TestDistinctErrors:
         assert bridge._distinct_errors([]) == []
 
 
+    # fx-genfail with DSP on, MAX 9.2, 2026-10-21 (trimmed to the console burst)
+    GENFAIL_EVENTS = [
+        (0.0928, "/err", ["error", "codebox:", "can't", "assign", "to", "parameter", "g"]),
+        (0.0928, "/err", ["error", "gen_domain:", "dsp.gen:", "[string", "-- main2.lua...]:727:",
+                          "failed", "to", "compile", "genpatcher"]),
+        (0.0928, "/err", ["error", "gen~:", "failed", "to", "compile", "patcher"]),
+        (0.1091, "/con/type", [1]),
+        (0.1091, "/con/msg", ["can't", "assign", "to", "parameter", "g"]),
+        (0.1091, "/con/obj", ["codebox"]),
+        (0.1091, "/con/type", [1]),
+        (0.1092, "/con/msg", ["dsp.gen:", "[string", "-- main2.lua...]:727:", "failed", "to",
+                              "compile", "genpatcher"]),
+        (0.1092, "/con/obj", ["gen_domain"]),
+        (0.1092, "/con/type", [1]),
+        (0.1092, "/con/msg", ["failed", "to", "compile", "patcher"]),
+        (0.1092, "/con/obj", ["gen~"]),
+    ]
+    GENFAIL_WRITE = [
+        "codebox: can't assign to parameter g",
+        'gen_domain: dsp.gen: [string "-- main2.lua..."]:727: failed to compile genpatcher',
+        "gen~: failed to compile patcher",
+    ]
+
+    def test_console_burst_pairs_each_msg_with_its_own_obj(self):
+        errs = bridge._error_lines(self.GENFAIL_EVENTS, False, [])
+        objs = [(e["text"].split()[0], e["obj"]) for e in errs if e["source"] == "console"]
+        assert objs == [("can't", ["codebox"]), ("dsp.gen:", ["gen_domain"]),
+                        ("failed", ["gen~"])]
+
+    def test_genfail_burst_is_three_distinct(self):
+        errs = bridge._error_lines(self.GENFAIL_EVENTS, False, self.GENFAIL_WRITE)
+        distinct = bridge._distinct_errors(errs)
+        assert len(distinct) == 3, [d["key"] for d in distinct]
+        assert all(d["sources"] == {"error": 1, "console": 1, "console_write": 1} for d in distinct)
+
 class FakeRun:
     """Stands in for bridge._run: answers osascript with a window list (after
     ``appear_after`` empty answers) and writes a png for screencapture."""
