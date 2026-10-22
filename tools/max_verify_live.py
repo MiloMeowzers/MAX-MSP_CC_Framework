@@ -53,6 +53,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tools import max_bridge as bridge  # noqa: E402
+from src.maxpat.project import get_active_project  # noqa: E402
 
 INPUT_BOXES = ("adc~", "ezadc~", "mc.adc~", "mc.ezadc~")
 ABSTRACTION_HOSTS = ("poly~", "mc.poly~", "pfft~")
@@ -192,6 +193,41 @@ def scan_patch(path) -> dict:
         "inputs": bool(where),
         "input_where": where,
     }
+
+
+def find_top_level_patches(generated: Path) -> tuple[list[Path], list[dict]]:
+    """``(tops, excluded)`` of a project's generated/ directory (non-recursive).
+
+    A ``__maxbridge_*`` file is excluded as a bridge temp copy. A stem that
+    another sibling references (bpatcher ``name``, newobj abstraction, the
+    poly~/mc.poly~/pfft~ argument; comments never count, and a file never
+    excludes itself) is a child: excluded as ``abstraction of <parents>``.
+    An unreadable file stays a top-level candidate; its run reports it.
+    """
+    generated = Path(generated)
+    excluded: list[dict] = []
+    candidates: list[Path] = []
+    for path in sorted(generated.glob("*.maxpat")):
+        if path.name.startswith(bridge.COPY_PREFIX):
+            excluded.append({"patch": path.name, "reason": "bridge temp copy"})
+        else:
+            candidates.append(path)
+    stems = {p.stem for p in candidates}
+    parents: dict[str, set[str]] = {}
+    for path in candidates:
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        for ref in _references(data, stems) - {path.stem}:
+            parents.setdefault(ref, set()).add(path.stem)
+    tops = [p for p in candidates if p.stem not in parents]
+    for path in candidates:
+        if path.stem in parents:
+            excluded.append({"patch": path.name,
+                             "reason": "abstraction of " + ", ".join(sorted(parents[path.stem]))})
+    excluded.sort(key=lambda e: e["patch"])
+    return tops, excluded
 
 
 def _audio_input_locked(scan: dict, opts) -> bool:
@@ -357,6 +393,15 @@ def map_findings(report: dict) -> list[dict]:
 # The run
 # ---------------------------------------------------------------------------
 
+def _new_result(project=None, excluded=None) -> dict:
+    return {
+        "status": "ran", "hint": None, "project": project, "patches": [],
+        "excluded": list(excluded or []), "notes": [],
+        "counts": {"blocker": 0, "warning": 0, "note": 0},
+        "reminder": REMINDER, "exit_code": 0,
+    }
+
+
 def _entry(path: Path) -> dict:
     return {"patch": str(path), "name": path.name, "status": "not checked", "mode": None,
             "argv": None, "reasons": [], "findings": [], "shot_png": None, "run_dir": None,
@@ -382,6 +427,32 @@ def _finish(result: dict, status: str | None = None, hint: str | None = None) ->
     return result
 
 
+def _norm_title(title: str) -> str:
+    """A MAX window title without the edited ``*`` and `` (presentation)``."""
+    t = str(title).strip()
+    while True:
+        new = t.rstrip("*").strip()
+        if new.endswith(" (presentation)"):
+            new = new[: -len(" (presentation)")].strip()
+        if new == t:
+            return t
+        t = new
+
+
+def _open_titles(result: dict) -> set[str]:
+    """Normalised titles of the open MAX windows (darwin only); a listing
+    failure becomes a run-level note. The user's windows are never touched."""
+    if sys.platform != "darwin":
+        return set()
+    try:
+        rows = bridge.cg_windows()
+    except (bridge.ShotError, OSError, subprocess.SubprocessError) as exc:
+        result["notes"].append(f"could not list MAX windows ({exc}): "
+                               "close any open original by hand")
+        return set()
+    return {_norm_title(row[1]) for row in rows}
+
+
 def run_live(patches, opts, *, project=None, excluded=None) -> dict:
     """Check *patches* one after another in the running MAX; return the result.
 
@@ -391,12 +462,7 @@ def run_live(patches, opts, *, project=None, excluded=None) -> dict:
     good pre-flight aborts the run; an exception in one patch becomes a
     warning and the loop goes on.
     """
-    result: dict = {
-        "status": "ran", "hint": None, "project": project, "patches": [],
-        "excluded": list(excluded or []), "notes": [],
-        "counts": {"blocker": 0, "warning": 0, "note": 0},
-        "reminder": REMINDER, "exit_code": 0,
-    }
+    result = _new_result(project, excluded)
     paths = [Path(p) for p in patches]
     if not paths:
         return _finish(result, "skipped", "no top-level .maxpat to check")
@@ -405,9 +471,19 @@ def run_live(patches, opts, *, project=None, excluded=None) -> dict:
         return _finish(result, "skipped", hint)
 
     result["patches"] = [_entry(p) for p in paths]
+    titles = _open_titles(result)
     total = len(paths)
     for i, entry in enumerate(result["patches"]):
         path = Path(entry["patch"])
+        if path.stem in titles or f"{path.stem}.maxpat" in titles:
+            entry["status"] = "skipped"
+            entry["findings"].append(_row(
+                "note", "original is open in MAX (shared send/receive/buffer~ names and "
+                        "udpreceive ports would collide)",
+                "close it (save first if it has edits) and rerun"))
+            print(f"[{i + 1}/{total}] {entry['name']}: skipped (original is open in MAX)",
+                  file=sys.stderr)
+            continue
         try:
             scan = scan_patch(path)
             argv, mode, reasons = check_argv(path, scan, opts)
@@ -449,6 +525,60 @@ def run_live(patches, opts, *, project=None, excluded=None) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Human report
+# ---------------------------------------------------------------------------
+
+def format_report(result: dict) -> str:
+    """The text /max-verify shows (max-verify.md, Output Format)."""
+    patches = result.get("patches") or []
+    title = f"Live check (MAX 9.2): {result.get('project') or f'{len(patches)} patch(es)'}"
+    lines = [title, "=" * len(title)]
+    status = result.get("status")
+    if status == "skipped":
+        lines.append(f"Live check skipped: {result.get('hint')}")
+    elif status == "aborted":
+        lines.append(f"Live check aborted: {result.get('hint')}")
+        not_checked = [e["name"] for e in patches if e["status"] == "not checked"]
+        if not_checked:
+            lines.append("Not checked: " + ", ".join(not_checked))
+    for entry in patches:
+        if entry["status"] == "not checked" and status == "aborted":
+            continue
+        head = entry["status"]
+        if entry.get("mode"):
+            head += f"; {entry['mode']}: " + "; ".join(entry.get("reasons") or [])
+        lines.append("")
+        lines.append(f"{entry['name']}  [{head}]")
+        for f in entry["findings"]:
+            if f["severity"] == "blocker":
+                lines.append(f"  LIVE BLOCKER: {f['finding']} -- Fix: {f['suggestion']}")
+            elif f["severity"] == "warning":
+                lines.append(f"  LIVE WARNING: {f['finding']} -- {f['suggestion']}")
+            else:
+                lines.append(f"  LIVE NOTE: {f['finding']}")
+        if entry.get("shot_png"):
+            lines.append(f"  shot: {entry['shot_png']}")
+        if entry.get("run_dir"):
+            lines.append(f"  run dir: {entry['run_dir']}")
+    if result.get("excluded") or result.get("notes"):
+        lines.append("")
+    for e in result.get("excluded") or []:
+        lines.append(f"Excluded: {e['patch']} ({e['reason']})")
+    for note in result.get("notes") or []:
+        lines.append(f"Note: {note}")
+    if status != "skipped":
+        c = result.get("counts") or {}
+        checked = sum(1 for e in patches if e["status"] == "checked")
+        lines.append("")
+        lines.append(f"Live: {c.get('blocker', 0)} blockers, {c.get('warning', 0)} warnings, "
+                     f"{c.get('note', 0)} notes ({checked} checked, "
+                     f"{len(patches) - checked} not run)")
+    lines.append("")
+    lines.append(result.get("reminder") or REMINDER)
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -460,6 +590,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("patches", nargs="*", metavar="PATCH",
                         help="explicit .maxpat files (default: the active project's top-level patches)")
+    parser.add_argument("--project", default=None, metavar="NAME",
+                        help="check this project's top-level patches instead of the active one "
+                             "(never changes the active-project pointer)")
     parser.add_argument("--record", type=float, default=None, metavar="S",
                         help=f"seconds to record a tapped patch (default {DEFAULT_RECORD_S:g}; "
                              "0 = never record)")
@@ -500,6 +633,23 @@ def _explicit(paths: list[str]) -> tuple[list[Path], list[dict]]:
     return keep, excluded
 
 
+def _resolve_project(name: str | None):
+    """``(name, generated dir)`` or a skip hint (str). Reads REPO_ROOT and
+    get_active_project at call time; never writes the active-project pointer."""
+    if name is not None:
+        if not name or name in (".", "..") or any(c in name for c in ("/", "\\", "\0")):
+            return f"--project {name!r} must be a single project directory name under patches/"
+    else:
+        active = get_active_project(REPO_ROOT)
+        if active is None:
+            return "no active project: run /max-switch, or pass --project NAME or PATH"
+        name = active["name"]
+    generated = REPO_ROOT / "patches" / name / "generated"
+    if not generated.is_dir():
+        return f"project {name!r} has no generated/ directory ({generated})"
+    return name, generated
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     opts = parser.parse_args(argv)
@@ -512,12 +662,29 @@ def main(argv: list[str] | None = None) -> int:
         if not 1 <= vel <= 127:
             parser.error(f"--note velocity {vel} is outside 1-127")
 
-    if not opts.patches:
-        print("no PATH given", file=sys.stderr)
-        return 2
-    patches, excluded = _explicit(opts.patches)
-    result = run_live(patches, opts, excluded=excluded)
-    print(json.dumps(result, indent=2, default=str))
+    if opts.project is not None and opts.patches:
+        parser.error("pass --project NAME or PATHs, not both")
+
+    if opts.patches:
+        patches, excluded = _explicit(opts.patches)
+        result = run_live(patches, opts, excluded=excluded)
+    else:
+        resolved = _resolve_project(opts.project)
+        if isinstance(resolved, str):
+            result = _finish(_new_result(opts.project), "skipped", resolved)
+        else:
+            name, generated = resolved
+            tops, excluded = find_top_level_patches(generated)
+            if not tops and any(e["reason"] != "bridge temp copy" for e in excluded):
+                result = _finish(_new_result(name, excluded), "skipped",
+                                 f"every .maxpat in {generated} is referenced by a sibling: "
+                                 "pass explicit PATHs")
+            else:
+                result = run_live(tops, opts, project=name, excluded=excluded)
+    if opts.json:
+        print(json.dumps(result, indent=2, default=str))
+    else:
+        print(format_report(result))
     return result["exit_code"]
 
 

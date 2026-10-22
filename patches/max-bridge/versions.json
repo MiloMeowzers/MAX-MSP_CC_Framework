@@ -20,6 +20,11 @@
       "files_changed": [
         "generated/max-bridge.maxpat"
       ]
+    },
+    {
+      "version": "0.3.0",
+      "description": "v0.3.0: /max-verify --live (tools/max_verify_live.py) and check --dsp-on-load",
+      "timestamp": "2026-10-22T01:14:05.596572+00:00"
     }
   ]
 }
