@@ -1,6 +1,6 @@
 # Severity Contract
 
-> What a validator or critic finding means, what to do with it, and which findings stop a save. Every behavioral claim was checked against `src/maxpat/validation.py`, `src/maxpat/critics/` and `src/maxpat/hooks.py`.
+> What a validator or critic finding means, what to do with it, and which findings stop a save. Every behavioral claim was checked against `src/maxpat/validation.py`, `src/maxpat/critics/` and `src/maxpat/hooks.py`. Section 7 (live findings) was checked against `tools/max_verify_live.py`.
 > Path: `.claude/skills/references/severity-contract.md`. Console errors MAX prints at load time are in `troubleshooting.md`; proven MAX forms are in `proven-forms.md`.
 
 ## 1. Two systems
@@ -101,3 +101,31 @@ The soft-limit "accept" option in the critic loop is the user's explicit confirm
 ## 6. Code and RNBO validators
 
 `validate_genexpr`, `validate_js` and `validate_n4m` (`src/maxpat/code_validation.py`) emit `error`, `warning` and `info` at layer `code`. Standalone, through `validate_code_file(path)` or `write_js`, they are report-only and never block. GenExpr inside a codebox of a top-level `gen~` box in a `.maxpat` is different: Layer 5 feeds those findings into `validate_patch`, so a GenExpr `error` there (for example `delay()` in a codebox) refuses a save that introduces it. `write_gendsp` does not run the GenExpr checks on its own codebox through the gate, so a `.gendsp` with `delay()` is written. Run `validate_code_file(path)` on it, or check the code with `validate_genexpr` before writing. `validate_rnbo_patch` (`src/maxpat/rnbo_validation.py`) emits `error` for objects not compatible with RNBO, for an unknown export target and for external file references, and `warning` for target limits (param count, buffers on embedded targets). It is not part of the save gate. Act on its errors before export.
+
+## 7. Live findings (`/max-verify --live`)
+
+Live findings come from `tools/max_verify_live.py`, which loads each top-level patch in the running MAX 9.2 through the max-bridge and maps every `tools/max_bridge.py check` report with `map_findings`. They are report-only: never part of the save gate (section 5) or the critic revision loop (section 4), never written into the patch, never auto-fixed. The bridge's own `exit_code` / `verdict` is not the severity: the bridge counts unsupported outputs and shot failures as findings, and here they are notes.
+
+| Live finding (report field) | Severity | Notes |
+|---|---|---|
+| `errors_distinct[].key` containing one of the four `ERROR_WORDINGS`: `no such object`, `bad argument`, `failed to compile`, `can't assign` | blocker | MAX's own console confirms what a validator `error` only predicts. Suggestion by wording: the object DB and `troubleshooting.md`; the argument form; `genexpr-rules.md` for gen~ compile errors |
+| any other `errors_distinct` entry | warning | runtime or environment error (missing file, port in use) or a post from another open patch |
+| `record.flags` `nonfinite` / `runaway` | blocker | NaN/inf or runaway output: dangerous at the speaker |
+| `record.flags` `clipping` / `dc_offset` / `silent` | warning | loadable but audibly wrong; `silent` usually needs a stimulus |
+| `record.flags` `sr_changed_during_run` / `short_recording` | note, and every other record flag of that patch is demoted to note | the audio driver restarted or DSP stopped: measures unreliable, rerun |
+| `record.warnings` (`sr_header_mismatch`) and report `warnings` (`dsp_state_unknown`, a channel above 2 left untapped, `--note: no notein or kslider to drive`) | note | informational; the analysis already corrected itself |
+| `unsupported` (`mc.dac~`, `plugout~`, `poly~`, `pfft~`, `bpatcher`) | note (`not tapped: ...`) | a coverage gap, not a defect |
+| `shot.error` | note | grant Screen Recording to the terminal app |
+| `closed` is False | warning | the temp copy's window may still be open: close it WITHOUT saving |
+| `feedback_suspected` | warning | the event cap tripped (console flood): the error list may be incomplete |
+| DSP already on (`dsp_before` 1) for a locked audio-input patch | note | its input was live during the load |
+| the patch's original is open in MAX | note; the patch is skipped | shared names and ports would collide; the user's window is never closed |
+| an exception while checking one patch | warning (`live check crashed`) | the loop goes on with the next patch |
+| `guard_input` refused the path | note; status `refused` | |
+| `verdict` `bridge_failed` after a good pre-flight | none: the run is `aborted` | MAX stopped answering (a modal dialog, a crash, the toggle switched OFF); the remaining patches are "not checked" |
+
+**Exit codes** of `tools/max_verify_live.py`: 0 ran with notes only; 1 any live blocker or warning; 2 skipped (no bridge patch in the install, MAX not running, the bridge did not answer), aborted, or a usage error.
+
+**Summary rule.** `/max-verify --live` never changes the static Summary line's counts. The live counts sit beside it: `(live: b blockers, w warnings, n notes)`, or `(live check skipped: <hint>)` / `(live check aborted: <hint>)`.
+
+A live blocker is MAX confirming what a validator error predicts. Fix it through `/max-iterate`, then rerun.

@@ -778,3 +778,56 @@ class TestFormatReport:
         out = capsys.readouterr().out
         assert rc == 2
         assert out.startswith("Live check (MAX 9.2)") and "Live check skipped:" in out
+
+
+# ---------------------------------------------------------------------------
+# Task 3: doc guards
+# ---------------------------------------------------------------------------
+
+MAX_VERIFY_MD = live.REPO_ROOT / ".claude" / "commands" / "max-verify.md"
+SEVERITY_MD = live.REPO_ROOT / ".claude" / "skills" / "references" / "severity-contract.md"
+CHECKLIST_V030 = (live.REPO_ROOT / "patches" / "max-bridge" / "test-results"
+                  / "v0.3.0-verify-live-checklist.md")
+
+
+class TestDocGuards:
+
+    def test_max_verify_doc(self):
+        text = MAX_VERIFY_MD.read_text()
+        for needle in ("from src.maxpat import", "review_patch", "--live", "tools/max_verify_live.py",
+                       "--live-inputs", "(live:", "live check skipped", "LIVE BLOCKER",
+                       "Live check (MAX 9.2)"):
+            assert needle in text, needle
+
+    def test_severity_contract_section_7(self):
+        text = SEVERITY_MD.read_text()
+        assert "## 7. Live findings" in text and "max_verify_live" in text
+        section = text[text.index("## 7. Live findings"):]
+        for wording in bridge.ERROR_WORDINGS:
+            assert wording in section, wording
+        for flag in ("nonfinite", "runaway", "clipping", "dc_offset", "silent",
+                     *live.UNRELIABLE_FLAGS):
+            assert flag in section, flag
+        for name in (*bridge.UNSUPPORTED_OUTPUTS, "bpatcher"):
+            assert name in section, name
+
+    def test_v030_checklist(self):
+        import re
+        assert CHECKLIST_V030.is_file()
+        text = CHECKLIST_V030.read_text()
+        for needle in ("fx-genfail", "--live-inputs", "aborted",
+                       "find patches -name '__maxbridge_*'"):
+            assert needle in text, needle
+        steps = {int(n) for n in re.findall(r"^(\d+)\. \[[^]]*\]", text, re.M)}
+        assert steps == set(range(9))
+        entries = [e for e in re.split(r"\n(?=W\d+\. )", text) if re.match(r"W\d+\. ", e)]
+        assert len(entries) == 4
+        for e in entries:
+            m = re.search(r"Answered by: step (\d+)", e)
+            assert m and int(m.group(1)) in steps, e[:60]
+
+    def test_report_title_matches_doc(self):
+        res = live._finish(live._new_result(project="demo"), "skipped", "x")
+        first = live.format_report(res).splitlines()[0]
+        assert first.startswith("Live check (MAX 9.2)")
+        assert "Live check (MAX 9.2)" in MAX_VERIFY_MD.read_text()
