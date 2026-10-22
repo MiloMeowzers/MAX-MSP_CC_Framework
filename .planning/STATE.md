@@ -2,10 +2,10 @@
 gsd_state_version: "1.0"
 milestone: v5.0
 status: completed
-last_updated: "2026-10-22T19:56:13.660Z"
+last_updated: "2026-10-22T20:40:30.528Z"
 last_activity: 2026-10-22
 last_activity_desc: "Completed quick task 261001-hwb: Max 9.2.0 update — object DB re-synced from the installed bundle, 9.2 guidance added"
-state_head: fa5bccf20a6e95c9537a8b2c1c3bef2df4207aab
+state_head: b824998549b64c0d3aa034fc10387d7553852aa7
 progress:
   total_phases: 5
   completed_phases: 5
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v5.0)
 Phase: —
 Plan: —
 Status: v5.0 shipped; awaiting `/gsd-new-milestone` to start next cycle
-Last activity: 2026-10-22 - Completed quick task 261022-cmr: Fix Q35 review findings CR-01, CR-02, WR-01..WR-06
+Last activity: 2026-10-22 - Completed quick task 261022-i07: Implement Q36 in .planning/reviews/2026-10-11-fix-plan.md — edit_patch session API and semantic patch diff
 
 Previous: 2026-09-21 - Completed quick task 260921-kfd: SF-04/SF-06/SF-07 closed — CLAUDE.md `live.*` extraction note revised (all 30 resolve); added refpage `<c74object name>`-is-authoritative rule and refpage-placeholder (54.5%) counts-not-types / never-overwrite-overrides rule
 
@@ -132,6 +132,7 @@ None.
 | 261021-olv | max-verify --live mode via max-bridge | 2026-10-22 | 04712b14 | — | [261021-olv-max-verify-live-mode-via-max-bridge](./quick/261021-olv-max-verify-live-mode-via-max-bridge/) |
 | 261021-urs | Implement Q35 in .planning/reviews/2026-10-11-fix-plan.md — GenExpr interpreter and codebox smoke test | 2026-10-22 | 0accfea9 | Verified | [261021-urs-implement-q35-in-planning-reviews-2026-1](./quick/261021-urs-implement-q35-in-planning-reviews-2026-1/) |
 | 261022-cmr | Fix Q35 review findings CR-01, CR-02, WR-01..WR-06 in .planning/quick/261021-urs-implement-q35-in-planning-reviews-2026-1/261021-urs-REVIEW.md | 2026-10-22 | fa5bccf2 | Verified | [261022-cmr-fix-q35-review-findings-cr-01-cr-02-wr-0](./quick/261022-cmr-fix-q35-review-findings-cr-01-cr-02-wr-0/) |
+| 261022-i07 | Implement Q36 in .planning/reviews/2026-10-11-fix-plan.md — edit_patch session API and semantic patch diff | 2026-10-22 | b8249985 | Verified | [261022-i07-implement-q36-in-planning-reviews-2026-1](./quick/261022-i07-implement-q36-in-planning-reviews-2026-1/) |
 
 ## Deferred Items
 
