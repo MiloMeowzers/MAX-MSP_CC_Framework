@@ -525,3 +525,256 @@ def test_d04_ast_guard():
             assert node.func.attr != "send", ast.dump(node)
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             assert node.value not in ("open", "osascript", "/dsp", "/listen"), node.value
+
+
+# ---------------------------------------------------------------------------
+# Task 2: top-level selection
+# ---------------------------------------------------------------------------
+
+def _bpatcher(i: int, name: str) -> dict:
+    return {"id": f"obj-{i}", "maxclass": "bpatcher", "name": name, "numinlets": 0,
+            "numoutlets": 0, "patching_rect": [20.0, 20.0 + 120 * i, 200.0, 100.0]}
+
+
+def _comment(i: int, text: str) -> dict:
+    return {"id": f"obj-{i}", "maxclass": "comment", "text": text, "numinlets": 1,
+            "numoutlets": 0, "patching_rect": [300.0, 20.0 + 40 * i, 120.0, 20.0]}
+
+
+def _write_raw(d: Path, name: str, boxes: list[dict]) -> Path:
+    path = d / f"{name}.maxpat"
+    path.write_text(json.dumps(_raw_patch(boxes)))
+    return path
+
+
+class TestTopLevel:
+
+    def test_children_are_excluded(self, tmp_path):
+        g = tmp_path / "generated"
+        g.mkdir()
+        _write_raw(g, "parent", [
+            _bpatcher(1, "kid-bp.maxpat"), _newobj(2, "poly~ kid-poly 4"),
+            _newobj(3, "mc.poly~ kid-mcpoly.maxpat 8"), _newobj(4, "pfft~ kid-fft 1024 4"),
+            _newobj(5, "kid-abs 1 2"), _comment(6, "see lonely for details"),
+        ])
+        for kid in ("kid-bp", "kid-poly", "kid-mcpoly", "kid-fft", "kid-abs"):
+            _write_raw(g, kid, [_newobj(1, "cycle~ 440")])
+        _write_raw(g, "lonely", [_newobj(1, "cycle~ 220")])
+        _write_raw(g, "selfref", [_newobj(1, "selfref 1"), _newobj(2, "poly~ selfref")])
+        _write_raw(g, "__maxbridge_x", [_newobj(1, "cycle~ 1")])
+        tops, excluded = live.find_top_level_patches(g)
+        assert [p.name for p in tops] == ["lonely.maxpat", "parent.maxpat", "selfref.maxpat"]
+        reasons = {e["patch"]: e["reason"] for e in excluded}
+        assert reasons == {
+            "__maxbridge_x.maxpat": "bridge temp copy",
+            "kid-abs.maxpat": "abstraction of parent",
+            "kid-bp.maxpat": "abstraction of parent",
+            "kid-fft.maxpat": "abstraction of parent",
+            "kid-mcpoly.maxpat": "abstraction of parent",
+            "kid-poly.maxpat": "abstraction of parent",
+        }
+
+    def test_several_parents_and_unreadable(self, tmp_path):
+        g = tmp_path / "generated"
+        g.mkdir()
+        _write_raw(g, "a", [_newobj(1, "shared")])
+        _write_raw(g, "b", [_bpatcher(1, "shared.maxpat")])
+        _write_raw(g, "shared", [_newobj(1, "cycle~ 440")])
+        (g / "broken.maxpat").write_text("{not json")
+        tops, excluded = live.find_top_level_patches(g)
+        assert [p.name for p in tops] == ["a.maxpat", "b.maxpat", "broken.maxpat"]
+        assert excluded == [{"patch": "shared.maxpat", "reason": "abstraction of a, b"}]
+
+    def test_terrain_synth_real_repo(self):
+        gen = live.REPO_ROOT / "patches" / "terrain-synth" / "generated"
+        if not gen.is_dir():
+            pytest.skip("terrain-synth not in this checkout")
+        tops, excluded = live.find_top_level_patches(gen)
+        assert [p.name for p in tops] == ["terrain-synth.maxpat"]
+        assert {e["patch"] for e in excluded} == {
+            "terrain-voice.maxpat", "terrain-osc.maxpat", "terrain-osc-b.maxpat",
+            "terrain-lfo.maxpat", "terrain-cheby.maxpat"}
+
+
+# ---------------------------------------------------------------------------
+# Task 2: project resolution
+# ---------------------------------------------------------------------------
+
+def _opened(fb) -> list[str]:
+    return [args[0] for a, args in fb.received if a == "/open"]
+
+
+class TestResolution:
+
+    def test_no_active_project(self, monkeypatch, capsys):
+        monkeypatch.setattr(live, "get_active_project", lambda base: None)
+        rc = live.main(["--port", str(_free_port()), "--reply-port", "0", "--json"])
+        res = json.loads(capsys.readouterr().out)
+        assert rc == 2 and res["status"] == "skipped"
+        assert "no active project" in res["hint"]
+
+    @pytest.mark.parametrize("bad", ["../x", "a/b", "a\\b", "..", "."])
+    def test_bad_project_name(self, bad, capsys):
+        rc = live.main(["--project", bad, "--port", str(_free_port()), "--reply-port", "0",
+                        "--json"])
+        res = json.loads(capsys.readouterr().out)
+        assert rc == 2 and res["status"] == "skipped"
+
+    def test_missing_project_dir(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr(live, "REPO_ROOT", tmp_path)
+        rc = live.main(["--project", "nope", "--port", str(_free_port()), "--reply-port", "0",
+                        "--json"])
+        assert rc == 2 and "nope" in json.loads(capsys.readouterr().out)["hint"]
+
+    def test_project_and_path_exclusive(self, tmp_path, db):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with pytest.raises(SystemExit) as exc:
+            live.main(["--project", "demo", str(src)])
+        assert exc.value.code == 2
+
+    def _demo(self, root: Path) -> Path:
+        g = root / "patches" / "demo" / "generated"
+        g.mkdir(parents=True)
+        _write_raw(g, "parent", [_bpatcher(1, "child.maxpat")])
+        _write_raw(g, "child", [_newobj(1, "cycle~ 440")])
+        return g
+
+    def test_project_runs_top_level_only(self, tmp_path, monkeypatch, capsys):
+        root = tmp_path / "repo"
+        self._demo(root)
+        monkeypatch.setattr(live, "REPO_ROOT", root)
+        with FakeBridge() as fb:
+            rc, res = _run(fb.port, extra=("--project", "demo"), capsys=capsys)
+        opened = _opened(fb)
+        assert len(opened) == 1 and opened[0].endswith("__maxbridge_parent.maxpat")
+        assert res["project"] == "demo"
+        assert [e["patch"] for e in res["excluded"]] == ["child.maxpat"]
+        assert [p["name"] for p in res["patches"]] == ["parent.maxpat"]
+        assert rc in (0, 1)
+
+    def test_active_project_pointer_is_used(self, tmp_path, monkeypatch, capsys):
+        root = tmp_path / "repo"
+        self._demo(root)
+        monkeypatch.setattr(live, "REPO_ROOT", root)
+        seen = []
+        monkeypatch.setattr(live, "get_active_project",
+                            lambda base: seen.append(base) or {"name": "demo"})
+        with FakeBridge() as fb:
+            _rc, res = _run(fb.port, capsys=capsys)
+        assert seen == [root] and res["project"] == "demo"
+        assert len(_opened(fb)) == 1
+
+    def test_every_file_referenced(self, tmp_path, monkeypatch, capsys):
+        root = tmp_path / "repo"
+        g = root / "patches" / "loop" / "generated"
+        g.mkdir(parents=True)
+        _write_raw(g, "a", [_newobj(1, "b")])
+        _write_raw(g, "b", [_newobj(1, "a")])
+        monkeypatch.setattr(live, "REPO_ROOT", root)
+        rc, res = _run(_free_port(), extra=("--project", "loop"), capsys=capsys)
+        assert rc == 2 and "referenced by a sibling" in res["hint"]
+
+
+# ---------------------------------------------------------------------------
+# Task 2: an original open in MAX is skipped, never closed
+# ---------------------------------------------------------------------------
+
+class TestOpenOriginal:
+
+    @pytest.mark.parametrize("title", ["tone", "tone (presentation)", "tone*", "tone.maxpat",
+                                       " tone* "])
+    def test_open_original_skipped(self, title, tmp_path, db, monkeypatch, capsys):
+        monkeypatch.setattr(live.sys, "platform", "darwin")
+        monkeypatch.setattr(bridge, "cg_windows", lambda: [(5, title, 0, 0, 100, 100)])
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge() as fb:
+            rc, res = _run(fb.port, src, capsys=capsys)
+        (entry,) = res["patches"]
+        assert entry["status"] == "skipped"
+        assert entry["findings"][0]["severity"] == "note"
+        assert entry["findings"][0]["finding"].startswith("original is open in MAX")
+        assert "/open" not in fb.addresses and rc == 0
+
+    def test_other_titles_run(self, tmp_path, db, monkeypatch, capsys):
+        monkeypatch.setattr(live.sys, "platform", "darwin")
+        monkeypatch.setattr(bridge, "cg_windows",
+                            lambda: [(5, "tone-2", 0, 0, 1, 1), (6, "max-bridge", 0, 0, 1, 1)])
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge() as fb:
+            rc, res = _run(fb.port, src, capsys=capsys)
+        assert res["patches"][0]["status"] == "checked" and rc == 0
+
+    def test_window_list_failure_is_a_note(self, tmp_path, db, monkeypatch, capsys):
+        monkeypatch.setattr(live.sys, "platform", "darwin")
+
+        def boom():
+            raise bridge.ShotError("osascript exited 1")
+
+        monkeypatch.setattr(bridge, "cg_windows", boom)
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge() as fb:
+            _rc, res = _run(fb.port, src, capsys=capsys)
+        assert any(n.startswith("could not list MAX windows") for n in res["notes"])
+        assert res["patches"][0]["status"] == "checked" and "/open" in fb.addresses
+
+
+# ---------------------------------------------------------------------------
+# Task 2: the human report
+# ---------------------------------------------------------------------------
+
+class TestFormatReport:
+
+    def _ran(self):
+        result = live._new_result(project="demo",
+                                  excluded=[{"patch": "child.maxpat",
+                                             "reason": "abstraction of parent"}])
+        result["notes"].append("could not list MAX windows (x): close any open original by hand")
+        entry = live._entry(Path("/x/parent.maxpat"))
+        entry.update(status="checked", mode="record", shot_png="/tmp/r/shot.png",
+                     run_dir="/tmp/r", verdict="findings",
+                     reasons=["record 3 s", "note 60 100 into the notein"],
+                     findings=[
+                         live._row("blocker", "MAX console: osc~: No such object (x1)", "use the DB"),
+                         live._row("warning", "record flag clipping", "reduce the gain"),
+                         live._row("note", "not tapped: plugout~ at top", "gap"),
+                     ])
+        result["patches"] = [entry]
+        return live._finish(result)
+
+    def test_ran(self):
+        text = live.format_report(self._ran())
+        lines = text.splitlines()
+        assert lines[0] == "Live check (MAX 9.2): demo"
+        assert set(lines[1]) == {"="} and len(lines[1]) == len(lines[0])
+        assert "parent.maxpat  [checked; record: record 3 s; note 60 100 into the notein]" in text
+        assert "  LIVE BLOCKER: MAX console: osc~: No such object (x1) -- Fix: use the DB" in text
+        assert "  LIVE WARNING: record flag clipping -- reduce the gain" in text
+        assert "  LIVE NOTE: not tapped: plugout~ at top" in text
+        assert "  shot: /tmp/r/shot.png" in text and "  run dir: /tmp/r" in text
+        assert "Excluded: child.maxpat (abstraction of parent)" in text
+        assert "could not list MAX windows" in text
+        assert "Live: 1 blockers, 1 warnings, 1 notes (1 checked, 0 not run)" in text
+        assert lines[-1] == live.REMINDER
+
+    def test_skipped(self):
+        res = live._finish(live._new_result(), "skipped", "MAX bridge did not answer")
+        text = live.format_report(res)
+        assert text.splitlines()[0].startswith("Live check (MAX 9.2)")
+        assert "Live check skipped: MAX bridge did not answer" in text
+        assert text.splitlines()[-1] == live.REMINDER
+
+    def test_aborted_lists_not_checked(self):
+        res = live._new_result()
+        res["patches"] = [live._entry(Path("/x/a.maxpat")), live._entry(Path("/x/b.maxpat"))]
+        res["patches"][0]["status"] = "failed"
+        text = live.format_report(live._finish(res, "aborted", "MAX stopped answering during a"))
+        assert "Live check aborted: MAX stopped answering during a" in text
+        assert "Not checked: b.maxpat" in text
+
+    def test_main_prints_human_report(self, tmp_path, db, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        rc = live.main([str(src), "--port", str(_free_port()), "--reply-port", "0",
+                        "--timeout", "0.3"])
+        out = capsys.readouterr().out
+        assert rc == 2
+        assert out.startswith("Live check (MAX 9.2)") and "Live check skipped:" in out
