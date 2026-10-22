@@ -19,10 +19,16 @@ Usage:
       --sweep "0.0,1.0,32" \\
       --params "freq=220,breath=0.6,bore_damp=0.3"
 
+  python -m src.maxpat.dsp_sim smoke PATH [--seconds S] [--input K=SPEC]
+      GenExpr codebox smoke test (Q35); dispatched before the legacy parser,
+      see `smoke --help` and src/maxpat/dsp_sim/smoke.py.
+
 Threat model (Plan 32-05 <threat_model>):
   - T-01 (Elevation): _load_mirror uses importlib.import_module + getattr
     only; no string evaluation, no string-as-code execution, no compile of
     arbitrary strings. Test suite asserts the dangerous-call grep returns 0.
+    genexpr_interp/smoke compile codebox text into closures and never
+    evaluate strings; an AST test pins it.
   - T-02 (Tampering): no shell invocations or process spawning from this CLI.
   - T-03 (Information disclosure): --patch is carried as an opaque string
     into the SimulationReport; never opened or path-resolved here.
@@ -78,7 +84,9 @@ def build_parser() -> argparse.ArgumentParser:
             "Run a numpy waveguide-stability sweep against a topology or "
             "custom mirror. Exit codes per D-09 priority: "
             "0=pass, 1=phase_drift, 2=mode_competition, "
-            "3=no_oscillation, 4=runaway."
+            "3=no_oscillation, 4=runaway. "
+            "Subcommand: `smoke PATH` runs the GenExpr codebox smoke test; "
+            "see `smoke --help`."
         ),
     )
     parser.add_argument(
@@ -310,6 +318,11 @@ def _print_report(report: SimulationReport) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns the exit code (D-08 + D-09 priority)."""
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv and argv[0] == "smoke":
+        from src.maxpat.dsp_sim.smoke import smoke_main
+
+        return smoke_main(argv[1:])
     parser = build_parser()
     args = parser.parse_args(argv)
 

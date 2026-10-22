@@ -1,0 +1,560 @@
+"""GenExpr codebox smoke test (Q35, quick 261021-urs).
+
+``python -m src.maxpat.dsp_sim smoke <file.gendsp|file.maxpat>`` runs every
+gen~ codebox in the file through the offline interpreter
+(:mod:`src.maxpat.dsp_sim.genexpr_interp`) at the Param corners and reports
+broken or unstable behaviour before MAX opens the patch.
+
+* Corners (D-02): the default run, then one run per Param at its declared min
+  and one at its declared max, with the other Params at default.
+* Stimulus (D-03, D-06): every inlet gets a 0.25 impulse plus seeded +-0.1
+  noise for the first half of the run, then zeros. ``--input K=SPEC``
+  replaces one inlet's signal for the whole run.
+* Checks: NaN/inf, peak > 4, permanent silence after excitation and
+  self-sustain are FAIL; DC offset and an all-silent output are WARN.
+* Unsupported never passes (D-04): unsupported constructs, unknown names,
+  non-codebox gen operators and interpreter errors give the verdict
+  ``unsupported``.
+
+Advisory only: nothing in the save path imports this module (D-07).
+See src/maxpat/dsp_sim/README.md for the full contract.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import numpy as np
+
+from src.maxpat.dsp_sim.genexpr_interp import Unsupported, parse_codebox
+
+__all__ = [
+    "CodeboxEntry",
+    "CodeboxResult",
+    "Finding",
+    "discover_codeboxes",
+    "parse_input_spec",
+    "smoke_codebox",
+    "smoke_file",
+    "smoke_main",
+]
+
+
+# ===========================================================================
+# Constants
+# ===========================================================================
+
+# Stimulus
+IMPULSE = 0.25            # impulse at n = 0 on every default inlet
+NOISE_AMP = 0.1           # uniform +-NOISE_AMP noise over the driven half
+DRIVE_FRACTION = 0.5      # fraction of the run the default stimulus is active
+SUSTAIN_SCALE = 0.01      # self-sustain rerun stimulus scale
+
+# Checks
+PEAK_LIMIT = 4.0          # FAIL above this absolute peak
+SILENCE_FLOOR = 1e-9      # tail max below this after activity = silence FAIL
+ACTIVITY_FLOOR = 1e-6     # "the output did something" threshold
+DC_DRIVEN_LIMIT = 0.1     # |mean| over the driven window -> dc WARN
+DC_TAIL_LIMIT = 0.05      # |mean| of the ring-out tail -> dc latch WARN
+SUSTAIN_ABS = 0.01        # small-run tail detrended RMS floor for self_sustain
+SUSTAIN_RATIO = 0.5       # small/nominal tail ratio above this = self_sustain
+TAIL_FRACTION = 0.1       # tail = last 10% of a window
+
+# Run limits
+MAX_SECONDS = 60.0
+MIN_SAMPLERATE = 1000.0
+MAX_SAMPLERATE = 384000.0
+
+_DEFAULT_SPEC = ("impulse+noise", 0.0)
+
+
+# ===========================================================================
+# Records
+# ===========================================================================
+
+
+@dataclass
+class Finding:
+    """One check result. ``output`` is 1-based; 0 means the whole codebox."""
+
+    check: str        # nonfinite | peak | silence | silent | dc | self_sustain | constant_assign
+    severity: str     # fail | warn
+    corner: str
+    output: int
+    detail: str
+
+
+@dataclass
+class CodeboxEntry:
+    label: str
+    code: str
+    status: str       # ok | unsupported | skipped
+    reason: str = ""
+
+
+@dataclass
+class CodeboxResult:
+    label: str
+    verdict: str      # pass | fail | unsupported | skipped
+    reason: str
+    corners: int
+    findings: list = field(default_factory=list)
+
+
+@dataclass
+class _Run:
+    corner: str
+    params: dict
+    outputs: list
+    driven: tuple            # (start, stop)
+    ring: tuple | None       # (start, stop) or None when ring-out is off
+
+
+# ===========================================================================
+# Discovery
+# ===========================================================================
+
+_PLUMBING_RE = re.compile(r"^(in|out)\s+\d+(\s|$)")
+
+
+def _box_text(box: dict) -> str:
+    return str(box.get("text", "") or "").strip()
+
+
+def _gen_patcher_entries(patcher: dict, prefix: str) -> list:
+    """Entries for one gen patcher (a .gendsp top level or an embedded gen~)."""
+    codes: list = []
+    foreign: list = []
+    for entry in patcher.get("boxes", []) or []:
+        box = entry.get("box", {}) if isinstance(entry, dict) else {}
+        mc = box.get("maxclass")
+        if mc == "codebox":
+            codes.append(box.get("code", "") or "")
+            continue
+        if mc in ("comment", "panel"):
+            continue
+        text = _box_text(box)
+        if mc == "newobj" and _PLUMBING_RE.match(text):
+            continue
+        foreign.append(text or str(mc))
+    if foreign:
+        return [CodeboxEntry(
+            prefix, "", "unsupported",
+            "non-codebox gen operators: " + ", ".join(foreign[:5]),
+        )]
+    if not codes:
+        return [CodeboxEntry(prefix, "", "unsupported", "no codebox")]
+    return [
+        CodeboxEntry(f"{prefix} > codebox {k}", code, "ok")
+        for k, code in enumerate(codes, 1)
+    ]
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read {path}: {exc}") from None
+    if not isinstance(data, dict) or not isinstance(data.get("patcher"), dict):
+        raise ValueError(f"{path} has no top-level patcher")
+    return data
+
+
+def discover_codeboxes(path) -> list:
+    """Every gen~ codebox in a .gendsp, as CodeboxEntry records.
+
+    Raises ValueError for an unreadable file or an unsupported suffix.
+    """
+    p = Path(path)
+    suffix = p.suffix.lower()
+    if suffix != ".gendsp":
+        raise ValueError(f"{p}: expected a .gendsp file")
+    data = _read_json(p)
+    return _gen_patcher_entries(data["patcher"], p.name)
+
+
+# ===========================================================================
+# Stimulus
+# ===========================================================================
+
+_SPEC_RE = re.compile(r"^(const|dc|phasor|sine):(.+)$")
+
+
+def parse_input_spec(spec: str) -> tuple:
+    """Parse an inlet SPEC into (kind, value). Raises ValueError when malformed.
+
+    Forms: ``impulse+noise`` (default), ``zero``, ``const:V`` (``dc:V`` is an
+    alias), ``phasor:HZ`` (0..1 ramp), ``sine:HZ`` (amplitude 0.25).
+    """
+    s = str(spec).strip()
+    if s == "impulse+noise":
+        return _DEFAULT_SPEC
+    if s == "zero":
+        return ("zero", 0.0)
+    m = _SPEC_RE.match(s)
+    if not m:
+        raise ValueError(
+            f"bad input spec {spec!r}: use impulse+noise, zero, const:V, dc:V, "
+            "phasor:HZ or sine:HZ"
+        )
+    kind = "const" if m.group(1) == "dc" else m.group(1)
+    try:
+        value = float(m.group(2))
+    except ValueError:
+        raise ValueError(f"bad input spec {spec!r}: {m.group(2)!r} is not a number") from None
+    if not np.isfinite(value):
+        raise ValueError(f"bad input spec {spec!r}: value must be finite")
+    return (kind, value)
+
+
+def _signal(spec: tuple, k: int, n: int, samplerate: float, seed: int, scale: float = 1.0):
+    kind, value = spec
+    if kind == "impulse+noise":
+        x = np.zeros(n)
+        nd = int(n * DRIVE_FRACTION)
+        rng = np.random.default_rng((seed, k))
+        x[:nd] = rng.uniform(-NOISE_AMP, NOISE_AMP, nd)
+        x[0] += IMPULSE
+        return x * scale
+    if kind == "zero":
+        return np.zeros(n)
+    if kind == "const":
+        return np.full(n, value)
+    t = np.arange(n) / samplerate
+    if kind == "phasor":
+        return np.mod(t * value, 1.0)
+    if kind == "sine":
+        return 0.25 * np.sin(2.0 * np.pi * value * t)
+    raise ValueError(f"unknown input kind {kind!r}")
+
+
+# ===========================================================================
+# Corners
+# ===========================================================================
+
+
+def _corners(params: list, mode: str) -> list:
+    out = [("default", {})]
+    if mode == "default":
+        return out
+    for p in params:
+        name, default = p["name"], p["default"]
+        for side in ("min", "max"):
+            v = p.get(side)
+            if v is None or v == default:
+                continue
+            out.append((f"{name}={side} ({v:g})", {name: v}))
+    return out
+
+
+# ===========================================================================
+# Checks
+# ===========================================================================
+
+
+def _driven_checks(run: _Run, samplerate: float) -> tuple:
+    """Driven-window checks on one run. Returns (findings, finite_outputs)."""
+    findings: list = []
+    finite: list = []
+    d0, d1 = run.driven
+    for k, y in enumerate(run.outputs, 1):
+        bad = ~np.isfinite(y)
+        if bad.any():
+            i = int(np.argmax(bad))
+            findings.append(Finding(
+                "nonfinite", "fail", run.corner, k,
+                f"non-finite sample {float(y[i])!r} at n={i} ({i / samplerate:.4f} s)",
+            ))
+            continue
+        finite.append(k)
+        a = np.abs(y)
+        pk = float(a.max()) if a.size else 0.0
+        if pk > PEAK_LIMIT:
+            i = int(np.argmax(a))
+            findings.append(Finding(
+                "peak", "fail", run.corner, k,
+                f"peak {pk:.4g} > {PEAK_LIMIT:g} at n={i} ({i / samplerate:.4f} s)",
+            ))
+        if pk <= ACTIVITY_FLOOR:
+            findings.append(Finding(
+                "silent", "warn", run.corner, k,
+                f"output never exceeds {ACTIVITY_FLOOR:g} (max {pk:.3g})",
+            ))
+            continue
+        d = y[d0:d1]
+        if d.size >= 2:
+            tail_n = max(1, int(d.size * TAIL_FRACTION))
+            early = np.abs(d[:-tail_n])
+            tail = np.abs(d[-tail_n:])
+            if early.size and early.max() > ACTIVITY_FLOOR and tail.max() < SILENCE_FLOOR:
+                findings.append(Finding(
+                    "silence", "fail", run.corner, k,
+                    "permanent silence after excitation: last "
+                    f"{tail_n / samplerate:.3f} s of the driven window below "
+                    f"{SILENCE_FLOOR:g} while the inputs are still active",
+                ))
+            mean = float(np.mean(d))
+            if abs(mean) > DC_DRIVEN_LIMIT:
+                findings.append(Finding(
+                    "dc", "warn", run.corner, k,
+                    f"mean {mean:+.4g} over the driven window (|mean| > {DC_DRIVEN_LIMIT:g})",
+                ))
+    return findings, finite
+
+
+# ===========================================================================
+# Smoke one codebox
+# ===========================================================================
+
+
+def _validate_run_args(seconds, samplerate) -> int:
+    seconds = float(seconds)
+    samplerate = float(samplerate)
+    if not (0.0 < seconds <= MAX_SECONDS):
+        raise ValueError(f"seconds must be in (0, {MAX_SECONDS:g}], got {seconds:g}")
+    if not (MIN_SAMPLERATE <= samplerate <= MAX_SAMPLERATE):
+        raise ValueError(
+            f"samplerate must be in [{MIN_SAMPLERATE:g}, {MAX_SAMPLERATE:g}], got {samplerate:g}"
+        )
+    return max(2, int(round(seconds * samplerate)))
+
+
+def smoke_codebox(
+    code: str,
+    *,
+    label: str = "codebox",
+    seconds: float = 1.0,
+    samplerate: float = 44100.0,
+    inputs: dict | None = None,
+    buffers: dict | None = None,
+    corners: str = "all",
+    seed: int = 1,
+    ringout: bool = True,
+) -> CodeboxResult:
+    """Smoke one codebox at every corner and return its verdict.
+
+    ``inputs`` maps a 1-based inlet to a SPEC string (keys beyond the
+    codebox's inlet count are ignored). Raises ValueError on bad arguments.
+    """
+    n = _validate_run_args(seconds, samplerate)
+    samplerate = float(samplerate)
+    if corners not in ("all", "default"):
+        raise ValueError(f"corners must be 'all' or 'default', got {corners!r}")
+    raw_inputs = dict(inputs or {})
+    parsed_inputs = {int(k): parse_input_spec(v) for k, v in raw_inputs.items()}
+
+    try:
+        cb = parse_codebox(code)
+    except Unsupported as exc:
+        return CodeboxResult(label, "unsupported", str(exc), 0, [])
+    except Exception as exc:  # never pass on an interpreter error
+        return CodeboxResult(
+            label, "unsupported", f"interpreter error: {type(exc).__name__}: {exc}", 0, []
+        )
+
+    specs = [parsed_inputs.get(k, _DEFAULT_SPEC) for k in range(1, cb.n_in + 1)]
+    any_default = any(s == _DEFAULT_SPEC for s in specs)
+    all_default = cb.n_in >= 1 and all(s == _DEFAULT_SPEC for s in specs)
+    nd = int(n * DRIVE_FRACTION)
+    # The default stimulus stops at N/2, so the driven window ends there
+    # whenever an inlet carries it; fully overridden inlets drive the run.
+    driven = (0, nd) if any_default else (0, n)
+    ring = (nd, n) if (ringout and all_default) else None
+    signals = [_signal(s, k, n, samplerate, seed) for k, s in enumerate(specs, 1)]
+
+    findings: list = [
+        Finding("constant_assign", "warn", "build", 0, w) for w in cb.warnings
+    ]
+    corner_list = _corners(cb.params, corners)
+    try:
+        for corner, cparams in corner_list:
+            prog = cb.build(params=cparams, samplerate=samplerate, seed=seed, buffers=buffers)
+            outs = prog.run(signals, n)
+            run = _Run(corner, cparams, outs, driven, ring)
+            f, _finite = _driven_checks(run, samplerate)
+            findings.extend(f)
+    except Unsupported as exc:
+        return CodeboxResult(label, "unsupported", str(exc), 0, [])
+    except Exception as exc:  # never pass on an interpreter error
+        return CodeboxResult(
+            label, "unsupported", f"interpreter error: {type(exc).__name__}: {exc}", 0, []
+        )
+
+    failed = any(f.severity == "fail" for f in findings)
+    if failed:
+        n_fail = sum(1 for f in findings if f.severity == "fail")
+        reason = f"{n_fail} failing check(s)"
+    else:
+        reason = ""
+    return CodeboxResult(
+        label, "fail" if failed else "pass", reason, len(corner_list), findings
+    )
+
+
+def smoke_file(path, **kwargs) -> list:
+    """Smoke every codebox in ``path``. Skipped and unsupported discovery
+    entries pass through as results. Raises ValueError on a read error."""
+    results: list = []
+    for e in discover_codeboxes(path):
+        if e.status != "ok":
+            results.append(CodeboxResult(e.label, e.status, e.reason, 0, []))
+            continue
+        results.append(smoke_codebox(e.code, label=e.label, **kwargs))
+    return results
+
+
+# ===========================================================================
+# CLI
+# ===========================================================================
+
+_EPILOG = """\
+input SPEC forms (per inlet, --input K=SPEC, repeatable):
+  impulse+noise   default: 0.25 impulse at n=0 plus seeded +-0.1 noise for
+                  the first half of the run, then zeros
+  zero            all zeros
+  const:V         constant V for the whole run (dc:V is an alias)
+  phasor:HZ       0..1 ramp at HZ, e.g. --input 1=phasor:2
+  sine:HZ         sine at HZ, amplitude 0.25
+An overridden inlet holds its signal for the whole run. The ring-out checks
+(self_sustain, dc latch) run only when every inlet is on the default
+stimulus.
+
+exit codes: 0 every codebox passed (warnings allowed), 1 any FAIL,
+2 usage or read error, 3 any unsupported codebox (and no FAIL) or nothing
+to smoke.
+"""
+
+
+def _seconds_arg(text: str) -> float:
+    try:
+        v = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a number: {text!r}") from None
+    if not (0.0 < v <= MAX_SECONDS):
+        raise argparse.ArgumentTypeError(f"must be in (0, {MAX_SECONDS:g}]")
+    return v
+
+
+def _samplerate_arg(text: str) -> float:
+    try:
+        v = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a number: {text!r}") from None
+    if not (MIN_SAMPLERATE <= v <= MAX_SAMPLERATE):
+        raise argparse.ArgumentTypeError(
+            f"must be in [{MIN_SAMPLERATE:g}, {MAX_SAMPLERATE:g}]"
+        )
+    return v
+
+
+def _input_arg(text: str) -> tuple:
+    key, sep, spec = text.partition("=")
+    if not sep:
+        raise argparse.ArgumentTypeError(f"expected K=SPEC, got {text!r}")
+    try:
+        k = int(key)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"inlet {key!r} is not an integer") from None
+    if k < 1:
+        raise argparse.ArgumentTypeError("inlet numbers start at 1")
+    try:
+        parse_input_spec(spec)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+    return (k, spec)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="python -m src.maxpat.dsp_sim smoke",
+        description=(
+            "GenExpr codebox smoke test: run every gen~ codebox in a .gendsp "
+            "or .maxpat at the default and per-Param min/max corners and "
+            "report NaN/inf, peak > 4, permanent silence and self-sustain "
+            "(FAIL) and DC offset (WARN). Unsupported constructs never pass. "
+            "Advisory: not a save gate."
+        ),
+        epilog=_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("path", help="a .gendsp or .maxpat file")
+    p.add_argument("--seconds", type=_seconds_arg, default=1.0,
+                   help="seconds per corner run (default 1.0, max 60)")
+    p.add_argument("--samplerate", type=_samplerate_arg, default=44100.0,
+                   help="sample rate in Hz (default 44100)")
+    p.add_argument("--seed", type=int, default=1,
+                   help="stimulus and noise() seed (default 1)")
+    p.add_argument("--corners", choices=("all", "default"), default="all",
+                   help="all = default + each Param at min and max (default); "
+                        "default = the default run only")
+    p.add_argument("--no-ringout", action="store_true",
+                   help="skip the ring-out checks (self_sustain, dc latch)")
+    p.add_argument("--input", dest="inputs", action="append", type=_input_arg,
+                   default=[], metavar="K=SPEC",
+                   help="override inlet K's stimulus, e.g. --input 1=phasor:2 "
+                        "or --input 1=const:220 (see SPEC forms below)")
+    return p
+
+
+def _exit_code(results: list) -> int:
+    if any(r.verdict == "fail" for r in results):
+        return 1
+    smoked = [r for r in results if r.verdict == "pass"]
+    if any(r.verdict == "unsupported" for r in results) or not smoked:
+        return 3
+    return 0
+
+
+def _format_text(path, args, results: list, code: int) -> str:
+    lines = [
+        f"smoke {path}: seconds={args.seconds:g} samplerate={args.samplerate:g} "
+        f"seed={args.seed} corners={args.corners}"
+    ]
+    for r in results:
+        head = f"{r.label}: {r.verdict.upper()} ({r.corners} corners)"
+        if r.reason:
+            head += f": {r.reason}"
+        lines.append(head)
+        for f in r.findings:
+            where = f"out{f.output}" if f.output else "codebox"
+            lines.append(f"  {f.severity.upper()} {f.check} [{f.corner}] {where}: {f.detail}")
+    counts = {v: sum(1 for r in results if r.verdict == v)
+              for v in ("pass", "fail", "unsupported", "skipped")}
+    warns = sum(1 for r in results for f in r.findings if f.severity == "warn")
+    lines.append(
+        f"summary: {len(results)} codebox(es): {counts['pass']} pass, "
+        f"{counts['fail']} fail, {counts['unsupported']} unsupported, "
+        f"{counts['skipped']} skipped, {warns} warning(s); exit {code}"
+    )
+    return "\n".join(lines)
+
+
+def smoke_main(argv=None) -> int:
+    """Entry point for ``python -m src.maxpat.dsp_sim smoke``. Returns the exit code."""
+    parser = _build_parser()
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 2
+    inputs = {k: spec for k, spec in args.inputs}
+    try:
+        results = smoke_file(
+            args.path,
+            seconds=args.seconds,
+            samplerate=args.samplerate,
+            inputs=inputs,
+            corners=args.corners,
+            seed=args.seed,
+            ringout=not args.no_ringout,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    code = _exit_code(results)
+    print(_format_text(args.path, args, results, code))
+    return code
