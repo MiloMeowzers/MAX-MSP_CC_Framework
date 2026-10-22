@@ -359,8 +359,18 @@ def test_buffer_option_resizes_buffer(tmp_path, capsys):
     assert main(["smoke", str(path), "--seconds", "0.1", "--buffer", "bufname=1000:2"]) == 0
     (r,) = smoke_file(path, seconds=0.1, buffers={"bufname": (1000, 2)})
     assert r.verdict == "pass"
+    # buffer-player's one-shot corner (loop=min) runs off the end of a
+    # 1000-frame Buffer within 0.1 s, but not off the default 48000 frames.
     player = _REPO / "patterns" / "gen" / "buffer" / "buffer-player.gendsp"
-    assert main(["smoke", str(player), "--seconds", "0.1", "--buffer", "bufname=1000:2"]) == 0
+    (r,) = smoke_file(player, seconds=0.1)
+    assert r.verdict == "pass", r.findings
+    (r,) = smoke_file(player, seconds=0.1, buffers={"bufname": (1000, 2)})
+    assert [(f.check, f.corner) for f in r.findings if f.severity == "fail"] == [
+        ("silence", "loop=min (0)")
+    ], r.findings
+    capsys.readouterr()
+    assert main(["smoke", str(player), "--seconds", "0.1", "--buffer", "bufname=1000:2"]) == 1
+    assert "FAIL silence [loop=min (0)]" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("spec", ["bufname=abc", "bufname=0", "nofmt", "bufname=10:0"])

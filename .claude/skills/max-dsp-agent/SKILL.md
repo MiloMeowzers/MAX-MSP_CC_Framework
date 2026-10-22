@@ -291,6 +291,18 @@ stability fixture and gates the save on its result. See
 `src/maxpat/dsp_sim/` and `tests/dsp_sim/README.md` for the topology
 catalogue and threshold defaults.
 
+### Codebox smoke test (advisory)
+
+After writing or editing a gen~ codebox, run the offline GenExpr smoke test on the saved file.
+It runs every codebox at the default and per-Param min/max corners and flags NaN/inf, peak > 4,
+permanent silence and self-sustain (a latched `tanh(x*g)/tanh(g)` loop); UNSUPPORTED never passes.
+Report any FAIL or UNSUPPORTED finding to the user, but never block a save on it. Details:
+`src/maxpat/dsp_sim/README.md`.
+
+```bash
+python3 -m src.maxpat.dsp_sim smoke patches/<project>/generated/<name>.maxpat
+```
+
 ### When to Run (D-07) -- filename convention
 
 - Compute `stem = Path(patch_path).stem` (e.g.,

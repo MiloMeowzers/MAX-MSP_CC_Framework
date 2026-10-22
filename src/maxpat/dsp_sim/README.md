@@ -15,6 +15,9 @@ It exists to serve the CLAUDE.md Gen~ rule:
 > the output fundamental. If pitch moves more than a few cents across the sweep, the architecture
 > is wrong.
 
+The `smoke` subcommand (Q35) is the general-purpose exception: a GenExpr codebox smoke test for
+any gen~ codebox (see [below](#python--m-srcmaxpatdsp_sim-smoke-genexpr-codebox-smoke-test)).
+
 The two curated topologies encode the canonical bassoon signal path. If you need to broaden
 this into a general DSP simulator (arbitrary gain chains, filter cascades, etc.), that is a
 deferred v6.0 roadmap item — see [Scope & Future Work](#scope--future-work) below.
@@ -97,6 +100,129 @@ shell gate directly:
 | `mode_competition` | 2 |
 | `no_oscillation` | 3 |
 | `runaway` | 4 |
+
+### `python -m src.maxpat.dsp_sim smoke`: GenExpr codebox smoke test
+
+**Advisory: not a save gate (Q35, D-07).** Nothing in the save path imports `smoke` or
+`genexpr_interp` (a test pins this). Run it after writing or editing a gen~ codebox and report
+FAIL / UNSUPPORTED findings; the stereo-feedback-delay v0.1.0 `tanh(x*g)/tanh(g)` runaway is
+the motivating bug.
+
+```bash
+python3 -m src.maxpat.dsp_sim smoke patches/<project>/generated/<name>.maxpat
+python3 -m src.maxpat.dsp_sim smoke engine.gendsp --seconds 0.25 --input 1=phasor:2 --json
+```
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `PATH` | (required) | a `.gendsp` or `.maxpat` |
+| `--seconds S` | `1.0` | seconds per corner run, in (0, 60] |
+| `--samplerate HZ` | `44100` | in [1000, 384000] |
+| `--seed N` | `1` | stimulus noise and `noise()` seed |
+| `--corners all\|default` | `all` | `default` runs only the default corner |
+| `--no-ringout` | off | skip the ring-out checks (self_sustain, dc latch) |
+| `--input K=SPEC` | `impulse+noise` | per-inlet stimulus override, repeatable |
+| `--buffer NAME=FRAMES[:CHANS]` | `48000:1` | size of the Buffer bound to buffer~ NAME, repeatable |
+| `--json` | off | print one JSON object (path, seconds, samplerate, seed, corners, exit_code, codeboxes[label, verdict, reason, corners, findings[check, severity, corner, output, detail]]) |
+
+**Discovery.**
+- `.gendsp`: the top-level gen patcher.
+- `.maxpat`: every `gen~` / `mc.gen~` newobj, recursively through `p` / bpatcher / poly~
+  embedded patchers (depth <= 32). An embedded gen patcher is used directly. A gen~ without
+  one is external: its name is the value after `@gen`, else the first non-`@` token after the
+  object name, and only `<the patch's own directory>/<name>.gendsp` is opened (a name with
+  `/`, `\` or `..` is unsupported). `jit.gen` / `jit.pix` / `jit.gl.pix` are skipped. Comment
+  boxes are ignored.
+- A gen patcher may hold only `in N` / `out N` newobjs, codeboxes, comments and panels. Any other
+  box (a `* 0.5`, a `history`, ...) makes the whole gen patcher **unsupported** (D-04).
+- Each codebox is smoked standalone; patcher wiring is ignored. Labels read
+  `<file> > [<subpatcher> > ]<box text> > codebox K`, numbered `(#2)` when repeated.
+
+**Stimulus (D-03, D-06).** Every inlet gets `impulse+noise`: a 0.25 impulse at n = 0 plus seeded
+uniform +-0.1 noise (`np.random.default_rng((seed, inlet))`) over the first half of the run,
+then zeros. `--input K=SPEC` replaces inlet K's signal for the whole run:
+
+| SPEC | Signal |
+|------|--------|
+| `impulse+noise` | the default above |
+| `zero` | zeros |
+| `const:V` / `dc:V` | constant V |
+| `phasor:HZ` | 0..1 ramp at HZ (phasor-domain patterns such as swing-generator) |
+| `sine:HZ` | sine at HZ, amplitude 0.25 |
+
+The driven window is the first half whenever an inlet carries the default stimulus (it stops
+there), else the whole run. The second half is the ring-out window, used only when every
+inlet is on the default stimulus and `--no-ringout` is off.
+
+**Corners (D-02).** `default` (every Param at its default), then per Param in declaration order
+`NAME=min (V)` and `NAME=max (V)` with the other Params at default: 1 + 2N runs. A side whose
+min/max is undeclared or equal to the default is skipped. Every finding names its corner.
+
+**Checks** (per output; the small self-sustain run is labelled `<corner> @0.01x`):
+
+| Check | Definition | Constant (value) | Severity |
+|-------|------------|------------------|----------|
+| `nonfinite` | any NaN / inf sample; reports the first index | - | FAIL (skips the other checks for that output) |
+| `peak` | max abs > limit | `PEAK_LIMIT` (4.0) | FAIL |
+| `silence` | the last `TAIL_FRACTION` of the driven window stays below the floor after the earlier driven window exceeded `ACTIVITY_FLOOR` (1e-6) | `SILENCE_FLOOR` (1e-9), `TAIL_FRACTION` (0.1) | FAIL |
+| `silent` | the output never exceeds `ACTIVITY_FLOOR` | `ACTIVITY_FLOOR` (1e-6) | WARN |
+| `dc` | abs mean over the driven window | `DC_DRIVEN_LIMIT` (0.1) | WARN |
+| `dc` (dc latch) | abs mean over the last 10% of the ring-out | `DC_TAIL_LIMIT` (0.05) | WARN |
+| `self_sustain` | rerun at `SUSTAIN_SCALE` x the stimulus (same seeds); small = detrended RMS (linear fit removed, `np.polyfit` degree 1) of the last 10% of the ring-out; FAIL when small > `SUSTAIN_ABS` and small / nominal > `SUSTAIN_RATIO`; nonfinite and peak also run on the small run | `SUSTAIN_SCALE` (0.01), `SUSTAIN_ABS` (0.01), `SUSTAIN_RATIO` (0.5) | FAIL |
+| `constant_assign` | an assignment to a built-in constant name (ignored; the constant wins) | - | WARN |
+
+DC is a warning, never a fail (D-06): phasors, envelopes, random walks and sample-and-hold sit
+off zero by design.
+
+**Why self-sustain (D-05).** A `tanh(x*g)/tanh(g)` feedback loop is bounded by tanh, so it never
+peaks above 4 or goes NaN; it latches into a limit cycle instead. genexpr-rules.md "In-loop
+saturation" gives the reason: the small-signal loop gain is `feedback * g / tanh(g)`, above
+unity at every setting. A stable (or linear) loop's tail scales with the stimulus (ratio
+~0.01); a latched loop's tail does not (ratio ~1). Measured: the `Delay` fixture in
+`tests/dsp_sim/test_smoke.py` (drive 4, feedback 0.6, 10 ms) has small = nominal = 0.589 and
+fails at `default`, `drive=max` and `feedback=max`; its `/ drive` twin passes.
+
+**Buffer / Data backing.** MAX's buffer~ contents are not available offline. Each `Buffer` is
+48000 frames x 1 channel holding `0.25 * sin(2*pi*220*n/samplerate)`, deliberately not the run
+length; `--buffer NAME=FRAMES[:CHANS]` resizes the Buffer bound to buffer~ NAME (the string
+argument, else the declared name). `Data` is zero-filled.
+
+**Interpreter** (`genexpr_interp.py`, D-01). A tree-walking AST evaluator: lexer over Q22's
+`mask()`, recursive descent plus Pratt parser, resolver, and a closure compiler (Params bound
+as constants per corner, constant subtrees folded). It never generates source text and never
+calls eval / exec / compile (an AST test pins it). It reproduces `patches/bassoon-model/tools/genrun.py`
+on the bassoon codebox within 1e-12. Supported: Param, History (sequential), Delay
+read/write, Data / Buffer peek / poke / dim / channels, if / else, constant-bound for,
+`+= -= *= /=`, ternary, the math built-ins, `noise phasor cycle latch dcblock triangle selector
+mc_channel`, the lowercase constants plus `phi` and the uppercase `PI TWOPI HALFPI`.
+Semantics assumptions (full table in the module docstring):
+- `[ASSUMED]` `/` is safediv (0 for a zero divisor); `%` is C `fmod`, 0 for a zero divisor.
+- `[ASSUMED]` `noise()` is uniform in [-1, 1); `wrap` / `fold` with `hi == lo` return `lo`.
+- `[ASSUMED]` `peek` floors a fractional index; out of range gives 0 (refpage boundmode ignore);
+  `poke` out of range writes nothing.
+- `[ASSUMED]` Delay `read(t)` clamps t to [1, N] with linear interpolation; heads advance at the
+  end of the sample, so a write-then-read sees the previous samples.
+- `[ASSUMED]` History is sequential: a read before the assignment sees the previous sample.
+- `[ASSUMED]` comparisons, `&&`, `||` evaluate both sides and give 1.0 / 0.0; `cycle` is
+  `sin(2*pi*phase)`; `selector` clamps an index above the count to the last input.
+
+**Exit codes.** `0` every codebox passed (warnings allowed); `1` any FAIL; `2` usage or read
+error; `3` any unsupported codebox (and no FAIL), or nothing to smoke (no gen~, only skipped
+jit.gen).
+
+**Limits.**
+- Codeboxes only: gen patchers with other operators, and constructs outside the subset
+  (`while`, `else if`, user functions, unimplemented Gen operators such as `sah` / `accum`,
+  ...), are **unsupported**, never pass.
+- `if` runs only the taken branch, so a stateful call (`noise()`, `phasor()`, a Delay write)
+  inside an untaken branch differs from gen, which executes both branches.
+- Any `--input` override (or `--no-ringout`) disables the ring-out checks: an overridden inlet
+  never goes quiet, so self-sustain cannot be judged. A generator with an inlet (an LFO with a
+  reset inlet) can trip self_sustain by design; use `--no-ringout` for it.
+- External `.gendsp` files are found only next to the patch (no Max search path).
+- Speed: ~1.3 us/sample for `patterns/gen/dsp/compressor.gendsp` and ~25.6 us/sample for the
+  537-line bassoon codebox (1.13 s per simulated second, Python 3.14). A full 37-corner bassoon
+  run (`--input 1=const:220 --input 2=const:0.6`, 1 s per corner) takes about 48 s; use `--corners default` and `--seconds` for quick checks.
 
 ### Live-patch gate: `tests/dsp_sim/test_<stem>.py`
 

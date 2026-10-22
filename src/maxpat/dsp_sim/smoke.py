@@ -165,17 +165,108 @@ def _read_json(path: Path) -> dict:
     return data
 
 
-def discover_codeboxes(path) -> list:
-    """Every gen~ codebox in a .gendsp, as CodeboxEntry records.
+_MAX_DEPTH = 32
+_GEN_OBJECTS = ("gen~", "mc.gen~")
+_SKIP_OBJECTS = ("jit.gen", "jit.pix", "jit.gl.pix")
 
+
+def _external_name(tokens: list):
+    """The .gendsp name of an external gen~ box: the value after @gen, else
+    the first token after the object name that does not start with '@'."""
+    if "@gen" in tokens:
+        i = tokens.index("@gen")
+        return tokens[i + 1] if i + 1 < len(tokens) else None
+    for tok in tokens[1:]:
+        if tok.startswith("@"):
+            return None
+        return tok
+    return None
+
+
+def _external_entries(maxpat: Path, label: str, tokens: list) -> list:
+    name = _external_name(tokens)
+    if not name:
+        return [CodeboxEntry(
+            label, "", "unsupported", "gen~ without embedded patcher or file name"
+        )]
+    if "/" in name or "\\" in name or ".." in name:
+        return [CodeboxEntry(
+            label, "", "unsupported",
+            f"external gendsp name is not a plain file name: {name!r}",
+        )]
+    fname = name if name.endswith(".gendsp") else f"{name}.gendsp"
+    target = maxpat.parent / fname
+    if not target.is_file():
+        return [CodeboxEntry(
+            label, "", "unsupported",
+            f"external gendsp not found: {fname} (only the patch's own directory "
+            "is searched)",
+        )]
+    try:
+        data = _read_json(target)
+    except ValueError as exc:
+        return [CodeboxEntry(label, "", "unsupported", str(exc))]
+    return _gen_patcher_entries(data["patcher"], f"{label} > {fname}")
+
+
+def _walk_maxpat(patcher: dict, maxpat: Path, prefix: str, out: list, depth: int) -> None:
+    if depth > _MAX_DEPTH:
+        out.append(CodeboxEntry(
+            prefix, "", "unsupported", f"patcher nesting deeper than {_MAX_DEPTH}"
+        ))
+        return
+    for entry in patcher.get("boxes", []) or []:
+        box = entry.get("box", {}) if isinstance(entry, dict) else {}
+        inner = box.get("patcher")
+        inner = inner if isinstance(inner, dict) else None
+        text = _box_text(box)
+        tokens = text.split()
+        first = tokens[0] if tokens else ""
+        if box.get("maxclass") == "newobj":
+            if first in _GEN_OBJECTS:
+                label = f"{prefix} > {text}"
+                if inner is not None:
+                    out.extend(_gen_patcher_entries(inner, label))
+                else:
+                    out.extend(_external_entries(maxpat, label, tokens))
+                continue
+            if first in _SKIP_OBJECTS and inner is not None:
+                out.append(CodeboxEntry(
+                    f"{prefix} > {text}", "", "skipped", f"not gen~ ({first})"
+                ))
+                continue
+        if inner is not None:
+            # p / bpatcher / poly~ with an embedded patcher: recurse.
+            sub = text or str(box.get("maxclass", "patcher"))
+            _walk_maxpat(inner, maxpat, f"{prefix} > {sub}", out, depth + 1)
+
+
+def discover_codeboxes(path) -> list:
+    """Every gen~ codebox in a .gendsp or .maxpat, as CodeboxEntry records.
+
+    .gendsp: the top-level gen patcher. .maxpat: every gen~ / mc.gen~ newobj,
+    recursively through embedded patchers (depth <= 32); an embedded gen
+    patcher is used directly, otherwise ``<name>.gendsp`` is resolved in the
+    patch's own directory only; jit.gen / jit.pix / jit.gl.pix are skipped.
     Raises ValueError for an unreadable file or an unsupported suffix.
     """
     p = Path(path)
     suffix = p.suffix.lower()
-    if suffix != ".gendsp":
-        raise ValueError(f"{p}: expected a .gendsp file")
+    if suffix not in (".gendsp", ".maxpat"):
+        raise ValueError(f"{p}: expected a .gendsp or .maxpat file")
     data = _read_json(p)
-    return _gen_patcher_entries(data["patcher"], p.name)
+    if suffix == ".gendsp":
+        return _gen_patcher_entries(data["patcher"], p.name)
+    out: list = []
+    _walk_maxpat(data["patcher"], p, p.name, out, 0)
+    # Two identical gen~ boxes in one patcher would share a label: number
+    # the repeats so every report line names exactly one codebox.
+    seen: dict = {}
+    for e in out:
+        seen[e.label] = seen.get(e.label, 0) + 1
+        if seen[e.label] > 1:
+            e.label = f"{e.label} (#{seen[e.label]})"
+    return out
 
 
 # ===========================================================================
@@ -489,6 +580,10 @@ An overridden inlet holds its signal for the whole run. The ring-out checks
 (self_sustain, dc latch) run only when every inlet is on the default
 stimulus.
 
+Buffer backing: MAX's buffer~ contents are not available offline; each
+Buffer is 48000 frames x 1 channel of a 0.25 220 Hz sine unless resized with
+--buffer NAME=FRAMES[:CHANS]. Data is zero-filled.
+
 exit codes: 0 every codebox passed (warnings allowed), 1 any FAIL,
 2 usage or read error, 3 any unsupported codebox (and no FAIL) or nothing
 to smoke.
@@ -534,6 +629,27 @@ def _input_arg(text: str) -> tuple:
     return (k, spec)
 
 
+def _buffer_arg(text: str) -> tuple:
+    from src.maxpat.dsp_sim.genexpr_interp import STATE_CAP
+
+    name, sep, size = text.partition("=")
+    if not sep or not name.strip():
+        raise argparse.ArgumentTypeError(f"expected NAME=FRAMES[:CHANS], got {text!r}")
+    frames_s, _c, chans_s = size.partition(":")
+    try:
+        frames = int(frames_s)
+        chans = int(chans_s) if chans_s else 1
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected NAME=FRAMES[:CHANS] with integers, got {text!r}"
+        ) from None
+    if frames < 1 or chans < 1:
+        raise argparse.ArgumentTypeError("FRAMES and CHANS must be >= 1")
+    if frames * chans > STATE_CAP:
+        raise argparse.ArgumentTypeError(f"FRAMES * CHANS must be <= {STATE_CAP}")
+    return (name.strip(), (frames, chans))
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="python -m src.maxpat.dsp_sim smoke",
@@ -563,6 +679,12 @@ def _build_parser() -> argparse.ArgumentParser:
                    default=[], metavar="K=SPEC",
                    help="override inlet K's stimulus, e.g. --input 1=phasor:2 "
                         "or --input 1=const:220 (see SPEC forms below)")
+    p.add_argument("--buffer", dest="buffers", action="append", type=_buffer_arg,
+                   default=[], metavar="NAME=FRAMES[:CHANS]",
+                   help="size the Buffer bound to buffer~ NAME (default 48000:1, "
+                        "a 0.25 220 Hz sine), e.g. --buffer bufname=1000:2")
+    p.add_argument("--json", action="store_true",
+                   help="print the report as one JSON object")
     return p
 
 
@@ -599,6 +721,36 @@ def _format_text(path, args, results: list, code: int) -> str:
     return "\n".join(lines)
 
 
+def _report_dict(path, args, results: list, code: int) -> dict:
+    return {
+        "path": str(path),
+        "seconds": args.seconds,
+        "samplerate": args.samplerate,
+        "seed": args.seed,
+        "corners": args.corners,
+        "exit_code": code,
+        "codeboxes": [
+            {
+                "label": r.label,
+                "verdict": r.verdict,
+                "reason": r.reason,
+                "corners": r.corners,
+                "findings": [
+                    {
+                        "check": f.check,
+                        "severity": f.severity,
+                        "corner": f.corner,
+                        "output": f.output,
+                        "detail": f.detail,
+                    }
+                    for f in r.findings
+                ],
+            }
+            for r in results
+        ],
+    }
+
+
 def smoke_main(argv=None) -> int:
     """Entry point for ``python -m src.maxpat.dsp_sim smoke``. Returns the exit code."""
     parser = _build_parser()
@@ -616,10 +768,14 @@ def smoke_main(argv=None) -> int:
             corners=args.corners,
             seed=args.seed,
             ringout=not args.no_ringout,
+            buffers=dict(args.buffers),
         )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     code = _exit_code(results)
-    print(_format_text(args.path, args, results, code))
+    if args.json:
+        print(json.dumps(_report_dict(args.path, args, results, code), indent=2))
+    else:
+        print(_format_text(args.path, args, results, code))
     return code
