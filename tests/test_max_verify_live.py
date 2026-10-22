@@ -488,6 +488,7 @@ class TestBatch:
             rc, res = _run(fb.port, a, b, capsys=capsys)
         assert rc == 2 and res["status"] == "aborted"
         assert "MAX stopped answering during a.maxpat" in res["hint"]
+        assert "close __maxbridge_a WITHOUT saving" in res["hint"] and "check DSP" in res["hint"]
         assert res["patches"][1]["status"] == "not checked"
         assert fb.addresses.count("/open") == 1
         assert _no_copies(tmp_path)

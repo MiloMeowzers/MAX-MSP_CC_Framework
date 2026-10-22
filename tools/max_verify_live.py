@@ -523,7 +523,10 @@ def run_live(patches, opts, *, project=None, excluded=None) -> dict:
             return _finish(
                 result, "aborted",
                 f"MAX stopped answering during {entry['name']} ({report.get('error')}): "
-                "a modal dialog, a crash, or the enable toggle switched OFF")
+                "a modal dialog, a crash, or the enable toggle switched OFF. "
+                f"In MAX, close {bridge.COPY_PREFIX}{Path(entry['name']).stem} WITHOUT saving "
+                "if it is still open and check DSP (the close and the DSP restore "
+                "cannot pass a closed toggle)")
 
         entry["status"] = "checked"
         entry["findings"] = map_findings(report)
