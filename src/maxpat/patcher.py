@@ -2155,6 +2155,21 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         p._next_id = max_id_num + 1
         return p
 
+    def diff(self, other: "Patcher") -> "PatchDiff":
+        """The changes from this Patcher to *other* (Q36, D-06 / D-07).
+
+        Boxes are matched by id at every level, recursing into embedded
+        patchers with path-prefixed entries (``p params/obj-7``). Neither
+        Patcher is mutated.
+
+        Returns:
+            A PatchDiff (``src.maxpat.patch_diff``); ``.render()`` gives the
+            compact text with a summary line.
+        """
+        from src.maxpat.patch_diff import diff_patch_dicts
+
+        return diff_patch_dicts(self.to_dict(), other.to_dict())
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize to complete .maxpat JSON structure.
 
