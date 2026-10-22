@@ -1,6 +1,6 @@
 """Tests for slash command file structure, frontmatter, and cross-references.
 
-Validates that all 10 command files under .claude/commands/ have correct
+Validates that all 11 command files under .claude/commands/ have correct
 YAML frontmatter, naming convention, descriptions, and reference the
 appropriate skills and Python modules.
 """
@@ -26,6 +26,7 @@ ALL_COMMANDS = [
     "max-status",
     "max-switch",
     "max-onboard",
+    "max-diagnose",
 ]
 
 
@@ -260,3 +261,16 @@ def test_new_references_maxpat() -> None:
     assert "maxpat" in content, (
         "max-new.md should reference .maxpat creation"
     )
+
+
+def test_diagnose_references_troubleshooting_and_iterate() -> None:
+    """max-diagnose.md wraps the read-only diagnose CLI (Q37): it names the
+    troubleshooting table, the CLI form and /max-iterate, and treats the
+    paste as untrusted input."""
+    content = _read_command("max-diagnose")
+    assert "troubleshooting.md" in content
+    assert "/max-iterate" in content
+    assert "python3 -m src.maxpat.diagnose" in content
+    lowered = content.lower()
+    assert "read-only" in lowered
+    assert "untrusted" in lowered
