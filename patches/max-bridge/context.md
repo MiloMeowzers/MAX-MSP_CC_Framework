@@ -1,6 +1,6 @@
 # max-bridge
 
-**Spike (Q34, quick 261016-uy1; v0.2.0 follow-ups, quick 261021-l26).** There is no `/max-verify` integration until the user confirms the bridge works in MAX (see `test-results/v0.1.0-bridge-checklist.md`, confirmed 2026-10-21, and `test-results/v0.2.0-bridge-checklist.md`, pending).
+**Spike (Q34, quick 261016-uy1; v0.2.0 follow-ups, quick 261021-l26; v0.3.0, quick 261021-olv).** v0.1.0 and v0.2.0 are confirmed in MAX 9.2 (`test-results/v0.1.0-bridge-checklist.md` and `test-results/v0.2.0-bridge-checklist.md`, 2026-10-21, commit dc0cde91). v0.3.0 adds `check --dsp-on-load` and `tools/max_verify_live.py` (`/max-verify --live`), pending `test-results/v0.3.0-verify-live-checklist.md`.
 
 ## Purpose
 
@@ -19,6 +19,8 @@ Design source: `.planning/quick/261016-uy1-implement-q34-in-planning-reviews-202
 - `generated/max-bridge.maxpat`: the resident bridge patch. Open it in MAX and leave it open while `tools/max_bridge.py` runs.
 - `tools/max_bridge.py` (repo root): the client, with the `ping`, `check` and `analyze` subcommands.
 - `tests/test_max_bridge.py`: hermetic tests that run against an in-process fake bridge. No MAX is needed.
+- `tools/max_verify_live.py` (v0.3.0): the `/max-verify --live` wrapper. It picks the project's top-level patches, chooses the `check` options per patch, runs them one after another and maps each report to live findings.
+- `tests/test_max_verify_live.py` (v0.3.0): hermetic tests of the wrapper on the same fake bridge.
 
 ## Protocol (the bridge is a dumb pass-through; Python sequences everything)
 
@@ -51,7 +53,7 @@ The enable toggle at the top left is OFF whenever the bridge patch opens, so eve
 
 ### DSP state (v0.2.0, N4)
 
-`check` sends `/query` (then a `/ping` barrier) before `/open`, so a patch that starts DSP at load cannot hide the prior state. `dsp_before` is the first `/state/dsp`, else 1 when a `/state/sr` arrived (dspstate~ is silent while DSP is off), else unknown (None). After the record block, `/dsp 0` is sent only when DSP was off before, or when the state is unknown and this run switched it on (then the warning `dsp_state_unknown`; an older bridge patch ignores `/query`). DSP that was on stays on. `--leave-dsp-on` never sends `/dsp 0`. The report carries `dsp_before` and `dsp_stop_sent`.
+`check` sends `/query` (then a `/ping` barrier) before `/open`, so a patch that starts DSP at load cannot hide the prior state. `dsp_before` is the first `/state/dsp`, else 1 when a `/state/sr` arrived (dspstate~ is silent while DSP is off), else unknown (None). After the record block, `/dsp 0` is sent only when DSP was off before, or when the state is unknown and this run switched it on (then the warning `dsp_state_unknown`; an older bridge patch ignores `/query`). DSP that was on stays on. `--leave-dsp-on` never sends `/dsp 0`. `--dsp-on-load` (v0.3.0) sends `/dsp 1` just before `/open` (never between `/open` and its load `/ping`), and the same restore rule applies. The report carries `dsp_before` and `dsp_stop_sent`.
 
 ### Sample rate (v0.2.0)
 
@@ -100,6 +102,18 @@ No allowlist entries are added for either.
 
 The Python client binds 127.0.0.1 only. The kill switch (v0.2.0, above) is implemented and OFF at every load, so nothing gets through until you turn it ON; still close the bridge patch when it is not in use. Any open patch can address `__maxbridge_reply` (its only sink is udpsend to 127.0.0.1:7401, which any patch could create anyway) and `__maxbridge_note` (which exists only in gitignored temp copies). There is no generic `/send`: `/note` reaches one fixed name.
 
+## /max-verify --live (v0.3.0)
+
+`tools/max_verify_live.py` runs after `/max-verify`'s static report and never changes it. Live findings are report-only: they are never part of the save gate or the critic revision loop.
+
+- **Top-level selection.** From the project's `generated/*.maxpat` (non-recursive) it drops `__maxbridge_*` and every file a sibling references: a bpatcher `name`, a newobj whose first token is a sibling stem, or the poly~/mc.poly~/pfft~ argument. Comments never count, and a file never excludes itself. terrain-synth resolves to `terrain-synth.maxpat` only. Explicit PATHs skip the selection (the fixtures in `fixtures/`, playable abstractions). `--project NAME` overrides the active project without writing `.active-project.json`.
+- **Option rules.** The tap and note-target decision reuses the bridge's own `_instrument_patcher` / `_inject_note` on an in-memory copy, so it never disagrees with what `check` taps. A tapped patch records (`--record 3` by default, `0` = never) with `--note 60 100` when it has a notein or kslider. D-01: an audio-input patch (`adc~`, `ezadc~`, `mc.adc~`, `mc.ezadc~` at any depth, or in a sibling it references) is load-only unless `--live-inputs`. D-02: every other load-only patch gets `check --dsp-on-load`, which switches DSP on just before `/open` so gen~ compile errors post during the settle; the usual restore rule puts DSP back. A locked audio-input patch never gets DSP switched on; if DSP was already on, a note says its input was live.
+- **Severities.** `.claude/skills/references/severity-contract.md` section 7 holds the table; `map_findings` implements it. The bridge's own exit_code/verdict is never the severity.
+- **Batch safety.** Patches run strictly one after another (one reply port, one sfrecord~). The first `bridge_failed` after a good pre-flight aborts the run, and the rest are "not checked". A per-patch exception becomes a warning and the loop goes on.
+- **Open originals.** When a patch's own window is open in MAX (title `<stem>`, `<stem>*`, `<stem> (presentation)` or `<stem>.maxpat`), it is skipped with a note. The user's window is never closed.
+- **The toggle and the bridge patch stay the user's (D-04).** The wrapper never sends a command itself: it reaches MAX only through `run_check` and a read-only `/ping` pre-flight. A closed bridge or the toggle OFF gives "live check skipped" with the toggle hint. Every report ends with the reminder to turn the toggle OFF.
+- **Exit codes.** 0 ran with notes only; 1 any live blocker or warning; 2 skipped, aborted or a usage error.
+
 ## Presentation mode
 
 None. The bridge is a utility patch whose one user control is the enable toggle (top left, patching mode); it has no presentation, so Rule #9 does not apply.
@@ -111,3 +125,11 @@ None. The bridge is a utility patch whose one user control is the enable toggle 
 | 0 | clean |
 | 1 | findings: error lines, analysis flags, unsupported outputs, shot failure, feedback cap |
 | 2 | bridge failure: no `/pong`, timeout, bind failure, a wav that never settles, refused input |
+
+`tools/max_verify_live.py` (v0.3.0) uses its own codes, computed from the live findings rather than the bridge's:
+
+| Code | Meaning |
+|---|---|
+| 0 | ran; notes only |
+| 1 | any live blocker or warning |
+| 2 | skipped (no bridge patch in the install, MAX not running, no answer), aborted (MAX stopped answering mid-run) or a usage error |

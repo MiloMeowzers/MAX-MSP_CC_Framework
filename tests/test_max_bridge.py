@@ -1455,3 +1455,85 @@ class TestFixtures:
             m = re.search(r"Answered by: step (\d+)", e)
             assert m and int(m.group(1)) in steps, e[:60]
             assert "Answer:" in e
+
+
+# ---------------------------------------------------------------------------
+# quick-261021-olv: check --dsp-on-load (D-02)
+# ---------------------------------------------------------------------------
+
+class TestDspOnLoad:
+
+    @pytest.mark.parametrize("mode,opener", [("pcontrol", "/open"), ("openfile", "/openfile")])
+    def test_plan_placement(self, tmp_path, run_dir, mode, opener):
+        copy = tmp_path / "__maxbridge_tone.maxpat"
+        opts = bridge.build_parser().parse_args(
+            ["check", str(tmp_path / "tone.maxpat"), "--dsp-on-load", "--open-mode", mode])
+        assert opts.dsp_on_load is True
+        plan = bridge.plan_messages(copy, run_dir, opts)
+        addrs = [a for a, _ in plan]
+        i = addrs.index(opener)
+        assert plan[i - 1] == ("/dsp", (1,))
+        assert addrs.index("/query") < i - 1
+        assert plan[i + 1] == ("/ping", ())
+        assert plan.count(("/dsp", (1,))) == 1
+
+    def test_flagless_plan_has_no_dsp_on(self, tmp_path, run_dir):
+        copy = tmp_path / "__maxbridge_tone.maxpat"
+        opts = bridge.build_parser().parse_args(["check", str(tmp_path / "tone.maxpat")])
+        assert opts.dsp_on_load is False
+        assert ("/dsp", (1,)) not in bridge.plan_messages(copy, run_dir, opts)
+
+    def test_plain_namespace_without_attribute(self, tmp_path, run_dir):
+        import argparse
+        opts = argparse.Namespace(console_all=False, record=None, leave_dsp_on=False)
+        plan = bridge.plan_messages(tmp_path / "__maxbridge_tone.maxpat", run_dir, opts)
+        assert ("/dsp", (1,)) not in plan
+
+    def test_dsp_off_before(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(dsp_on=0) as fb:
+            rc, rep = _check(fb, src, "--dsp-on-load", capsys=capsys)
+        assert rc == 0, rep
+        i_open = fb.addresses.index("/open")
+        on = fb.received.index(("/dsp", [1]))
+        off = fb.received.index(("/dsp", [0]))
+        assert on < i_open < off
+        assert rep["dsp_before"] == 0 and rep["dsp_stop_sent"] is True
+        assert fb.dsp_on == 0
+
+    def test_dsp_on_before(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(dsp_on=1) as fb:
+            rc, rep = _check(fb, src, "--dsp-on-load", capsys=capsys)
+        assert rc == 0, rep
+        assert ("/dsp", [0]) not in fb.received
+        assert rep["dsp_before"] == 1 and rep["dsp_stop_sent"] is False
+        assert fb.dsp_on == 1
+
+    def test_query_unanswered(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(answers_query=False) as fb:
+            rc, rep = _check(fb, src, "--dsp-on-load", capsys=capsys)
+        assert rc == 0, rep
+        assert ("/dsp", [0]) in fb.received and rep["dsp_stop_sent"] is True
+        assert any(w.startswith("dsp_state_unknown") for w in rep["warnings"])
+        assert fb.dsp_on == 0
+
+    def test_bridge_stops_answering(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        with FakeBridge(mute_after_open=True, dsp_on=0) as fb:
+            rc, rep = _check(fb, src, "--dsp-on-load", capsys=capsys)
+            time.sleep(0.2)  # let the fake receive the fire-and-forget cleanup
+        assert rc == 2 and rep["verdict"] == "bridge_failed"
+        assert ("/dsp", [0]) in fb.received
+        assert fb.received.index(("/dsp", [1])) < fb.addresses.index("/open")
+        assert not (tmp_path / "__maxbridge_tone.maxpat").exists()
+
+    def test_dry_run(self, tmp_path, db, run_dir, capsys):
+        src = _tone_patch(tmp_path / "tone.maxpat", db)
+        rc = bridge.main(["check", str(src), "--dsp-on-load", "--dry-run"])
+        lines = [ln.strip() for ln in capsys.readouterr().out.splitlines()]
+        assert rc == 0
+        i = next(k for k, ln in enumerate(lines) if ln.startswith("/open "))
+        assert lines[i - 1] == "/dsp 1"
+        assert not (tmp_path / "__maxbridge_tone.maxpat").exists()

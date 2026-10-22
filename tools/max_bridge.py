@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Drive a running MAX 9.2 from Python through a resident bridge patch (Q34 spike).
 
-SPIKE STATUS: the v0.1.0 mechanisms were confirmed in MAX through
-patches/max-bridge/test-results/v0.1.0-bridge-checklist.md (2026-10-21); the
-v0.2.0 follow-ups are pending
-patches/max-bridge/test-results/v0.2.0-bridge-checklist.md.
-patches/max-bridge/open-questions.md lists what only MAX can answer. There is no /max-verify integration until
-the user confirms the bridge works.
+SPIKE STATUS: v0.1.0 and v0.2.0 were confirmed in MAX 9.2 through their
+checklists (patches/max-bridge/test-results/v0.1.0-bridge-checklist.md and
+v0.2.0-bridge-checklist.md; 2026-10-21, commit dc0cde91). v0.3.0 adds
+``check --dsp-on-load`` and the ``/max-verify --live`` wrapper
+tools/max_verify_live.py, pending
+patches/max-bridge/test-results/v0.3.0-verify-live-checklist.md.
 
 Protocol. The bridge patch (patches/max-bridge/generated/max-bridge.maxpat)
 is a dumb UDP pass-through; this client owns all the sequencing:
@@ -46,14 +46,16 @@ DSP restore (v0.2.0): check sends /query before /open and resolves the DSP
 state it found (/state/dsp, else 1 when dspstate~ reported a rate, else
 unknown). After the record block it sends /dsp 0 only when DSP was off before
 (or unknown and this run switched it on: warning dsp_state_unknown); DSP that
-was on stays on. --leave-dsp-on never sends /dsp 0.
+was on stays on. --leave-dsp-on never sends /dsp 0. --dsp-on-load (v0.3.0)
+sends /dsp 1 just before /open, so DSP-time errors (gen~ compiles) post during
+the load settle; the same restore rule applies.
 
 Subcommands:
     python3 tools/max_bridge.py ping
     python3 tools/max_bridge.py check PATCH.maxpat [--settle S] [--record N]
         [--shot [PNG]] [--open-mode pcontrol|openfile] [--console-all]
-        [--leave-dsp-on] [--load-timeout S] [--note PITCH VEL [--note-ms MS]]
-        [--dry-run]
+        [--leave-dsp-on] [--dsp-on-load] [--load-timeout S]
+        [--note PITCH VEL [--note-ms MS]] [--dry-run]
     python3 tools/max_bridge.py analyze OUT.wav [--channels L,R] [--sr N]
 
 Exit codes (house convention, tools/audit_db.py): 0 clean, 1 findings
@@ -889,6 +891,10 @@ def plan_messages(copy: Path, run_dir: Path, opts, tapped: bool = True) -> list[
     if opts.console_all:
         plan.append(("/console", ("showonlyerrors", 0)))
     plan.append(("/listen", (1,)))
+    if getattr(opts, "dsp_on_load", False):
+        # v0.3.0: right before the opener, never between it and its /ping
+        # (_execute keys the load wait on prev in openers)
+        plan.append(("/dsp", (1,)))
     plan.append(("/openfile" if openfile else "/open", (str(copy),)))
     plan.append(("/ping", ()))
     if opts.record and tapped:
@@ -1385,6 +1391,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="console shows every line, not only errors, during the run")
     sc.add_argument("--leave-dsp-on", action="store_true",
                     help="do not switch DSP off after recording")
+    sc.add_argument("--dsp-on-load", action="store_true",
+                    help="switch DSP on just before the /open so DSP-time errors (gen~ compiles) "
+                         "post during the settle; the prior DSP state is restored as after --record")
     sc.add_argument("--load-timeout", type=float, default=30.0,
                     help="seconds to wait for the /pong after the open (default 30)")
     sc.add_argument("--note", nargs=2, type=int, default=None, metavar=("PITCH", "VEL"),
