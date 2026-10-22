@@ -1,6 +1,6 @@
 # max-bridge
 
-**Spike (Q34, quick 261016-uy1; v0.2.0 follow-ups, quick 261021-l26; v0.3.0, quick 261021-olv).** v0.1.0 and v0.2.0 are confirmed in MAX 9.2 (`test-results/v0.1.0-bridge-checklist.md` and `test-results/v0.2.0-bridge-checklist.md`, 2026-10-21, commit dc0cde91). v0.3.0 adds `check --dsp-on-load` and `tools/max_verify_live.py` (`/max-verify --live`), pending `test-results/v0.3.0-verify-live-checklist.md`.
+**Spike (Q34, quick 261016-uy1; v0.2.0 follow-ups, quick 261021-l26; v0.3.0, quick 261021-olv).** v0.1.0 and v0.2.0 are confirmed in MAX 9.2 (`test-results/v0.1.0-bridge-checklist.md` and `test-results/v0.2.0-bridge-checklist.md`, 2026-10-21, commit dc0cde91). v0.3.0 adds `check --dsp-on-load` and `tools/max_verify_live.py` (`/max-verify --live`), confirmed in MAX 9.2 (`test-results/v0.3.0-verify-live-checklist.md`, 2026-10-21; four fixes from the run: 9e849d87, b333b135, 869b5885, a4e17423). Known limit: a kill-switch abort leaves the copy window open and DSP as it was mid-run (the close and restore cannot pass the closed gate); the abort hint says so.
 
 ## Purpose
 
