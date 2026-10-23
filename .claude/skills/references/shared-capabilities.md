@@ -30,7 +30,7 @@ The installed Max is 9.2.0 and the object database was synced against it (2026-1
 
 ## Patch Finalization
 
-- `finalize_patch(patcher, is_new=True)` -- single-call layout cleanup hook. For new patches (`is_new=True`): applies auto-styling, layout, assistance comments, midpoints. For edited patches (`is_new=False`): regenerates midpoints and populates assistance comments without moving objects.
+- `finalize_patch(patcher, is_new=True, *, force_layout=False)` -- single-call layout cleanup hook. For new patches (`is_new=True`): applies auto-styling, layout, assistance comments, midpoints. It first checks the layout guard: a MAX-saved patcher, or one over the box limit, raises `LayoutRefusedError` (a `ValueError`, from `src.maxpat.layout`) before anything is restyled or moved; pass `force_layout=True` for a large new build. For edited patches (`is_new=False`): never moves objects, never restyles and never clears existing midpoints; it routes only cords that have no midpoints and are new or touch an added or moved box, and fills empty assistance comments. Use `is_new=False` (or `edit_patch`) for anything read from disk.
 - Import from `src.maxpat`: `from src.maxpat import finalize_patch`
 - Replaces manual `_apply_auto_styling()` + `apply_layout()` + `populate_assistance_comments()` calls
 
@@ -122,7 +122,7 @@ The structure critic (`src/maxpat/critics/structure_critic.py`) detects fan-out 
 
 ## Builder API (Phase 31)
 
-Four high-level builders on `Patcher` codify recipes that previously lived as
+High-level builders on `Patcher` codify recipes that previously lived as
 prose in CLAUDE.md. Prefer these over restating the recipes per patch.
 
 ### `Patcher.add_overlay_readout(target, *, format='%.2f', type='flonum', editable=False, offset_x=0, offset_y=0) -> Box`
@@ -198,6 +198,21 @@ call from inside the builder — layering violation).
 **When to call:** Starting a new M4L `.amxd` device with a synth/effect
 body. Replaces the manual `param_connect` setup recipe.
 
+### `Patcher.add_m4l_device(kind, params=None, *, audio_source=None, midi_source=None, midi_in=True, init_chain=True, banks=True, presentation=True, modmode=None, info_text=None)`
+
+**Experimental:** not yet confirmed in Live (the combined Q15/Q40 Live check is pending).
+
+Build the device skeleton for `kind` `instrument` / `audio_effect` / `midi_effect`: Live-template wiring (`plugin~` / `plugout~`, `midiin` / `midiout`), the `live.thisdevice` init chain, one `live.dial` per param (unit and type inferred from range and name; explicit keys win), unique short names and Push `parameterbanks`. `add_m4l_gen_synth` is built on it.
+
+- **Reuse:** an existing top-scope `plugin~`, `plugout~`, `midiin`, `midiout` or `live.thisdevice` is reused, never duplicated, and the pass-through feeds only output inlets nothing feeds yet, so a `plugin~ -> fx -> plugout~` chain never gets a dry path. Two boxes of one of those names raise `ValueError` before anything is built.
+- **Names:** a param long name equal to an existing `parameter_longname`, or an explicit short name already taken, raises `ValueError`; auto short names avoid the existing ones.
+- **Info text:** new dials get `annotation` / `annotation_name` when `info_text` is True (None follows `presentation`).
+- **Layout:** when a new box would overlap a pre-existing one, all new boxes shift right together.
+
+### `export_amxd(patcher_or_path, out_path=None, kind=None) -> Path`
+
+From `src.maxpat.m4l_device`. **Experimental.** Save the `.maxpat` first (it is the source of truth), then write the `.amxd` next to it. The kind is detected from the patch (`detect_m4l_device_type`); an explicit `kind` that disagrees warns, and an unknown kind raises. A `live.thisdevice`-only patch is a helper abstraction, not a device: it raises unless `kind=` is given.
+
 ### Role-driven companion-pair placement (passive — applied by `apply_layout`)
 
 `apply_layout` consults a `_ROLE_COMPANION_MAP` in `layout.py` that maps
@@ -224,19 +239,20 @@ yourself or use `add_overlay_readout` explicitly.
 | dial+flonum readout overlay | `add_overlay_readout(dial)` | §"Rule #6: Z-Order Awareness" recipe |
 | N-parameter labeled multislider | `add_labeled_param_bank([(name, mn, mx), ...], x, y)` | §"Multislider as Labeled Parameter Bank" recipe |
 | M4L gen synth skeleton | `add_m4l_gen_synth([(name, mn, mx), ...])` | §"Domain-Specific Rules → Max for Live (M4L)" recipe |
+| M4L device skeleton (any kind) + `.amxd` | `add_m4l_device(kind, params)`, then `export_amxd(maxpat_path)` | §"Max for Live (M4L / .amxd)" |
 | Auto-place meter~ on audio outlet / flonum on status outlet | (none — `apply_layout` does it via `_ROLE_COMPANION_MAP`) | manual companion positioning |
 
 ## Editing Functions
 
-- `with edit_patch(path) as patcher:` -- edit session on an existing patch (Q36): re-reads the file on entry; a clean exit routes touched cords, sets contrast on touched boxes and saves through the gate (keep `session = edit_patch(path)` to read `session.diff`, `session.saved`, `session.commit_hash`)
+- `with edit_patch(path) as patcher:` -- edit session on an existing patch (Q36): re-reads the file on entry; a clean exit routes touched cords, sets contrast on added boxes that carry an explicit textcolor and saves through the gate (keep `session = edit_patch(path)` to read `session.diff`, `session.saved`, `session.commit_hash`)
 - `patcher.diff(other)` -- semantic diff from this Patcher to `other` (boxes added/removed/moved/resized, text, attrs, presentation, cords, nested paths); `.render()` gives the compact text
 - `read_patch(path)` -- load .maxpat into (Patcher, original_text) tuple (analysis, or the manual path)
 - `patcher.analyze()` -- structured 7-facet summary of patch contents
 - `patcher.find_box(name=..., maxclass=..., text=...)` -- search for a single object
 - `patcher.find_boxes(name=..., maxclass=..., text=...)` -- search for multiple objects
-- `patcher.modify_box(box, args=..., position=..., color=...)` -- in-place attribute editing
+- `patcher.modify_box(box, args=..., position=..., color=..., extra_attrs=...)` -- in-place attribute editing. `args` sets the text of a newobj (name kept), a message or comment, or a text-bearing UI box (textbutton, live.text, live.comment, textedit: no name prefix, size kept); `args` on any other UI box raises `ValueError` before any change -- use `extra_attrs`. `extra_attrs` keys `patching_rect`, `text` and `saved_object_attributes` set the model fields (`text` on a newobj raises: use `args`); the structural keys `id`, `maxclass`, `numinlets`, `numoutlets`, `outlettype` and `patcher` raise
 - `patcher.insert_into_connection(src, dst, name, args)` -- insert a new object between two connected boxes (returns an EditResult)
-- `patcher.replace_box_safe(box, new_name, args=[...])` -- swap object type keeping the box's identity (list position, presentation rect, varname, colours, parameter blocks); rewires every cord whose outlet/inlet index still exists on the new box and returns the rest in `result.orphaned` (CLAUDE.md Rule #8). Plain `replace_box(box, new_name, args=...)` keeps the identity too but orphans every connection.
+- `patcher.replace_box_safe(box, new_name, args=[...])` -- swap object type keeping the box's identity (id, list position, presentation rect, varname, colours, parameter blocks, and the size for the same fixed-size UI class or unchanged text); an embedded patcher moves to the new box only for the same name or `gen~` <-> `mc.gen~` (I/O and outlettype follow, `signal` <-> `multichannelsignal`), and any other replace of a box with an embedded patcher raises `ValueError` with the patch untouched; rewires every cord whose outlet/inlet index still exists on the new box and returns the rest in `result.orphaned` (CLAUDE.md Rule #8). Plain `replace_box(box, new_name, args=...)` keeps the identity too but orphans every connection.
 - `patcher.remove_box(box)` -- remove object and clean up connections
 - `patcher.connected_components()` -- identify groups for section rebuild scope
 - `save_patch_roundtrip(patcher.to_dict(), path, original_text)` -- save preserving positions (manual path; the session calls it for you)
@@ -255,7 +271,7 @@ with session as patcher:
 print(session.diff.render())                           # show the user what changed
 ```
 
-Leaving the block saves: touched-cord routing, contrast on touched boxes, stale check + save gate, atomic write in the file's own layout, path-scoped commit. A no-op session writes nothing. `StaleFileError` / `PatchValidationError` propagate with the file untouched -- re-run the session after fixing; `edit_patch(path, force=True)` only with user confirmation.
+Leaving the block saves: touched-cord routing, contrast on added boxes that carry an explicit textcolor, stale check + save gate, atomic write in the file's own layout, path-scoped commit. A no-op session writes nothing. `StaleFileError` / `PatchValidationError` propagate with the file untouched -- re-run the session after fixing; `edit_patch(path, force=True)` only with user confirmation.
 
 ## Output Protocol (Edited Patches)
 
@@ -263,10 +279,10 @@ Leaving the block saves: touched-cord routing, contrast on touched boxes, stale 
 2. Make surgical edits or section rebuild using find/modify/replace/insert/remove, inside one session: `with edit_patch(path) as patcher:`
 3. Validate via `validate_patch(patcher)` inside the block (raise to discard on blockers)
 4. Return for critic review
-5. Leave the block to save: exit routes touched cords (never clears existing midpoints), sets text contrast on touched boxes (added, moved, presentation-changed) and saves through the gate with `save_patch_roundtrip()`; show `session.diff.render()` to the user
+5. Leave the block to save: exit routes touched cords (never clears existing midpoints), sets text contrast only on added boxes that carry an explicit textcolor (moved, presentation-changed and replaced boxes keep their colour; a comment without a textcolor is never given one) and saves through the gate with `save_patch_roundtrip()`; show `session.diff.render()` to the user
 6. Manual path (no session): `finalize_patch(patcher, is_new=False)` then `save_patch_roundtrip(patcher.to_dict(), path, original_text)` -- finalize also fills empty inlet/outlet assistance comments, which the session does not
 
-Moving or adding a panel does not recolour untouched text over it: treat the layout critic's "Low contrast text" warnings as must-fix (Rule #9).
+Moving or adding a panel does not recolour existing text over it: treat the layout critic's "Low contrast text" warnings on boxes with an explicit textcolor as must-fix (Rule #9), and fix them by hand. A warning on a comment without a textcolor is a critic false positive (MAX renders it in the theme text colour). Never run whole-patch `repair_text_contrast` unless the user asks.
 
 ## Version Comment
 
@@ -279,14 +295,14 @@ Moving or adding a panel does not recolour untouched text over it: treat the lay
 
 Every `save_patch_roundtrip()`, `write_gendsp()`, and `write_js()` call automatically commits the saved file to git via `auto_commit_patch()`. This prevents work loss from stash operations, branch switches, or concurrent Claude instances.
 
-Before writing, `save_patch_roundtrip()` and `write_gendsp()` (and the `edit_patch` session exit, which calls `save_patch_roundtrip()`) also run a save gate (validation + critics against the `original_text` / HEAD / on-disk baseline): a save that introduces a blocker or reorders a subpatcher's inlets/outlets raises `PatchValidationError` and nothing is written or committed; removed cords emit a `SaveGateWarning`. Fix the findings; `force=True` bypasses only with user confirmation. See CLAUDE.md Rule #7. All writers write atomically (temp file + fsync + `os.replace`), so a crash never leaves a partial file.
+Before writing, `save_patch_roundtrip()` and `write_gendsp()` (and the `edit_patch` session exit, which calls `save_patch_roundtrip()`) also run a save gate (validation + critics against the `original_text` / HEAD / on-disk baseline): a save that introduces a blocker or reorders a subpatcher's inlets/outlets raises `PatchValidationError` and nothing is written or committed; removed cords emit a `SaveGateWarning`. The gate validates with the file's path, so an unknown object that no abstraction beside the patch (or in its `patches/<project>/` tree) resolves is a blocker: save abstractions before the patch that uses them. Fix the findings; `force=True` bypasses only with user confirmation. See CLAUDE.md Rule #7. All writers write atomically (temp file + fsync + `os.replace`), so a crash never leaves a partial file.
 
 ### Rules
 
 1. **Never use `git stash`** during patch work. Stash operations have caused orphaned work in the past (3 stashes with significant patch changes were found abandoned). If you need to switch context, commit first.
 2. **Commit scope isolation** -- `auto_commit_patch()` only stages files within the specific project directory. This allows multiple Claude instances to work on different patches simultaneously without conflicts.
 3. **Version entries track files** -- `bump_version()` accepts `files_changed` to record which files were modified in each version entry.
-4. **Manual commit for multi-file saves** -- if a build/iterate produces multiple files saved via separate calls, run one explicit `auto_commit_patch()` at the end with all file paths to create a single clean commit (the per-file auto-commits are fine too, just noisier).
+4. **Manual commit for multi-file saves** -- if a build/iterate produces multiple files saved via separate calls, run one explicit `auto_commit_patch()` at the end with all file paths to create a single clean commit (the per-file auto-commits are fine too, just noisier). Called directly, `auto_commit_patch()` raises `RuntimeError` on any git failure (the save wrappers catch it and warn).
 
 ### Multi-Instance Safety
 
