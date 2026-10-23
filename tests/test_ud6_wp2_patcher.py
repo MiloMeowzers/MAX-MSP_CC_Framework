@@ -432,6 +432,95 @@ class TestFinalizeRefusalAtomic:
 # ---------------------------------------------------------------------------
 
 
+JI = "patches/ji-harmonizer/generated/ji-harmonizer.maxpat"
+
+
+# ---------------------------------------------------------------------------
+# WR-05: modify_box(args=...) on text-bearing UI boxes; refused on other UI
+# ---------------------------------------------------------------------------
+
+
+class TestModifyBoxArgsOnUi:
+    def test_textbutton_text_has_no_prefix_and_keeps_size(self):
+        p = _load(JI)
+        tb = _box(p, "obj-269")
+        rect = list(tb.patching_rect)
+        p.modify_box(tb, args=["Go"])
+        d = _box_dict(p.to_dict(), "obj-269")
+        assert d["text"] == "Go"
+        assert d["patching_rect"] == rect
+
+    def test_new_textbutton_text(self):
+        p = Patcher()
+        tb = p.add_box("textbutton")
+        p.modify_box(tb, args=["Load", "file"])
+        assert tb.text == "Load file"
+        assert _box_dict(p.to_dict(), tb.id)["text"] == "Load file"
+
+    @pytest.mark.parametrize("box_id", ["obj-73", "obj-13"])
+    def test_other_ui_refuses_args_untouched(self, box_id):
+        p = _load(JI)
+        before = p.to_dict()
+        with pytest.raises(ValueError, match="extra_attrs"):
+            p.modify_box(_box(p, box_id), args=["1"])
+        assert p.to_dict() == before
+
+    def test_newobj_and_message_unchanged_behaviour(self):
+        p = Patcher()
+        m = p.add_message("hello")
+        n = p.add_box("pack", ["0", "0"])
+        p.modify_box(m, args=["set", "1"])
+        p.modify_box(n, args=["0", "0", "0"])
+        assert m.text == "set 1"
+        assert n.text == "pack 0 0 0" and n.numinlets == 3
+
+
+# ---------------------------------------------------------------------------
+# WR-06: modify_box(extra_attrs=...) model-field keys
+# ---------------------------------------------------------------------------
+
+
+class TestModifyBoxExtraAttrsModelKeys:
+    def test_patching_rect_reaches_disk_on_loaded_box(self):
+        p = _load(JI)
+        b = _box(p, "obj-269")
+        p.modify_box(b, extra_attrs={"patching_rect": [10.0, 10.0, 300.0, 22.0]})
+        assert b.patching_rect == [10.0, 10.0, 300.0, 22.0]
+        assert _box_dict(p.to_dict(), "obj-269")["patching_rect"] == [10.0, 10.0, 300.0, 22.0]
+
+    def test_patching_rect_on_new_box_updates_model(self):
+        p = Patcher()
+        b = p.add_box("print")
+        p.modify_box(b, extra_attrs={"patching_rect": [10.0, 10.0, 300.0, 22.0]})
+        assert b.patching_rect == [10.0, 10.0, 300.0, 22.0]
+        assert "patching_rect" not in b.extra_attrs
+        assert _box_dict(p.to_dict(), b.id)["patching_rect"] == [10.0, 10.0, 300.0, 22.0]
+
+    def test_text_on_comment_and_loaded_textbutton(self):
+        p = _load(JI)
+        tb = _box(p, "obj-269")
+        p.modify_box(tb, extra_attrs={"text": "open"})
+        assert _box_dict(p.to_dict(), "obj-269")["text"] == "open"
+        c = p.add_comment("old", 0, 0)
+        p.modify_box(c, extra_attrs={"text": "new"})
+        assert _box_dict(p.to_dict(), c.id)["text"] == "new"
+
+    def test_text_on_newobj_refused(self):
+        p = Patcher()
+        n = p.add_box("print")
+        with pytest.raises(ValueError, match="args="):
+            p.modify_box(n, extra_attrs={"text": "print foo"})
+
+    @pytest.mark.parametrize("key", ["id", "maxclass", "numinlets", "numoutlets", "outlettype", "patcher"])
+    def test_structural_keys_refused_before_any_change(self, key):
+        p = _load(JI)
+        b = _box(p, "obj-269")
+        before = p.to_dict()
+        with pytest.raises(ValueError, match=key):
+            p.modify_box(b, position=[1.0, 1.0], extra_attrs={"fontsize": 20.0, key: 1})
+        assert p.to_dict() == before
+
+
 @pytest.mark.parametrize("rel", [
     ".claude/skills/max-patch-agent/SKILL.md",
     ".claude/commands/max-build.md",

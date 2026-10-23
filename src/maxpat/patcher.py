@@ -46,6 +46,15 @@ _BOX_HANDLED_KEYS = frozenset({
     "saved_object_attributes",
 })
 
+# Non-newobj maxclasses whose text is a "text" attribute: modify_box(args=...)
+# sets it without a maxclass prefix and keeps the box size (261022-ud6 WR-05).
+TEXT_UI_MAXCLASSES = frozenset({"textbutton", "live.text", "live.comment", "textedit"})
+
+# Keys modify_box(extra_attrs=...) refuses: they define the object (WR-06).
+_MODIFY_STRUCTURAL_KEYS = frozenset({
+    "id", "maxclass", "numinlets", "numoutlets", "outlettype", "patcher",
+})
+
 # Patchline keys from_dict maps onto model fields.
 _LINE_HANDLED_KEYS = frozenset({
     "source", "destination", "order", "hidden", "midpoints", "color",
@@ -1016,10 +1025,17 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
 
         Changes args, position, color, or extra_attrs.
 
-        ``args`` rules (Q6 / B2 / B3):
+        ``args`` rules (Q6 / B2 / B3; review 261022-ud6 WR-05):
 
         - message/comment boxes: text becomes ``" ".join(args)`` with no
           maxclass prefix; I/O is unchanged.
+        - other text-bearing UI boxes (``TEXT_UI_MAXCLASSES``: textbutton,
+          live.text, live.comment, textedit): text becomes
+          ``" ".join(args)``; I/O and size are unchanged (their size is
+          fixed or user-set).
+        - any other non-newobj maxclass (toggle, umenu, live.dial,
+          bpatcher, inlet, ...): ValueError before anything changes --
+          set its attributes with ``extra_attrs``.
         - content-defined boxes (see ``_io_is_content_defined``: embedded
           patchers, bpatchers, ``CONTENT_DEFINED_NAMES``, names not in the
           DB, and DB objects not marked ``variable_io``): text becomes
@@ -1038,6 +1054,14 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         ``fontname`` / ``fontsize`` / ``presentation`` /
         ``presentation_rect`` are synced onto the box fields.
 
+        Model-field keys in ``extra_attrs`` (WR-06) set the model field, so
+        what layout reads is what is saved: ``patching_rect`` (the box's
+        rect, in place), ``text`` (message, comment and
+        ``TEXT_UI_MAXCLASSES`` boxes only; a newobj's text is its object --
+        use ``args=``) and ``saved_object_attributes``. Keys that define the
+        object (``id``, ``maxclass``, ``numinlets``, ``numoutlets``,
+        ``outlettype``, ``patcher``) raise ValueError.
+
         Args:
             box: The box to modify (must be in this patcher).
             args: New arguments (rules above).
@@ -1049,18 +1073,23 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             EditResult with the modified box and any orphaned connections.
 
         Raises:
-            ValueError: If box is not in this patcher.
+            ValueError: If box is not in this patcher, if ``args`` is given
+                for a UI maxclass that carries no text, or if
+                ``extra_attrs`` holds a structural key or ``text`` for a
+                box that cannot take it. All are raised before anything
+                changes.
         """
         if box not in self.boxes:
             raise ValueError(
                 f"Box {box.id} not found in this patcher"
             )
+        self._check_modify_request(box, args, extra_attrs)
 
         orphaned: list[dict] = []
 
         if args is not None:
             new_args = list(args)
-            if box.maxclass in ("message", "comment"):
+            if box.maxclass in ("message", "comment") or box.maxclass in TEXT_UI_MAXCLASSES:
                 new_text = " ".join(new_args).strip()
                 recompute = False
             else:
@@ -1082,10 +1111,15 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                         box.name, new_args
                     )
 
-                # Recalculate box size
-                w, h = calculate_box_size(box.text, box.maxclass)
-                box.patching_rect[2] = w
-                box.patching_rect[3] = h
+                # Recalculate box size (text-sized classes only; a text UI
+                # box keeps its fixed or user-set size, WR-05)
+                if box.maxclass not in TEXT_UI_MAXCLASSES:
+                    w, h = calculate_box_size(box.text, box.maxclass)
+                    box.patching_rect[2] = w
+                    box.patching_rect[3] = h
+                elif box._raw is None:
+                    # The creation path writes text-UI text from extra_attrs
+                    box.extra_attrs["text"] = box.text
 
                 # Orphan connections to removed outlets/inlets
                 surviving = []
@@ -1137,6 +1171,24 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                 box.fontname = extra_attrs["fontname"]
             if "fontsize" in extra_attrs:
                 box.fontsize = extra_attrs["fontsize"]
+            # Model fields layout and serialization read (WR-06); never
+            # parked in extra_attrs, where they would shadow the field.
+            extra_attrs = dict(extra_attrs)
+            if "patching_rect" in extra_attrs:
+                box.patching_rect[:] = [float(v) for v in extra_attrs.pop("patching_rect")]
+                if box._raw is not None:
+                    box._raw["patching_rect"] = box.patching_rect
+            if "text" in extra_attrs:
+                box.text = str(extra_attrs.pop("text"))
+                box.args = []
+                if box._raw is not None:
+                    box._raw["text"] = box.text
+                elif box.maxclass in TEXT_UI_MAXCLASSES:
+                    box.extra_attrs["text"] = box.text
+            if "saved_object_attributes" in extra_attrs:
+                box._saved_object_attributes = copy.deepcopy(
+                    extra_attrs.pop("saved_object_attributes")
+                )
             box.extra_attrs.update(extra_attrs)
             if box._raw is not None:
                 # The extra_attrs diff skips model-field keys; keep their
@@ -1147,6 +1199,36 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                         box._raw[k] = v
 
         return EditResult(box=box, orphaned=orphaned)
+
+    @staticmethod
+    def _check_modify_request(box: Box, args, extra_attrs) -> None:
+        """Raise ValueError for a modify_box request it cannot honour (WR-05 /
+        WR-06). Runs before modify_box changes anything."""
+        text_ok = box.maxclass in ("message", "comment") or box.maxclass in TEXT_UI_MAXCLASSES
+        if args is not None and box.maxclass != "newobj" and not text_ok:
+            raise ValueError(
+                f"modify_box(args=...) does not apply to a {box.maxclass!r} box "
+                f"({box.id}): it has no object text. Set its attributes with "
+                f"extra_attrs={{...}} instead."
+            )
+        if not extra_attrs:
+            return
+        bad = [k for k in extra_attrs if k in _MODIFY_STRUCTURAL_KEYS]
+        if bad:
+            raise ValueError(
+                f"modify_box(extra_attrs=...) cannot set {', '.join(sorted(bad))} on "
+                f"{box.id}: these define the object. Use replace_box_safe for a "
+                f"different object, args= for arguments, or the inner patcher API."
+            )
+        if "text" in extra_attrs and not text_ok:
+            raise ValueError(
+                f"modify_box(extra_attrs={{'text': ...}}) on {box.id} "
+                f"({box.maxclass!r}): a newobj's text is its object -- use "
+                f"args=[...] (or replace_box_safe) instead."
+                if box.maxclass == "newobj" else
+                f"modify_box(extra_attrs={{'text': ...}}): a {box.maxclass!r} box "
+                f"({box.id}) has no text."
+            )
 
     def replace_box(
         self,
