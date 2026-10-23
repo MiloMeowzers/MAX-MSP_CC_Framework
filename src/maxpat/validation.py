@@ -1062,12 +1062,52 @@ def _validate_community_extracted(
 # Layer 3: Connection Validation (Bounds + Signal Types)
 # ===========================================================================
 
+def _is_port(value) -> bool:
+    """A usable port index: a non-negative int, bools excluded (WR-01)."""
+    return type(value) is int and value >= 0
+
+
+def _is_box_id(value) -> bool:
+    """A usable endpoint box id: a non-empty str or a non-bool int."""
+    if isinstance(value, bool):
+        return False
+    return (isinstance(value, str) and bool(value)) or type(value) is int
+
+
+def _well_formed_endpoints(patchline) -> bool:
+    """True when both ends are ``[box_id, port]`` lists with a usable id and
+    a non-negative int port (extra elements allowed, as MAX never writes
+    them but older tools did)."""
+    if not isinstance(patchline, dict):
+        return False
+    source = patchline.get("source")
+    destination = patchline.get("destination")
+    return (
+        isinstance(source, list) and isinstance(destination, list)
+        and len(source) >= 2 and len(destination) >= 2
+        and _is_box_id(source[0]) and _is_box_id(destination[0])
+        and _is_port(source[1]) and _is_port(destination[1])
+    )
+
+
+def _count(value) -> int:
+    """A box's numinlets / numoutlets as an int (anything else counts 0)."""
+    return value if type(value) is int and value >= 0 else 0
+
+
+def _outlettype(box: dict) -> list:
+    """A box's ``outlettype`` list, or ``[]`` when it is not a list."""
+    value = box.get("outlettype")
+    return value if isinstance(value, list) else []
+
+
 def _line_key(patchline: dict) -> tuple:
     """Return ``(src_id, src_outlet, dst_id, dst_inlet)`` for a patchline.
 
     A non-list source/destination is treated as empty and missing elements
     are padded with None, so malformed lines still get a stable key that
-    ``apply_fixes`` can match.
+    ``apply_fixes`` can match. An unhashable element (a list where an id
+    belongs) is replaced by its ``repr`` so the key stays hashable.
     """
     source = patchline.get("source")
     destination = patchline.get("destination")
@@ -1075,7 +1115,15 @@ def _line_key(patchline: dict) -> tuple:
     dst = list(destination[:2]) if isinstance(destination, list) else []
     src += [None] * (2 - len(src))
     dst += [None] * (2 - len(dst))
-    return (src[0], src[1], dst[0], dst[1])
+    return tuple(_hashable(v) for v in (src[0], src[1], dst[0], dst[1]))
+
+
+def _hashable(value):
+    try:
+        hash(value)
+    except TypeError:
+        return repr(value)
+    return value
 
 
 def _is_container_box(box: dict) -> bool:
@@ -1134,10 +1182,10 @@ def _validate_connections(
         destination = patchline.get("destination", [])
         key = _line_key(patchline)
 
-        if (
-            not isinstance(source, list) or not isinstance(destination, list)
-            or len(source) < 2 or len(destination) < 2
-        ):
+        # WR-01: a non-int, bool or negative port (or an unusable box id)
+        # is malformed too -- it used to raise TypeError from the bounds
+        # check, or (-1) pass it and read the last port.
+        if not _well_formed_endpoints(patchline):
             results.append(ValidationResult(
                 "connections", "error",
                 f"Malformed patchline at index {idx}: "
@@ -1164,9 +1212,10 @@ def _validate_connections(
 
         out_of_bounds = False
 
-        # --- Check outlet bounds ---
+        # --- Check outlet bounds --- (a non-int saved count is not a
+        # count: that side's bound is unknown and not checked)
         src_numoutlets = src_box.get("numoutlets", 0)
-        if src_outlet >= src_numoutlets:
+        if type(src_numoutlets) is int and src_outlet >= src_numoutlets:
             results.append(ValidationResult(
                 "connections", "error",
                 f"Outlet index {src_outlet} out of bounds on '{src_id}' "
@@ -1177,7 +1226,7 @@ def _validate_connections(
 
         # --- Check inlet bounds ---
         dst_numinlets = dst_box.get("numinlets", 0)
-        if dst_inlet >= dst_numinlets:
+        if type(dst_numinlets) is int and dst_inlet >= dst_numinlets:
             results.append(ValidationResult(
                 "connections", "error",
                 f"Inlet index {dst_inlet} out of bounds on '{dst_id}' "
@@ -1243,7 +1292,7 @@ def _validate_connections(
                     continue
 
         # --- Signal type compatibility (bounds are OK) ---
-        src_outlettype = src_box.get("outlettype", [])
+        src_outlettype = _outlettype(src_box)
         is_signal_source = (
             src_outlet < len(src_outlettype)
             and src_outlettype[src_outlet] == "signal"
@@ -1432,7 +1481,7 @@ def _validate_domain_rules(
         patchline = line_entry.get("patchline", {})
         source = patchline.get("source", [])
         destination = patchline.get("destination", [])
-        if len(source) < 2 or len(destination) < 2:
+        if not _well_formed_endpoints(patchline):
             continue
 
         src_id, src_outlet = source[0], source[1]
@@ -1443,7 +1492,7 @@ def _validate_domain_rules(
             continue
 
         # Determine if this is a signal connection
-        src_outlettype = src_box.get("outlettype", [])
+        src_outlettype = _outlettype(src_box)
         is_signal = (
             src_outlet < len(src_outlettype)
             and src_outlettype[src_outlet] == "signal"
@@ -1461,7 +1510,7 @@ def _validate_domain_rules(
         patchline = line_entry.get("patchline", {})
         source = patchline.get("source", [])
         destination = patchline.get("destination", [])
-        if len(source) < 2 or len(destination) < 2:
+        if not _well_formed_endpoints(patchline):
             continue
 
         src_id, src_outlet = source[0], source[1]
@@ -1471,7 +1520,7 @@ def _validate_domain_rules(
         if not src_box:
             continue
 
-        src_outlettype = src_box.get("outlettype", [])
+        src_outlettype = _outlettype(src_box)
         is_sig = (
             src_outlet < len(src_outlettype)
             and src_outlettype[src_outlet] == "signal"
