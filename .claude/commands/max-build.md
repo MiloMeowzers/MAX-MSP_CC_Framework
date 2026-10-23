@@ -27,7 +27,9 @@ Generate MAX/MSP patches, Gen~ code, JavaScript, or other artifacts by routing t
    - max-rnbo-agent (RNBO export, target validation, param mapping)
    - max-ext-agent (C++ externals, Min-DevKit scaffolding, build)
 
-   Each specialist creates a `Patcher` instance, builds the patch structure using `add_box()` and `add_connection()`, then applies styling, layout, and validation via `_apply_auto_styling(patcher)`, `apply_layout(patcher)`, `validate_patch(patcher.to_dict())`.
+   Each specialist creates a `Patcher` instance, builds the patch structure using `add_box()` and `add_connection()`, then finalizes it with `finalize_patch(patcher, is_new=True)` (styling, layout, text contrast, assistance comments) and validates with `validate_patch(patcher.to_dict())`.
+
+   **Layout refusal.** `finalize_patch(patcher, is_new=True)` (and `apply_layout`) raises `LayoutRefusedError` (`from src.maxpat.layout import LayoutRefusedError`, a `ValueError`) when the patcher, or any subpatcher the layout would visit, has more than 120 boxes or was saved by MAX. It is raised before anything changes, so the patch is untouched and nothing is styled. For a large NEW build (the generator just made every box), pass `finalize_patch(patcher, is_new=True, force_layout=True)`. Never force it on a patch that came from disk or embeds a MAX-saved subpatcher: global layout wrecks a user's arrangement. Edit those with `edit_patch(path)` or `finalize_patch(patcher, is_new=False)` instead.
 
 5. **Critic loop** -- run the max-critic skill on generated output:
    - Invoke `review_patch(patch_dict, code_context)` from `src.maxpat.critics`
@@ -55,7 +57,8 @@ Generate MAX/MSP patches, Gen~ code, JavaScript, or other artifacts by routing t
 ## Python Modules
 
 ```python
-from src.maxpat import Patcher, Box, _apply_auto_styling, apply_layout, validate_patch, save_patch_roundtrip, LayoutOptions
+from src.maxpat import Patcher, Box, finalize_patch, apply_layout, validate_patch, save_patch_roundtrip, LayoutOptions
+from src.maxpat.layout import LayoutRefusedError
 from src.maxpat.project import get_active_project, read_status, update_status, auto_commit_patch
 from src.maxpat.critics import review_patch, CriticResult
 ```

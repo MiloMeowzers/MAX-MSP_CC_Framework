@@ -393,3 +393,51 @@ class TestLegacyNoOpSave:
         changed = [i for i, (a, b) in enumerate(zip(old_lines, new_lines)) if a != b]
         assert len(changed) == 1, [new_lines[i] for i in changed]
         assert '"patching_rect" : [ ' in new_lines[changed[0]]
+
+
+# ---------------------------------------------------------------------------
+# WR-04: finalize_patch(is_new=True) refuses before restyling anything
+# ---------------------------------------------------------------------------
+
+
+class TestFinalizeRefusalAtomic:
+    def test_refused_finalize_leaves_patch_untouched(self):
+        from src.maxpat.hooks import finalize_patch
+        from src.maxpat.layout import LayoutRefusedError
+
+        p = _load("patches/ji-harmonizer/generated/ji-harmonizer.maxpat")
+        before = p.to_dict()
+        with pytest.raises(LayoutRefusedError):
+            finalize_patch(p, is_new=True)
+        assert p.to_dict() == before
+
+    def test_large_new_patch_refused_untouched_and_force_lays_out(self):
+        from src.maxpat.hooks import finalize_patch
+        from src.maxpat.layout import LayoutRefusedError
+
+        p = Patcher()
+        for i in range(125):
+            p.add_box("loadbang" if i == 0 else "print", x=80.0 * (i % 20),
+                      y=40.0 * (i // 20), skip_overlap_check=True)
+        before = p.to_dict()
+        with pytest.raises(LayoutRefusedError):
+            finalize_patch(p, is_new=True)
+        assert p.to_dict() == before
+        finalize_patch(p, is_new=True, force_layout=True)
+        assert p.to_dict() != before
+
+
+# ---------------------------------------------------------------------------
+# WR-09: the build recipes document LayoutRefusedError and force_layout
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("rel", [
+    ".claude/skills/max-patch-agent/SKILL.md",
+    ".claude/commands/max-build.md",
+])
+def test_build_recipes_document_layout_refusal(rel):
+    text = (REPO_ROOT / rel).read_text()
+    assert "LayoutRefusedError" in text
+    assert "force_layout=True" in text
+    assert "is_new=False" in text

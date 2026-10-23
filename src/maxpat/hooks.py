@@ -224,6 +224,10 @@ def finalize_patch(
     from src.maxpat import layout
 
     if is_new:
+        # Refuse before ANY change (review 261022-ud6 WR-04): auto-styling
+        # must not run on a patch apply_layout is about to refuse.
+        if not force_layout:
+            layout._check_layout_allowed(patcher)
         aesthetics.apply_auto_styling(patcher, contrast=False)
         layout.apply_layout(patcher, force=force_layout)
         aesthetics.ensure_text_contrast(patcher)
