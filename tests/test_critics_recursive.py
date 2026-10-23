@@ -331,8 +331,9 @@ class TestStructureNested:
         top_boxes = copy.deepcopy(db_) + [a, b]
         d = _patch(top_boxes, copy.deepcopy(dl))
         paths = [r.path for r in review_structure(d)]
-        # obj-10: fan-out blocker + hot/cold warning on the pack
-        assert paths == ["", "obj-10", "obj-10", "obj-11"]
+        # obj-10: the fan-out blocker only -- the hot/cold check leaves a
+        # one-outlet fan-out to the fan-out check (quick 261022-ud6 IN-02)
+        assert paths == ["", "obj-10", "obj-11"]
 
 
 # ---------------------------------------------------------------------------

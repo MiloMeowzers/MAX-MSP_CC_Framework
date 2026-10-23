@@ -135,6 +135,15 @@ def _stored_rect(box: dict) -> list[float] | None:
     return [float(v) for v in vals]
 
 
+def _port_geometry(rect: list[float], box: dict, count_key: str) -> dict:
+    """A minimal box dict for sizing.inlet_x / outlet_x: the validated *rect*
+    and *box*'s port count, 1 when it is not a positive int (IN-01)."""
+    n = box.get(count_key)
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+        n = 1
+    return {"patching_rect": rect, count_key: n}
+
+
 def _inside(inner: list[float], outer: list[float], tol: float) -> bool:
     """True when *inner* lies inside *outer*, within *tol* px on every edge."""
     return (
@@ -238,15 +247,19 @@ def _check_missing_midpoints(
         if not src_box or not dst_box:
             continue
 
-        src_rect = src_box.get("patching_rect")
-        dst_rect = dst_box.get("patching_rect")
-        if not src_rect or not dst_rect or len(src_rect) < 4 or len(dst_rect) < 4:
+        # IN-01 (quick 261022-ud6): validated rects and port counts only -- a
+        # malformed patching_rect / numinlets gives no finding, never a crash
+        src_rect = _stored_rect(src_box)
+        dst_rect = _stored_rect(dst_box)
+        if src_rect is None or dst_rect is None:
+            continue
+        if not isinstance(src_outlet, int) or not isinstance(dst_inlet, int):
             continue
 
         # Compute outlet/inlet positions
-        src_ox = _outlet_x(src_box, src_outlet)
+        src_ox = _outlet_x(_port_geometry(src_rect, src_box, "numoutlets"), src_outlet)
         src_oy = src_rect[1] + src_rect[3]  # bottom of source box
-        dst_ix = _inlet_x(dst_box, dst_inlet)
+        dst_ix = _inlet_x(_port_geometry(dst_rect, dst_box, "numinlets"), dst_inlet)
         dst_iy = dst_rect[1]  # top of destination box
 
         hdist = abs(src_ox - dst_ix)

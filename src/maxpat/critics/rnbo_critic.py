@@ -161,13 +161,17 @@ def _check_io_completeness(
 ) -> list[CriticResult]:
     """Check the inner RNBO patcher for in~ and out~.
 
-    No out~ is a blocker (no audio output). No in~ is a note (Q26 / E8):
-    a generator takes no audio input by design.
+    No out~ is a blocker (no audio output) unless the patcher has an event
+    output (``_RNBO_EVENT_OUTPUTS``: midiout, noteout, ctlout, ..., outport,
+    out): a MIDI-only or event-only RNBO patch then gets a note (Q26
+    follow-up, quick 261022-ud6). No in~ is a note (Q26 / E8): a generator
+    takes no audio input by design.
     """
     results: list[CriticResult] = []
 
     has_in = False
     has_out = False
+    has_event_out = False
 
     for box in inner_boxes:
         name = walk.box_name(box)
@@ -175,6 +179,8 @@ def _check_io_completeness(
             has_in = True
         elif name == "out~":
             has_out = True
+        elif name in _RNBO_EVENT_OUTPUTS:
+            has_event_out = True
 
     rnbo_id = rnbo_box.get("id", "?")
 
@@ -189,7 +195,18 @@ def _check_io_completeness(
             box_ids=finding_ids(rnbo_id),
         ))
 
-    if not has_out:
+    if not has_out and has_event_out:
+        results.append(CriticResult(
+            "note",
+            f"rnbo~ '{rnbo_id}' inner patcher has no out~ object -- "
+            f"it outputs events only (MIDI / outport / out), which is "
+            f"expected for a MIDI or control generator",
+            "If the patch should also output audio, add an 'out~ 1' object "
+            "to the inner RNBO patcher",
+            rule="io_completeness",
+            box_ids=finding_ids(rnbo_id),
+        ))
+    elif not has_out:
         results.append(CriticResult(
             "blocker",
             f"rnbo~ '{rnbo_id}' inner patcher has no out~ object -- "
@@ -200,6 +217,14 @@ def _check_io_completeness(
         ))
 
     return results
+
+
+# RNBO objects that send events out of the rnbo~ patcher (no audio): MIDI
+# outputs, outport and the control-rate ``out`` (Q26 follow-up).
+_RNBO_EVENT_OUTPUTS = frozenset({
+    "midiout", "noteout", "ctlout", "bendout", "pgmout", "touchout",
+    "outport", "out",
+})
 
 
 _NUMBER_RE = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$")

@@ -437,6 +437,37 @@ def _bach_out_value(box: dict) -> "str | None":
     return None
 
 
+# @out letters plain MAX objects can read (bach refpages, attribute ``out``):
+# t (text) and m (max) are regular MAX messages; x disables the outlet, so it
+# sends nothing to misread. n (native, the default) and p (portal) are not.
+_BACH_READABLE_OUT = frozenset("tmx")
+
+
+def _bach_outlet_readable(entry: dict, value, outlet) -> bool:
+    """True when ``@out`` *value* makes llll outlet *outlet* readable (IN-04).
+
+    The bach refpages define ``@out`` as one character per llll outlet. The
+    llll index of *outlet* is its rank among the DB outlets whose digest is
+    not a bang; an index past the value's length takes its last character
+    (so ``@out t`` keeps covering every outlet, as before -- the padding rule
+    is not documented and awaits confirmation in MAX). An unset value is the
+    default ``n``.
+    """
+    if not value:
+        return False
+    llll_index = 0
+    for o in entry.get("outlets", []) or []:
+        if not isinstance(o, dict) or not isinstance(o.get("id"), int):
+            continue
+        if o["id"] >= outlet:
+            break
+        digest = o.get("digest")
+        if not (isinstance(digest, str) and "bang" in digest.lower()):
+            llll_index += 1
+    char = value[llll_index] if llll_index < len(value) else value[-1]
+    return char in _BACH_READABLE_OUT
+
+
 def _outlet_is_bang(entry: dict, outlet) -> bool:
     for o in entry.get("outlets", []) or []:
         if isinstance(o, dict) and o.get("id") == outlet:
@@ -454,8 +485,10 @@ def _check_bach_out_mode(
 
     Every bach object's ``@out`` defaults to ``n`` (native), which plain MAX
     objects reject with "wrong message or type" (CLAUDE.md bach section). A
-    source is a Bach-package box whose ``@out`` value is missing or not all
-    ``t``; an offending cord leaves an outlet whose DB digest has no "bang"
+    source is a Bach-package box whose ``@out`` character for the cord's llll
+    outlet is not readable by MAX (:func:`_bach_outlet_readable`: t, m or x;
+    quick 261022-ud6 IN-04 -- ``@out tn`` with outlet 0 feeding ``print`` is
+    fine); an offending cord leaves an outlet whose DB digest has no "bang"
     and enters a consumer that is neither a Bach-package object nor in
     ``_BACH_OUT_FORWARDERS``. One warning per bach box (consumers in edge
     order), port = the first offending outlet, with a ``set_bach_out`` fix
@@ -471,10 +504,9 @@ def _check_bach_out_mode(
         src_entry = db.lookup(_get_object_name(src_box))
         if not src_entry or src_entry.get("package") != "Bach":
             continue
-        value = _bach_out_value(src_box)
-        if value is not None and set(value) == {"t"}:
-            continue
         if _outlet_is_bang(src_entry, edge.outlet):
+            continue
+        if _bach_outlet_readable(src_entry, _bach_out_value(src_box), edge.outlet):
             continue
         dst_name = _get_object_name(dst_box)
         if not dst_name or dst_name in _BACH_OUT_FORWARDERS:

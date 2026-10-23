@@ -830,7 +830,9 @@ def test_bach_out_warning_and_fix():
 
 @pytest.mark.parametrize("args,expected", [
     (["1", "@out", "n"], "bach.nth 1 @out t"),
-    (["1", "@out", "tn"], "bach.nth 1 @out tt"),
+    # outlet 0 is 'n' here; '@out tn' would make it text and give no finding
+    # (one @out character per llll outlet -- quick 261022-ud6 IN-04)
+    (["1", "@out", "nt"], "bach.nth 1 @out tt"),
 ])
 def test_bach_out_replaces_existing_value(args, expected):
     (r,) = _bach_findings(_bach_patcher(args))

@@ -2,11 +2,14 @@
 
 Catches semantic DSP issues that the mechanical validation pipeline does
 not detect:
-  - gen~ I/O mismatches between GenExpr code and wrapper box. Boxes are
-    detected by name (``gen~`` / ``mc.gen~``), not maxclass, because MAX and
-    add_gen write them as ``newobj``; mc.gen~'s gen patcher is read from
+  - gen~ I/O mismatches between the gen patcher and the wrapper box. Boxes
+    are detected by name (``gen~`` / ``mc.gen~``), not maxclass, because MAX
+    and add_gen write them as ``newobj``; mc.gen~'s gen patcher is read from
     ``data.patcher`` (MAX's mc wrapper) as well as ``patcher`` (Q4 / E3,
-    quick 261012-egf).
+    quick 261012-egf). The box's ports are the ``in N`` / ``out N``
+    operators; a codebox counts only through inputs / outputs it uses but
+    nothing wires (quick 261022-ud6 CR-03), so codeboxes in series or fed by
+    params pass.
   - Missing gain staging before an output terminal (Q26 / E6, PD-5): the
     gain stages and output terminals come from :mod:`src.maxpat.dsp_roles`
     (DB-driven, shared with validation.py): live.gain~ is a gain stage,
@@ -15,7 +18,9 @@ not detect:
     Layer 4 (Q33 / S7); the critic adds the mc oscillators and reports a
     blocker
   - Unsafe gain sources (Q26 / E6, PD-4): a bounds-propagating backward
-    trace into both inlets of every ``*~`` / ``mc.*~`` that reads comma
+    trace into both inlets of every ``*~`` / ``mc.*~`` acting as a gain stage
+    (an audio operand on the other inlet, output not feeding an oscillator's
+    frequency / phase inlets -- quick 261022-ud6 CR-01 / WR-04) that reads comma
     segments, line~ target/time pairs, ``* k`` / ``/ k`` / scale / zmap /
     clip and each source's own range, and stops at unknown boxes. The
     blocker carries an ``insert_gain_normalizer`` quick-fix payload (Q39:
@@ -48,7 +53,7 @@ import math
 import re
 from collections import deque
 
-from src.maxpat import dsp_roles, gain_staging, walk
+from src.maxpat import dsp_roles, gain_staging, genexpr_parse, walk
 from src.maxpat.critics.base import CriticResult, finding_ids, tag_results
 from src.maxpat.critics.fixes import gain_normalizer_fix, gen_param_fix, max_float
 from src.maxpat.codegen import parse_genexpr_io
@@ -62,17 +67,6 @@ _GAIN_NAMES = frozenset({
     "*~", "mc.*~", "gain~", "mc.gain~", "live.gain~", "mc.live.gain~",
 })
 _TERMINAL_NAMES = frozenset({"dac~", "mc.dac~", "ezdac~", "mc.ezdac~", "plugout~"})
-
-# Objects known to output MIDI-range (0-127) or UI-range values (back-compat;
-# the Q26 trace reads each source's own bounds, see _bounded_source)
-_MIDI_RANGE_SOURCES = frozenset({
-    "ctlin", "notein", "slider", "kslider",
-    "live.dial", "live.slider", "live.numbox",
-    "number", "flonum",
-})
-
-# Objects that normalize/scale values into safe ranges
-_NORMALIZER_NAMES = frozenset({"scale", "zmap", "clip", "clip~"})
 
 # Outlet type strings that carry audio: MAX writes "multichannelsignal" for
 # mc.* outlets (and DB-derived saves mirror that), so a bare == "signal"
@@ -95,9 +89,10 @@ def review_dsp(
     """Review DSP aspects of a patch.
 
     Checks:
-      1. gen~ I/O match between GenExpr code and wrapper box (gen~ and
-         mc.gen~ detected by box name; mc.gen~ code read from data.patcher
-         too -- Q4 / E3)
+      1. gen~ I/O match between the gen patcher and the wrapper box (gen~
+         and mc.gen~ detected by box name; mc.gen~ code read from
+         data.patcher too -- Q4 / E3): ``in N`` / ``out N`` operators, and
+         codebox inputs / outputs only where they are unwired (CR-03)
       2. Gain staging: oscillators reaching an output terminal without a
          gain stage; both sets come from ``dsp_roles(db)`` (Q26 / E6, PD-5)
       3. Unsafe gain sources: a value range above 1.0 reaching either
@@ -152,9 +147,22 @@ def _check_gen_io_match(
 
     Boxes are selected by name (``gen~`` / ``mc.gen~``, Q4 / E3): MAX and
     add_gen write them as ``newobj``, so the former ``maxclass == "gen~"``
-    gate never fired on real patches. The compared code is the first
-    *wired* codebox of the embedded gen patcher (see _extract_codebox_code);
-    when there is none, code_context supplies externally-provided code.
+    gate never fired on real patches.
+
+    The gen~ box's ports are the ``in N`` / ``out N`` operators of its gen
+    patcher, not a codebox's ``inK`` / ``outK`` (quick 261022-ud6 CR-03): a
+    codebox may be fed by params, history or another codebox. Two counts are
+    compared with the box's ``numinlets`` / ``numoutlets``:
+
+    * the highest ``in N`` / ``out N`` operator (:func:`_gen_operator_io`);
+    * for a *wired* codebox (OQ1-A), the code's input / output count when
+      some ``inK`` / ``outK`` it uses has no cord on that codebox port
+      (:func:`_unwired_codebox_io`) -- the add_gen layout with
+      ``num_inputs`` below the code's count.
+
+    The larger count is reported. Only when the gen patcher has no wired
+    codebox with code does ``code_context`` supply externally-provided code,
+    compared as a whole.
     """
     results: list[CriticResult] = []
 
@@ -170,20 +178,20 @@ def _check_gen_io_match(
         if not isinstance(gen_numoutlets, (int, float)) or isinstance(gen_numoutlets, bool):
             gen_numoutlets = 0
 
-        # Find codebox code from embedded patcher
-        code = _extract_codebox_code(box)
+        inner = walk.inner_patcher(box)
+        op_inputs, op_outputs = _gen_operator_io(inner)
+        cb_inputs, cb_outputs, wired_code = _unwired_codebox_io(inner)
+        code_inputs = max(op_inputs, cb_inputs)
+        code_outputs = max(op_outputs, cb_outputs)
 
-        # Also check code_context for externally-provided code
-        if code is None and isinstance(code_context, dict):
+        # Externally-provided code when no wired codebox carries any
+        if not wired_code and isinstance(code_context, dict):
             gen_codes = code_context.get("gen~_code", {})
-            if isinstance(gen_codes, dict):
-                code = gen_codes.get(box_id)
-
-        if not isinstance(code, str):
-            continue  # No code to check
-
-        # Parse I/O from GenExpr code
-        code_inputs, code_outputs = parse_genexpr_io(code)
+            code = gen_codes.get(box_id) if isinstance(gen_codes, dict) else None
+            if isinstance(code, str):
+                ctx_inputs, ctx_outputs = parse_genexpr_io(code)
+                code_inputs = max(code_inputs, ctx_inputs)
+                code_outputs = max(code_outputs, ctx_outputs)
 
         # Compare inputs
         if code_inputs > gen_numinlets:
@@ -218,20 +226,16 @@ def _check_gen_io_match(
 _gen_inner_patcher = walk.inner_patcher
 
 
-def _extract_codebox_code(gen_box: dict) -> str | None:
-    """Extract GenExpr code from the first wired codebox inside a gen~ box.
+_CODE_IN_RE = re.compile(r"\bin(\d+)\b")
+_CODE_OUT_RE = re.compile(r"\bout(\d+)\b")
 
-    Only a codebox that appears as the source or destination of at least one
-    patchline in its gen patcher is used (Q4 OQ1-A): an unwired codebox is
-    demonstration or dead code whose in/out usage says nothing about the
-    gen~ box's inlets (MAX's own gen~.maxhelp has one). Returns None when no
-    wired codebox has code, so the caller falls back to code_context.
-    """
-    inner_patcher = walk.inner_patcher(gen_box)
-    if not inner_patcher:
-        return None
 
-    wired_ids: set = set()
+def _gen_patcher_parts(inner_patcher) -> tuple:
+    """``(boxes, ports)`` of a gen patcher: its box dicts, and the set of
+    ``(box_id, "in" | "out", port)`` ends of its patchlines."""
+    if not isinstance(inner_patcher, dict):
+        return [], set()
+    ports: set = set()
     lines = inner_patcher.get("lines")
     for line_entry in lines if isinstance(lines, list) else ():
         if not isinstance(line_entry, dict):
@@ -239,26 +243,73 @@ def _extract_codebox_code(gen_box: dict) -> str | None:
         patchline = line_entry.get("patchline", line_entry)
         if not isinstance(patchline, dict):
             continue
-        for key in ("source", "destination"):
+        for key, side in (("source", "out"), ("destination", "in")):
             end = patchline.get(key)
-            if isinstance(end, list) and end and isinstance(end[0], (str, int)):
-                wired_ids.add(end[0])
-
-    boxes = inner_patcher.get("boxes")
-    for entry in boxes if isinstance(boxes, list) else ():
+            if (
+                isinstance(end, list) and len(end) >= 2
+                and isinstance(end[0], (str, int))
+                and isinstance(end[1], int) and not isinstance(end[1], bool)
+            ):
+                ports.add((end[0], side, end[1]))
+    boxes = []
+    raw = inner_patcher.get("boxes")
+    for entry in raw if isinstance(raw, list) else ():
         inner_box = entry.get("box") if isinstance(entry, dict) else None
-        if not isinstance(inner_box, dict):
+        if isinstance(inner_box, dict):
+            boxes.append(inner_box)
+    return boxes, ports
+
+
+def _gen_operator_io(inner_patcher) -> tuple:
+    """Highest ``in N`` / ``out N`` operator numbers of a gen patcher (CR-03)."""
+    boxes, _ports = _gen_patcher_parts(inner_patcher)
+    top = {"in": 0, "out": 0}
+    for inner_box in boxes:
+        name = walk.box_name(inner_box)
+        if name not in top:
             continue
+        args = walk.box_args(inner_box)
+        n = _num(args[0]) if args else None
+        if n is not None and n == int(n) and n >= 1:
+            top[name] = max(top[name], int(n))
+    return top["in"], top["out"]
+
+
+def _unwired_codebox_io(inner_patcher) -> tuple:
+    """``(inputs, outputs, wired_code)`` from the wired codeboxes (CR-03).
+
+    Only a codebox that appears in at least one patchline of its gen patcher
+    is read (Q4 OQ1-A): an unwired codebox is demonstration or dead code
+    (MAX's own gen~.maxhelp has one). For each, its code's input count
+    counts only when some ``inK`` it uses has no cord into codebox inlet
+    K-1, and its output count only when some ``outK`` has no cord out of
+    codebox outlet K-1: a fully wired codebox's ports are its own, fed by
+    ``in N`` operators, params, history or another codebox. *wired_code*
+    is True when any wired codebox carries code.
+    """
+    boxes, ports = _gen_patcher_parts(inner_patcher)
+    wired_ids = {box_id for box_id, _side, _port in ports}
+    inputs = outputs = 0
+    wired_code = False
+    for inner_box in boxes:
         if inner_box.get("maxclass") != "codebox":
             continue
         inner_id = inner_box.get("id")
         if not isinstance(inner_id, (str, int)) or inner_id not in wired_ids:
             continue
         code = inner_box.get("code")
-        if code and isinstance(code, str):
-            return code
-
-    return None
+        if not code or not isinstance(code, str):
+            continue
+        wired_code = True
+        n_in, n_out = parse_genexpr_io(code)
+        masked = genexpr_parse.mask(code)  # comments / strings blanked (Q22)
+        used_in = {int(k) for k in _CODE_IN_RE.findall(masked)}
+        used_out = {int(k) for k in _CODE_OUT_RE.findall(masked)}
+        if any((inner_id, "in", k - 1) not in ports for k in used_in if k >= 1):
+            inputs = max(inputs, n_in)
+        if any((inner_id, "out", k - 1) not in ports for k in used_out if k >= 1):
+            outputs = max(outputs, n_out)
+    return inputs, outputs, wired_code
 
 
 # ---------------------------------------------------------------------------
@@ -342,53 +393,6 @@ def _check_gain_staging(
         ))
 
     return results
-
-
-# ---------------------------------------------------------------------------
-# Check 3: Unsafe gain sources
-# ---------------------------------------------------------------------------
-
-def _is_normalizer(box: dict) -> bool:
-    """Check if a box is a normalizer/scaler that constrains values to safe range."""
-    name = walk.box_name(box)
-    if name in _NORMALIZER_NAMES:
-        return True
-
-    text = walk.box_text(box)
-    # Division by 127 normalizes MIDI range: "/ 127." or "!/ 127."
-    if text.startswith("/ 127") or text.startswith("!/ 127"):
-        return True
-    # Small multiplication factor like "* 0.007" (approx 1/127)
-    if text.startswith("* 0.00") and not text.startswith("* 0.0 "):
-        return True
-    # expr/vexpr: only treat as normalizer if text contains division/scaling patterns
-    if name in ("expr", "vexpr"):
-        # Division by common ranges, or multiplication by small constant < 1.0
-        if re.search(r'[/!]\s*127|[/!]\s*255|[/!]\s*100|\*\s*0\.\d', text):
-            return True
-        return False
-
-    return False
-
-
-def _parse_line_tilde_targets(text: str) -> list[float]:
-    """Parse target values from a message box feeding line~.
-
-    line~ message format: target1 time1 target2 time2 ...
-    Values at even indices (0, 2, 4...) are target values.
-    A single number with no time is also a valid target.
-    Kept for back-compat; the Q26 trace splits comma segments itself
-    (:func:`_message_segments`).
-    """
-    targets: list[float] = []
-    parts = text.split()
-    for i, part in enumerate(parts):
-        if i % 2 == 0:  # even indices are target values
-            try:
-                targets.append(float(part))
-            except ValueError:
-                pass
-    return targets
 
 
 # ---------------------------------------------------------------------------
@@ -618,10 +622,25 @@ def _check_unsafe_gain_sources(
 ) -> list[CriticResult]:
     """Flag a value source that can drive a ``*~`` / ``mc.*~`` input above 1.0.
 
-    Q26 / E6 (planner decision PD-4). For each ``*~`` / ``mc.*~`` box and
-    each of its two inlets, a backward BFS from the control cords into the
-    inlet -- and from the control cords into inlet 0 of a ``line~`` whose
-    signal feeds it -- carries an op chain of the value transforms passed:
+    Q26 / E6 (planner decision PD-4), narrowed to gain stages by quick
+    261022-ud6 (CR-01 / WR-04). A ``*~`` / ``mc.*~`` box is judged only as
+    a gain stage:
+
+    * a box whose signal output reaches any inlet of an oscillator
+      (cycle~, saw~, rect~, tri~, phasor~ and mc. forms), directly or
+      through signal arithmetic / mtof~, scales a frequency or phase and is
+      skipped (:func:`_feeds_oscillator`);
+    * an inlet is traced only when the *other* inlet carries audio
+      (:func:`_inlet_has_audio`): a ramp source (line~, curve~, sig~,
+      adsr~, number~), a constant ``*~ k`` argument with inlet 1 unfed, or a
+      control cord there makes the box arithmetic. An inlet 0 with no cord
+      at all counts as audio (the gain's audio input is not wired yet).
+
+    For each judged inlet, a backward BFS from the control cords into the
+    inlet -- and, through :func:`_ramp_seeds`, from the control cords into
+    inlet 0 of a ``line~`` whose signal feeds it, directly or through
+    arithmetic ``*~ k`` boxes (multiply-by-k prepended) -- carries an op
+    chain of the value transforms passed:
 
     1. message box: comma segments up to the first unescaped ``;``; a
        segment starting with a symbol is a command (``set``, ``stop``) and
@@ -636,13 +655,11 @@ def _check_unsafe_gain_sources(
        0-127;
     3. ``* k``, ``/ k``, ``scale`` / ``zmap a b c d`` and ``clip lo hi``
        (:func:`_op_of`) prepend their op and continue to inlet-0 feeders;
-    4. an expr / vexpr matching :func:`_is_normalizer` is safe;
+    4. an expr / vexpr stops with an unknown range (no finding);
     5. trigger value outlets (i, f, l) and f / float / i / int pass the
        value on; numeric arguments are constant sources;
     6. anything else stops with an unknown range and no finding.
 
-    For inlet 0 of a ``*~ k`` with nothing on inlet 1, the chain starts
-    with multiply-by-k (``line~`` -> ``*~ 0.01`` is judged as the product).
     One blocker per (source, gain box, inlet) whose propagated range leaves
     -1.0..1.0. A visited set, a 64-hop limit and a 4096-state cap per
     (gain box, inlet) bound the walk.
@@ -672,34 +689,181 @@ def _check_unsafe_gain_sources(
         if edge.outlet < len(src_outlettype) and src_outlettype[edge.outlet] in _SIGNAL_OUTLET_TYPES:
             sig_in.setdefault((edge.dst, edge.inlet), []).append(edge)
 
+    # src_id -> signal edges out of it (the forward modulation walk)
+    sig_out: dict = {}
+    for edges_in in sig_in.values():
+        for edge in edges_in:
+            sig_out.setdefault(edge.src, []).append(edge)
+
+    audio_memo: dict = {}
     for gain_id, gain_box in box_lookup.items():
         gain_name = walk.box_name(gain_box)
         if gain_name not in _GAIN_INLET_NAMES:
             continue
+        # CR-01 / WR-04 (quick 261022-ud6): a *~ whose output sets an
+        # oscillator's frequency or phase scales Hz; it is not a gain stage.
+        if _feeds_oscillator(gain_id, box_lookup, sig_out):
+            continue
         for inlet in (0, 1):
-            base_ops: tuple = ()
-            if inlet == 0 and (gain_id, 1) not in fed_inlets:
-                args = walk.box_args(gain_box)
-                k = _num(args[0]) if args else None
-                if k is not None:
-                    base_ops = (("mul", k),)
+            # CR-01: the traced inlet is a gain input only when the other
+            # operand carries audio. A ramp, a constant ``*~ k`` argument
+            # (inlet 1 unfed) or a control cord there makes the box plain
+            # arithmetic, judged where its output reaches a real gain. An
+            # inlet 0 with no cord at all is the not-yet-wired audio input of
+            # a gain whose control inlet is fed: judged as audio.
+            other = 1 - inlet
+            if other == 0 and (gain_id, 0) not in fed_inlets:
+                pass
+            elif not _inlet_has_audio(gain_id, other, box_lookup, sig_in, audio_memo):
+                continue
             seeds = []
             seed_via = []  # the consumer cord (dst, inlet) of each seed (Q39)
             for edge in ctrl_in.get((gain_id, inlet), ()):
-                seeds.append((edge.src, edge.outlet, base_ops, False, False))
+                seeds.append((edge.src, edge.outlet, (), False, False))
                 seed_via.append((edge.dst, edge.inlet))
             for sig_edge in sig_in.get((gain_id, inlet), ()):
-                line_box = box_lookup.get(sig_edge.src)
-                if line_box is None or walk.box_name(line_box) != "line~":
-                    continue
-                for edge in ctrl_in.get((sig_edge.src, 0), ()):
-                    seeds.append((edge.src, edge.outlet, base_ops, True, True))
-                    seed_via.append((edge.dst, edge.inlet))
+                _ramp_seeds(
+                    sig_edge.src, (), box_lookup, ctrl_in, sig_in, seeds, seed_via, set(),
+                )
             if seeds:
                 results.extend(_trace_gain_inlet(
                     box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds, seed_via,
                 ))
     return results
+
+
+# CR-01 / WR-04: oscillators whose every inlet is a frequency, phase or shape
+# control (gain_staging's set adds noise~ / pink~, which have none, and has no
+# phasor~).
+_MODULATED_OSCILLATORS = frozenset(
+    name
+    for base in ("cycle~", "saw~", "rect~", "tri~", "phasor~")
+    for name in (base, "mc." + base)
+)
+
+# Signal arithmetic: a value passes through it unchanged in kind.
+_SIGNAL_ARITH = frozenset(
+    name
+    for base in ("+~", "-~", "*~", "/~", "!-~", "!/~")
+    for name in (base, "mc." + base)
+)
+
+# Frequency converters: the forward modulation walk continues through them.
+_FREQ_CONVERTERS = frozenset({"mtof~", "mc.mtof~"})
+
+# Signal sources that carry a control value, not audio (CR-01).
+_RAMP_SOURCES = frozenset(
+    name
+    for base in ("line~", "curve~", "sig~", "adsr~", "number~")
+    for name in (base, "mc." + base)
+)
+
+_WALK_LIMIT = 256
+
+
+def _feeds_oscillator(box_id, box_lookup, sig_out) -> bool:
+    """True when *box_id*'s signal output reaches an oscillator inlet (CR-01).
+
+    Forward walk over signal cords through signal arithmetic (``+~``, ``*~``,
+    ...) and ``mtof~``. Every inlet of cycle~ / saw~ / rect~ / tri~ / phasor~
+    (and the mc. forms) is a frequency, phase or shape input, never a gain.
+    """
+    seen = {box_id}
+    queue = deque([box_id])
+    steps = 0
+    while queue and steps < _WALK_LIMIT:
+        steps += 1
+        node = queue.popleft()
+        for edge in sig_out.get(node, ()):
+            dst = box_lookup.get(edge.dst)
+            if dst is None:
+                continue
+            name = walk.box_name(dst)
+            if name in _MODULATED_OSCILLATORS:
+                return True
+            if (name in _SIGNAL_ARITH or name in _FREQ_CONVERTERS) and edge.dst not in seen:
+                seen.add(edge.dst)
+                queue.append(edge.dst)
+    return False
+
+
+def _inlet_has_audio(box_id, inlet, box_lookup, sig_in, memo, stack=None) -> bool:
+    """True when a signal cord into (*box_id*, *inlet*) carries audio (CR-01).
+
+    Ramp sources (line~, curve~, sig~, adsr~, number~) carry a control
+    value; signal arithmetic carries audio only when one of its own inputs
+    does (``line~ -> *~ 440.`` is a scaled ramp). Every other signal source
+    is audio. A control cord, or no cord, is never audio.
+    """
+    if stack is None:
+        stack = set()
+    for edge in sig_in.get((box_id, inlet), ()):
+        if _is_audio_source(edge.src, box_lookup, sig_in, memo, stack):
+            return True
+    return False
+
+
+def _is_audio_source(src_id, box_lookup, sig_in, memo, stack) -> bool:
+    if src_id in memo:
+        return memo[src_id]
+    box = box_lookup.get(src_id)
+    if box is None:
+        return False
+    name = walk.box_name(box)
+    if name in _RAMP_SOURCES:
+        memo[src_id] = False
+        return False
+    if name not in _SIGNAL_ARITH:
+        memo[src_id] = True
+        return True
+    if src_id in stack:
+        return False  # an arithmetic-only cycle carries no audio of its own
+    stack.add(src_id)
+    value = any(
+        _inlet_has_audio(src_id, i, box_lookup, sig_in, memo, stack) for i in (0, 1)
+    )
+    stack.discard(src_id)
+    memo[src_id] = value
+    return value
+
+
+def _ramp_seeds(src_id, ops, box_lookup, ctrl_in, sig_in, seeds, seed_via, seen) -> None:
+    """Seed the trace through a control-valued signal source (CR-01).
+
+    A ``line~`` seeds the control cords into its inlet 0 (``into_line``).
+    A ``*~ k`` / ``mc.*~ k`` with nothing on inlet 1 and no audio on inlet 0
+    is a scaled ramp: multiply-by-*k* is prepended and the walk continues
+    into its inlet 0, so ``line~ -> *~ 0.5 -> *~`` is judged as the product
+    at the gain. Anything else gives no seed (unknown range).
+    """
+    if src_id in seen or len(seen) > _TRACE_HOP_LIMIT:
+        return
+    seen.add(src_id)
+    box = box_lookup.get(src_id)
+    if box is None:
+        return
+    name = walk.box_name(box)
+    if name == "line~":
+        for edge in ctrl_in.get((src_id, 0), ()):
+            seeds.append((edge.src, edge.outlet, ops, True, True))
+            seed_via.append((edge.dst, edge.inlet))
+        return
+    if name not in _GAIN_INLET_NAMES:
+        return
+    if (src_id, 1) in ctrl_in or (src_id, 1) in sig_in:
+        return  # a fed multiplier has its own (untraced) range
+    args = walk.box_args(box)
+    k = _num(args[0]) if args else None
+    if k is None:
+        return  # *~ with no argument and nothing on inlet 1 multiplies by 0
+    if _inlet_has_audio(src_id, 0, box_lookup, sig_in, {}):
+        return
+    ops = (("mul", k),) + ops
+    for edge in ctrl_in.get((src_id, 0), ()):
+        seeds.append((edge.src, edge.outlet, ops, False, False))
+        seed_via.append((edge.dst, edge.inlet))
+    for edge in sig_in.get((src_id, 0), ()):
+        _ramp_seeds(edge.src, ops, box_lookup, ctrl_in, sig_in, seeds, seed_via, seen)
 
 
 def _trace_gain_inlet(box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds, seed_via=None) -> list:

@@ -22,7 +22,7 @@ Before running the critic loop:
 
 ## Capabilities
 
-- Invoke `review_patch(patch_dict, code_context=None, ext_code=None, ext_archetype="message")` from `src.maxpat.critics`
+- Invoke `review_patch(patch_dict, code_context=None, ext_code=None, ext_archetype="message", is_new=...)` from `src.maxpat.critics`: `is_new=True` when the output will be saved as a new file (`/max-build`, or an iterate step that creates a file), `is_new=False` (the default) for an edit of an existing file. It must match what the save gate will use (True for a file with no baseline), or a Q24 uninitialized-state warning in the loop becomes a refused save
 - Parse the returned `list[CriticResult]` for severity levels: blocker, warning, note
 - Format blocker findings into actionable revision requests for the generator
 - Track revision history to detect repeated identical findings
@@ -46,7 +46,7 @@ Summary:
 
 ### Edited Patches (via /max-iterate)
 
-The critic loop applies equally to edited patches. After edits, `validate_patch()` runs, then `review_patch()` on `patcher.to_dict()`. The save path is `save_patch_roundtrip()`, which re-runs both pipelines as a save gate and raises `PatchValidationError` on any blocker the edit introduced -- the critic loop should already have cleared them, so the gate is a backstop. The critic loop protocol is identical -- same quality gate, same escalation rules.
+The critic loop applies equally to edited patches. After edits, `validate_patch()` runs, then `review_patch()` on `patcher.to_dict()` (default `is_new=False`; pass `is_new=True` only when the edit writes a new file). The save path is `save_patch_roundtrip()`, which re-runs both pipelines as a save gate and raises `PatchValidationError` on any blocker the edit introduced -- the critic loop should already have cleared them, so the gate is a backstop. That holds only when the loop's `is_new` matches the gate's (True for a file with no baseline). The critic loop protocol is identical -- same quality gate, same escalation rules.
 
 ## Severity Handling
 
