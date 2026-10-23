@@ -57,6 +57,10 @@ RUNTIME_FILES = (
     "src/maxpat/__init__.py",
     ".claude/max-objects/max/objects.json",
     "tools/sync_max_bundle.py",
+    # WR-01 (quick 261022-ud6 WP6): /max-verify --live needs the bridge patch
+    "tools/max_bridge.py",
+    "tools/max_verify_live.py",
+    "tools/max_bridge/max-bridge.maxpat",
     WIDTH_TABLE,
 )
 ARCHIVE_SUFFIXES = (".tar.gz", ".tgz", ".tar", ".zip")
@@ -249,6 +253,26 @@ print(json.dumps({"first": first, "second": second}))
         res = _run_in_archive(root, code)
         assert res == {"first": None, "second": None}
 
+    def test_live_check_bridge_patch_available(self, release_archive):
+        """WR-01 (quick 261022-ud6 WP6): /max-verify --live can find its bridge
+        patch in a release install (patches/ is not shipped)."""
+        _, root, _ = release_archive
+        code = r"""
+import json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root))
+import tools.max_bridge as bridge
+print(json.dumps({
+    "file": bridge.BRIDGE_PATCH.is_file(),
+    "inside": str(bridge.BRIDGE_PATCH.resolve()).startswith(str(root.resolve())),
+    "hint": bridge._bridge_hint(bridge.HOST, bridge.BRIDGE_PORT),
+}))
+"""
+        res = _run_in_archive(root, code)
+        assert res["file"] and res["inside"], res
+        assert "tools/max_bridge/max-bridge.maxpat" in res["hint"]
+
 
 class TestGitattributes:
     """I2: export-ignore patterns are anchored and cover the S2 exclusions."""
@@ -332,6 +356,50 @@ class TestCiConfig:
         assert "--exclude-from" not in text
         assert "|| [[" not in text, "release.yml masks an exit code"
         assert "tar czf" not in text
+
+    def test_test_workflow_checks_python_310_syntax_and_apis(self):
+        """BL-01 follow-up (quick 261022-ud6 WP6): math.exp2 (3.11+) passed CI
+        because no test reached it; vermin flags any 3.11+ API statically."""
+        text = (WORKFLOWS / "test.yml").read_text()
+        assert re.search(r"vermin -t=3\.10- --violations\b.*\bsrc tools tests scripts "
+                         r"\.claude/scripts", text), text
+        assert 'python -m pip install "vermin>=1.6,<2"' in text
+
+    # WR-05 / IN-07 (quick 261022-ud6 WP6): npm trusted publishing (OIDC), no
+    # long-lived token, publish verified before the GitHub release goes public,
+    # and only full semver tags trigger a release.
+
+    @staticmethod
+    def _release_steps(text: str) -> list[str]:
+        return re.findall(r"^\s+- (?:name|uses): (.+)$", text, re.M)
+
+    def test_release_uses_trusted_publishing(self):
+        text = (WORKFLOWS / "release.yml").read_text()
+        assert "NODE_AUTH_TOKEN" not in text and "NPM_TOKEN" not in text
+        assert "secrets." not in text
+        assert re.search(r"^\s+id-token: write\b", text, re.M)
+        assert "npm publish --provenance --access public" in text
+        assert "node-version: '24'" in text
+        assert "npm install -g npm@^11.5.1" in text
+
+    def test_publish_checked_before_github_release(self):
+        text = (WORKFLOWS / "release.yml").read_text()
+        steps = self._release_steps(text)
+        idx = {s: i for i, s in enumerate(steps)}
+        dry = next(i for s, i in idx.items() if "dry run" in s.lower())
+        pub = next(i for s, i in idx.items() if s.startswith("Publish to npm"))
+        gh = next(i for s, i in idx.items() if s.startswith("Create GitHub Release"))
+        assert dry < pub < gh, steps
+        assert "npm publish --dry-run" in text
+        # a re-run after a GitHub-release failure must not fail on "version exists"
+        assert "npm view" in text
+
+    def test_tag_filter_is_full_semver(self):
+        text = (WORKFLOWS / "release.yml").read_text()
+        m = re.search(r"^\s*tags:\s*\[(.*)\]\s*$", text, re.M)
+        assert m, "release.yml has no inline tags filter"
+        patterns = [p.strip().strip("'\"") for p in m.group(1).split(",")]
+        assert patterns == ["v[0-9]+.[0-9]+.[0-9]+"]
 
     def test_release_ignore_removed(self):
         assert not (REPO_ROOT / ".release-ignore").exists()

@@ -807,10 +807,65 @@ def test_max_dsp_agent_skill_uses_argv_subprocess_form():
         "max-dsp-agent SKILL.md must use argv-form subprocess invocation; "
         "shell=True is a command-injection footgun (T-02)."
     )
-    # Positive: ensure the argv form snippet is present.
-    assert '"pytest", str(fixture), "-q"' in text, (
+    # Positive: ensure the argv form snippet is present. WR-02 (quick 261022-ud6
+    # WP6): `python -m pytest` with the interpreter running the agent, so the
+    # gate needs no `pytest` on PATH and puts the framework root on sys.path.
+    assert '[sys.executable, "-m", "pytest", str(fixture), "-q"' in text, (
         "max-dsp-agent SKILL.md must include the argv-form subprocess snippet."
     )
+    assert '["pytest", str(fixture)' not in text
+
+
+def _dsp_gate_snippet() -> str:
+    """The python block under '### How to Invoke' in the max-dsp-agent skill."""
+    text = _DSP_AGENT_SKILL.read_text()
+    section = text.split("### How to Invoke", 1)[1]
+    return section.split("```python\n", 1)[1].split("```", 1)[0]
+
+
+def _run_dsp_gate(root: Path, patch_path: str) -> "subprocess.CompletedProcess":
+    import os
+    import subprocess
+    import sys
+
+    code = f"patch_path = {patch_path!r}\n" + _dsp_gate_snippet() + "\nprint('GATE-PASSED')\n"
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    return subprocess.run([sys.executable, "-c", code], cwd=str(root), env=env,
+                          capture_output=True, text=True, timeout=300)
+
+
+def _release_like_root(tmp_path: Path, body: str) -> Path:
+    """A release-install layout: src/ but no tests/__init__.py or conftest.py."""
+    root = tmp_path / "install"
+    (root / "tests" / "dsp_sim").mkdir(parents=True)
+    (root / "src").symlink_to(Path(__file__).resolve().parent.parent / "src")
+    (root / "tests" / "dsp_sim" / "test_demo.py").write_text(
+        "from src.maxpat.dsp_sim import run_simulation  # noqa: F401\n\n"
+        "def test_sim():\n" + body
+    )
+    return root
+
+
+def test_dsp_gate_snippet_passes_in_release_layout(tmp_path):
+    """WR-02: a passing sim fixture must not block the save in a release install
+    (bare `pytest` put tests/dsp_sim, not the root, on sys.path: `No module
+    named 'src'` -> PatchValidationError on every save)."""
+    root = _release_like_root(tmp_path, "    assert True\n")
+    r = _run_dsp_gate(root, "patches/demo/generated/demo.maxpat")
+    assert r.returncode == 0 and "GATE-PASSED" in r.stdout, r.stdout + r.stderr
+
+
+def test_dsp_gate_snippet_blocks_failing_sim(tmp_path):
+    root = _release_like_root(tmp_path, "    assert False, 'phase_drift'\n")
+    r = _run_dsp_gate(root, "patches/demo/generated/demo.maxpat")
+    assert r.returncode != 0 and "PatchValidationError" in r.stderr, r.stdout + r.stderr
+    assert "DSP pre-flight simulation failed for demo" in r.stderr
+
+
+def test_dsp_gate_snippet_no_fixture_is_no_gate(tmp_path):
+    root = _release_like_root(tmp_path, "    assert False\n")
+    r = _run_dsp_gate(root, "patches/other/generated/other.maxpat")
+    assert r.returncode == 0 and "GATE-PASSED" in r.stdout, r.stdout + r.stderr
 
 
 # ── Q18: single-sourced skill blocks and moved-rule loading (review S11) ──

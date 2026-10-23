@@ -38,7 +38,7 @@ Run the full validation pipeline and critic review on all generated files in the
 
 - Turn the volume down.
 - Close the originals of the project's patches (the tool skips a patch whose original is open) and any unrelated patch: console posts from other open patches are attributed to the patch under test.
-- The bridge patch (`patches/max-bridge/generated/max-bridge.maxpat`) must already be open in MAX with its enable toggle ON. That is the user's job: never toggle it or open the bridge patch for them (D-04). Afterwards, remind the user to turn the toggle OFF: the bridge listens on UDP 7400 on all network interfaces.
+- The bridge patch (`tools/max_bridge/max-bridge.maxpat`, shipped with the framework) must already be open in MAX with its enable toggle ON. That is the user's job: never toggle it or open the bridge patch for them (D-04). Afterwards, remind the user to turn the toggle OFF: the bridge listens on UDP 7400 on all network interfaces.
 - Recorded patches switch DSP on only for the recording. Load-only patches get DSP on during the load settle so gen~ compile errors post, and the prior DSP state is restored afterwards (D-02).
 - Audio-input patches (`adc~`, `ezadc~`, `mc.adc~`, `mc.ezadc~`) stay load-only with DSP untouched unless `--live-inputs` (D-01). If DSP is already on, their input is live during the load, so switch DSP off first.
 - Ctrl-C mid-run skips the bridge's cleanup: DSP may stay on and a `__maxbridge_` window may stay open. Close that window WITHOUT saving.

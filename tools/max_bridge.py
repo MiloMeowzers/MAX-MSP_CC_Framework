@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Drive a running MAX 9.2 from Python through a resident bridge patch (Q34 spike).
 
-SPIKE STATUS: v0.1.0 and v0.2.0 were confirmed in MAX 9.2 through their
-checklists (patches/max-bridge/test-results/v0.1.0-bridge-checklist.md and
-v0.2.0-bridge-checklist.md; 2026-10-21, commit dc0cde91). v0.3.0 adds
-``check --dsp-on-load`` and the ``/max-verify --live`` wrapper
-tools/max_verify_live.py, pending
-patches/max-bridge/test-results/v0.3.0-verify-live-checklist.md.
+SPIKE STATUS: v0.1.0, v0.2.0 and v0.3.0 are all confirmed in MAX 9.2 through
+their checklists (patches/max-bridge/test-results/v0.1.0-bridge-checklist.md,
+v0.2.0-bridge-checklist.md and v0.3.0-verify-live-checklist.md; 2026-10-21,
+commits dc0cde91 and f935e550). v0.3.0 added ``check --dsp-on-load`` and the
+``/max-verify --live`` wrapper tools/max_verify_live.py.
 
-Protocol. The bridge patch (patches/max-bridge/generated/max-bridge.maxpat)
+Protocol. The bridge patch (tools/max_bridge/max-bridge.maxpat)
 is a dumb UDP pass-through; this client owns all the sequencing:
 
     Python -> MAX  (OSC over UDP to 127.0.0.1:7400)
@@ -107,7 +106,9 @@ REPLY_RECEIVE = "__maxbridge_reply"
 # /query reply addresses: adstatus switch, adstatus sr, dspstate~ outlet 1
 STATE_ADDRESSES = ("/state/dsp", "/state/adsr", "/state/sr")
 COPY_PREFIX = "__maxbridge_"
-BRIDGE_PATCH = REPO_ROOT / "patches" / "max-bridge" / "generated" / "max-bridge.maxpat"
+# Shipped with the tools (WR-01, quick 261022-ud6): /patches is export-ignored,
+# and a patch under patches/ would show up as a user project in /max-switch.
+BRIDGE_PATCH = REPO_ROOT / "tools" / "max_bridge" / "max-bridge.maxpat"
 
 DEFAULT_TIMEOUT = 2.0
 MAX_EVENTS = 1000
@@ -529,6 +530,27 @@ def _inject_note(p, report: dict) -> None:
     report["note_target"] = None
 
 
+def _load_patch(src: Path):
+    """Parse *src*: (Patcher, file text); every malformed-input failure is ValueError.
+
+    (OSError for an unreadable file passes through.) run_check maps both to
+    exit 2, bad input (WR-04, quick 261022-ud6): a truncated or non-patch
+    file must never surface as a traceback with exit 1 ("findings").
+    """
+    import json
+
+    from src.maxpat.patcher import Patcher
+
+    text = src.read_text(encoding="utf-8")  # UnicodeDecodeError is a ValueError
+    data = json.loads(text)  # JSONDecodeError is a ValueError
+    if not isinstance(data, dict) or not isinstance(data.get("patcher"), dict):
+        raise ValueError("not a MAX patch (no top-level \"patcher\" object)")
+    try:
+        return Patcher.from_dict(data), text
+    except (KeyError, TypeError, AttributeError, IndexError) as exc:
+        raise ValueError(f"not a MAX patch ({type(exc).__name__}: {exc})") from exc
+
+
 def instrument(src: Path, note: bool = False) -> tuple[Path, dict]:
     """Write the instrumented sibling copy of *src*; return (copy_path, report).
 
@@ -553,15 +575,11 @@ def instrument(src: Path, note: bool = False) -> tuple[Path, dict]:
     poly~, pfft~, bpatcher boxes), warnings (channels above 2),
     no_output_tap, close_hook.
     """
-    import json
-
     from src.maxpat.atomic_io import atomic_write_bytes
     from src.maxpat.hooks import format_patch_text
-    from src.maxpat.patcher import Patcher
 
     src = Path(src)
-    text = src.read_text()
-    p = Patcher.from_dict(json.loads(text))
+    p, text = _load_patch(src)
     report: dict = {"taps": {"L": 0, "R": 0}, "tap_boxes": [], "unsupported": [],
                     "warnings": [], "no_output_tap": False, "close_hook": False,
                     "note_target": None}
@@ -1294,7 +1312,11 @@ def run_check(args) -> dict:
         return report
     report["patch"] = str(src)
     note = getattr(args, "note", None)
-    copy, inst = instrument(src, note=bool(note))
+    try:
+        copy, inst = instrument(src, note=bool(note))
+    except (OSError, ValueError) as exc:  # JSONDecodeError is a ValueError (WR-04)
+        report["error"] = f"cannot read {src}: {exc}"
+        return report  # verdict bridge_failed, exit_code 2, copy None
     report.update(copy=str(copy), taps=inst["taps"], tap_boxes=inst["tap_boxes"],
                   unsupported=inst["unsupported"], warnings=inst["warnings"],
                   note_target=inst["note_target"])
@@ -1378,8 +1400,16 @@ def run_check(args) -> dict:
     return report
 
 
+def bridge_patch_display() -> str:
+    """BRIDGE_PATCH relative to the repo root (absolute when it lies outside)."""
+    try:
+        return str(BRIDGE_PATCH.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(BRIDGE_PATCH)
+
+
 def _bridge_hint(host: str, port: int) -> str:
-    rel = BRIDGE_PATCH.relative_to(REPO_ROOT)
+    rel = bridge_patch_display()
     return (f"MAX bridge at {host}:{port} did not answer: open {rel} in MAX "
             f"(MAX 9.2 must be running) and turn ON its enable toggle "
             f"(the kill switch is OFF whenever the bridge patch opens)")

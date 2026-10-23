@@ -2,7 +2,12 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    # Full semver tags only (vMAJOR.MINOR.PATCH): a `v5.0` tag once reached
+    # `npm version 5.0` and failed mid-release (review IN-07).
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -14,23 +19,27 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write   # create the GitHub release
+      id-token: write   # npm trusted publishing (OIDC) and provenance
     steps:
       - uses: actions/checkout@v6
 
       - name: Build release archive
         run: bash scripts/build_release.sh "$RUNNER_TEMP/framework.tar.gz"
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          files: ${{ runner.temp }}/framework.tar.gz
-
+      # npm trusted publishing needs Node >= 22.14 and npm >= 11.5.1; no
+      # long-lived npm token or repo secret is used (review WR-05). The publisher is linked
+      # on npmjs.com: create-max-framework -> Settings -> Trusted Publisher.
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Upgrade npm for trusted publishing
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
 
       - name: Update installer version from tag
         run: |
@@ -38,7 +47,26 @@ jobs:
           cd installer
           npm version "$VERSION" --no-git-tag-version
 
+      # Publish BEFORE the GitHub release: installers download
+      # releases/latest, so a failed publish must not leave a public release
+      # behind with npm still on the previous version.
+      - name: Check npm package (dry run)
+        run: cd installer && npm publish --dry-run --access public
+
       - name: Publish to npm
-        run: cd installer && npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd installer
+          NAME="$(node -p "require('./package.json').name")"
+          VERSION="$(node -p "require('./package.json').version")"
+          # A re-run after a failed GitHub-release step must not fail on
+          # "cannot publish over the previously published version".
+          if [ -n "$(npm view "$NAME@$VERSION" version 2>/dev/null)" ]; then
+            echo "$NAME@$VERSION is already on npm: skipping publish (re-run)"
+          else
+            npm publish --provenance --access public
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ${{ runner.temp }}/framework.tar.gz

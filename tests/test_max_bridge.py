@@ -288,8 +288,17 @@ class TestBridgePatch:
         return False
 
     def test_exists_at_bridge_patch(self):
+        # quick 261022-ud6 WP6 (WR-01): the bridge patch lives under tools/ so
+        # releases ship it (/patches is export-ignored) and /max-switch never
+        # lists it as a user project.
         assert bridge.BRIDGE_PATCH.is_file()
-        assert bridge.BRIDGE_PATCH == bridge.REPO_ROOT / "patches/max-bridge/generated/max-bridge.maxpat"
+        assert bridge.BRIDGE_PATCH == bridge.REPO_ROOT / "tools/max_bridge/max-bridge.maxpat"
+        assert not (bridge.REPO_ROOT / "patches/max-bridge/generated/max-bridge.maxpat").exists()
+
+    def test_bridge_dir_does_not_shadow_module(self):
+        # tools/max_bridge/ has no __init__.py, so tools/max_bridge.py still wins
+        assert Path(bridge.__file__).name == "max_bridge.py"
+        assert not (bridge.REPO_ROOT / "tools/max_bridge/__init__.py").exists()
 
     def test_validates_and_reviews_clean(self, patch, db):
         from src.maxpat.hooks import _blocking_findings
@@ -1247,6 +1256,33 @@ class TestCheck:
         f.write_text("{}")
         assert bridge.main(["check", str(f), "--dry-run"]) == 2
 
+    # WR-04 (quick 261022-ud6 WP6): unreadable input is bad input (exit 2,
+    # one stderr line), never a traceback reported as exit 1 "findings".
+    @pytest.mark.parametrize("payload", [
+        b'{"patcher": ',            # truncated JSON
+        b'\xff\xfe not utf-8',       # undecodable bytes
+        b'{"patcher": 3}',          # valid JSON, not a patch
+        b'[]',                      # valid JSON, wrong top-level type
+    ])
+    @pytest.mark.parametrize("dry", [True, False])
+    def test_malformed_patch_exits_2(self, tmp_path, capsys, payload, dry):
+        bad = tmp_path / "bad.maxpat"
+        bad.write_bytes(payload)
+        argv = ["check", str(bad), "--port", str(_free_port()), "--reply-port", "0",
+                "--timeout", "0.2"] + (["--dry-run"] if dry else [])
+        assert bridge.main(argv) == 2
+        err = capsys.readouterr().err
+        assert "cannot read" in err and "Traceback" not in err
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["bad.maxpat"]
+
+    def test_malformed_patch_report(self, tmp_path):
+        bad = tmp_path / "bad.maxpat"
+        bad.write_text('{"patcher": ')
+        args = bridge.build_parser().parse_args(["check", str(bad), "--dry-run"])
+        report = bridge.run_check(args)
+        assert report["verdict"] == "bridge_failed" and report["exit_code"] == 2
+        assert report["copy"] is None and "cannot read" in report["error"]
+
     def test_open_requires_copy_prefix(self):
         with bridge.Bridge(port=_free_port(), reply_port=0) as b:
             with pytest.raises(ValueError):
@@ -1433,7 +1469,11 @@ class TestFixtures:
     def test_fixtures_exist_outside_generated(self):
         for name in FIXTURES:
             assert (PROJECT_DIR / "fixtures" / f"{name}.maxpat").is_file(), name
-        assert sorted(p.name for p in (PROJECT_DIR / "generated").iterdir()) == ["max-bridge.maxpat"]
+        # WR-01: the bridge patch moved to tools/max_bridge/; the project keeps
+        # only its docs, fixtures and checklists
+        assert not (PROJECT_DIR / "generated" / "max-bridge.maxpat").exists()
+        assert sorted(p.name for p in bridge.BRIDGE_PATCH.parent.iterdir()
+                      if p.suffix == ".maxpat") == ["max-bridge.maxpat"]
 
     @pytest.mark.parametrize("name,tapped", [
         ("fx-clean", True), ("fx-dc", True), ("fx-genfail", True),

@@ -202,6 +202,89 @@ class TestInstallers:
         assert r.stdout.strip() == "create-max-framework v" + pkg["version"]
 
 
+def _fake_bin(tmp_path: Path, python: bool = True, blocked: tuple[str, ...] = (),
+              git: bool = False) -> Path:
+    """A PATH dir with a python3 wrapper (real interpreter; *blocked* modules
+    raise ImportError via stubs on PYTHONPATH) and optionally a git stub."""
+    import sys
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stubs = tmp_path / "stubs"
+    stubs.mkdir()
+    for mod in blocked:
+        (stubs / f"{mod}.py").write_text("raise ImportError('stubbed out by the test')\n")
+    if python:
+        py = bin_dir / "python3"
+        py.write_text(f'#!/bin/sh\nPYTHONPATH="{stubs}" exec "{sys.executable}" "$@"\n')
+        py.chmod(0o755)
+    if git:
+        g = bin_dir / "git"
+        g.write_text("#!/bin/sh\nexit 0\n")
+        g.chmod(0o755)
+    return bin_dir
+
+
+class TestInstallerDependencyCheck:
+    """IN-06 (quick 261022-ud6 WP6): both installers check the Python packages
+    (numpy, scipy, pytest) and git, not just the Python version, and point at
+    requirements-dev.txt. ``--check-deps`` runs only the checks."""
+
+    def _run_sh(self, bin_dir: Path):
+        return subprocess.run(["/bin/bash", str(REPO_ROOT / "install.sh"), "--check-deps"],
+                              env={"PATH": str(bin_dir)}, capture_output=True, text=True,
+                              timeout=60)
+
+    def _run_js(self, bin_dir: Path):
+        return subprocess.run([shutil.which("node"), str(_INSTALLER_JS), "--check-deps"],
+                              env={"PATH": str(bin_dir)}, capture_output=True, text=True,
+                              timeout=60)
+
+    def _runners(self):
+        runs = [self._run_sh]
+        if shutil.which("node") is not None:
+            runs.append(self._run_js)
+        return runs
+
+    def test_all_present_is_quiet(self, tmp_path: Path):
+        bin_dir = _fake_bin(tmp_path, git=True)
+        for run in self._runners():
+            r = run(bin_dir)
+            out = r.stdout + r.stderr
+            assert r.returncode == 0, out
+            assert "WARNING" not in out and "requirements-dev.txt" not in out, out
+
+    def test_missing_packages_warn_with_hint(self, tmp_path: Path):
+        bin_dir = _fake_bin(tmp_path, blocked=("numpy", "scipy"), git=True)
+        for run in self._runners():
+            r = run(bin_dir)
+            out = r.stdout + r.stderr
+            assert r.returncode == 0, out
+            assert "numpy" in out and "scipy" in out and "pytest" not in out, out
+            assert "python3 -m pip install -r requirements-dev.txt" in out, out
+
+    def test_missing_git_warns(self, tmp_path: Path):
+        bin_dir = _fake_bin(tmp_path, git=False)
+        for run in self._runners():
+            r = run(bin_dir)
+            out = r.stdout + r.stderr
+            assert r.returncode == 0, out
+            assert "git not found" in out, out
+
+    def test_missing_python_fails_check(self, tmp_path: Path):
+        bin_dir = _fake_bin(tmp_path, python=False, git=True)
+        for run in self._runners():
+            r = run(bin_dir)
+            out = r.stdout + r.stderr
+            assert r.returncode == 1, out
+            assert "Python 3 not found" in out, out
+
+    def test_installer_readme_lists_requirements(self):
+        text = (REPO_ROOT / "installer" / "README.md").read_text()
+        assert "requirements-dev.txt" in text and "git" in text.lower()
+        assert "--check-deps" in text
+
+
 class TestReadStatus:
     """Tests for read_status function."""
 

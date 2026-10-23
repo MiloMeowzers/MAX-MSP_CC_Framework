@@ -2,7 +2,7 @@
 
 'use strict';
 
-const { spawn, execSync } = require('child_process');
+const { spawn, execSync, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
@@ -21,6 +21,10 @@ const args = process.argv.slice(2);
 if (args.includes('--version') || args.includes('-v')) {
   console.log(`create-max-framework v${VERSION}`);
   process.exit(0);
+}
+
+if (args.includes('--check-deps')) {
+  process.exit(checkDeps() ? 0 : 1);
 }
 
 if (args.includes('--help') || args.includes('-h') || args.length === 0) {
@@ -63,11 +67,11 @@ downloadAndExtract(RELEASE_URL, targetDir)
     try {
       execSync('git init', { cwd: targetDir, stdio: 'ignore' });
     } catch (_) {
-      // git not available -- not critical
+      // git not available -- checkDeps() warns
     }
 
-    // Check Python version
-    checkPython();
+    // Check Python, its packages and git (warnings only)
+    checkDeps();
 
     // Success message
     console.log(`Done! Your MAX/MSP Claude Code Framework project is ready.\n`);
@@ -104,6 +108,7 @@ Create a new MAX/MSP Claude Code Framework project.
 Options:
   -h, --help      Show this help message
   -v, --version   Show version number
+  --check-deps    Only check Python 3.10+, its packages and git
 
 Examples:
   npx create-max-framework my-synth
@@ -181,21 +186,65 @@ function followRedirects(url, count, callback) {
   });
 }
 
-/**
- * Check for Python 3.10+ and warn if missing or too old.
- */
-function checkPython() {
+// Prints "<major>.<minor> <1 if >= 3.10 else 0> <comma-separated missing modules>".
+// Valid on any Python, so an old interpreter still reports its version.
+// A function, not a const: --check-deps runs before this line is reached.
+function pyProbe() {
+  return [
+    'import sys',
+    'missing = []',
+    'for m in ("numpy", "scipy", "pytest"):',
+    '    try:',
+    '        __import__(m)',
+    '    except Exception:',
+    '        missing.append(m)',
+    'print("%d.%d %d %s" % (sys.version_info[0], sys.version_info[1],',
+    '                       int(sys.version_info >= (3, 10)), ",".join(missing)))',
+  ].join('\n');
+}
+
+function onPath(cmd) {
   try {
-    const pyVersion = execSync('python3 --version', { encoding: 'utf8' }).trim();
-    const match = pyVersion.match(/Python\s+(\d+)\.(\d+)/);
-    if (match) {
-      const major = parseInt(match[1], 10);
-      const minor = parseInt(match[2], 10);
-      if (major < 3 || (major === 3 && minor < 10)) {
-        console.warn(`WARNING: Python 3.10+ required. Found: ${pyVersion}`);
-      }
-    }
-  } catch (_) {
-    console.warn('WARNING: Python 3 not found. The framework requires Python 3.10+ for the validation engine.');
+    execFileSync(cmd, ['--version'], { stdio: 'ignore' });
+    return true;
+  } catch (err) {
+    return err.code !== 'ENOENT';
   }
+}
+
+/**
+ * Check for Python 3.10+, the Python packages the DSP simulation, smoke tests
+ * and pre-flight gate need (numpy, scipy, pytest), and git (Rule #7
+ * auto-commits every save). Warns only; returns false when Python 3.10+ is
+ * missing (review IN-06).
+ */
+function checkDeps() {
+  if (!onPath('git')) {
+    console.warn('WARNING: git not found. The framework commits every patch save (Rule #7); install git.');
+  }
+  let info;
+  try {
+    info = execFileSync('python3', ['-c', pyProbe()], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      console.warn('WARNING: Python 3 not found. The framework requires Python 3.10+ for the validation engine.');
+    } else {
+      console.warn('WARNING: python3 did not run. The framework requires Python 3.10+ for the validation engine.');
+    }
+    return false;
+  }
+  const [version, ok, missing = ''] = info.split(/\s+/);
+  let good = true;
+  if (ok !== '1') {
+    console.warn(`WARNING: Python 3.10+ required. Found Python ${version}`);
+    good = false;
+  }
+  if (missing) {
+    console.warn(`WARNING: Python packages missing: ${missing.split(',').join(', ')} (needed by the DSP simulation, smoke tests and the DSP pre-flight gate; validation works without them).`);
+    console.warn('  Install them from the project directory: python3 -m pip install -r requirements-dev.txt');
+  }
+  return good;
 }

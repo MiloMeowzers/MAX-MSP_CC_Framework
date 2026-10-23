@@ -34,3 +34,10 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q
+
+      # Python 3.10 is the floor. A 3.11+ API (math.exp2, review BL-01) passes
+      # the 3.10 leg when no test reaches it; vermin checks every file.
+      - name: Check Python 3.10 compatibility (vermin)
+        run: |
+          python -m pip install "vermin>=1.6,<2"
+          vermin -t=3.10- --violations --no-tips --eval-annotations src tools tests scripts .claude/scripts

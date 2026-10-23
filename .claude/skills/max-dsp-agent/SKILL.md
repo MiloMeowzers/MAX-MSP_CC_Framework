@@ -315,15 +315,24 @@ python3 -m src.maxpat.dsp_sim smoke patches/<project>/generated/<name>.maxpat
 ### How to Invoke (T-02 mitigation: argv form, no shell)
 
 ```python
+import importlib.util
 import subprocess
+import sys
 from pathlib import Path
 from src.maxpat.hooks import PatchValidationError
 
+REPO_ROOT = Path.cwd()  # the framework root: run from the directory holding src/
 stem = Path(patch_path).stem
-fixture = Path("tests/dsp_sim") / f"test_{stem}.py"
+fixture = REPO_ROOT / "tests" / "dsp_sim" / f"test_{stem}.py"
 if fixture.exists():
+    if importlib.util.find_spec("pytest") is None:
+        raise PatchValidationError(
+            f"DSP pre-flight simulation for {stem} cannot run: pytest is not "
+            f"installed for {sys.executable} (pip install -r requirements-dev.txt)"
+        )
     result = subprocess.run(
-        ["pytest", str(fixture), "-q"],
+        [sys.executable, "-m", "pytest", str(fixture), "-q", "-p", "no:cacheprovider"],
+        cwd=str(REPO_ROOT),
         check=False,
         capture_output=True,
         text=True,
@@ -334,6 +343,13 @@ if fixture.exists():
             f"DSP pre-flight simulation failed for {stem}:\n{result.stdout}\n{result.stderr}"
         )
 ```
+
+`sys.executable -m pytest` with `cwd=REPO_ROOT` is what makes the gate work in
+a release install: `tests/` is not shipped there, so a registered fixture has
+no `__init__.py` or conftest, and bare `pytest` would put `tests/dsp_sim` (not
+the root) on `sys.path` and fail collection with `No module named 'src'`.
+`python -m` puts the working directory on `sys.path`, and it needs no `pytest`
+on PATH.
 
 Use the argv list form ALWAYS. Never invoke pytest through a shell (no
 `shell` kwarg set to true) and never string-interpolate `stem` or
