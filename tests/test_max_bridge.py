@@ -1256,6 +1256,33 @@ class TestCheck:
         f.write_text("{}")
         assert bridge.main(["check", str(f), "--dry-run"]) == 2
 
+    # WR-04 (quick 261022-ud6 WP6): unreadable input is bad input (exit 2,
+    # one stderr line), never a traceback reported as exit 1 "findings".
+    @pytest.mark.parametrize("payload", [
+        b'{"patcher": ',            # truncated JSON
+        b'\xff\xfe not utf-8',       # undecodable bytes
+        b'{"patcher": 3}',          # valid JSON, not a patch
+        b'[]',                      # valid JSON, wrong top-level type
+    ])
+    @pytest.mark.parametrize("dry", [True, False])
+    def test_malformed_patch_exits_2(self, tmp_path, capsys, payload, dry):
+        bad = tmp_path / "bad.maxpat"
+        bad.write_bytes(payload)
+        argv = ["check", str(bad), "--port", str(_free_port()), "--reply-port", "0",
+                "--timeout", "0.2"] + (["--dry-run"] if dry else [])
+        assert bridge.main(argv) == 2
+        err = capsys.readouterr().err
+        assert "cannot read" in err and "Traceback" not in err
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["bad.maxpat"]
+
+    def test_malformed_patch_report(self, tmp_path):
+        bad = tmp_path / "bad.maxpat"
+        bad.write_text('{"patcher": ')
+        args = bridge.build_parser().parse_args(["check", str(bad), "--dry-run"])
+        report = bridge.run_check(args)
+        assert report["verdict"] == "bridge_failed" and report["exit_code"] == 2
+        assert report["copy"] is None and "cannot read" in report["error"]
+
     def test_open_requires_copy_prefix(self):
         with bridge.Bridge(port=_free_port(), reply_port=0) as b:
             with pytest.raises(ValueError):
