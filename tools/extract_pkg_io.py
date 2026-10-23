@@ -21,7 +21,7 @@ For every entry in ObjectDatabase().audit_empty_io()['critical']:
   6. Deep-merge into overrides.json under `objects`. Existing entries are NOT
      clobbered: only `inlets` / `outlets` / `_audit` are added if the entry is
      present-but-empty, otherwise a brand-new entry is created.
-  7. Atomic write via temp file + os.replace.
+  7. Atomic write via src.maxpat.atomic_io.atomic_write_bytes, in the file's own json_style.
 
 Re-running is a no-op once entries are populated. Extend MANUAL_FALLBACK if a
 new package object lands in the DB with empty I/O and no helpfile coverage.
@@ -45,6 +45,8 @@ OVERRIDES_PATH = DB_ROOT / "overrides.json"
 
 # Allow `from src.maxpat.db_lookup import ObjectDatabase`
 sys.path.insert(0, str(ROOT))
+
+from src.maxpat.atomic_io import atomic_write_bytes, json_style  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -301,13 +303,21 @@ def deep_merge_io(existing: dict, new_inlets: list, new_outlets: list, audit: di
     return changed
 
 
-def merge_into_overrides(populated: dict[str, dict]) -> tuple[int, int]:
+def merge_into_overrides(populated: dict[str, dict]) -> tuple[int, int, int]:
     """Load overrides.json, merge populated entries under `objects`. Returns
-    (entries_added, entries_extended) where added=brand new keys and
-    extended=existing keys that gained inlets/outlets.
+    (entries_added, entries_extended, critical_empty_io) where added=brand new
+    keys, extended=existing keys that gained inlets/outlets, and
+    critical_empty_io is the post-merge ``audit_empty_io()['critical']`` count.
+
+    The file is rewritten in its own style (``json_style``: indent 2, its
+    escaping and trailing newline) through ``atomic_write_bytes`` (temp file,
+    fsync, rename, mode kept), and not at all when nothing changed (IN-05,
+    quick 261022-ud6).
     """
-    with OVERRIDES_PATH.open() as f:
-        ov = json.load(f)
+    raw = OVERRIDES_PATH.read_bytes()
+    ov = json.loads(raw)
+    # Historical style when the file is not reproducible: ASCII, no newline.
+    ensure_ascii, trailing_newline = json_style(raw, ov) or (True, False)
     objs = ov.setdefault("objects", {})
     added = 0
     extended = 0
@@ -323,9 +333,10 @@ def merge_into_overrides(populated: dict[str, dict]) -> tuple[int, int]:
             objs[name] = payload
             added += 1
 
-    tmp = OVERRIDES_PATH.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(ov, indent=2))
-    os.replace(tmp, OVERRIDES_PATH)
+    body = json.dumps(ov, indent=2, ensure_ascii=ensure_ascii)
+    payload = (body + ("\n" if trailing_newline else "")).encode("utf-8")
+    if payload != raw:
+        atomic_write_bytes(OVERRIDES_PATH, payload)
 
     # Post-merge critical count from a live audit of the written file.
     from src.maxpat.db_lookup import ObjectDatabase  # noqa: E402
