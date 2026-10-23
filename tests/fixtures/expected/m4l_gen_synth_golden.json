@@ -1,0 +1,1466 @@
+{
+  "default": {
+    "patcher": {
+      "fileversion": 1,
+      "appversion": {
+        "major": 9,
+        "minor": 0,
+        "revision": 0,
+        "architecture": "x64",
+        "modernui": 1
+      },
+      "classnamespace": "box",
+      "rect": [
+        85.0,
+        104.0,
+        640.0,
+        480.0
+      ],
+      "bglocked": 0,
+      "openinpresentation": 0,
+      "default_fontsize": 12.0,
+      "default_fontface": 0,
+      "default_fontname": "Arial",
+      "gridonopen": 1,
+      "gridsize": [
+        15.0,
+        15.0
+      ],
+      "gridsnaponopen": 1,
+      "objectsnaponopen": 1,
+      "statusbarvisible": 2,
+      "toolbarvisible": 1,
+      "lefttoolbarpinned": 0,
+      "toptoolbarpinned": 0,
+      "righttoolbarpinned": 0,
+      "bottomtoolbarpinned": 0,
+      "toolbars_unpinned_last_save": 0,
+      "tallnewobj": 0,
+      "boxanimatetime": 200,
+      "enablehscroll": 1,
+      "enablevscroll": 1,
+      "devicewidth": 0.0,
+      "description": "",
+      "digest": "",
+      "tags": "",
+      "style": "",
+      "subpatcher_template": "",
+      "assistshowspatchername": 0,
+      "boxes": [
+        {
+          "box": {
+            "maxclass": "newobj",
+            "id": "obj-1",
+            "numinlets": 1,
+            "numoutlets": 1,
+            "outlettype": [
+              "signal"
+            ],
+            "patching_rect": [
+              200.0,
+              200.0,
+              121.0,
+              22.0
+            ],
+            "text": "gen~",
+            "fontname": "Arial",
+            "fontsize": 12.0,
+            "patcher": {
+              "fileversion": 1,
+              "appversion": {
+                "major": 9,
+                "minor": 0,
+                "revision": 0,
+                "architecture": "x64",
+                "modernui": 1
+              },
+              "classnamespace": "box",
+              "rect": [
+                100.0,
+                100.0,
+                600.0,
+                450.0
+              ],
+              "bglocked": 0,
+              "openinpresentation": 0,
+              "default_fontsize": 12.0,
+              "default_fontface": 0,
+              "default_fontname": "Arial",
+              "gridonopen": 1,
+              "gridsize": [
+                15.0,
+                15.0
+              ],
+              "gridsnaponopen": 1,
+              "objectsnaponopen": 1,
+              "statusbarvisible": 2,
+              "toolbarvisible": 1,
+              "lefttoolbarpinned": 0,
+              "toptoolbarpinned": 0,
+              "righttoolbarpinned": 0,
+              "bottomtoolbarpinned": 0,
+              "toolbars_unpinned_last_save": 0,
+              "tallnewobj": 0,
+              "boxanimatetime": 200,
+              "enablehscroll": 1,
+              "enablevscroll": 1,
+              "devicewidth": 0.0,
+              "description": "",
+              "digest": "",
+              "tags": "",
+              "style": "",
+              "subpatcher_template": "",
+              "assistshowspatchername": 0,
+              "boxes": [
+                {
+                  "box": {
+                    "maxclass": "codebox",
+                    "id": "obj-1",
+                    "numinlets": 0,
+                    "numoutlets": 1,
+                    "outlettype": [
+                      ""
+                    ],
+                    "patching_rect": [
+                      50.0,
+                      80.0,
+                      400.0,
+                      200.0
+                    ],
+                    "parameter_enable": 0,
+                    "code": "Param freq(1010.0, min=20.0, max=2000.0);\nParam amp(0.5, min=0.0, max=1.0);\nout1 = 0;",
+                    "fontname": "Arial",
+                    "fontsize": 12.0
+                  }
+                },
+                {
+                  "box": {
+                    "maxclass": "newobj",
+                    "id": "obj-2",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "outlettype": [],
+                    "patching_rect": [
+                      50.0,
+                      320.0,
+                      30.0,
+                      22.0
+                    ],
+                    "text": "out 1",
+                    "fontname": "Arial",
+                    "fontsize": 12.0
+                  }
+                }
+              ],
+              "lines": [
+                {
+                  "patchline": {
+                    "source": [
+                      "obj-1",
+                      0
+                    ],
+                    "destination": [
+                      "obj-2",
+                      0
+                    ]
+                  }
+                }
+              ],
+              "dependency_cache": [],
+              "autosave": 0,
+              "bgcolor": [
+                0.9,
+                0.9,
+                0.9,
+                1.0
+              ]
+            },
+            "varname": "synth"
+          }
+        },
+        {
+          "box": {
+            "maxclass": "newobj",
+            "id": "obj-2",
+            "numinlets": 2,
+            "numoutlets": 2,
+            "outlettype": [
+              "signal",
+              "signal"
+            ],
+            "patching_rect": [
+              200.0,
+              400.0,
+              90.0,
+              22.0
+            ],
+            "text": "plugout~",
+            "fontname": "Arial",
+            "fontsize": 12.0
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-3",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              50.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "freq",
+            "param_connect": "synth::freq",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  1010.0
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "freq",
+                "parameter_shortname": "freq",
+                "parameter_mmin": 20.0,
+                "parameter_mmax": 2000.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-4",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              110.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "amp",
+            "param_connect": "synth::amp",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  0.5
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "amp",
+                "parameter_shortname": "amp",
+                "parameter_mmin": 0.0,
+                "parameter_mmax": 1.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        }
+      ],
+      "lines": [
+        {
+          "patchline": {
+            "source": [
+              "obj-1",
+              0
+            ],
+            "destination": [
+              "obj-2",
+              0
+            ]
+          }
+        },
+        {
+          "patchline": {
+            "source": [
+              "obj-1",
+              0
+            ],
+            "destination": [
+              "obj-2",
+              1
+            ]
+          }
+        }
+      ],
+      "dependency_cache": [],
+      "autosave": 0
+    }
+  },
+  "varname_osc": {
+    "patcher": {
+      "fileversion": 1,
+      "appversion": {
+        "major": 9,
+        "minor": 0,
+        "revision": 0,
+        "architecture": "x64",
+        "modernui": 1
+      },
+      "classnamespace": "box",
+      "rect": [
+        85.0,
+        104.0,
+        640.0,
+        480.0
+      ],
+      "bglocked": 0,
+      "openinpresentation": 0,
+      "default_fontsize": 12.0,
+      "default_fontface": 0,
+      "default_fontname": "Arial",
+      "gridonopen": 1,
+      "gridsize": [
+        15.0,
+        15.0
+      ],
+      "gridsnaponopen": 1,
+      "objectsnaponopen": 1,
+      "statusbarvisible": 2,
+      "toolbarvisible": 1,
+      "lefttoolbarpinned": 0,
+      "toptoolbarpinned": 0,
+      "righttoolbarpinned": 0,
+      "bottomtoolbarpinned": 0,
+      "toolbars_unpinned_last_save": 0,
+      "tallnewobj": 0,
+      "boxanimatetime": 200,
+      "enablehscroll": 1,
+      "enablevscroll": 1,
+      "devicewidth": 0.0,
+      "description": "",
+      "digest": "",
+      "tags": "",
+      "style": "",
+      "subpatcher_template": "",
+      "assistshowspatchername": 0,
+      "boxes": [
+        {
+          "box": {
+            "maxclass": "newobj",
+            "id": "obj-1",
+            "numinlets": 1,
+            "numoutlets": 1,
+            "outlettype": [
+              "signal"
+            ],
+            "patching_rect": [
+              200.0,
+              200.0,
+              121.0,
+              22.0
+            ],
+            "text": "gen~",
+            "fontname": "Arial",
+            "fontsize": 12.0,
+            "patcher": {
+              "fileversion": 1,
+              "appversion": {
+                "major": 9,
+                "minor": 0,
+                "revision": 0,
+                "architecture": "x64",
+                "modernui": 1
+              },
+              "classnamespace": "box",
+              "rect": [
+                100.0,
+                100.0,
+                600.0,
+                450.0
+              ],
+              "bglocked": 0,
+              "openinpresentation": 0,
+              "default_fontsize": 12.0,
+              "default_fontface": 0,
+              "default_fontname": "Arial",
+              "gridonopen": 1,
+              "gridsize": [
+                15.0,
+                15.0
+              ],
+              "gridsnaponopen": 1,
+              "objectsnaponopen": 1,
+              "statusbarvisible": 2,
+              "toolbarvisible": 1,
+              "lefttoolbarpinned": 0,
+              "toptoolbarpinned": 0,
+              "righttoolbarpinned": 0,
+              "bottomtoolbarpinned": 0,
+              "toolbars_unpinned_last_save": 0,
+              "tallnewobj": 0,
+              "boxanimatetime": 200,
+              "enablehscroll": 1,
+              "enablevscroll": 1,
+              "devicewidth": 0.0,
+              "description": "",
+              "digest": "",
+              "tags": "",
+              "style": "",
+              "subpatcher_template": "",
+              "assistshowspatchername": 0,
+              "boxes": [
+                {
+                  "box": {
+                    "maxclass": "codebox",
+                    "id": "obj-1",
+                    "numinlets": 0,
+                    "numoutlets": 1,
+                    "outlettype": [
+                      ""
+                    ],
+                    "patching_rect": [
+                      50.0,
+                      80.0,
+                      400.0,
+                      200.0
+                    ],
+                    "parameter_enable": 0,
+                    "code": "Param freq(550.0, min=100.0, max=1000.0);\nout1 = 0;",
+                    "fontname": "Arial",
+                    "fontsize": 12.0
+                  }
+                },
+                {
+                  "box": {
+                    "maxclass": "newobj",
+                    "id": "obj-2",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "outlettype": [],
+                    "patching_rect": [
+                      50.0,
+                      320.0,
+                      30.0,
+                      22.0
+                    ],
+                    "text": "out 1",
+                    "fontname": "Arial",
+                    "fontsize": 12.0
+                  }
+                }
+              ],
+              "lines": [
+                {
+                  "patchline": {
+                    "source": [
+                      "obj-1",
+                      0
+                    ],
+                    "destination": [
+                      "obj-2",
+                      0
+                    ]
+                  }
+                }
+              ],
+              "dependency_cache": [],
+              "autosave": 0,
+              "bgcolor": [
+                0.9,
+                0.9,
+                0.9,
+                1.0
+              ]
+            },
+            "varname": "osc"
+          }
+        },
+        {
+          "box": {
+            "maxclass": "newobj",
+            "id": "obj-2",
+            "numinlets": 2,
+            "numoutlets": 2,
+            "outlettype": [
+              "signal",
+              "signal"
+            ],
+            "patching_rect": [
+              200.0,
+              400.0,
+              90.0,
+              22.0
+            ],
+            "text": "plugout~",
+            "fontname": "Arial",
+            "fontsize": 12.0
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-3",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              50.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "freq",
+            "param_connect": "osc::freq",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  550.0
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "freq",
+                "parameter_shortname": "freq",
+                "parameter_mmin": 100.0,
+                "parameter_mmax": 1000.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        }
+      ],
+      "lines": [
+        {
+          "patchline": {
+            "source": [
+              "obj-1",
+              0
+            ],
+            "destination": [
+              "obj-2",
+              0
+            ]
+          }
+        },
+        {
+          "patchline": {
+            "source": [
+              "obj-1",
+              0
+            ],
+            "destination": [
+              "obj-2",
+              1
+            ]
+          }
+        }
+      ],
+      "dependency_cache": [],
+      "autosave": 0
+    }
+  },
+  "custom_code": {
+    "patcher": {
+      "fileversion": 1,
+      "appversion": {
+        "major": 9,
+        "minor": 0,
+        "revision": 0,
+        "architecture": "x64",
+        "modernui": 1
+      },
+      "classnamespace": "box",
+      "rect": [
+        85.0,
+        104.0,
+        640.0,
+        480.0
+      ],
+      "bglocked": 0,
+      "openinpresentation": 0,
+      "default_fontsize": 12.0,
+      "default_fontface": 0,
+      "default_fontname": "Arial",
+      "gridonopen": 1,
+      "gridsize": [
+        15.0,
+        15.0
+      ],
+      "gridsnaponopen": 1,
+      "objectsnaponopen": 1,
+      "statusbarvisible": 2,
+      "toolbarvisible": 1,
+      "lefttoolbarpinned": 0,
+      "toptoolbarpinned": 0,
+      "righttoolbarpinned": 0,
+      "bottomtoolbarpinned": 0,
+      "toolbars_unpinned_last_save": 0,
+      "tallnewobj": 0,
+      "boxanimatetime": 200,
+      "enablehscroll": 1,
+      "enablevscroll": 1,
+      "devicewidth": 0.0,
+      "description": "",
+      "digest": "",
+      "tags": "",
+      "style": "",
+      "subpatcher_template": "",
+      "assistshowspatchername": 0,
+      "boxes": [
+        {
+          "box": {
+            "maxclass": "newobj",
+            "id": "obj-1",
+            "numinlets": 1,
+            "numoutlets": 1,
+            "outlettype": [
+              "signal"
+            ],
+            "patching_rect": [
+              200.0,
+              200.0,
+              121.0,
+              22.0
+            ],
+            "text": "gen~",
+            "fontname": "Arial",
+            "fontsize": 12.0,
+            "patcher": {
+              "fileversion": 1,
+              "appversion": {
+                "major": 9,
+                "minor": 0,
+                "revision": 0,
+                "architecture": "x64",
+                "modernui": 1
+              },
+              "classnamespace": "box",
+              "rect": [
+                100.0,
+                100.0,
+                600.0,
+                450.0
+              ],
+              "bglocked": 0,
+              "openinpresentation": 0,
+              "default_fontsize": 12.0,
+              "default_fontface": 0,
+              "default_fontname": "Arial",
+              "gridonopen": 1,
+              "gridsize": [
+                15.0,
+                15.0
+              ],
+              "gridsnaponopen": 1,
+              "objectsnaponopen": 1,
+              "statusbarvisible": 2,
+              "toolbarvisible": 1,
+              "lefttoolbarpinned": 0,
+              "toptoolbarpinned": 0,
+              "righttoolbarpinned": 0,
+              "bottomtoolbarpinned": 0,
+              "toolbars_unpinned_last_save": 0,
+              "tallnewobj": 0,
+              "boxanimatetime": 200,
+              "enablehscroll": 1,
+              "enablevscroll": 1,
+              "devicewidth": 0.0,
+              "description": "",
+              "digest": "",
+              "tags": "",
+              "style": "",
+              "subpatcher_template": "",
+              "assistshowspatchername": 0,
+              "boxes": [
+                {
+                  "box": {
+                    "maxclass": "codebox",
+                    "id": "obj-1",
+                    "numinlets": 0,
+                    "numoutlets": 1,
+                    "outlettype": [
+                      ""
+                    ],
+                    "patching_rect": [
+                      50.0,
+                      80.0,
+                      400.0,
+                      200.0
+                    ],
+                    "parameter_enable": 0,
+                    "code": "Param cutoff(10010, min=20, max=20000);\nParam res(0.5, min=0, max=1);\nout1 = noise() * res;",
+                    "fontname": "Arial",
+                    "fontsize": 12.0
+                  }
+                },
+                {
+                  "box": {
+                    "maxclass": "newobj",
+                    "id": "obj-2",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "outlettype": [],
+                    "patching_rect": [
+                      50.0,
+                      320.0,
+                      30.0,
+                      22.0
+                    ],
+                    "text": "out 1",
+                    "fontname": "Arial",
+                    "fontsize": 12.0
+                  }
+                }
+              ],
+              "lines": [
+                {
+                  "patchline": {
+                    "source": [
+                      "obj-1",
+                      0
+                    ],
+                    "destination": [
+                      "obj-2",
+                      0
+                    ]
+                  }
+                }
+              ],
+              "dependency_cache": [],
+              "autosave": 0,
+              "bgcolor": [
+                0.9,
+                0.9,
+                0.9,
+                1.0
+              ]
+            },
+            "varname": "synth"
+          }
+        },
+        {
+          "box": {
+            "maxclass": "newobj",
+            "id": "obj-2",
+            "numinlets": 2,
+            "numoutlets": 2,
+            "outlettype": [
+              "signal",
+              "signal"
+            ],
+            "patching_rect": [
+              200.0,
+              400.0,
+              90.0,
+              22.0
+            ],
+            "text": "plugout~",
+            "fontname": "Arial",
+            "fontsize": 12.0
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-3",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              50.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "cutoff",
+            "param_connect": "synth::cutoff",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  10010.0
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "cutoff",
+                "parameter_shortname": "cutoff",
+                "parameter_mmin": 20.0,
+                "parameter_mmax": 20000.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-4",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              110.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "res",
+            "param_connect": "synth::res",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  0.5
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "res",
+                "parameter_shortname": "res",
+                "parameter_mmin": 0.0,
+                "parameter_mmax": 1.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        }
+      ],
+      "lines": [
+        {
+          "patchline": {
+            "source": [
+              "obj-1",
+              0
+            ],
+            "destination": [
+              "obj-2",
+              0
+            ]
+          }
+        },
+        {
+          "patchline": {
+            "source": [
+              "obj-1",
+              0
+            ],
+            "destination": [
+              "obj-2",
+              1
+            ]
+          }
+        }
+      ],
+      "dependency_cache": [],
+      "autosave": 0
+    }
+  },
+  "ten_params": {
+    "patcher": {
+      "fileversion": 1,
+      "appversion": {
+        "major": 9,
+        "minor": 0,
+        "revision": 0,
+        "architecture": "x64",
+        "modernui": 1
+      },
+      "classnamespace": "box",
+      "rect": [
+        85.0,
+        104.0,
+        640.0,
+        480.0
+      ],
+      "bglocked": 0,
+      "openinpresentation": 0,
+      "default_fontsize": 12.0,
+      "default_fontface": 0,
+      "default_fontname": "Arial",
+      "gridonopen": 1,
+      "gridsize": [
+        15.0,
+        15.0
+      ],
+      "gridsnaponopen": 1,
+      "objectsnaponopen": 1,
+      "statusbarvisible": 2,
+      "toolbarvisible": 1,
+      "lefttoolbarpinned": 0,
+      "toptoolbarpinned": 0,
+      "righttoolbarpinned": 0,
+      "bottomtoolbarpinned": 0,
+      "toolbars_unpinned_last_save": 0,
+      "tallnewobj": 0,
+      "boxanimatetime": 200,
+      "enablehscroll": 1,
+      "enablevscroll": 1,
+      "devicewidth": 0.0,
+      "description": "",
+      "digest": "",
+      "tags": "",
+      "style": "",
+      "subpatcher_template": "",
+      "assistshowspatchername": 0,
+      "boxes": [
+        {
+          "box": {
+            "maxclass": "newobj",
+            "id": "obj-1",
+            "numinlets": 1,
+            "numoutlets": 1,
+            "outlettype": [
+              "signal"
+            ],
+            "patching_rect": [
+              200.0,
+              200.0,
+              121.0,
+              22.0
+            ],
+            "text": "gen~",
+            "fontname": "Arial",
+            "fontsize": 12.0,
+            "patcher": {
+              "fileversion": 1,
+              "appversion": {
+                "major": 9,
+                "minor": 0,
+                "revision": 0,
+                "architecture": "x64",
+                "modernui": 1
+              },
+              "classnamespace": "box",
+              "rect": [
+                100.0,
+                100.0,
+                600.0,
+                450.0
+              ],
+              "bglocked": 0,
+              "openinpresentation": 0,
+              "default_fontsize": 12.0,
+              "default_fontface": 0,
+              "default_fontname": "Arial",
+              "gridonopen": 1,
+              "gridsize": [
+                15.0,
+                15.0
+              ],
+              "gridsnaponopen": 1,
+              "objectsnaponopen": 1,
+              "statusbarvisible": 2,
+              "toolbarvisible": 1,
+              "lefttoolbarpinned": 0,
+              "toptoolbarpinned": 0,
+              "righttoolbarpinned": 0,
+              "bottomtoolbarpinned": 0,
+              "toolbars_unpinned_last_save": 0,
+              "tallnewobj": 0,
+              "boxanimatetime": 200,
+              "enablehscroll": 1,
+              "enablevscroll": 1,
+              "devicewidth": 0.0,
+              "description": "",
+              "digest": "",
+              "tags": "",
+              "style": "",
+              "subpatcher_template": "",
+              "assistshowspatchername": 0,
+              "boxes": [
+                {
+                  "box": {
+                    "maxclass": "codebox",
+                    "id": "obj-1",
+                    "numinlets": 0,
+                    "numoutlets": 1,
+                    "outlettype": [
+                      ""
+                    ],
+                    "patching_rect": [
+                      50.0,
+                      80.0,
+                      400.0,
+                      200.0
+                    ],
+                    "parameter_enable": 0,
+                    "code": "Param freq(1010.0, min=20.0, max=2000.0);\nParam amp(0.5, min=0.0, max=1.0);\nParam attack_ms(250.5, min=1.0, max=500.0);\nParam cutoffHz(10010.0, min=20.0, max=20000.0);\nParam gain_db(-35.0, min=-70.0, max=0.0);\nParam octave(0.0, min=-2, max=2);\nParam steps(8.5, min=1, max=16);\nParam pan(0.0, min=-1.0, max=1.0);\nParam Filter Envelope Amount(0.5, min=0.0, max=1.0);\nParam mix(0.5, min=0.0, max=1.0);\nout1 = 0;",
+                    "fontname": "Arial",
+                    "fontsize": 12.0
+                  }
+                },
+                {
+                  "box": {
+                    "maxclass": "newobj",
+                    "id": "obj-2",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "outlettype": [],
+                    "patching_rect": [
+                      50.0,
+                      320.0,
+                      30.0,
+                      22.0
+                    ],
+                    "text": "out 1",
+                    "fontname": "Arial",
+                    "fontsize": 12.0
+                  }
+                }
+              ],
+              "lines": [
+                {
+                  "patchline": {
+                    "source": [
+                      "obj-1",
+                      0
+                    ],
+                    "destination": [
+                      "obj-2",
+                      0
+                    ]
+                  }
+                }
+              ],
+              "dependency_cache": [],
+              "autosave": 0,
+              "bgcolor": [
+                0.9,
+                0.9,
+                0.9,
+                1.0
+              ]
+            },
+            "varname": "synth"
+          }
+        },
+        {
+          "box": {
+            "maxclass": "newobj",
+            "id": "obj-2",
+            "numinlets": 2,
+            "numoutlets": 2,
+            "outlettype": [
+              "signal",
+              "signal"
+            ],
+            "patching_rect": [
+              200.0,
+              400.0,
+              90.0,
+              22.0
+            ],
+            "text": "plugout~",
+            "fontname": "Arial",
+            "fontsize": 12.0
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-3",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              50.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "freq",
+            "param_connect": "synth::freq",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  1010.0
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "freq",
+                "parameter_shortname": "freq",
+                "parameter_mmin": 20.0,
+                "parameter_mmax": 2000.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-4",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              110.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "amp",
+            "param_connect": "synth::amp",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  0.5
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "amp",
+                "parameter_shortname": "amp",
+                "parameter_mmin": 0.0,
+                "parameter_mmax": 1.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-5",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              170.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "attack_ms",
+            "param_connect": "synth::attack_ms",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  250.5
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "attack_ms",
+                "parameter_shortname": "attack_ms",
+                "parameter_mmin": 1.0,
+                "parameter_mmax": 500.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-6",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              230.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "cutoffHz",
+            "param_connect": "synth::cutoffHz",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  10010.0
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "cutoffHz",
+                "parameter_shortname": "cutoffHz",
+                "parameter_mmin": 20.0,
+                "parameter_mmax": 20000.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-7",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              290.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "gain_db",
+            "param_connect": "synth::gain_db",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  -35.0
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "gain_db",
+                "parameter_shortname": "gain_db",
+                "parameter_mmin": -70.0,
+                "parameter_mmax": 0.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-8",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              350.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "octave",
+            "param_connect": "synth::octave",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  0.0
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "octave",
+                "parameter_shortname": "octave",
+                "parameter_mmin": -2,
+                "parameter_mmax": 2,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-9",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              410.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "steps",
+            "param_connect": "synth::steps",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  8.5
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "steps",
+                "parameter_shortname": "steps",
+                "parameter_mmin": 1,
+                "parameter_mmax": 16,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-10",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              470.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "pan",
+            "param_connect": "synth::pan",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  0.0
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "pan",
+                "parameter_shortname": "pan",
+                "parameter_mmin": -1.0,
+                "parameter_mmax": 1.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-11",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              530.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "Filter Envelope Amount",
+            "param_connect": "synth::Filter Envelope Amount",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  0.5
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "Filter Envelope Amount",
+                "parameter_shortname": "Filter Envelope Amount",
+                "parameter_mmin": 0.0,
+                "parameter_mmax": 1.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        },
+        {
+          "box": {
+            "maxclass": "live.dial",
+            "id": "obj-12",
+            "numinlets": 1,
+            "numoutlets": 2,
+            "outlettype": [
+              "",
+              ""
+            ],
+            "patching_rect": [
+              590.0,
+              100.0,
+              44.0,
+              66.0
+            ],
+            "parameter_enable": 1,
+            "varname": "mix",
+            "param_connect": "synth::mix",
+            "saved_attribute_attributes": {
+              "valueof": {
+                "parameter_initial": [
+                  0.5
+                ],
+                "parameter_initial_enable": 1,
+                "parameter_longname": "mix",
+                "parameter_shortname": "mix",
+                "parameter_mmin": 0.0,
+                "parameter_mmax": 1.0,
+                "parameter_modmode": 4,
+                "parameter_type": 0,
+                "parameter_unitstyle": 1
+              }
+            }
+          }
+        }
+      ],
+      "lines": [
+        {
+          "patchline": {
+            "source": [
+              "obj-1",
+              0
+            ],
+            "destination": [
+              "obj-2",
+              0
+            ]
+          }
+        },
+        {
+          "patchline": {
+            "source": [
+              "obj-1",
+              0
+            ],
+            "destination": [
+              "obj-2",
+              1
+            ]
+          }
+        }
+      ],
+      "dependency_cache": [],
+      "autosave": 0
+    }
+  }
+}
