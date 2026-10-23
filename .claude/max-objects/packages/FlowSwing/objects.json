@@ -57,7 +57,7 @@
       "Flow",
       "Swing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "FlowSwing",
@@ -132,7 +132,7 @@
       "Flow",
       "Swing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "FlowSwing",
@@ -202,7 +202,7 @@
       "Flow",
       "Swing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "FlowSwing",
@@ -265,7 +265,7 @@
       "Flow",
       "Swing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "FlowSwing",
@@ -338,7 +338,7 @@
       "Flow",
       "Swing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "FlowSwing",
@@ -408,7 +408,7 @@
       "Flow",
       "Swing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "FlowSwing",

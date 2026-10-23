@@ -32,7 +32,7 @@
       "Max for Live",
       "Transport"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false
@@ -63,7 +63,7 @@
       "Max for Live",
       "Transport"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false
@@ -207,7 +207,7 @@
       "Max for Live devices",
       "Live MSP Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -322,7 +322,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -386,7 +386,7 @@
       "Live",
       "Live Control Surface"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -502,7 +502,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -561,7 +561,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -655,7 +655,7 @@
     "tags": [
       "Live"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -826,7 +826,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -926,7 +926,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -1178,7 +1178,7 @@
       "Live MSP Objects",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -1400,7 +1400,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -1466,7 +1466,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -1548,7 +1548,7 @@
       "Live",
       "Live API Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -1716,7 +1716,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -1859,7 +1859,7 @@
       "Live MSP Objects",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -1929,7 +1929,7 @@
       "Live",
       "Live MIDI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -1971,7 +1971,7 @@
       "Live",
       "Live MIDI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false
@@ -2051,7 +2051,7 @@
       "Live",
       "Live MSP Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -2203,7 +2203,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -2249,7 +2249,7 @@
     "tags": [
       "Live"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false
@@ -2295,7 +2295,7 @@
     "tags": [
       "Live"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false
@@ -2337,7 +2337,7 @@
       "Live",
       "Live MSP Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -2381,7 +2381,7 @@
     "tags": [
       "Live"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false
@@ -2452,7 +2452,7 @@
       "Live API Objects Push",
       "Live API Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -2501,7 +2501,7 @@
     "tags": [
       "Live"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false
@@ -2592,7 +2592,7 @@
     "tags": [
       "Live API Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -2733,7 +2733,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -3038,7 +3038,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -3262,7 +3262,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -3491,7 +3491,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -3561,7 +3561,7 @@
       "Live",
       "Live API Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -3701,7 +3701,7 @@
       "Live",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -3875,7 +3875,7 @@
     "tags": [
       "Live"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false
@@ -4054,7 +4054,7 @@
       "Live MSP Objects",
       "Live UI Objects"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false

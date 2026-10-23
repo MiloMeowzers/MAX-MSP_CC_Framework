@@ -37,7 +37,7 @@
     "tags": [
       "spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -81,7 +81,7 @@
     "tags": [
       "spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -126,7 +126,7 @@
     "tags": [
       "spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -171,7 +171,7 @@
     "tags": [
       "spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -216,7 +216,7 @@
     "tags": [
       "spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -261,7 +261,7 @@
     "tags": [
       "room"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -306,7 +306,7 @@
     "tags": [
       "room"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -351,7 +351,7 @@
     "tags": [
       "room"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -396,7 +396,7 @@
     "tags": [
       "room"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -441,7 +441,7 @@
     "tags": [
       "hoa"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -486,7 +486,7 @@
     "tags": [
       "hoa"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -531,7 +531,7 @@
     "tags": [
       "hoa"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -576,7 +576,7 @@
     "tags": [
       "hoa"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -621,7 +621,7 @@
     "tags": [
       "hoa"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -666,7 +666,7 @@
     "tags": [
       "hoa"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -711,7 +711,7 @@
     "tags": [
       "wfs"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -749,7 +749,7 @@
     "tags": [
       "control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -787,7 +787,7 @@
     "tags": [
       "control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -831,7 +831,7 @@
     "tags": [
       "io"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -875,7 +875,7 @@
     "tags": [
       "io"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -913,7 +913,7 @@
     "tags": [
       "ui"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -958,7 +958,7 @@
     "tags": [
       "spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -996,7 +996,7 @@
     "tags": [
       "osc"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1034,7 +1034,7 @@
     "tags": [
       "osc"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1072,7 +1072,7 @@
     "tags": [
       "osc"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,

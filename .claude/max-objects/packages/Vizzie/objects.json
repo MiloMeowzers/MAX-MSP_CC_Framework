@@ -88,7 +88,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -189,7 +189,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -254,7 +254,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -320,7 +320,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -421,7 +421,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -648,7 +648,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -791,7 +791,7 @@
       "Vizzie",
       "Mix-Composite"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1018,7 +1018,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1140,7 +1140,7 @@
       "Vizzie",
       "Mix-Composite"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1304,7 +1304,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1398,7 +1398,7 @@
       "Vizzie",
       "Mix-Composite"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1586,7 +1586,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1659,7 +1659,7 @@
       "Vizzie",
       "Mix-Composite"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1744,7 +1744,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1826,7 +1826,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1877,7 +1877,7 @@
       "Vizzie",
       "Utility"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1961,7 +1961,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2019,7 +2019,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2124,7 +2124,7 @@
       "Vizzie",
       "Input"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2190,7 +2190,7 @@
       "Vizzie",
       "Output"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2248,7 +2248,7 @@
       "Vizzie",
       "Utility"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2370,7 +2370,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2457,7 +2457,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2562,7 +2562,7 @@
       "Vizzie",
       "Mix-Composite"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2619,7 +2619,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2685,7 +2685,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2800,7 +2800,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2887,7 +2887,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2960,7 +2960,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3025,7 +3025,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3084,7 +3084,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3168,7 +3168,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3234,7 +3234,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3300,7 +3300,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3373,7 +3373,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3551,7 +3551,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3645,7 +3645,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3716,7 +3716,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3761,7 +3761,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3834,7 +3834,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3900,7 +3900,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3959,7 +3959,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4023,7 +4023,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4096,7 +4096,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4155,7 +4155,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4207,7 +4207,7 @@
       "Vizzie",
       "Input"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4266,7 +4266,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4332,7 +4332,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4412,7 +4412,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4463,7 +4463,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4515,7 +4515,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4588,7 +4588,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4661,7 +4661,7 @@
       "Vizzie",
       "Mix-Composite"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4748,7 +4748,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4793,7 +4793,7 @@
       "Vizzie",
       "Utility"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4852,7 +4852,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4901,7 +4901,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4971,7 +4971,7 @@
       "Vizzie",
       "Utility"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5043,7 +5043,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5109,7 +5109,7 @@
       "Vizzie",
       "Mix-Composite"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5175,7 +5175,7 @@
       "Vizzie",
       "Mix-Composite"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5220,7 +5220,7 @@
       "Vizzie",
       "Input"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5328,7 +5328,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5383,7 +5383,7 @@
       "Vizzie",
       "Utility"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5442,7 +5442,7 @@
       "Vizzie",
       "Mix-Composite"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5508,7 +5508,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5574,7 +5574,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5692,7 +5692,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5807,7 +5807,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5985,7 +5985,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6051,7 +6051,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6110,7 +6110,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6183,7 +6183,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6276,7 +6276,7 @@
       "Vizzie",
       "Input"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6328,7 +6328,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6419,7 +6419,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6485,7 +6485,7 @@
       "Vizzie",
       "Output"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6537,7 +6537,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6603,7 +6603,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6655,7 +6655,7 @@
       "Vizzie",
       "Output"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6791,7 +6791,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6857,7 +6857,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6930,7 +6930,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7024,7 +7024,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7104,7 +7104,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7205,7 +7205,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7263,7 +7263,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7350,7 +7350,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7416,7 +7416,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7475,7 +7475,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7520,7 +7520,7 @@
       "Vizzie",
       "Output"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7614,7 +7614,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7659,7 +7659,7 @@
       "Vizzie",
       "Utility"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7732,7 +7732,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7791,7 +7791,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7878,7 +7878,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7923,7 +7923,7 @@
       "Vizzie",
       "Utility"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7994,7 +7994,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8053,7 +8053,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8140,7 +8140,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8206,7 +8206,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8279,7 +8279,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8324,7 +8324,7 @@
       "Vizzie",
       "Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8362,7 +8362,7 @@
       "Vizzie",
       "Output"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8431,7 +8431,7 @@
       "Vizzie",
       "Utility"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8497,7 +8497,7 @@
       "Vizzie",
       "Generate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8591,7 +8591,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8650,7 +8650,7 @@
       "Vizzie",
       "Mix-Composite"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8730,7 +8730,7 @@
       "Vizzie",
       "Effect"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8796,7 +8796,7 @@
       "Vizzie",
       "Transform"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,

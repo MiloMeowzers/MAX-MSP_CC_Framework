@@ -79,7 +79,7 @@
     "tags": [
       "bundle"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -161,7 +161,7 @@
     "tags": [
       "bundle"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": true,
     "rnbo_compatible": false,
@@ -199,7 +199,7 @@
     "tags": [
       "bundle"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -237,7 +237,7 @@
     "tags": [
       "bundle"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -282,7 +282,7 @@
     "tags": [
       "bundle"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -327,7 +327,7 @@
     "tags": [
       "bundle"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -372,7 +372,7 @@
     "tags": [
       "bundle"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -410,7 +410,7 @@
     "tags": [
       "bundle"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -448,7 +448,7 @@
     "tags": [
       "bundle"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -531,7 +531,7 @@
     "tags": [
       "expression"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -575,7 +575,7 @@
     "tags": [
       "expression"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -613,7 +613,7 @@
     "tags": [
       "expression"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -651,7 +651,7 @@
     "tags": [
       "state"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -689,7 +689,7 @@
     "tags": [
       "state"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -727,7 +727,7 @@
     "tags": [
       "state"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -765,7 +765,7 @@
     "tags": [
       "debug"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -803,7 +803,7 @@
     "tags": [
       "debug"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -841,7 +841,7 @@
     "tags": [
       "debug"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -879,7 +879,7 @@
     "tags": [
       "debug"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -917,7 +917,7 @@
     "tags": [
       "debug"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -955,7 +955,7 @@
     "tags": [
       "scheduling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -993,7 +993,7 @@
     "tags": [
       "scheduling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1031,7 +1031,7 @@
     "tags": [
       "scheduling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1069,7 +1069,7 @@
     "tags": [
       "data"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1107,7 +1107,7 @@
     "tags": [
       "data"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1177,7 +1177,7 @@
     "tags": [
       "data"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1215,7 +1215,7 @@
     "tags": [
       "data"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1253,7 +1253,7 @@
     "tags": [
       "serialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1291,7 +1291,7 @@
     "tags": [
       "serialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1329,7 +1329,7 @@
     "tags": [
       "io"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1367,7 +1367,7 @@
     "tags": [
       "io"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,

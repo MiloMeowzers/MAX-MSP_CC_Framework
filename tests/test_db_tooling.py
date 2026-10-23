@@ -602,21 +602,23 @@ class TestI6ObjectfileRealBundle:
         return sync.run_report(REAL_DB, MAX_APP_PATH)["sections"]["objectfile_aliases"]
 
     def test_q38_candidates(self, section: dict) -> None:
+        # Q38 applied these candidates: the names now resolve through aliases.json.
         entries = {e["name"]: e for e in section["entries"]}
+        aliases = json.loads((REAL_DB / "aliases.json").read_text())["aliases"]
         expected = {
-            "mc.times~": ("mc.*~", "mc_wrapper"),
-            "hslider": ("slider", "file"),
-            "list.iter": ("zl.iter", "class"),
-            "4mixr": ("vz.4mixr", "abstraction"),
+            "mc.times~": "mc.*~",
+            "hslider": "slider",
+            "list.iter": "zl.iter",
+            "4mixr": "vz.4mixr",
         }
-        for name, (candidate, basis) in expected.items():
-            assert (entries[name]["candidate"], entries[name]["basis"]) == (candidate, basis), name
+        for name, candidate in expected.items():
+            assert name not in entries, name
+            assert aliases[name] == candidate, name
 
     def test_non_objectmappings_init_files_and_shadowed_names(self, section: dict) -> None:
         assert "mc.abl.dsp.chorus~" in section["names_unresolved"]
-        shadowed = {e["name"]: e for e in section["domain_shadowed"]}
-        assert shadowed["list.len"]["candidate"] == "zl.len"
-        assert section["unresolved_count"] >= 251
+        assert section["domain_shadowed"] == []
+        assert section["unresolved_count"] == len(section["names_unresolved"]) >= 100
 
     def test_audit_db_maps_objectfile_names(self) -> None:
         import tools.audit_db as audit_db

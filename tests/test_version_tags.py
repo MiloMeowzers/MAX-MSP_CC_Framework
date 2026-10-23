@@ -1,8 +1,10 @@
 """ODB-03: Validate version tagging on all objects.
 
-Q30 (PD-3): ``min_version`` may be a number (the DB's historical form, e.g.
-``8``, ``8.1``) or a version string (``"9.2"``, ``"9.10"``), which the sync
-tool now writes. Both are compared through :func:`_version_tuple`.
+Q30 (PD-3) made the sync tool write ``min_version`` as a version string
+(``"9.2"``, ``"9.10"``); Q38 migrated the whole DB to strings (``"8"``,
+``"8.1"``, ``"9"``, ``"9.2"``, ``"4"``), which
+:func:`test_every_min_version_is_a_version_string` enforces. Values are still
+compared through :func:`_version_tuple`, which also accepts numbers.
 """
 
 import re
@@ -90,3 +92,37 @@ class TestVersionTags:
             assert _version_tuple(obj.get("min_version")) is not None, (
                 f"mc object {obj['name']} missing min_version"
             )
+
+
+_VERSION_STRING = re.compile(r"^\d+(\.\d+){0,2}$")
+
+
+def test_every_min_version_is_a_version_string():
+    """Q38: every DB min_version is a str such as "8", "8.1", "9", "9.2" or "4".
+
+    Walks the real DB files tests may read (``real_db_files``) minus the
+    top-level files, plus overrides.json ``objects``.
+    """
+    import json
+
+    from tests.test_db_tooling import REAL_DB, real_db_files
+
+    sources = []
+    for path in real_db_files():
+        if path.parent == REAL_DB:
+            continue
+        sources.append((path.relative_to(REAL_DB).as_posix(), json.loads(path.read_text())))
+    overrides = json.loads((REAL_DB / "overrides.json").read_text())["objects"]
+    sources.append(("overrides.json", overrides))
+    bad = []
+    seen = 0
+    for rel, entries in sources:
+        for name, entry in entries.items():
+            if not isinstance(entry, dict) or "min_version" not in entry:
+                continue
+            seen += 1
+            value = entry["min_version"]
+            if not (isinstance(value, str) and _VERSION_STRING.match(value)):
+                bad.append(f"{rel}:{name}={value!r}")
+    assert bad == []
+    assert seen > 3000, seen

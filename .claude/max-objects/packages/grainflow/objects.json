@@ -90,7 +90,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -217,7 +217,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -330,7 +330,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -654,7 +654,7 @@
       "msp",
       "grainflow"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "grainflow",
@@ -788,7 +788,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -846,7 +846,7 @@
       "MSP",
       "Spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -897,7 +897,7 @@
       "MSP",
       "Spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -959,7 +959,7 @@
       "MSP",
       "Spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1028,7 +1028,7 @@
       "MSP",
       "Spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1083,7 +1083,7 @@
       "MSP",
       "Spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1138,7 +1138,7 @@
       "MSP",
       "Spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1191,7 +1191,7 @@
       "MSP",
       "Spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1244,7 +1244,7 @@
       "MSP",
       "Spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1312,7 +1312,7 @@
       "MSP",
       "Spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1379,7 +1379,7 @@
       "MSP",
       "Spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1442,7 +1442,7 @@
       "MSP",
       "Spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1509,7 +1509,7 @@
       "MSP",
       "Spatialization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1601,7 +1601,7 @@
     "tags": [
       "ui"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "grainflow",
@@ -1738,7 +1738,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1848,7 +1848,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1894,7 +1894,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -1963,7 +1963,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -2013,7 +2013,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -2067,7 +2067,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -2113,7 +2113,7 @@
       "msp",
       "grainflow"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "grainflow",
@@ -2182,7 +2182,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -2260,7 +2260,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -2327,7 +2327,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -2387,7 +2387,7 @@
       "msp",
       "grainflow"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "grainflow",
@@ -2467,7 +2467,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -2506,7 +2506,7 @@
       "msp",
       "grainflow"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "grainflow",
@@ -2552,7 +2552,7 @@
       "Granulation",
       "MSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "grainflow",
@@ -2676,7 +2676,7 @@
     "tags": [
       "ui"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "grainflow",
@@ -2974,7 +2974,7 @@
       "msp",
       "grainflow"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "grainflow",

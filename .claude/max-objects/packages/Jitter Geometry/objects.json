@@ -45,7 +45,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -117,7 +117,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -169,7 +169,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -224,7 +224,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -301,7 +301,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -363,7 +363,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -410,7 +410,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -477,7 +477,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -526,7 +526,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -584,7 +584,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -636,7 +636,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -690,7 +690,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -777,7 +777,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -831,7 +831,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -890,7 +890,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -948,7 +948,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -995,7 +995,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -1050,7 +1050,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -1105,7 +1105,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -1167,7 +1167,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -1232,7 +1232,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -1292,7 +1292,7 @@
       "bogus"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -1367,7 +1367,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -1457,7 +1457,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -1660,7 +1660,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",
@@ -1725,7 +1725,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Geometry",

@@ -122,7 +122,7 @@
     "tags": [
       "ears math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -252,7 +252,7 @@
     "tags": [
       "ears math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -310,7 +310,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -439,7 +439,7 @@
     "tags": [
       "ears math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -568,7 +568,7 @@
     "tags": [
       "ears math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -697,7 +697,7 @@
     "tags": [
       "ears math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -826,7 +826,7 @@
     "tags": [
       "ears math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -884,7 +884,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -1044,7 +1044,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -1138,7 +1138,7 @@
     "tags": [
       "ears filter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -1236,7 +1236,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -1330,7 +1330,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -1451,7 +1451,7 @@
     "tags": [
       "ears distorsion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -1558,7 +1558,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -1735,7 +1735,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -1842,7 +1842,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -1924,7 +1924,7 @@
     "tags": [
       "ears filter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -2006,7 +2006,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -2133,7 +2133,7 @@
     "tags": [
       "ears dynamics"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -2240,7 +2240,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -2500,7 +2500,7 @@
     "tags": [
       "ears analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -2616,7 +2616,7 @@
     "tags": [
       "ears math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -2750,7 +2750,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -2876,7 +2876,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -2962,7 +2962,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -3140,7 +3140,7 @@
     "tags": [
       "ears conversions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -3262,7 +3262,7 @@
     "tags": [
       "ears reverb"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -3350,7 +3350,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -3425,7 +3425,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -3458,7 +3458,7 @@
     "tags": [
       "ears process"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -3591,7 +3591,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -3709,7 +3709,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -3822,7 +3822,7 @@
     "tags": [
       "ears ambisonic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -3962,7 +3962,7 @@
     "tags": [
       "ears ambisonic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -4055,7 +4055,7 @@
     "tags": [
       "ears ambisonic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -4198,7 +4198,7 @@
     "tags": [
       "ears ambisonic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -4251,7 +4251,7 @@
     "tags": [
       "ears process"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -4322,7 +4322,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -4431,7 +4431,7 @@
     "tags": [
       "ears interpolation"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -4475,7 +4475,7 @@
     "tags": [
       "ears process"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -4615,7 +4615,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -4687,7 +4687,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -4816,7 +4816,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -4898,7 +4898,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -4969,7 +4969,7 @@
     "tags": [
       "ears process"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -5041,7 +5041,7 @@
     "tags": [
       "ears process"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -5149,7 +5149,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -5300,7 +5300,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -5487,7 +5487,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -5611,7 +5611,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -5799,7 +5799,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -5947,7 +5947,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -6067,7 +6067,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -6172,7 +6172,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -6285,7 +6285,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -6399,7 +6399,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -6498,7 +6498,7 @@
     "tags": [
       "ears filter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -6553,7 +6553,7 @@
     "tags": [
       "ears process"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -6597,7 +6597,7 @@
     "tags": [
       "ears process"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -6702,7 +6702,7 @@
     "tags": [
       "ears distorsion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -6804,7 +6804,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -6949,7 +6949,7 @@
     "tags": [
       "ears pan"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -7075,7 +7075,7 @@
     "tags": [
       "ears time and pitch"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -7199,7 +7199,7 @@
     "tags": [
       "ears time and pitch"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -7328,7 +7328,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -7414,7 +7414,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -7500,7 +7500,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -7561,7 +7561,7 @@
     "tags": [
       "ears playback"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -7639,7 +7639,7 @@
     "tags": [
       "ears process"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -7696,7 +7696,7 @@
     "tags": [
       "score"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7765,7 +7765,7 @@
       "io",
       "ears"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7849,7 +7849,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -7950,7 +7950,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -8067,7 +8067,7 @@
     "tags": [
       "ears conversions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -8149,7 +8149,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -8374,7 +8374,7 @@
     "tags": [
       "ears export"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -8578,7 +8578,7 @@
     "tags": [
       "ears export"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -8780,7 +8780,7 @@
     "tags": [
       "ears export"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -8881,7 +8881,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -9059,7 +9059,7 @@
     "tags": [
       "ears time and pitch"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -9115,7 +9115,7 @@
       "editing",
       "ears"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -9251,7 +9251,7 @@
     "tags": [
       "ears time and pitch"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -9362,7 +9362,7 @@
     "tags": [
       "ears display"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -9493,7 +9493,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -9648,7 +9648,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -9799,7 +9799,7 @@
     "tags": [
       "ears spectral"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -10033,7 +10033,7 @@
     "tags": [
       "ears time and pitch"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -10113,7 +10113,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -10176,7 +10176,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -10221,7 +10221,7 @@
     "tags": [
       "ears process"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -10303,7 +10303,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -10410,7 +10410,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -10492,7 +10492,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -10626,7 +10626,7 @@
     "tags": [
       "ears analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -10732,7 +10732,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -10838,7 +10838,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -10954,7 +10954,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -11062,7 +11062,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -11169,7 +11169,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -11262,7 +11262,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -11366,7 +11366,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -11467,7 +11467,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",
@@ -11601,7 +11601,7 @@
     "tags": [
       "ears basic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "EARS",

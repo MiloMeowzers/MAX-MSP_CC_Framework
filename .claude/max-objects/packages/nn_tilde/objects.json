@@ -70,7 +70,7 @@
       "deep learning",
       "ai"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "nn_tilde",
@@ -147,7 +147,7 @@
       "deep learning",
       "ai"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "nn_tilde",
@@ -202,7 +202,7 @@
       "deep learning",
       "ai"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "nn_tilde",
@@ -274,7 +274,7 @@
       "deep learning",
       "ai"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "nn_tilde",

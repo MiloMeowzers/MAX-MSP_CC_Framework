@@ -75,7 +75,7 @@
       "ease",
       "functions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "ease",
@@ -160,7 +160,7 @@
       "ease",
       "functions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "ease",
@@ -242,7 +242,7 @@
       "ease",
       "functions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "ease",
@@ -322,7 +322,7 @@
       "ease",
       "functions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "ease",
@@ -402,7 +402,7 @@
       "ease",
       "functions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "ease",
@@ -484,7 +484,7 @@
       "ease",
       "functions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "ease",

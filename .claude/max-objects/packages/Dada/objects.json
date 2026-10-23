@@ -46,7 +46,7 @@
       "dada abstractions",
       "dada analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -112,7 +112,7 @@
       "dada abstractions",
       "dada analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -171,7 +171,7 @@
       "dada abstractions",
       "dada analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -224,7 +224,7 @@
       "dada abstractions",
       "dada analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -278,7 +278,7 @@
       "dada abstractions",
       "dada analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -343,7 +343,7 @@
       "dada abstractions",
       "dada analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -413,7 +413,7 @@
       "dada abstractions",
       "dada analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -465,7 +465,7 @@
       "dada",
       "dada abstractions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -783,7 +783,7 @@
     "tags": [
       "utility"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1404,7 +1404,7 @@
     "tags": [
       "physics"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1658,7 +1658,7 @@
       "dada interfaces",
       "dada rule-based systems"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -2331,7 +2331,7 @@
     "tags": [
       "physics"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2727,7 +2727,7 @@
       "dada corpus-based tools",
       "dada geometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -3055,7 +3055,7 @@
       "dada corpus-based tools",
       "dada geometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -3093,7 +3093,7 @@
     "tags": [
       "utility"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3140,7 +3140,7 @@
     "tags": [
       "database"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3187,7 +3187,7 @@
     "tags": [
       "visualization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3234,7 +3234,7 @@
     "tags": [
       "visualization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3504,7 +3504,7 @@
       "dada interfaces",
       "dada geometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -3825,7 +3825,7 @@
       "dada interfaces",
       "dada rule-based systems"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -3951,7 +3951,7 @@
       "dada",
       "dada abstractions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -4222,7 +4222,7 @@
       "dada interfaces",
       "dada rule-based systems"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -4293,7 +4293,7 @@
     "tags": [
       "dada scores"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "Dada",
@@ -4521,7 +4521,7 @@
       "dada interfaces",
       "dada rule-based systems"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -4565,7 +4565,7 @@
     "tags": [
       "visualization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4612,7 +4612,7 @@
     "tags": [
       "physics"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4706,7 +4706,7 @@
     "tags": [
       "dada scores"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -4750,7 +4750,7 @@
     "tags": [
       "visualization"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5136,7 +5136,7 @@
       "dada interfaces",
       "dada rule-based systems"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -5180,7 +5180,7 @@
     "tags": [
       "geometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5227,7 +5227,7 @@
     "tags": [
       "geometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5274,7 +5274,7 @@
     "tags": [
       "database"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5580,7 +5580,7 @@
       "dada interfaces",
       "dada geometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -5694,7 +5694,7 @@
       "dada",
       "dada abstractions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -5802,7 +5802,7 @@
       "dada",
       "dada abstractions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -5910,7 +5910,7 @@
       "dada",
       "dada abstractions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -6012,7 +6012,7 @@
       "dada",
       "dada abstractions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -6126,7 +6126,7 @@
       "dada",
       "dada abstractions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -6342,7 +6342,7 @@
       "dada geometry",
       "dada audio"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Dada",
@@ -6386,7 +6386,7 @@
     "tags": [
       "geometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,

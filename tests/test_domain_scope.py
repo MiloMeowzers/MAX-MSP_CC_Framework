@@ -38,15 +38,8 @@ from src.maxpat.validation import has_blocking_errors, validate_patch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-LIST_EXEMPT = sorted(
-    "list." + x
-    for x in (
-        "change compare delace ecils filter group indexmap join lace len "
-        "lookup median mth nth queue reg rev rot scramble sect slice sort "
-        "stack stream sub sum swap thin union unique"
-    ).split()
-)
-EXEMPT = sorted(LIST_EXEMPT + ["rnbo~", "rnbo.remote", "div~", "rdiv~", "rdiv"])
+# list.* now alias zl.* (Q38; tests/test_objectfile_aliases.py), so they need no exemption.
+EXEMPT = sorted(["rnbo~", "rnbo.remote", "div~", "rdiv~", "rdiv"])
 
 
 # ---------------------------------------------------------------------------

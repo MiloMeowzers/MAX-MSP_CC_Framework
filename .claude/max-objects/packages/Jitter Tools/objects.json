@@ -93,7 +93,7 @@
       "jit.fx.subtexture"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -188,7 +188,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -283,7 +283,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -356,7 +356,7 @@
       "jit.fx.an.min"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -429,7 +429,7 @@
       "jit.fx.an.min"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -502,7 +502,7 @@
       "jit.fx.an.min"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -592,7 +592,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -688,7 +688,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -789,7 +789,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -889,7 +889,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -978,7 +978,7 @@
       "jit.fx.subtexture"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -1094,7 +1094,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -1160,7 +1160,7 @@
       "jit.fx.cf.tiltshift"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -1247,7 +1247,7 @@
       "jit.fx.cf.tiltshift"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -1329,7 +1329,7 @@
       "jit.fx.cf.tiltshift"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -1426,7 +1426,7 @@
       "jit.fx.cf.tiltshift"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -1518,7 +1518,7 @@
       "jit.fx.cf.tiltshift"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -1589,7 +1589,7 @@
       "jit.fx.cf.tiltshift"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -1691,7 +1691,7 @@
       "jit.fx.cf.tiltshift"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -1789,7 +1789,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -1887,7 +1887,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -1985,7 +1985,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -2083,7 +2083,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -2181,7 +2181,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -2279,7 +2279,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -2402,7 +2402,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -2500,7 +2500,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -2598,7 +2598,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -2696,7 +2696,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -2794,7 +2794,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -2892,7 +2892,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -2990,7 +2990,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -3088,7 +3088,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -3186,7 +3186,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -3284,7 +3284,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -3382,7 +3382,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -3510,7 +3510,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -3608,7 +3608,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -3706,7 +3706,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -3804,7 +3804,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -3902,7 +3902,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -4000,7 +4000,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -4098,7 +4098,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -4196,7 +4196,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -4294,7 +4294,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -4392,7 +4392,7 @@
       "jit.fx.co.subtractive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -4473,7 +4473,7 @@
       "jit.fx.subtexture"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -4569,7 +4569,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -4709,7 +4709,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -4815,7 +4815,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -4904,7 +4904,7 @@
       "jit.fx.subtexture"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -5006,7 +5006,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -5120,7 +5120,7 @@
       "jit.fx.ge.randlines"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -5219,7 +5219,7 @@
       "jit.fx.ge.randlines"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -5348,7 +5348,7 @@
       "jit.fx.ge.randlines"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -5447,7 +5447,7 @@
       "jit.fx.ge.randlines"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -5547,7 +5547,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -5632,7 +5632,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -5700,7 +5700,7 @@
       "jit.fx.subtexture"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -5776,7 +5776,7 @@
       "jit.fx.subtexture"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -5892,7 +5892,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -5999,7 +5999,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -6087,7 +6087,7 @@
       "jit.fx.subtexture"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -6203,7 +6203,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -6304,7 +6304,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -6389,7 +6389,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -6457,7 +6457,7 @@
       "jit.fx.subtexture"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -6536,7 +6536,7 @@
       "jit.fx.subtexture"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -6626,7 +6626,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -6714,7 +6714,7 @@
       "jit.fx.tp.warp"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -6792,7 +6792,7 @@
       "jit.fx.tp.warp"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -6862,7 +6862,7 @@
       "jit.fx.tp.warp"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -6952,7 +6952,7 @@
       "jit.fx.tr.zoomfade"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -7052,7 +7052,7 @@
       "jit.fx.tr.zoomfade"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -7143,7 +7143,7 @@
       "jit.fx.tr.zoomfade"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -7249,7 +7249,7 @@
       "jit.fx.tr.zoomfade"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -7344,7 +7344,7 @@
       "jit.fx.tr.zoomfade"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -7450,7 +7450,7 @@
       "jit.fx.tr.zoomfade"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -7545,7 +7545,7 @@
       "jit.fx.tr.zoomfade"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -7625,7 +7625,7 @@
       "jit.fx.tr.zoomfade"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -7731,7 +7731,7 @@
       "jit.fx.tr.zoomfade"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -7831,7 +7831,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -7942,7 +7942,7 @@
       "jit.fx.wake"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -8029,7 +8029,7 @@
       "glcore",
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -8135,7 +8135,7 @@
       "glcore",
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -8358,7 +8358,7 @@
       "Jitter-Tools",
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -8646,7 +8646,7 @@
       "glcore",
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -8705,7 +8705,7 @@
       "jit.gl.texture"
     ],
     "tags": [],
-    "min_version": 9.2,
+    "min_version": "9.2",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -8828,7 +8828,7 @@
       "Jitter-Tools",
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -8870,7 +8870,7 @@
       "jit.matrixinfo"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -8935,7 +8935,7 @@
       "Jitter-Tools",
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -9029,7 +9029,7 @@
       "glcore",
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -9063,7 +9063,7 @@
       "Jitter-Tools",
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -9302,7 +9302,7 @@
       "Jitter-Tools",
       "Jitter"
     ],
-    "min_version": 9.2,
+    "min_version": "9.2",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -9381,7 +9381,7 @@
       "Jitter-Tools",
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -9644,7 +9644,7 @@
     "tags": [
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -9922,7 +9922,7 @@
     "tags": [
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -10220,7 +10220,7 @@
     "tags": [
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -10493,7 +10493,7 @@
     "tags": [
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -10816,7 +10816,7 @@
     "tags": [
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -11104,7 +11104,7 @@
     "tags": [
       "Jitter"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",
@@ -11173,7 +11173,7 @@
       "Jitter",
       "Jitter Data"
     ],
-    "min_version": 9.2,
+    "min_version": "9.2",
     "verified": true,
     "variable_io": false,
     "package": "Jitter Tools",

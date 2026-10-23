@@ -408,143 +408,6 @@
     },
     "type_mismatches": 0
    },
-   "list.delace": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=1,2": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.indexmap": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=2,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.join": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=2,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.lace": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=2,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.len": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=1,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.lookup": {
-    "boxes": 3,
-    "count_mismatches": 3,
-    "signatures": {
-     "count args=0 max=2,2 db=2,1": 1,
-     "count args=7 max=2,2 db=2,1": 2
-    },
-    "type_mismatches": 0
-   },
-   "list.median": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=1,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.queue": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=1,2": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.reg": {
-    "boxes": 2,
-    "count_mismatches": 2,
-    "signatures": {
-     "count args=0 max=2,2 db=2,1": 2
-    },
-    "type_mismatches": 0
-   },
-   "list.rev": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=1,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.rot": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=2,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.stack": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=1,2": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.sum": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=1,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.swap": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=2,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.thin": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=1,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.union": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=2,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.unique": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=2,1": 1
-    },
-    "type_mismatches": 0
-   },
    "live.comment": {
     "boxes": 132,
     "count_mismatches": 65,
@@ -1827,14 +1690,6 @@
     },
     "type_mismatches": 0
    },
-   "list.reg": {
-    "boxes": 1,
-    "count_mismatches": 1,
-    "signatures": {
-     "count args=0 max=2,2 db=2,1": 1
-    },
-    "type_mismatches": 0
-   },
    "live.gain~": {
     "boxes": 29,
     "count_mismatches": 11,
@@ -1882,14 +1737,6 @@
     "count_mismatches": 1,
     "signatures": {
      "count args=2 max=2,1 db=0,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "list.lookup": {
-    "boxes": 2,
-    "count_mismatches": 2,
-    "signatures": {
-     "count args=7 max=2,2 db=2,1": 2
     },
     "type_mismatches": 0
    },
@@ -4112,10 +3959,10 @@
  "schema": 1,
  "sources": {
   "bundle": {
-   "boxes_compared": 77909,
+   "boxes_compared": 77911,
    "files": 2114,
-   "mismatching_boxes": 4344,
-   "mismatching_names": 107,
+   "mismatching_boxes": 4324,
+   "mismatching_names": 90,
    "version": "9.2.0"
   },
   "package:CNMAT Externals": {
@@ -4135,15 +3982,15 @@
   "package:FluidCorpusManipulation": {
    "boxes_compared": 7312,
    "files": 78,
-   "mismatching_boxes": 940,
-   "mismatching_names": 54,
+   "mismatching_boxes": 939,
+   "mismatching_names": 53,
    "version": "1.0.9"
   },
   "package:RNBO": {
    "boxes_compared": 2605,
    "files": 563,
-   "mismatching_boxes": 31,
-   "mismatching_names": 7,
+   "mismatching_boxes": 29,
+   "mismatching_names": 6,
    "version": "1.4.3"
   },
   "package:Rhythm and Time Toolkit": {
@@ -4168,7 +4015,7 @@
    "version": "0.8.3"
   },
   "package:cv.jit": {
-   "boxes_compared": 3041,
+   "boxes_compared": 3042,
    "files": 70,
    "mismatching_boxes": 114,
    "mismatching_names": 4,
@@ -4189,7 +4036,7 @@
    "version": "0.1.0"
   },
   "package:ease": {
-   "boxes_compared": 377,
+   "boxes_compared": 379,
    "files": 6,
    "mismatching_boxes": 15,
    "mismatching_names": 2,
@@ -4218,11 +4065,11 @@
   }
  },
  "totals": {
-  "boxes_compared": 126700,
-  "count_mismatch_names": 321,
+  "boxes_compared": 126705,
+  "count_mismatch_names": 304,
   "files": 3430,
-  "mismatching_boxes": 8670,
-  "mismatching_names": 386,
+  "mismatching_boxes": 8647,
+  "mismatching_names": 369,
   "type_mismatch_names": 73
  }
 }

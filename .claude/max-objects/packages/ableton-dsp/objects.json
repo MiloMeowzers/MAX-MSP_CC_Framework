@@ -299,7 +299,7 @@
       "effect",
       "filter"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -447,7 +447,7 @@
       "filter",
       "utility"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -593,7 +593,7 @@
       "utility",
       "dynamics"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -736,7 +736,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1140,7 +1140,7 @@
     "tags": [
       "instrument"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1310,7 +1310,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1577,7 +1577,7 @@
     "tags": [
       "sampler"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1817,7 +1817,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -1955,7 +1955,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2109,7 +2109,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2342,7 +2342,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9.2,
+    "min_version": "9.2",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2462,7 +2462,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -2910,7 +2910,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3048,7 +3048,7 @@
     "tags": [
       "spectral"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3216,7 +3216,7 @@
     "tags": [
       "spectral"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3399,7 +3399,7 @@
       "utility",
       "dynamics"
     ],
-    "min_version": 9.2,
+    "min_version": "9.2",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3548,7 +3548,7 @@
       "utility",
       "dynamics"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3695,7 +3695,7 @@
     "tags": [
       "generator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3790,7 +3790,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3884,7 +3884,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -3979,7 +3979,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4073,7 +4073,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4217,7 +4217,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4276,7 +4276,7 @@
     "tags": [
       "utility"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4371,7 +4371,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4555,7 +4555,7 @@
       "effect",
       "reverb"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4661,7 +4661,7 @@
       "filter",
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4815,7 +4815,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -4924,7 +4924,7 @@
       "filter",
       "effect"
     ],
-    "min_version": 9.2,
+    "min_version": "9.2",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5123,7 +5123,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5217,7 +5217,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5366,7 +5366,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5447,7 +5447,7 @@
     "tags": [
       "utility"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5601,7 +5601,7 @@
     "tags": [
       "generator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5662,7 +5662,7 @@
     "tags": [
       "utility"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5756,7 +5756,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5850,7 +5850,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -5951,7 +5951,7 @@
       "effect",
       "filter"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6150,7 +6150,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6246,7 +6246,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6342,7 +6342,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6496,7 +6496,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6591,7 +6591,7 @@
     "tags": [
       "generator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6700,7 +6700,7 @@
     "tags": [
       "filter"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6817,7 +6817,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -6919,7 +6919,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7066,7 +7066,7 @@
     "tags": [
       "generator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7161,7 +7161,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7255,7 +7255,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7409,7 +7409,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7649,7 +7649,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7699,7 +7699,7 @@
     "tags": [
       "analysis"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7797,7 +7797,7 @@
       "effect",
       "pitch"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -7931,7 +7931,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8059,7 +8059,7 @@
     "tags": [
       "generator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8256,7 +8256,7 @@
       "effect",
       "reverb"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8351,7 +8351,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8498,7 +8498,7 @@
     "tags": [
       "generator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8589,7 +8589,7 @@
       "effect",
       "pitch"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8719,7 +8719,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8812,7 +8812,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -8996,7 +8996,7 @@
       "effect",
       "reverb"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -9091,7 +9091,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -9185,7 +9185,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -9279,7 +9279,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -9389,7 +9389,7 @@
       "modulation",
       "utility"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -9482,7 +9482,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -9581,7 +9581,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -9669,7 +9669,7 @@
     "tags": [
       "oscillator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -9827,7 +9827,7 @@
       "effect",
       "reverb"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -9901,7 +9901,7 @@
     "tags": [
       "modulation"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -9991,7 +9991,7 @@
       "dynamics",
       "utility"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -10046,7 +10046,7 @@
     "tags": [
       "utility"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -10200,7 +10200,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -10301,7 +10301,7 @@
       "filter",
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -10448,7 +10448,7 @@
     "tags": [
       "generator"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -10598,7 +10598,7 @@
     "tags": [
       "effect"
     ],
-    "min_version": 9,
+    "min_version": "9",
     "verified": true,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -10741,7 +10741,7 @@
       "ui",
       "Live"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -10852,7 +10852,7 @@
       "synthesis",
       "Live"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -10988,7 +10988,7 @@
     "tags": [
       "ui"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,

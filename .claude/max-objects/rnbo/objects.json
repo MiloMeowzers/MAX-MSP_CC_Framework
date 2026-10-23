@@ -40,7 +40,7 @@
       "RNBO Constant",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -82,7 +82,7 @@
       "RNBO Constant",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -127,7 +127,7 @@
       "RNBO Constant",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -169,7 +169,7 @@
       "RNBO Constant",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -214,7 +214,7 @@
       "RNBO Numeric",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -271,7 +271,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -328,7 +328,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -373,7 +373,7 @@
       "RNBO Numeric",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -433,7 +433,7 @@
       "RNBO",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -511,7 +511,7 @@
       "RNBO",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -573,7 +573,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -627,7 +627,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -681,7 +681,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -729,7 +729,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -783,7 +783,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -843,7 +843,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -958,7 +958,7 @@
       "RNBO Envelopes",
       "RNBO Functions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -1036,7 +1036,7 @@
       "RNBO",
       "RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -1089,7 +1089,7 @@
       "RNBO Comparison",
       "RNBO Logic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -1148,7 +1148,7 @@
       "RNBO Comparison",
       "RNBO Logic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -1212,7 +1212,7 @@
       "RNBO Lists",
       "RNBO Messages"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -1266,7 +1266,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -1320,7 +1320,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -1374,7 +1374,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -1422,7 +1422,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -1472,7 +1472,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -1536,7 +1536,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -1600,7 +1600,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -1648,7 +1648,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -1702,7 +1702,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -1752,7 +1752,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -1797,7 +1797,7 @@
       "RNBO Operators",
       "RNBO Dynamics"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -1848,7 +1848,7 @@
       "RNBO Operators",
       "RNBO Dynamics"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -1923,7 +1923,7 @@
       "RNBO Analysis",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -2004,7 +2004,7 @@
       "RNBO Analysis",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -2085,7 +2085,7 @@
       "RNBO Analysis",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -2160,7 +2160,7 @@
       "RNBO Analysis",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -2241,7 +2241,7 @@
       "RNBO Analysis",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -2316,7 +2316,7 @@
       "RNBO Analysis",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -2366,7 +2366,7 @@
       "RNBO Analysis",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -2441,7 +2441,7 @@
       "RNBO Data",
       "RNBO Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -2509,7 +2509,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -2583,7 +2583,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -2651,7 +2651,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -2725,7 +2725,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -2793,7 +2793,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -2867,7 +2867,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -2935,7 +2935,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -3009,7 +3009,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -3061,7 +3061,7 @@
       "RNBO Timing",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -3121,7 +3121,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -3198,7 +3198,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -3319,7 +3319,7 @@
       "RNBO",
       "RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -3371,7 +3371,7 @@
       "RNBO Window",
       "RNBO FFT"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -3429,7 +3429,7 @@
       "RNBO Window",
       "RNBO FFT"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -3488,7 +3488,7 @@
       "RNBO Timing",
       "RNBO Data"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -3550,7 +3550,7 @@
       "or"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -3604,7 +3604,7 @@
       "or~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -3668,7 +3668,7 @@
       "RNBO",
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -3738,7 +3738,7 @@
       "RNBO",
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -3790,7 +3790,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -3865,7 +3865,7 @@
       "biquad~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -3930,7 +3930,7 @@
       "RNBO",
       "RNBO UI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -4001,7 +4001,7 @@
       "RNBO FFT",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -4078,7 +4078,7 @@
       "RNBO FFT",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -4123,7 +4123,7 @@
       "RNBO Powers",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -4174,7 +4174,7 @@
       "RNBO Powers",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -4220,7 +4220,7 @@
       "RNBO Numeric",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -4272,7 +4272,7 @@
       "RNBO Numeric",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -4332,7 +4332,7 @@
       "RNBO",
       "RNBO Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -4385,7 +4385,7 @@
       "RNBO",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -4435,7 +4435,7 @@
       "RNBO Sampling",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -4504,7 +4504,7 @@
       "RNBO Bounds",
       "RNBO Range"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -4573,7 +4573,7 @@
       "RNBO Bounds",
       "RNBO Range"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -4619,7 +4619,7 @@
       "line~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -4643,7 +4643,7 @@
       "gen~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_options": {
@@ -4685,7 +4685,7 @@
       "gen~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_options": {
@@ -4801,7 +4801,7 @@
       "RNBO",
       "RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -4840,7 +4840,7 @@
       "splineinterp~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -4903,7 +4903,7 @@
       "RNBO Route",
       "RNBO Logic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -4972,7 +4972,7 @@
       "RNBO Route",
       "RNBO Logic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -5020,7 +5020,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -5079,7 +5079,7 @@
       "RNBO Trigonometry",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -5130,7 +5130,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -5181,7 +5181,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -5234,7 +5234,7 @@
       "RNBO Trigonometry",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -5282,7 +5282,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -5336,7 +5336,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -5415,7 +5415,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -5500,7 +5500,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -5548,7 +5548,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -5672,7 +5672,7 @@
       "RNBO",
       "RNBO Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -5761,7 +5761,7 @@
       "RNBO",
       "RNBO Generators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -5803,7 +5803,7 @@
       "RNBO",
       "RNBO System"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -5877,7 +5877,7 @@
       "RNBO",
       "RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -5964,7 +5964,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -6053,7 +6053,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -6156,7 +6156,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -6265,7 +6265,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -6314,7 +6314,7 @@
       "RNBO System",
       "RNBO Timing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -6360,7 +6360,7 @@
       "RNBO System",
       "RNBO Timing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -6408,7 +6408,7 @@
       "RNBO System",
       "RNBO Timing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -6453,7 +6453,7 @@
       "RNBO System",
       "RNBO Timing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -6540,7 +6540,7 @@
       "RNBO Functions",
       "RNBO Envelopes"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -6619,7 +6619,7 @@
       "RNBO Synthesis",
       "RNBO Oscillators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -6724,7 +6724,7 @@
       "RNBO Sampling",
       "RNBO Synthesis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -6803,7 +6803,7 @@
       "RNBO Operators",
       "RNBO Dynamics"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -6854,7 +6854,7 @@
       "RNBO Operators",
       "RNBO Dynamics"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -6916,7 +6916,7 @@
       "RNBO Filters",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -7006,7 +7006,7 @@
       "RNBO Filters",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -7054,7 +7054,7 @@
       "RNBO Trigonometry",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -7108,7 +7108,7 @@
       "RNBO Trigonometry",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -7157,7 +7157,7 @@
       "RNBO Math",
       "RNBO Constant"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -7203,7 +7203,7 @@
       "RNBO Math",
       "RNBO Constant"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -7273,7 +7273,7 @@
       "RNBO",
       "RNBO Timing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -7341,7 +7341,7 @@
       "RNBO",
       "RNBO Delays"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -7408,7 +7408,7 @@
     "tags": [
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -7490,7 +7490,7 @@
       "RNBO Modifiers",
       "RNBO Timing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -7541,7 +7541,7 @@
     "tags": [
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -7599,7 +7599,7 @@
       "RNBO",
       "RNBO UI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -7682,7 +7682,7 @@
       "RNBO Sampling",
       "RNBO Coordinate"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -7742,7 +7742,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -7802,7 +7802,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -7863,7 +7863,7 @@
       "RNBO",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -7930,7 +7930,7 @@
       "RNBO",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -8008,7 +8008,7 @@
       "RNBO Generators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -8064,7 +8064,7 @@
       "RNBO Math",
       "RNBO Constant"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -8129,7 +8129,7 @@
       "RNBO",
       "RNBO Interpolation"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -8213,7 +8213,7 @@
       "RNBO",
       "RNBO Interpolation"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -8299,7 +8299,7 @@
       "RNBO",
       "RNBO Interpolation"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -8358,7 +8358,7 @@
       "RNBO",
       "RNBO Interpolation"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -8410,7 +8410,7 @@
       "zerox~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -8447,7 +8447,7 @@
     "attributes": {},
     "seealso": [],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -8547,7 +8547,7 @@
       "RNBO Envelopes",
       "RNBO Functions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -8600,7 +8600,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -8660,7 +8660,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -8720,7 +8720,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -8773,7 +8773,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -8818,7 +8818,7 @@
       "RNBO Powers",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -8869,7 +8869,7 @@
       "RNBO Powers",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -8920,7 +8920,7 @@
       "RNBO Powers",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -8965,7 +8965,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -9016,7 +9016,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -9045,7 +9045,7 @@
       "RNBO Expression",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_options": {
@@ -9087,7 +9087,7 @@
       "gen~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_options": {
@@ -9146,7 +9146,7 @@
       "RNBO Powers",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -9183,7 +9183,7 @@
       "RNBO Math",
       "RNBO Constant"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -9241,7 +9241,7 @@
       "RNBO Constant",
       "RNBO Data"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -9291,7 +9291,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -9341,7 +9341,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -9389,7 +9389,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -9443,7 +9443,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -9546,7 +9546,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -9655,7 +9655,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -9700,7 +9700,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -9751,7 +9751,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -9807,7 +9807,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -9869,7 +9869,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -9917,7 +9917,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -9971,7 +9971,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -10019,7 +10019,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -10073,7 +10073,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -10120,7 +10120,7 @@
       "RNBO Feedback",
       "RNBO Functions"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -10192,7 +10192,7 @@
     },
     "seealso": [],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -10312,7 +10312,7 @@
     },
     "seealso": [],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -10420,7 +10420,7 @@
     },
     "seealso": [],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -10473,7 +10473,7 @@
       "RNBO Gen-Operators",
       "RNBO DSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -10526,7 +10526,7 @@
       "RNBO Gen-Operators",
       "RNBO DSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -10573,7 +10573,7 @@
       "RNBO Gen-Operators",
       "RNBO DSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -10626,7 +10626,7 @@
       "RNBO Gen-Operators",
       "RNBO DSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -10672,7 +10672,7 @@
       "RNBO Range",
       "RNBO Numeric"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -10724,7 +10724,7 @@
       "RNBO Range",
       "RNBO Numeric"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -10800,7 +10800,7 @@
       "RNBO Bounds",
       "RNBO Range"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -10882,7 +10882,7 @@
       "RNBO Bounds",
       "RNBO Range"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -10928,7 +10928,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -10980,7 +10980,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -11046,7 +11046,7 @@
       "RNBO",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -11092,7 +11092,7 @@
       "RNBO",
       "RNBO Communications"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -11144,7 +11144,7 @@
       "RNBO",
       "RNBO Communications"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -11229,7 +11229,7 @@
       "RNBO Math",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -11322,7 +11322,7 @@
       "RNBO Modifiers",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -11403,7 +11403,7 @@
       "RNBO FFT",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -11526,7 +11526,7 @@
       "RNBO",
       "RNBO UI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -11610,7 +11610,7 @@
       "RNBO Control",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -11662,7 +11662,7 @@
       ">=~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -11718,7 +11718,7 @@
       ">=~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -11795,7 +11795,7 @@
       "switch"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -11834,7 +11834,7 @@
       "RNBO Subpatcher",
       "RNBO Code"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -11959,7 +11959,7 @@
       "RNBO Modifiers",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -12110,7 +12110,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -12181,7 +12181,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -12240,7 +12240,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -12299,7 +12299,7 @@
       "RNBO Operators",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -12358,7 +12358,7 @@
       "RNBO Operators",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -12411,7 +12411,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -12464,7 +12464,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -12523,7 +12523,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -12576,7 +12576,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -12621,7 +12621,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -12663,7 +12663,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -12715,7 +12715,7 @@
       "RNBO Window",
       "RNBO FFT"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -12773,7 +12773,7 @@
       "RNBO Window",
       "RNBO FFT"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -12825,7 +12825,7 @@
       "RNBO Window",
       "RNBO FFT"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -12883,7 +12883,7 @@
       "RNBO Window",
       "RNBO FFT"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -12941,7 +12941,7 @@
       "RNBO Filter",
       "RNBO FFT"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -12997,7 +12997,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -13059,7 +13059,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -13127,7 +13127,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -13201,7 +13201,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -13269,7 +13269,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -13343,7 +13343,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -13411,7 +13411,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -13485,7 +13485,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -13553,7 +13553,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -13627,7 +13627,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -13712,7 +13712,7 @@
       "RNBO FFT",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -13772,7 +13772,7 @@
       "RNBO Messages",
       "RNBO Communications"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -13824,7 +13824,7 @@
       "RNBO Messages",
       "RNBO Communications"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -13876,7 +13876,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -13924,7 +13924,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -13989,7 +13989,7 @@
       "RNBO Constant",
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -14046,7 +14046,7 @@
       "RNBO",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -14092,7 +14092,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -14135,7 +14135,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -14172,7 +14172,7 @@
       "RNBO",
       "RNBO Communications"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -14233,7 +14233,7 @@
       "RNBO Gen-Operators",
       "RNBO DSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -14286,7 +14286,7 @@
       "RNBO Gen-Operators",
       "RNBO DSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -14332,7 +14332,7 @@
       "RNBO Gen-Operators",
       "RNBO DSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -14384,7 +14384,7 @@
       "RNBO Gen-Operators",
       "RNBO DSP"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -14444,7 +14444,7 @@
       "RNBO Lists",
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -14482,7 +14482,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -14555,7 +14555,7 @@
       "RNBO Synthesis",
       "RNBO Function"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -14624,7 +14624,7 @@
       "RNBO Synthesis",
       "RNBO Function"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -14686,7 +14686,7 @@
       "RNBO Messages",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -14758,7 +14758,7 @@
       "RNBO Function",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -14848,7 +14848,7 @@
       "RNBO Modifiers",
       "RNBO Dynamics"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -14960,7 +14960,7 @@
       "RNBO Functions",
       "RNBO Envelopes"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -15045,7 +15045,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -15130,7 +15130,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -15208,7 +15208,7 @@
       "RNBO Functions",
       "RNBO Envelopes"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -15308,7 +15308,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -15397,7 +15397,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -15477,7 +15477,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -15538,7 +15538,7 @@
       "RNBO",
       "RNBO Interpolation"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -15631,7 +15631,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -15735,7 +15735,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -15828,7 +15828,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -15910,7 +15910,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -15998,7 +15998,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -16095,7 +16095,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -16176,7 +16176,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -16263,7 +16263,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -16337,7 +16337,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -16432,7 +16432,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -16521,7 +16521,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -16602,7 +16602,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -16684,7 +16684,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -16767,7 +16767,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -16854,7 +16854,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -16954,7 +16954,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -17043,7 +17043,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -17137,7 +17137,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -17237,7 +17237,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -17324,7 +17324,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -17423,7 +17423,7 @@
     },
     "seealso": [],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -17535,7 +17535,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -17624,7 +17624,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -17704,7 +17704,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -17792,7 +17792,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -17871,7 +17871,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -17959,7 +17959,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -18047,7 +18047,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -18121,7 +18121,7 @@
       "RNBO",
       "RNBO Lists"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -18173,7 +18173,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -18216,7 +18216,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -18262,7 +18262,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -18305,7 +18305,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -18355,7 +18355,7 @@
       "RNBO Messages",
       "RNBO Patching"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -18405,7 +18405,7 @@
       "RNBO Messages",
       "RNBO Patching"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -18451,7 +18451,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -18504,7 +18504,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -18555,7 +18555,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -18597,7 +18597,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -18644,7 +18644,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -18690,7 +18690,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -18742,7 +18742,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -18789,7 +18789,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -18840,7 +18840,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -18882,7 +18882,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -18926,7 +18926,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -18976,7 +18976,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -19023,7 +19023,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -19069,7 +19069,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -19142,7 +19142,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -19245,7 +19245,7 @@
       "RNBO",
       "RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -19298,7 +19298,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -19357,7 +19357,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -19416,7 +19416,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -19475,7 +19475,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -19528,7 +19528,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -19581,7 +19581,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -19640,7 +19640,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -19693,7 +19693,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -19771,7 +19771,7 @@
       "midiin"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -19841,7 +19841,7 @@
       "RNBO Control",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -19915,7 +19915,7 @@
       "RNBO",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -19977,7 +19977,7 @@
       "RNBO Comparison",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -20047,7 +20047,7 @@
       "RNBO",
       "RNBO Messages"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -20111,7 +20111,7 @@
       "RNBO",
       "RNBO UI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -20181,7 +20181,7 @@
       "RNBO Time",
       "RNBO Timing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -20315,7 +20315,7 @@
       "RNBO MIDI",
       "RNBO Notes"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -20374,7 +20374,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -20430,7 +20430,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -20519,7 +20519,7 @@
       "noteout"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -20589,7 +20589,7 @@
       "RNBO",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -20651,7 +20651,7 @@
       "RNBO Comparison",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -20714,7 +20714,7 @@
       "RNBO Mixing",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -20783,7 +20783,7 @@
       "RNBO Mixing",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -20836,7 +20836,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -20895,7 +20895,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -20963,7 +20963,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -21037,7 +21037,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -21105,7 +21105,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -21179,7 +21179,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -21251,7 +21251,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -21329,7 +21329,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -21397,7 +21397,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -21471,7 +21471,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -21550,7 +21550,7 @@
       "RNBO Math",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -21639,7 +21639,7 @@
       "RNBO Moderators",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -21702,7 +21702,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -21770,7 +21770,7 @@
       "RNBO Math",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -21838,7 +21838,7 @@
       "RNBO Math",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -21911,7 +21911,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -21974,7 +21974,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -22042,7 +22042,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -22112,7 +22112,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -22162,7 +22162,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -22215,7 +22215,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -22275,7 +22275,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -22335,7 +22335,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -22388,7 +22388,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -22440,7 +22440,7 @@
       "RNBO Generators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -22493,7 +22493,7 @@
       "RNBO Generators",
       "RNBO Synthesis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -22551,7 +22551,7 @@
       "RNBO",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -22596,7 +22596,7 @@
       "RNBO Comparison",
       "RNBO Logic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -22685,7 +22685,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -22785,7 +22785,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -22830,7 +22830,7 @@
       "RNBO Comparison",
       "RNBO Logic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -22896,7 +22896,7 @@
       "RNBO",
       "RNBO UI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -23010,7 +23010,7 @@
       "RNBO",
       "RNBO UI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -23083,7 +23083,7 @@
       "RNBO",
       "RNBO Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -23149,7 +23149,7 @@
       "RNBO",
       "RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -23214,7 +23214,7 @@
       "RNBO",
       "RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -23257,7 +23257,7 @@
       "RNBO",
       "RNBO RNBO Right-to-Left"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -23297,7 +23297,7 @@
       "RNBO",
       "RNBO RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -23350,7 +23350,7 @@
       "RNBO Comparison",
       "RNBO Logic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -23409,7 +23409,7 @@
       "RNBO Comparison",
       "RNBO Logic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -23448,7 +23448,7 @@
       "RNBO Messages",
       "RNBO Communications"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -23501,7 +23501,7 @@
       "RNBO Messages",
       "RNBO Communications"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -23550,7 +23550,7 @@
       "RNBO Messages",
       "RNBO Communications"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -23603,7 +23603,7 @@
       "RNBO Lists",
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -23652,7 +23652,7 @@
       "RNBO Lists",
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -23698,7 +23698,7 @@
       "RNBO Mixing",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_options": {
@@ -23756,7 +23756,7 @@
       "RNBO Mixing",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_options": {
@@ -23849,7 +23849,7 @@
       "RNBO Communications",
       "RNBO Declare"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -23983,7 +23983,7 @@
       "RNBO Communications",
       "RNBO Declare"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -24081,7 +24081,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -24135,7 +24135,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -24157,7 +24157,7 @@
       "gen~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_options": {
@@ -24264,7 +24264,7 @@
       "RNBO",
       "RNBO Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -24316,7 +24316,7 @@
       "RNBO Modifiers",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -24374,7 +24374,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -24473,7 +24473,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -24553,7 +24553,7 @@
       "RNBO",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -24630,7 +24630,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -24709,7 +24709,7 @@
       "RNBO",
       "RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -24758,7 +24758,7 @@
       "RNBO Filter",
       "RNBO FFT"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -24813,7 +24813,7 @@
       "RNBO Filter",
       "RNBO FFT"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -24877,7 +24877,7 @@
       "RNBO Synthesis",
       "RNBO Oscillators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -24929,7 +24929,7 @@
       "RNBO Constant",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -24972,7 +24972,7 @@
       "RNBO Constant",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -25017,7 +25017,7 @@
       "RNBO Math",
       "RNBO Constant"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -25072,7 +25072,7 @@
       "RNBO Generators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -25118,7 +25118,7 @@
       "RNBO Generators",
       "RNBO Synthesis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -25149,7 +25149,7 @@
       "RNBO",
       "RNBO Timing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false
   },
@@ -25185,7 +25185,7 @@
       "RNBO Math",
       "RNBO Constant"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -25265,7 +25265,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -25367,7 +25367,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -25460,7 +25460,7 @@
       "RNBO FFT",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -25537,7 +25537,7 @@
       "RNBO FFT",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -25602,7 +25602,7 @@
       "RNBO Polyphony",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -25652,7 +25652,7 @@
       "RNBO Polyphony",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -25743,7 +25743,7 @@
       "RNBO Polyphony",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -25799,7 +25799,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -25861,7 +25861,7 @@
       "RNBO Math",
       "RNBO Powers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -25925,7 +25925,7 @@
       "RNBO Lists",
       "RNBO Messages"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -25968,7 +25968,7 @@
     "tags": [
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -26003,7 +26003,7 @@
       "RNBO System",
       "RNBO Reporting"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -26071,7 +26071,7 @@
       "RNBO",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -26140,7 +26140,7 @@
       "RNBO Filters",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -26188,7 +26188,7 @@
       "RNBO Trigonometry",
       "RNBO Function"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -26242,7 +26242,7 @@
       "RNBO Trigonometry",
       "RNBO Function"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -26291,7 +26291,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -26337,7 +26337,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -26414,7 +26414,7 @@
       "RNBO Modifiers",
       "RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -26497,7 +26497,7 @@
       "RNBO Modifiers",
       "RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -26562,7 +26562,7 @@
       "RNBO Generators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -26616,7 +26616,7 @@
       "RNBO Synthesis",
       "RNBO Function"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -26681,7 +26681,7 @@
       "RNBO",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -26756,7 +26756,7 @@
       "RNBO",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -26815,7 +26815,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -26874,7 +26874,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -26909,7 +26909,7 @@
       "RNBO",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -26951,7 +26951,7 @@
       "receive"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -27051,7 +27051,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -27158,7 +27158,7 @@
       "RNBO Synthesis",
       "RNBO Oscillators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27236,7 +27236,7 @@
       "RNBO",
       "RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27289,7 +27289,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -27348,7 +27348,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27399,7 +27399,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27438,7 +27438,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27491,7 +27491,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -27550,7 +27550,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27587,7 +27587,7 @@
       "RNBO Control",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27624,7 +27624,7 @@
       "RNBO Control",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27675,7 +27675,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -27732,7 +27732,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27795,7 +27795,7 @@
       "RNBO",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27858,7 +27858,7 @@
       "RNBO",
       "RNBO Generators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27897,7 +27897,7 @@
       "RNBO System",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27943,7 +27943,7 @@
       "vectorsize"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -27985,7 +27985,7 @@
       "RNBO System",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -28058,7 +28058,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -28152,7 +28152,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -28226,7 +28226,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -28294,7 +28294,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -28368,7 +28368,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -28436,7 +28436,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -28510,7 +28510,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -28578,7 +28578,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -28652,7 +28652,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -28725,7 +28725,7 @@
       "RNBO Synthesis",
       "RNBO Oscillators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -28774,7 +28774,7 @@
       "mtof~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -28818,7 +28818,7 @@
       "mtof~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -28873,7 +28873,7 @@
       "mtof~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -28972,7 +28972,7 @@
       "RNBO",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -29083,7 +29083,7 @@
       "RNBO",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -29145,7 +29145,7 @@
       "RNBO",
       "RNBO UI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -29199,7 +29199,7 @@
       "RNBO Control",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -29248,7 +29248,7 @@
       "RNBO Control",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -29290,7 +29290,7 @@
       "RNBO Right-to-Left",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -29333,7 +29333,7 @@
       "receive~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -29384,7 +29384,7 @@
       "RNBO Subpatcher",
       "RNBO Messages"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -29434,7 +29434,7 @@
       "RNBO Operators",
       "RNBO Numeric"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -29484,7 +29484,7 @@
       "RNBO Operators",
       "RNBO Numeric"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -29546,7 +29546,7 @@
       "RNBO Function",
       "RNBO Synthesis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -29613,7 +29613,7 @@
       "RNBO Polyphony",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -29671,7 +29671,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -29725,7 +29725,7 @@
       "RNBO Trigonometry",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -29779,7 +29779,7 @@
       "RNBO Trigonometry",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -29827,7 +29827,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -29901,7 +29901,7 @@
       "RNBO",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -29965,7 +29965,7 @@
       "RNBO",
       "RNBO UI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -30066,7 +30066,7 @@
       "RNBO Filters",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -30140,7 +30140,7 @@
       "RNBO Math",
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -30220,7 +30220,7 @@
       "RNBO RNBO Modifiers",
       "RNBO RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -30272,7 +30272,7 @@
       "RNBO",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -30339,7 +30339,7 @@
       "RNBO",
       "RNBO Timing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -30421,7 +30421,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -30570,7 +30570,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -30703,7 +30703,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -30806,7 +30806,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -30915,7 +30915,7 @@
       "RNBO Interpolation",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -30990,7 +30990,7 @@
       "RNBO",
       "RNBO Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -31035,7 +31035,7 @@
       "RNBO Powers",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -31088,7 +31088,7 @@
       "RNBO Math",
       "RNBO Constant"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -31132,7 +31132,7 @@
       "RNBO Math",
       "RNBO Constant"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -31179,7 +31179,7 @@
       "RNBO Constant",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -31223,7 +31223,7 @@
       "RNBO Constant",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -31268,7 +31268,7 @@
       "RNBO Powers",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -31318,7 +31318,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -31374,7 +31374,7 @@
       "RNBO Logic",
       "RNBO Comparison"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -31443,7 +31443,7 @@
       "RNBO Notes",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -31496,7 +31496,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -31584,7 +31584,7 @@
     "tags": [
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -31637,7 +31637,7 @@
       "RNBO Operators",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -31737,7 +31737,7 @@
       "RNBO",
       "RNBO Filters"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -31804,7 +31804,7 @@
       "RNBO Filters",
       "RNBO Modifiers"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -31871,7 +31871,7 @@
       "RNBO",
       "RNBO Right-to-Left"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -31930,7 +31930,7 @@
     "tags": [
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -31979,7 +31979,7 @@
       "RNBO Control",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -32040,7 +32040,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -32092,7 +32092,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -32145,7 +32145,7 @@
       "RNBO Dynamics",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -32204,7 +32204,7 @@
       "RNBO Dynamics",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -32263,7 +32263,7 @@
       "RNBO Dynamics",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -32316,7 +32316,7 @@
       "RNBO Dynamics",
       "RNBO Operators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -32364,7 +32364,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -32418,7 +32418,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -32472,7 +32472,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -32520,7 +32520,7 @@
       "RNBO Math",
       "RNBO Trigonometry"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -32571,7 +32571,7 @@
       "RNBO",
       "RNBO Timing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -32647,7 +32647,7 @@
       "RNBO",
       "RNBO Timing"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -32729,7 +32729,7 @@
       "RNBO",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -32797,7 +32797,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -32871,7 +32871,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -32939,7 +32939,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -33013,7 +33013,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -33081,7 +33081,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -33155,7 +33155,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -33222,7 +33222,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -33295,7 +33295,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -33362,7 +33362,7 @@
       "RNBO Timing",
       "RNBO Time"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -33422,7 +33422,7 @@
       "RNBO Timing",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -33480,7 +33480,7 @@
       "RNBO",
       "RNBO UI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -33536,7 +33536,7 @@
       "RNBO",
       "RNBO Communications"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -33588,7 +33588,7 @@
       "RNBO",
       "RNBO Communications"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -33649,7 +33649,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -33726,7 +33726,7 @@
       "RNBO Communications",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -33799,7 +33799,7 @@
       "RNBO Math",
       "RNBO Oscillators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -33878,7 +33878,7 @@
       "RNBO Synthesis",
       "RNBO Oscillators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -33967,7 +33967,7 @@
       "RNBO Timing",
       "RNBO Conversion"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -34100,7 +34100,7 @@
       "RNBO Timing",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -34176,7 +34176,7 @@
       "RNBO Math",
       "RNBO Oscillators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -34258,7 +34258,7 @@
       "RNBO Synthesis",
       "RNBO Oscillators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -34319,7 +34319,7 @@
       "RNBO Math",
       "RNBO Oscillators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -34386,7 +34386,7 @@
       "RNBO Synthesis",
       "RNBO Oscillators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -34425,7 +34425,7 @@
       "RNBO Right-to-Left",
       "RNBO Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -34516,7 +34516,7 @@
       "RNBO Synthesis",
       "RNBO Oscillators"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -34585,7 +34585,7 @@
       "RNBO",
       "RNBO Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -34631,7 +34631,7 @@
       "RNBO Numeric",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -34683,7 +34683,7 @@
       "RNBO Numeric",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -34753,7 +34753,7 @@
       "RNBO Envelopes",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -34798,7 +34798,7 @@
       "RNBO Math",
       "RNBO Constant"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -34840,7 +34840,7 @@
       "RNBO Math",
       "RNBO Constant"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -34906,7 +34906,7 @@
       "unpack"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -34955,7 +34955,7 @@
       "RNBO Lists",
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -35021,7 +35021,7 @@
     "tags": [
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -35106,7 +35106,7 @@
       "RNBO",
       "RNBO Math"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -35202,7 +35202,7 @@
       "RNBO",
       "RNBO Control"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -35246,7 +35246,7 @@
       "RNBO System",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -35288,7 +35288,7 @@
       "RNBO System",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -35378,7 +35378,7 @@
       "RNBO Polyphony",
       "RNBO MIDI"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -35398,7 +35398,7 @@
     "attributes": {},
     "seealso": [],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false
   },
@@ -35503,7 +35503,7 @@
       "RNBO",
       "RNBO Sampling"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -35581,7 +35581,7 @@
       "RNBO Window",
       "RNBO FFT"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -35639,7 +35639,7 @@
       "RNBO Window",
       "RNBO FFT"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -35706,7 +35706,7 @@
     "tags": [
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -35760,7 +35760,7 @@
     "tags": [
       "RNBO"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -35836,7 +35836,7 @@
       "RNBO Bounds",
       "RNBO Range"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -35918,7 +35918,7 @@
       "RNBO Bounds",
       "RNBO Range"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -35949,7 +35949,7 @@
       "RNBO Mixing",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_options": {
@@ -35998,7 +35998,7 @@
       "RNBO Mixing",
       "RNBO Route"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_options": {
@@ -36069,7 +36069,7 @@
       "RNBO Comparison",
       "RNBO Logic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -36128,7 +36128,7 @@
       "RNBO Comparison",
       "RNBO Logic"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -36178,7 +36178,7 @@
       "RNBO",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -36244,7 +36244,7 @@
       "RNBO",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "rnbo_options": {
@@ -36310,7 +36310,7 @@
       "RNBO",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   },
@@ -36360,7 +36360,7 @@
       "RNBO",
       "RNBO Analysis"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false
   }

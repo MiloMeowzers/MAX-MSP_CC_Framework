@@ -68,7 +68,7 @@
     "tags": [
       "Mira"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "Mira",
@@ -95,7 +95,7 @@
     "tags": [
       "Mira"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,
@@ -183,7 +183,7 @@
     "tags": [
       "Mira"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "rnbo_compatible": false,

@@ -270,7 +270,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "VIDDLL",
@@ -535,7 +535,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "VIDDLL",
@@ -666,7 +666,7 @@
     "tags": [
       "TEXT_HERE"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "VIDDLL",

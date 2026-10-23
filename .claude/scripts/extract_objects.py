@@ -545,7 +545,7 @@ def parse_standard_xml(filepath: Path, module_hint: str, domain_hint: str) -> di
         "attributes": attributes,
         "seealso": seealso,
         "tags": tags,
-        "min_version": 8,
+        "min_version": "8",
         "verified": verified,
         "variable_io": variable_io,
     }
@@ -704,7 +704,7 @@ def parse_gen_xml(filepath: Path, module_hint: str = "gen-dsp") -> dict | None:
         "attributes": attributes,
         "seealso": seealso,
         "tags": tags,
-        "min_version": 8,
+        "min_version": "8",
         "verified": True,
         "variable_io": False,
     }
@@ -886,7 +886,7 @@ def parse_rnbo_xml(filepath: Path) -> dict | None:
         "attributes": attributes,
         "seealso": seealso,
         "tags": tags,
-        "min_version": 8,
+        "min_version": "8",
         "verified": bool(inlets or outlets),
         "variable_io": False,
     }

@@ -22,7 +22,7 @@
       "abc.hoa.ringmod~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -66,7 +66,7 @@
       "abc.stereoout~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -111,7 +111,7 @@
       "abc.rissetsbell~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -136,7 +136,7 @@
       "abc.stereoout~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -202,7 +202,7 @@
       "abc.mc.grain~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -271,7 +271,7 @@
       "abc.rissetsbell~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -303,7 +303,7 @@
       "abc.hoa.ringmod~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -341,7 +341,7 @@
       "abc.rissetsbell~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -382,7 +382,7 @@
       "abc.rissetsbell~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -422,7 +422,7 @@
       "abc.adcinput~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -454,7 +454,7 @@
       "abc.cartopol~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -481,7 +481,7 @@
       "abc.gaincontrol"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -588,7 +588,7 @@
       "abc.gaincontrol"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -617,7 +617,7 @@
       "abc.adcinput~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -665,7 +665,7 @@
       "abc.hoa.optim~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -742,7 +742,7 @@
       "abc.hoa.optim~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -819,7 +819,7 @@
       "abc.hoa.optim~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -879,7 +879,7 @@
       "abc.hoa.optim~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -965,7 +965,7 @@
       "abc.hoa.ringmod~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1031,7 +1031,7 @@
       "abc.hoa.optim~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1083,7 +1083,7 @@
       "abc.hoa.ringmod~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "abclib",
@@ -1125,7 +1125,7 @@
       "abc.hoa.map~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1172,7 +1172,7 @@
       "abc.hoa.map~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1242,7 +1242,7 @@
       "abc.hoa.mirror~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1297,7 +1297,7 @@
       "abc.hoa.optim~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1345,7 +1345,7 @@
       "abc.hoa.wider~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1387,7 +1387,7 @@
       "abc.hoa.stereodecoder~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1434,7 +1434,7 @@
       "abc.hoa.optim~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1511,7 +1511,7 @@
       "abc.mc.substractsynth~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1553,7 +1553,7 @@
       "abc.poltocar~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1587,7 +1587,7 @@
       "abc.hoa.ringmod~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1653,7 +1653,7 @@
       "abc.mc.freqshift~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1686,7 +1686,7 @@
       "abc.mc.delay~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1733,7 +1733,7 @@
       "abc.mc.delay~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1787,7 +1787,7 @@
       "abc.mc.grain~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1853,7 +1853,7 @@
       "abc.mc.grain~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1919,7 +1919,7 @@
       "abc.mc.chopan~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -1966,7 +1966,7 @@
       "abc.mc.randenv~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2007,7 +2007,7 @@
       "abc.mc.randenv~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2066,7 +2066,7 @@
       "abc.mc.randenv~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2119,7 +2119,7 @@
       "abc.mc.randenv~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2166,7 +2166,7 @@
       "abc.mc.gain~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2199,7 +2199,7 @@
       "abc.mc.gain~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2264,7 +2264,7 @@
       "abc.mc.freqshift~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2323,7 +2323,7 @@
       "abc.mc.freqshift~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2394,7 +2394,7 @@
       "abc.mc.gain~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2419,7 +2419,7 @@
       "abc.adcinput~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2451,7 +2451,7 @@
       "abc.adcinput~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2483,7 +2483,7 @@
       "abc.mc.busselect~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2515,7 +2515,7 @@
       "abc.mc.busselect~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2543,7 +2543,7 @@
       "abc.adcinput~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2568,7 +2568,7 @@
       "abc.stereoout~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2655,7 +2655,7 @@
       "abc.mc.addsynth~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2693,7 +2693,7 @@
       "abc.adcinput~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2738,7 +2738,7 @@
       "abc.mc.addsynth~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2814,7 +2814,7 @@
       "abc.mc.addsynth~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2862,7 +2862,7 @@
       "abc.adcinput~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2905,7 +2905,7 @@
       "abc.adcinput~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2929,7 +2929,7 @@
       "abc.mc.busselect~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -2969,7 +2969,7 @@
       "abc.mc.addsynth~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -3039,7 +3039,7 @@
       "abc.mc.addsynth~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -3079,7 +3079,7 @@
       "abc.mc.addsynth~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -3110,7 +3110,7 @@
       "abc.adcinput~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -3185,7 +3185,7 @@
       "abc.mc.addsynth~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -3231,7 +3231,7 @@
       "abc.adcinput~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",
@@ -3284,7 +3284,7 @@
       "abc.hoa.map~"
     ],
     "tags": [],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "abclib",

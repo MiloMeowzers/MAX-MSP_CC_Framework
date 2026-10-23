@@ -51,7 +51,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -144,7 +144,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -241,7 +241,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -344,7 +344,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -405,7 +405,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -454,7 +454,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -547,7 +547,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -672,7 +672,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -703,7 +703,7 @@
     "tags": [
       "machine learning"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "ml.star",
@@ -741,7 +741,7 @@
     "tags": [
       "data"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "ml.star",
@@ -780,7 +780,7 @@
     "tags": [
       "data"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "ml.star",
@@ -889,7 +889,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -978,7 +978,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -1075,7 +1075,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -1165,7 +1165,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -1255,7 +1255,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -1353,7 +1353,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",
@@ -1496,7 +1496,7 @@
     "tags": [
       "ml"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": true,
     "variable_io": false,
     "package": "ml.star",

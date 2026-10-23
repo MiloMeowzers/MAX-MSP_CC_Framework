@@ -136,7 +136,7 @@
       "ui",
       "Live"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "maxforlive-elements",
@@ -247,7 +247,7 @@
       "synthesis",
       "Live"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "maxforlive-elements",
@@ -383,7 +383,7 @@
     "tags": [
       "ui"
     ],
-    "min_version": 8,
+    "min_version": "8",
     "verified": false,
     "variable_io": false,
     "package": "maxforlive-elements",
