@@ -21,7 +21,7 @@ import pytest
 from src.maxpat.code_validation import validate_genexpr
 from src.maxpat.codegen import reorder_genexpr_declarations
 from src.maxpat.db_lookup import ObjectDatabase
-from src.maxpat.genexpr_parse import CONSTANTS, function_defs, param_items
+from src.maxpat.genexpr_parse import BUILTIN_CONSTANTS, CONSTANTS, function_defs, param_items
 
 
 @pytest.fixture(scope="module")
@@ -164,7 +164,8 @@ class TestConstantAliases:
         assert any(f"built-in constant '{name}'" in m for m in errors), errors
 
     def test_constants_set(self):
-        assert {"phi", "PHI", "PI", "E", "TWOPI", "pi", "e"} <= CONSTANTS
+        assert {"phi", "PHI", "PI", "E", "TWOPI", "pi", "e"} <= BUILTIN_CONSTANTS
+        assert CONSTANTS < BUILTIN_CONSTANTS and "phi" not in CONSTANTS
 
     def test_reading_a_constant_is_fine(self, db):
         assert not _msgs("out1 = in1 * PHI + TWOPI;", db, "error")

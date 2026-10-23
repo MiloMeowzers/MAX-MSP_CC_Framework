@@ -32,16 +32,20 @@ from dataclasses import dataclass
 
 DECL_TYPES = ("Param", "History", "Delay", "Buffer", "Data")
 
-# GenExpr built-in constants: the lower-case operator names (Gen refpages
-# gen_common_<name>.maxref.xml, phi included) and the upper-case aliases the
-# Max 9 Gen operator guide lists (gen_common_operators.json: PI, TWOPI, ...,
-# PHI, E). Assigning to any of them has no effect -- the constant wins
-# silently (review WR-04, quick 261022-ud6).
-_LOWER_CONSTANTS = (
+# Q22's 13 lower-case constant names (dsp_sim.genexpr_interp asserts this
+# exact set against its value table).
+CONSTANTS = frozenset({
     "e", "pi", "twopi", "halfpi", "invpi", "ln2", "ln10", "log10e", "log2e",
-    "sqrt2", "sqrt1_2", "degtorad", "radtodeg", "phi",
-)
-CONSTANTS = frozenset(_LOWER_CONSTANTS) | frozenset(n.upper() for n in _LOWER_CONSTANTS)
+    "sqrt2", "sqrt1_2", "degtorad", "radtodeg",
+})
+
+# Every GenExpr built-in constant name: CONSTANTS, phi (Gen refpage
+# gen_common_phi.maxref.xml) and the upper-case aliases the Max 9 Gen
+# operator guide lists (gen_common_operators.json: PI, TWOPI, ..., PHI, E).
+# Assigning to any of them has no effect -- the constant wins silently
+# (review WR-04, quick 261022-ud6). validate_genexpr Checks 11 and 14 use it.
+BUILTIN_CONSTANTS = (CONSTANTS | {"phi"}) | frozenset(
+    n.upper() for n in CONSTANTS | {"phi"})
 
 _DECL_RE = re.compile(r"(Param|History|Delay|Buffer|Data)\s")
 _IDENT_RE = re.compile(r"\s*([A-Za-z_]\w*)")

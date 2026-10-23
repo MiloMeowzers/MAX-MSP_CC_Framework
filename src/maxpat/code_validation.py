@@ -17,7 +17,7 @@ import re
 from typing import TYPE_CHECKING
 
 from src.maxpat.genexpr_parse import (
-    CONSTANTS as _GENEXPR_CONSTANTS,
+    BUILTIN_CONSTANTS as _GENEXPR_CONSTANTS,
     _find_assign,
     _for_parts,
     _paren_content,
