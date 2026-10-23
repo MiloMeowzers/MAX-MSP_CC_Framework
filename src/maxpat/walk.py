@@ -189,6 +189,84 @@ def box_label(box) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Message-box parts (fix-plan Q23; quick 261022-ud6 WP7b)
+# ---------------------------------------------------------------------------
+
+_MESSAGE_SEPARATORS = ",;"
+
+
+def _message_parts(box) -> list[tuple]:
+    """``(separator, tokens)`` parts of a message box's text (Q23).
+
+    The first part has separator None; every later part starts at a ``,``
+    or ``;`` separator: a token equal to it, a token ending in it unescaped
+    (the prefix stays in the current part) or a token starting with it (the
+    remainder starts the next part). A token starting with ``"`` is atomic;
+    ``\\,`` / ``\\;`` are literal. ``[]`` for a non-message box or non-str
+    text; never raises.
+    """
+    if box_maxclass(box) != "message":
+        return []
+    text = box.get("text")
+    if not isinstance(text, str):
+        return []
+    parts: list[tuple] = [(None, [])]
+    for token in split_box_text(text):
+        if token.startswith('"'):
+            parts[-1][1].append(token)
+            continue
+        lead: list[str] = []
+        while token and token[0] in _MESSAGE_SEPARATORS:
+            lead.append(token[0])
+            token = token[1:]
+        trail: list[str] = []
+        while (token and token[-1] in _MESSAGE_SEPARATORS
+               and not (len(token) >= 2 and token[-2] == "\\")):
+            trail.insert(0, token[-1])
+            token = token[:-1]
+        for sep in lead:
+            parts.append((sep, []))
+        if token:
+            parts[-1][1].append(token)
+        for sep in trail:
+            parts.append((sep, []))
+    return parts
+
+
+def message_segments(box) -> list[list[str]]:
+    """Comma segments of a message box's outlet part (Q23).
+
+    The outlet part is everything before the first ``;`` separator (what
+    the box sends out of its outlet; the rest are remote ``; name ...``
+    messages). Each segment is a token list; empty segments are dropped:
+    ``0, 1 500`` -> ``[["0"], ["1", "500"]]``, ``set 1 2; foo bar`` ->
+    ``[["set", "1", "2"]]``, ``;\\rdsp start`` -> ``[]``. ``[]`` for a
+    non-message box or non-str text; never raises.
+    """
+    out: list[list[str]] = []
+    for sep, tokens in _message_parts(box):
+        if sep == ";":
+            break
+        if tokens:
+            out.append(list(tokens))
+    return out
+
+
+def message_remote_targets(box) -> list[str]:
+    """Receive names a message box's ``;`` parts target, in order (Q23).
+
+    The first token of each part after a ``;`` separator:
+    ``; foo 1, 2; bar`` -> ``["foo", "bar"]``. ``[]`` for a non-message box
+    or non-str text; never raises.
+    """
+    out: list[str] = []
+    for sep, tokens in _message_parts(box):
+        if sep == ";" and tokens:
+            out.append(tokens[0])
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Paths and contexts
 # ---------------------------------------------------------------------------
 

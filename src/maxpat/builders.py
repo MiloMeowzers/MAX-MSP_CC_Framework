@@ -14,6 +14,7 @@ The methods reference sibling Patcher helpers (``_gen_id``, ``_auto_position``,
 
 from __future__ import annotations
 
+import re
 import warnings
 from typing import Any
 
@@ -29,6 +30,17 @@ from src.maxpat.defaults import (
 from src.maxpat.maxclass_map import is_ui_object
 from src.maxpat.sizing import calculate_box_size, is_max_saved, rendered_rect
 from src.maxpat.patcher import Box, Patchline
+
+# A numeric string add_bpatcher stores as a JSON number (Q23 D11; the same
+# predicate as validation._NUMERIC_STRING_RE, no exponent forms).
+_NUMERIC_ARG_RE = re.compile(r"[+-]?(\d+\.?\d*|\.\d+)")
+
+
+def _bpatcher_arg(value):
+    """*value*, or the int / float a numeric string spells (Q23 D11)."""
+    if isinstance(value, str) and _NUMERIC_ARG_RE.fullmatch(value):
+        return float(value) if "." in value else int(value)
+    return value
 
 
 class BuildersMixin:
@@ -825,7 +837,7 @@ class BuildersMixin:
         self,
         filename: str | None = None,
         embedded: bool = False,
-        args: list[str] | None = None,
+        args: list | None = None,
         x: float = 0.0,
         y: float = 0.0,
         width: float | None = None,
@@ -839,7 +851,13 @@ class BuildersMixin:
         Args:
             filename: Path to external .maxpat file (for file reference).
             embedded: If True, create embedded bpatcher with inner Patcher.
-            args: bpatcher arguments.
+            args: bpatcher arguments. Numeric strings (``"0"``, ``"-3"``,
+                ``"1.5"``, ``".5"``; no exponent forms) are stored as JSON
+                numbers (int without a ``.``, else float): a string
+                substitutes into ``#N`` as a quoted symbol and ``-~ #2``
+                fails with "bad arguments" (CLAUDE.md "Bpatcher and
+                Abstraction Arguments"; fix-plan Q23 D11). The caller's list
+                is never mutated.
             x: Horizontal position.
             y: Vertical position.
             width: bpatcher display width (None = auto from DB or 200).
@@ -852,8 +870,7 @@ class BuildersMixin:
         Returns:
             Box if file reference, (Box, Patcher) tuple if embedded.
         """
-        if args is None:
-            args = []
+        args = [_bpatcher_arg(a) for a in (args or [])]
 
         # DB-driven dimension lookup when object_name provided
         if object_name:

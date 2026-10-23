@@ -423,6 +423,9 @@ def _validate_scope_layers(
     # Layer 4: Domain-specific rules -- MSP / Max-UI only, skipped in gen
     if scope != "gen":
         results.extend(_validate_domain_rules(patch_dict, db))
+        # Layer 4c: Q23 vocabulary checks (clip(), bpatcher args, selectors,
+        # patcher bgcolor); self-contained, see _validate_vocabulary
+        results.extend(_validate_vocabulary(patch_dict, db, scope))
 
     # Layer 4b: Domain restriction guard (Phase 29 / VALID-02)
     results.extend(_validate_domain_restrictions(patch_dict, db, scope))
@@ -2223,29 +2226,44 @@ def _check_line_tilde_comma_messages(
     box_lookup: dict[str, dict],
     ctrl_adj: dict[str, list[str]],
 ) -> list[ValidationResult]:
-    """Catch messages with commas connected to line~ (commas restart ramps)."""
+    """Error on a ramp segment followed by another comma segment into line~.
+
+    Fix-plan Q23 (review §4.1 class 12, planner decision D2): every comma
+    segment of a message arrives in one tick and each replaces the ramp
+    before it, so a ramp (a segment of 2+ tokens) followed by any other
+    segment never plays -- bassoon aac68ed ``0., 0.9 15, 0.9 60, 0. 80``.
+    Max's own jump-then-ramp idiom (``0, 1 500``: a single-number jump, then
+    one ramp) gives no finding. One error per (message, line~) cord pair;
+    segments are read through :func:`walk.message_segments` (the outlet
+    part only; ``;`` remote parts are not sent to line~). Runs in every
+    scope Layer 4 runs on (nested included).
+    """
     results: list[ValidationResult] = []
 
     for box_id, box in box_lookup.items():
         if box.get("maxclass") != "message":
             continue
-        text = walk.box_text(box)
-        if "," not in text:
+        segments = walk.message_segments(box)
+        if not any(len(seg) >= 2 for seg in segments[:-1]):
             continue
-        # Check if any downstream box is line~
+        seen: set = set()
         for dst_id in ctrl_adj.get(box_id, []):
             dst_box = box_lookup.get(dst_id)
-            if not dst_box:
+            if not dst_box or dst_id in seen:
                 continue
-            dst_name = walk.box_name(dst_box)
-            if dst_name == "line~":
-                results.append(ValidationResult(
-                    "domain", "warning",
-                    f"line~ replaces ramps on new messages; use single list "
-                    f"without comma separators ({box_id})",
-                    rule="line_tilde_comma", box_ids=(box_id,),
-                ))
-                break
+            if walk.box_name(dst_box) != "line~":
+                continue
+            seen.add(dst_id)
+            results.append(ValidationResult(
+                "domain", "error",
+                f"line~ comma segments: '{walk.box_text(box)}' ({box_id}) -> "
+                f"line~ ({dst_id}) has a ramp segment followed by another "
+                f"comma segment -- all segments arrive in one tick and each "
+                f"replaces the ramp before it, so only the last takes effect; "
+                f"send the ramp pairs as one space-delimited list (a leading "
+                f"single-number jump may stay before the comma)",
+                rule="line_tilde_comma", box_ids=(box_id, dst_id),
+            ))
 
     return results
 
@@ -2316,3 +2334,254 @@ def _check_assistance_comments(
             ))
 
     return results
+
+
+# ===========================================================================
+# Layer 4c: Vocabulary checks (fix-plan Q23; review §4.4 R7 / R10;
+# quick 261022-ud6 WP7b, review-docs-completion CR-01)
+# ===========================================================================
+#
+# Mechanical vocabulary checks, run on every non-gen scope after Layer 4
+# (planner decision D1). Errors: expr/vexpr/if ``clip()`` and numeric
+# bpatcher args stored as strings. Warnings: a message selector the
+# destination does not list, and a patcher that sets editing_bgcolor /
+# locked_bgcolor but no bgcolor. The line~ comma check (Q23 D2) lives in
+# Layer 4 (_check_line_tilde_comma_messages); unknown objects on the
+# load/edit path are Layer 2 (validate_patch(patch_path=...), Q23 D3).
+# Every check is read-only and tolerates junk boxes.
+
+_CLIP_NAMES = frozenset({"expr", "vexpr", "if"})
+_CLIP_CALL_RE = _re.compile(r"\bclip\s*\(")
+
+# A str that #N would substitute as a quoted symbol although it reads as a
+# number (Q23 D11; no exponent forms -- MAX keeps "1e3" a symbol).
+_NUMERIC_STRING_RE = _re.compile(r"[+-]?(\d+\.?\d*|\.\d+)")
+# A message selector that is a number (skipped by the selector check)
+_NUMBER_TOKEN_RE = _re.compile(r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?")
+
+# Destinations the selector check never judges (D4): containers, scripts and
+# gen hosts route arbitrary messages to code or inner patchers.
+_SELECTOR_SKIP_NAMES = frozenset({
+    "p", "patcher", "bpatcher", "poly~", "mc.poly~", "pfft~", "rnbo~",
+    "gen~", "mc.gen~", "mcs.gen~", "gen", "gen.codebox~", "jit.gen",
+    "jit.pix", "jit.gl.pix", "js", "jsui", "v8", "v8ui", "v8.codebox",
+    "node.script", "node.codebox",
+})
+
+# jbox.maxref.xml "Common Box Attributes": every box accepts these as messages
+_JBOX_COMMON_ATTRIBUTES = frozenset({
+    "annotation", "background", "color", "fontface", "fontname", "fontsize",
+    "hidden", "hint", "ignoreclick", "jspainterfile", "patching_rect",
+    "position", "presentation", "presentation_rect", "rect", "size",
+    "textcolor", "textjustification", "valuepopup", "valuepopuplabel",
+    "varname",
+})
+
+
+def _validate_vocabulary(
+    patch_dict: dict,
+    db: ObjectDatabase,
+    scope: str,
+) -> list[ValidationResult]:
+    """Q23 vocabulary checks on one non-gen scope (Layer 4c).
+
+    ``clip()`` and message selectors run in max scope only (RNBO math and
+    message vocabularies differ); bpatcher args and the patcher bgcolor run
+    in every non-gen scope.
+    """
+    patcher = patch_dict.get("patcher")
+    if not isinstance(patcher, dict):
+        return []
+    box_lookup: dict = {}
+    for entry in patcher.get("boxes") or ():
+        box = entry.get("box") if isinstance(entry, dict) else None
+        if isinstance(box, dict) and _is_box_id(box.get("id")):
+            box_lookup.setdefault(box["id"], box)
+    lines = patcher.get("lines")
+    lines = lines if isinstance(lines, list) else []
+
+    results: list[ValidationResult] = []
+    if scope == "max":
+        results.extend(_check_expr_clip(box_lookup))
+    results.extend(_check_bpatcher_numeric_args(box_lookup))
+    if scope == "max":
+        results.extend(_check_message_selectors(box_lookup, lines, db))
+    results.extend(_check_patcher_bgcolor(patcher))
+    return results
+
+
+def _check_expr_clip(box_lookup: dict) -> list[ValidationResult]:
+    """Error: expr / vexpr / if calling ``clip()`` (Q23 / R7).
+
+    Max's expression evaluator has no clip(): MAX prints "function clip not
+    found" (physics-composition v0.0.2, ab79ddbe). Word-bounded, so
+    ``fclip(`` is not matched. gen~ codeboxes (which do have clip) are not
+    newobj expr boxes and are never checked.
+    """
+    results: list[ValidationResult] = []
+    for box_id, box in box_lookup.items():
+        if walk.box_maxclass(box) != "newobj":
+            continue
+        name = walk.box_name(box)
+        if name not in _CLIP_NAMES:
+            continue
+        text = walk.box_text(box)
+        if not _CLIP_CALL_RE.search(text):
+            continue
+        results.append(ValidationResult(
+            "domain", "error",
+            f"expr clip(): '{text}' ({box_id}) calls clip(), which {name} "
+            f"does not have -- MAX prints \"function clip not found\"; use "
+            f"min(max(x, lo), hi)",
+            rule="expr_clip", box_ids=(box_id,),
+        ))
+    return results
+
+
+def _check_bpatcher_numeric_args(box_lookup: dict) -> list[ValidationResult]:
+    """Error: a bpatcher ``args`` entry that is a numeric string (Q23 D11).
+
+    ``#N`` substitutes a str arg as a quoted symbol, so ``-~ #2`` with
+    ``"0"`` fails with "bad arguments creating object" (CLAUDE.md "Bpatcher
+    and Abstraction Arguments"); numeric args must be JSON numbers.
+    ``Patcher.add_bpatcher`` coerces them. One error per bpatcher box.
+    """
+    results: list[ValidationResult] = []
+    for box_id, box in box_lookup.items():
+        if walk.box_maxclass(box) != "bpatcher":
+            continue
+        args = box.get("args")
+        if not isinstance(args, list):
+            continue
+        bad = [a for a in args
+               if isinstance(a, str) and _NUMERIC_STRING_RE.fullmatch(a)]
+        if not bad:
+            continue
+        name = box.get("name")
+        label = name if isinstance(name, str) else "bpatcher"
+        values = ", ".join(f"'{a}'" for a in bad)
+        results.append(ValidationResult(
+            "domain", "error",
+            f"bpatcher args: '{label}' ({box_id}) stores numeric argument(s) "
+            f"{values} as strings -- #N substitutes a quoted symbol and "
+            f"objects such as '-~ #2' fail with \"bad arguments\"; store "
+            f"them as JSON numbers",
+            rule="bpatcher_numeric_args", box_ids=(box_id,),
+        ))
+    return results
+
+
+def _accepted_selectors(name: str, db: ObjectDatabase) -> "set | None":
+    """Selectors *name* accepts for the Q23 D4 check, or None to skip it.
+
+    None when the name is not in the DB, its message list is empty (the DB
+    says nothing), or it lists ``anything``. Otherwise ``db.selectors``
+    plus the jbox common box attributes. Never raises.
+    """
+    try:
+        if db.lookup(name) is None:
+            return None
+        messages = db.messages(name) or []
+        if not messages or "anything" in messages:
+            return None
+        accepted = set(db.selectors(name) or ())
+    except Exception:
+        return None
+    return accepted | _JBOX_COMMON_ATTRIBUTES
+
+
+def _selector_accepted(sel: str, accepted: set) -> bool:
+    if sel in accepted:
+        return True
+    # ``get<attr>`` queries any accepted attribute (getfrequency)
+    return sel.startswith("get") and sel[3:] in accepted
+
+
+def _check_message_selectors(
+    box_lookup: dict,
+    lines: list,
+    db: ObjectDatabase,
+) -> list[ValidationResult]:
+    """Warning: a message box sends a selector its destination does not list.
+
+    Q23 / R7 (review §4.1 class 3, "doesn't understand"); the guards are
+    planner decision D4. Only a cord from a message box's outlet 0 into the
+    destination's inlet 0. Skipped destinations: structural boxes, boxes
+    with an embedded patcher, containers / scripts / gen hosts
+    (:data:`_SELECTOR_SKIP_NAMES`), names not in the DB, and an empty DB
+    message list or one with ``anything``. Skipped selectors: numbers,
+    ``$`` / ``#`` / ``@`` / quoted tokens and ``set``. Accepted:
+    ``db.selectors``, the jbox common box attributes and ``get<accepted>``.
+    Each comma segment of the outlet part is checked (``;`` remote parts
+    are not). One warning per (message box, destination, selector).
+    """
+    results: list[ValidationResult] = []
+    seen: set = set()
+    cache: dict = {}
+    for entry in lines:
+        patchline = entry.get("patchline") if isinstance(entry, dict) else None
+        if not isinstance(patchline, dict) or not _well_formed_endpoints(patchline):
+            continue
+        src_id, src_outlet = patchline["source"][0], patchline["source"][1]
+        dst_id, dst_inlet = patchline["destination"][0], patchline["destination"][1]
+        if src_outlet != 0 or dst_inlet != 0:
+            continue
+        src = box_lookup.get(src_id)
+        dst = box_lookup.get(dst_id)
+        if not src or not dst or walk.box_maxclass(src) != "message":
+            continue
+        name = walk.object_name(dst)
+        if not name or walk.inner_patcher(dst) is not None:
+            continue
+        if name in _SELECTOR_SKIP_NAMES:
+            continue
+        segments = walk.message_segments(src)
+        if not segments:
+            continue
+        if name not in cache:
+            cache[name] = _accepted_selectors(name, db)
+        accepted = cache[name]
+        if accepted is None:
+            continue
+        for seg in segments:
+            sel = seg[0]
+            if (_NUMBER_TOKEN_RE.fullmatch(sel) or sel[:1] in ("$", "#", "@", '"')
+                    or sel == "set"):
+                continue
+            if _selector_accepted(sel, accepted):
+                continue
+            key = (src_id, dst_id, sel)
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append(ValidationResult(
+                "domain", "warning",
+                f"Message selector: '{walk.box_text(src)}' ({src_id}) sends "
+                f"'{sel}' to '{name}' ({dst_id}), which lists no such message "
+                f"or attribute -- MAX prints \"doesn't understand {sel}\" "
+                f"unless the DB entry is incomplete",
+                rule="message_selector", box_ids=(src_id, dst_id),
+            ))
+    return results
+
+
+def _check_patcher_bgcolor(patcher: dict) -> list[ValidationResult]:
+    """Warning: editing_bgcolor / locked_bgcolor set but no bgcolor (Q23 D5).
+
+    MAX honors the patcher-level ``bgcolor`` in locked and presentation mode
+    and otherwise falls back to its light default (CLAUDE.md Rule #9). A
+    patcher that sets none of the three keys renders with the theme and is
+    fine. ``set_canvas_background`` writes all three.
+    """
+    if "bgcolor" in patcher:
+        return []
+    if "editing_bgcolor" not in patcher and "locked_bgcolor" not in patcher:
+        return []
+    return [ValidationResult(
+        "domain", "warning",
+        "Patcher bgcolor: this patcher sets editing_bgcolor/locked_bgcolor but "
+        "no patcher-level bgcolor -- MAX uses bgcolor in locked and "
+        "presentation mode and falls back to its light default; set bgcolor "
+        "to the editing_bgcolor value (set_canvas_background writes all three)",
+        rule="patcher_bgcolor",
+    )]

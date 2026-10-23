@@ -1413,10 +1413,11 @@ class TestLayer4GenExprChecks:
 
     # --- Check 5: line~ comma messages ---
 
-    def test_line_tilde_comma_message_warning(self, db):
-        """Message with comma connected to line~ triggers warning."""
+    def test_line_tilde_comma_message_error(self, db):
+        """A ramp segment followed by another comma segment into line~ is an
+        error (Q23 D2; '100, 500 1000' is the jump-then-ramp idiom, no finding)."""
         boxes = [
-            _make_box("msg-1", maxclass="message", text="100, 500 1000",
+            _make_box("msg-1", maxclass="message", text="1 10, 0 500",
                        numinlets=2, numoutlets=1, outlettype=[""]),
             _make_box("line-1", text="line~", numinlets=2, numoutlets=2,
                        outlettype=["signal", ""]),
@@ -1424,10 +1425,10 @@ class TestLayer4GenExprChecks:
         lines = [_make_line("msg-1", 0, "line-1", 0)]
         patch = _make_patch_dict(boxes=boxes, lines=lines)
         results = validate_patch(patch, db=db)
-        warns = [r for r in results
-                 if r.layer == "domain" and r.level == "warning"
-                 and "replaces ramps" in r.message.lower()]
-        assert len(warns) >= 1
+        errors = [r for r in results
+                  if r.layer == "domain" and r.level == "error"
+                  and "line~ comma segments" in r.message]
+        assert len(errors) == 1
 
     def test_line_tilde_no_comma_no_warning(self, db):
         """Message without comma connected to line~ produces no warning."""

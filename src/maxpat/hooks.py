@@ -695,6 +695,7 @@ def _blocking_findings(
     scope: "str | None" = None,
     *,
     is_new: bool = False,
+    patch_path=None,
 ) -> list:
     """Blocking validation errors and critic blockers of *patch_dict*.
 
@@ -706,12 +707,17 @@ def _blocking_findings(
     here. *scope* is passed to validate_patch (None auto-detects; Q12).
     *is_new* is passed to review_patch: with True a Q24 uninitialized-state
     finding is a blocker, otherwise a warning that never blocks.
+    *patch_path* (the file saved) is passed to validate_patch, so an unknown
+    object with no abstraction beside the file or in its project is an
+    error (fix-plan Q23 D3).
     """
     from src.maxpat.critics import review_patch
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        v_results = validate_patch(copy.deepcopy(patch_dict), db=_gate_db(), scope=scope)
+        v_results = validate_patch(
+            copy.deepcopy(patch_dict), db=_gate_db(), scope=scope, patch_path=patch_path,
+        )
         c_results = review_patch(copy.deepcopy(patch_dict), db=_gate_db(), is_new=is_new)
 
     found = [
@@ -897,6 +903,7 @@ def _gate_report(
     baseline_dict: "dict | None",
     ref_dicts: list,
     scope: "str | None" = None,
+    patch_path=None,
 ) -> GateReport:
     """Compare *new_dict* with its blocker baseline and cord/port references.
 
@@ -908,12 +915,20 @@ def _gate_report(
     finding (a UI value holder reaching DSP with nothing setting it at
     load) blocks only a file with no baseline; an edit reviews both sides
     with the default, where it is a warning.
+
+    *patch_path* validates both sides against the same abstraction set
+    (Q23 D3), so a pre-existing unresolved unknown keys identically.
     """
-    new_findings = _blocking_findings(new_dict, scope=scope, is_new=baseline_dict is None)
+    new_findings = _blocking_findings(
+        new_dict, scope=scope, is_new=baseline_dict is None, patch_path=patch_path,
+    )
     if baseline_dict is None:
         new_blockers = list(new_findings)
     else:
-        base_counts = Counter(_finding_key(r) for r in _blocking_findings(baseline_dict, scope=scope))
+        base_counts = Counter(
+            _finding_key(r)
+            for r in _blocking_findings(baseline_dict, scope=scope, patch_path=patch_path)
+        )
         seen: Counter = Counter()
         new_blockers = []
         for r in new_findings:
@@ -994,6 +1009,7 @@ def _run_save_gate(
     report = _gate_report(
         patch_dict, baseline, [d for _, d in refs],
         scope=SCOPE_BY_SUFFIX.get(path.suffix),
+        patch_path=path,
     )
 
     # 1. Removed cords: one warning, whatever force is (review §4.1 class 9).
@@ -1311,7 +1327,10 @@ def validate_file(path: str | Path) -> list[ValidationResult]:
     """Load and validate an existing .maxpat file from disk.
 
     .gendsp / .genjit files validate in gen scope and .rnbopat in rnbo
-    scope (SCOPE_BY_SUFFIX); other suffixes auto-detect (Q12 / C3).
+    scope (SCOPE_BY_SUFFIX); other suffixes auto-detect (Q12 / C3). The
+    file path is passed as ``patch_path`` (fix-plan Q23 D3): an unknown
+    object is an error unless an abstraction resolves beside the file or in
+    its ``patches/<project>/`` tree.
 
     Args:
         path: Path to the .maxpat file.
@@ -1337,7 +1356,7 @@ def validate_file(path: str | Path) -> list[ValidationResult]:
         )]
 
     # Run the validation pipeline on the loaded dict
-    return validate_patch(data, scope=SCOPE_BY_SUFFIX.get(path.suffix))
+    return validate_patch(data, scope=SCOPE_BY_SUFFIX.get(path.suffix), patch_path=path)
 
 
 _JS_ENGINE_NAMES = {"js": "js", "jsui": "js", "v8": "v8", "v8ui": "v8"}

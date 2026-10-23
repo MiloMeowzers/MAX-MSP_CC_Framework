@@ -620,11 +620,13 @@ class TestBpatcher:
         assert "patcher" in bd["box"]
 
     def test_bpatcher_args(self):
-        """bpatcher can have args."""
+        """bpatcher can have args; numeric strings become JSON numbers (Q23:
+        a string "1" substitutes as a quoted symbol -- CLAUDE.md "Bpatcher
+        and Abstraction Arguments")."""
         p = Patcher()
         b = p.add_bpatcher("my_control.maxpat", args=["1", "2"])
         bd = b.to_dict()
-        assert bd["box"]["args"] == ["1", "2"]
+        assert bd["box"]["args"] == [1, 2]
 
 
 class TestEndToEndSerialization:

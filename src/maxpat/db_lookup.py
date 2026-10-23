@@ -708,12 +708,22 @@ class ObjectDatabase:
         EVERY inherited attribute name (typed or not), since MAX accepts an
         attribute name as a message. Use this for "is this message legal"
         checks. Returns a fresh set, or None for an unknown name.
+
+        Message entries that are dicts (bach.roll, dada.bounce, Odot: the
+        extracted ``{"name": ..., "args": ...}`` form) contribute their
+        ``name``; any other non-str entry is skipped (fix-plan Q23 D10 --
+        this used to raise TypeError).
         """
         canonical = self._aliases.get(name, name)
         obj = self._objects.get(canonical)
         if obj is None:
             return None
-        out = set(self.messages(canonical) or [])
+        out: set[str] = set()
+        for item in self.messages(canonical) or []:
+            if isinstance(item, dict):
+                item = item.get("name")
+            if isinstance(item, str):
+                out.add(item)
         own = obj.get("attributes")
         if isinstance(own, dict):
             out.update(own)
