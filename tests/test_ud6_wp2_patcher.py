@@ -521,6 +521,143 @@ class TestModifyBoxExtraAttrsModelKeys:
         assert p.to_dict() == before
 
 
+# ---------------------------------------------------------------------------
+# WR-07 / locked decision B11: edit-session contrast touches only boxes the
+# edit added, never default-text comments; self-painted objects and
+# gradient panels resolve correctly
+# ---------------------------------------------------------------------------
+
+PHYS = "patches/physics-composition/generated/physics-composition.maxpat"
+
+
+def _session_copy(tmp_path: Path, rel: str) -> Path:
+    target = tmp_path / Path(rel).name
+    target.write_bytes((REPO_ROOT / rel).read_bytes())
+    return target
+
+
+def _session(path: Path, edit):
+    from src.maxpat.edit_session import edit_patch
+
+    s = edit_patch(path)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with s as p:
+            edit(p)
+    return s
+
+
+def _textcolor(path: Path, box_id: str):
+    return _box_dict(json.loads(path.read_text()), box_id).get("textcolor")
+
+
+class TestEditSessionContrast:
+    def test_moved_bach_roll_keeps_textcolor(self, tmp_path):
+        path = _session_copy(tmp_path, PHYS)
+        before = _textcolor(path, "obj-67")
+
+        def edit(p):
+            b = _box(p, "obj-67")
+            p.modify_box(b, position=[b.patching_rect[0] + 1, b.patching_rect[1]])
+
+        s = _session(path, edit)
+        assert s.saved
+        assert _textcolor(path, "obj-67") == before
+
+    @pytest.mark.parametrize("box_id", ["obj-7", "obj-10"])
+    def test_moved_comment_on_gradient_keeps_textcolor(self, tmp_path, box_id):
+        path = _session_copy(tmp_path, AMP)
+        before = _textcolor(path, box_id)
+
+        def edit(p):
+            b = _box(p, box_id)
+            p.modify_box(b, position=[b.patching_rect[0] + 1, b.patching_rect[1]])
+
+        _session(path, edit)
+        assert _textcolor(path, box_id) == before
+
+    def test_new_default_text_comment_gets_no_textcolor(self, tmp_path):
+        path = _session_copy(tmp_path, AMP)
+        made = {}
+
+        def edit(p):
+            made["c"] = p.add_comment("new note", 600.0, 600.0)
+
+        _session(path, edit)
+        assert _textcolor(path, made["c"].id) is None
+
+    def test_new_box_with_failing_explicit_textcolor_is_fixed(self, tmp_path):
+        path = _session_copy(tmp_path, AMP)
+        made = {}
+
+        def edit(p):
+            c = p.add_comment("new label", 600.0, 600.0)
+            c.extra_attrs["textcolor"] = [0.3, 0.3, 0.3, 1.0]
+            made["c"] = c
+
+        _session(path, edit)
+        assert _textcolor(path, made["c"].id) != [0.3, 0.3, 0.3, 1.0]
+
+
+class TestContrastResolution:
+    def test_repair_leaves_self_painted_bach_roll(self):
+        from src.maxpat.aesthetics import repair_text_contrast
+
+        p = _load(PHYS)
+        before = list(_box(p, "obj-67").extra_attrs["textcolor"])
+        repair_text_contrast(p)
+        assert _box(p, "obj-67").extra_attrs["textcolor"] == before
+
+    @pytest.mark.parametrize("box_id", ["obj-7", "obj-10"])
+    def test_repair_scores_both_gradient_stops(self, box_id):
+        """No candidate reads on both stops of the amplitude-follower gradient
+        panel, so the explicit colour is kept rather than flipped to black."""
+        from src.maxpat.aesthetics import repair_text_contrast
+
+        p = _load(AMP)
+        before = list(_box(p, box_id).extra_attrs["textcolor"])
+        repair_text_contrast(p)
+        assert _box(p, box_id).extra_attrs["textcolor"] == before
+
+    def test_paints_unknown_background(self):
+        from src.maxpat.aesthetics import paints_unknown_background
+
+        assert paints_unknown_background("bach.roll", {})
+        assert paints_unknown_background("jit.cellblock", {})
+        assert paints_unknown_background("textbutton", {})
+        assert not paints_unknown_background("comment", {})
+        assert not paints_unknown_background("live.comment", {})
+        assert not paints_unknown_background("newobj", {})
+        assert not paints_unknown_background("textbutton", {"bgcolor": [1, 0, 0, 1]})
+        assert not paints_unknown_background("bach.roll", {"bgcolor": [1, 1, 1, 1]})
+
+    def test_gradient_text_on_new_patch_reads_on_both_stops(self):
+        from src.maxpat.aesthetics import ensure_text_contrast, contrast_ratio
+        from src.maxpat.defaults import MIN_CONTRAST_RATIO
+
+        light, mid = [0.95, 0.95, 0.95, 1.0], [0.62, 0.62, 0.62, 1.0]
+        p = Patcher()
+        panel = p.add_panel(0, 0, 300, 200, gradient=False)
+        panel.extra_attrs.pop("bgcolor", None)
+        panel.extra_attrs.update({"mode": 1, "grad1": light, "grad2": mid})
+        c = p.add_comment("label", 20, 20)
+        # A light-only pass would keep a mid-gray that fails on grad2.
+        c.extra_attrs["textcolor"] = [0.3, 0.3, 0.3, 1.0]
+        ensure_text_contrast(p)
+        color = c.extra_attrs["textcolor"]
+        for stop in (light, mid):
+            assert contrast_ratio(color, stop) >= MIN_CONTRAST_RATIO
+
+    def test_gradient_stops_encodings(self):
+        from src.maxpat.aesthetics import gradient_stops
+
+        a, b = [0.9, 0.9, 0.9, 1.0], [0.2, 0.2, 0.2, 1.0]
+        assert gradient_stops({"mode": 1, "grad1": a, "grad2": b}) == [a, b]
+        assert gradient_stops({"mode": 0, "grad1": a, "grad2": b}) is None
+        assert gradient_stops({"bgfillcolor": {"type": "gradient", "color1": a, "color2": b}}) == [a, b]
+        assert gradient_stops({"bgfillcolor": {"type": "color", "color": a}}) is None
+
+
 @pytest.mark.parametrize("rel", [
     ".claude/skills/max-patch-agent/SKILL.md",
     ".claude/commands/max-build.md",

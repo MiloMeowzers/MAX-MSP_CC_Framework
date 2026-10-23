@@ -15,10 +15,16 @@ the change-tracked Patcher. On a clean exit, in this order:
    in this session that have no midpoints (``_finalize_midpoints_recursive``
    with ``layout._generate_midpoints``); existing midpoints are never
    cleared;
-2. text contrast on touched boxes only (D-03): the top-level boxes added,
-   moved or presentation-changed in this session go through
-   ``aesthetics._apply_text_contrast(patcher, only_ids=...)`` (panels and
-   the background still come from the whole patcher). Top level only, like
+2. text contrast on added boxes only (D-03; locked decision B11, review
+   261022-ud6 WR-07): the top-level boxes this session added (ids not in
+   the file as read) that carry an explicit ``textcolor`` go through
+   ``aesthetics._apply_text_contrast(patcher, only_ids=...,
+   explicit_only=True)`` (panels and the background still come from the
+   whole patcher). A box that was moved, put into presentation or replaced
+   (replace_box keeps the id) keeps its colour; a comment without a
+   textcolor is never given one (MAX renders it in the theme's text
+   colour); self-painted objects (bach.roll, ...) are skipped and gradient
+   panels are scored on both stops. Top level only, like
    ``ensure_text_contrast`` on new patches, so codeboxes inside a freshly
    added gen~ are left alone. Whole-patch ``repair_text_contrast`` is never
    run: it restyles 33 of the 63 committed patches on a no-op;
@@ -113,12 +119,15 @@ class EditSession:
 
             # 1. Touched cords only (D-03).
             _hooks._finalize_midpoints_recursive(self.patcher, layout._generate_midpoints)
-            # 2. Text contrast on touched top-level boxes only (D-03).
-            touched = self._touched_top_level_ids()
-            if touched:
+            # 2. Text contrast on added top-level boxes with an explicit
+            # textcolor only (D-03, B11 / WR-07).
+            added = self._added_top_level_ids()
+            if added:
                 from src.maxpat import aesthetics
 
-                aesthetics._apply_text_contrast(self.patcher, only_ids=touched)
+                aesthetics._apply_text_contrast(
+                    self.patcher, only_ids=added, explicit_only=True
+                )
             # 3. Serialize; diff before any save so it survives a refusal (D-01).
             new_dict = self.patcher.to_dict()
             self.diff = diff_patch_dicts(self._baseline, new_dict)
@@ -137,29 +146,19 @@ class EditSession:
         finally:
             self._active = False
 
-    def _touched_top_level_ids(self) -> set:
-        """Top-level boxes added, moved or presentation-changed in this session."""
-        baseline = {}
+    def _added_top_level_ids(self) -> set:
+        """Top-level boxes this session added: ids absent from the file as read.
+
+        A replace_box keeps the old id (261022-ud6 WR-02), so a replaced box
+        counts as existing and keeps its colours.
+        """
+        baseline = set()
         boxes = self._baseline.get("patcher", {}).get("boxes", [])
         for entry in boxes if isinstance(boxes, list) else []:
             box = entry.get("box") if isinstance(entry, dict) else None
             if isinstance(box, dict) and isinstance(box.get("id"), str):
-                baseline[box["id"]] = box
-        touched = set()
-        for box in self.patcher.boxes:
-            old = baseline.get(box.id)
-            if old is None or _hooks._box_added_or_moved(box):
-                touched.add(box.id)
-                continue
-            now = (
-                bool(box.presentation),
-                list(box.presentation_rect) if box.presentation and box.presentation_rect is not None else None,
-            )
-            flag = bool(old.get("presentation"))
-            then = (flag, old.get("presentation_rect") if flag else None)
-            if now != then:
-                touched.add(box.id)
-        return touched
+                baseline.add(box["id"])
+        return {box.id for box in self.patcher.boxes if box.id not in baseline}
 
     def current_diff(self) -> PatchDiff:
         """The diff from the file as read to the Patcher as it is now.
