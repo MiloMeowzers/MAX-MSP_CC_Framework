@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import re as _re
 from collections import defaultdict
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.maxpat import dsp_roles, gain_staging, walk
@@ -210,6 +211,7 @@ def validate_patch(
     *,
     scope: str | None = None,
     target_version: str | None = None,
+    patch_path=None,
 ) -> list[ValidationResult]:
     """Run the full validation pipeline on a patch and every embedded patcher.
 
@@ -243,6 +245,14 @@ def validate_patch(
             lacks per ``version_io.json`` (changes with target < by <= the
             installed version, applied only to a box carrying the installed
             layout). None (the default) runs exactly the pre-Q38 pipeline.
+        patch_path: Keyword-only (fix-plan Q23 D3; quick 261022-ud6 WP1,
+            review IN-02). The file the patch is loaded from / saved to
+            (str or Path). An unknown name then resolves against the
+            abstractions MAX can load (:func:`_project_abstractions`:
+            NAME.maxpat / .js / .gendsp beside the patch or anywhere in its
+            ``patches/<project>/`` tree, case-insensitive): resolved gives
+            no finding, unresolved is an ``objects`` error carrying the box
+            id. None (the default) keeps the ``Unknown object`` warning.
 
     Returns:
         Combined list of ValidationResult from all layers and scopes: the
@@ -305,7 +315,9 @@ def validate_patch(
     if any(r.level == "error" for r in layer1):
         return results  # Stop early -- structure is broken
 
-    state = _ScopeState()
+    state = _ScopeState(
+        _project_abstractions(patch_path) if patch_path is not None else None
+    )
 
     # Layers 2-5 on the top level (unchanged order and messages)
     results.extend(_validate_scope_layers(
@@ -325,10 +337,47 @@ def validate_patch(
 class _ScopeState:
     """Per-``validate_patch`` state shared across scopes."""
 
-    __slots__ = ("warned_packages",)
+    __slots__ = ("warned_packages", "abstractions")
 
-    def __init__(self) -> None:
+    def __init__(self, abstractions: frozenset | None = None) -> None:
         self.warned_packages: set[str] = set()
+        # Casefolded abstraction stems (patch_path given), else None.
+        self.abstractions = abstractions
+
+
+_ABSTRACTION_SUFFIXES = (".maxpat", ".js", ".gendsp")
+
+
+def _project_abstractions(patch_path) -> frozenset:
+    """Casefolded stems of the abstractions *patch_path* can load (Q23 D3).
+
+    ``*.maxpat`` / ``*.js`` / ``*.gendsp`` in the patch's own directory
+    (non-recursive) plus, when the path lies under ``patches/<project>/``
+    (the first ancestor whose parent is named ``patches``), every such file
+    under the project directory (recursive). Never raises: an I/O error
+    means nothing found there.
+    """
+    stems: set[str] = set()
+
+    def add(files) -> None:
+        try:
+            for f in files:
+                if f.suffix.lower() in _ABSTRACTION_SUFFIXES and f.is_file():
+                    stems.add(f.stem.casefold())
+        except OSError:
+            pass
+
+    try:
+        path = Path(patch_path).resolve()
+    except (OSError, TypeError, ValueError):
+        return frozenset()
+    add(path.parent.glob("*") if path.parent.is_dir() else ())
+    for ancestor in path.parents:
+        if ancestor.parent.name == "patches":
+            if ancestor.is_dir():
+                add(ancestor.rglob("*"))
+            break
+    return frozenset(stems)
 
 
 def _validate_scope_layers(
@@ -347,7 +396,9 @@ def _validate_scope_layers(
     results: list[ValidationResult] = []
 
     # Layer 2: Object existence
-    results.extend(_validate_objects_exist(patch_dict, db, scope))
+    results.extend(_validate_objects_exist(
+        patch_dict, db, scope, abstractions=state.abstractions,
+    ))
 
     # Layer 2b: Maxclass usage (non-UI objects should use "newobj")
     results.extend(_validate_maxclass_usage(patch_dict))
@@ -911,13 +962,20 @@ def _validate_objects_exist(
     patch_dict: dict,
     db: ObjectDatabase,
     scope: str = "max",
+    *,
+    abstractions: frozenset | None = None,
 ) -> list[ValidationResult]:
     """Check every object in the patch exists in the database.
 
     A name whose DB entries all come from rnbo/ and/or gen/ (and has no
     explicit domain_restricted key) exists only in RNBO / Gen: outside its
     scope MAX says "No such object", so it is an error here (Q12 / C3).
-    Top-level boxes only; *scope* is the top-level patcher's scope.
+    *scope* is the scope of the patcher checked.
+
+    An unknown name (not in the DB, not PD, not a UI maxclass) is a warning
+    when *abstractions* is None; with the casefolded abstraction stems of
+    ``validate_patch(patch_path=...)`` it gives no finding when it resolves
+    and an error carrying the box id when it does not (Q23 D3, IN-02).
     """
     results: list[ValidationResult] = []
 
@@ -942,7 +1000,10 @@ def _validate_objects_exist(
                 equivalent = db.suggest_max_equivalent(name)
                 if equivalent:
                     msg += f" MAX equivalent: {equivalent}"
-                results.append(ValidationResult("objects", "error", msg, rule="scope_restricted_object", box_ids=(box.get("id"),)))
+                results.append(ValidationResult(
+                    "objects", "error", msg,
+                    rule="scope_restricted_object", box_ids=(box.get("id"),),
+                ))
             continue
 
         # Check if it is a PD object with a MAX equivalent
@@ -958,11 +1019,21 @@ def _validate_objects_exist(
             # Check if it is a known UI maxclass that might not be in the db
             if is_ui_object(name):
                 continue  # UI objects may not have db entries; that is OK
-            results.append(ValidationResult(
-                "objects", "warning",
-                f"Unknown object: '{name}' -- not in database",
-                rule="unknown_object", box_ids=(box.get("id"),),
-            ))
+            if abstractions is None:
+                results.append(ValidationResult(
+                    "objects", "warning",
+                    f"Unknown object: '{name}' -- not in database",
+                    rule="unknown_object", box_ids=(box.get("id"),),
+                ))
+            elif name.casefold() not in abstractions:
+                results.append(ValidationResult(
+                    "objects", "error",
+                    f"Unknown object: '{name}' ({box.get('id')}) -- not in "
+                    f"database and no abstraction ({name}.maxpat / .js / "
+                    f".gendsp) beside the patch or in its project; MAX says "
+                    f"\"No such object\"",
+                    rule="unknown_object", box_ids=(box.get("id"),),
+                ))
 
     return results
 
