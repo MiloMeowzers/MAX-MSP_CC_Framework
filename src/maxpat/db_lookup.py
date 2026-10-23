@@ -240,6 +240,25 @@ def parse_version(text) -> tuple[int, int, int]:
 _SIGNAL_OUTLET_TYPES = ("signal", "multichannelsignal")
 
 
+def saved_outlet_type(outlet) -> str:
+    """The ``outlettype`` string MAX saves for DB outlet entry *outlet*.
+
+    ``""`` for a control outlet (or a non-dict); for a signal outlet
+    ``"multichannelsignal"`` when its DB type names a multichannel signal
+    (contains ``multichannel``, or the extractor's ``mc_signal``), else
+    ``"signal"``. overrides.json types every MC-family signal outlet from
+    MAX-saved help boxes (CR-01): ``mc.cycle~`` is multichannel,
+    ``mc.sum~`` / ``mc.unpack~`` are plain ``signal``.
+    """
+    if not isinstance(outlet, dict) or not outlet.get("signal"):
+        return ""
+    otype = outlet.get("type")
+    otype = otype.lower() if isinstance(otype, str) else ""
+    if "multichannel" in otype or otype == "mc_signal":
+        return "multichannelsignal"
+    return "signal"
+
+
 def _is_port_token(text: str) -> bool:
     """A non-negative ASCII decimal port index."""
     return text.isascii() and text.isdigit()
@@ -327,6 +346,9 @@ class ObjectDatabase:
         # Q38: cords the bundle's help patches ship, alias-canonical
         # (src, outlet, class, dst, inlet). Layer 3 never type/role-checks one.
         self._idioms: set[tuple[str, int, str, str, int]] = set()
+        # (dst, inlet) pairs some shipped idiom feeds with a signal cord;
+        # built from _idioms on first use (is_shipped_signal_inlet).
+        self._idiom_signal_inlets: frozenset | None = None
         # Q38: per-version I/O changes mined from bundle help boxes
         # (version_io.json), canonical name -> changes sorted by `by`.
         self._version_io: dict[str, list[dict]] = {}
@@ -725,6 +747,14 @@ class ObjectDatabase:
                 raise ValueError(
                     f"variable_io_rules[{name!r}].trailing_outlets must be a "
                     f"positive int, got {trailing!r}"
+                )
+            trailing_in = rule.get("trailing_inlets")
+            if trailing_in is not None and (
+                type(trailing_in) is not int or trailing_in < 0
+            ):
+                raise ValueError(
+                    f"variable_io_rules[{name!r}].trailing_inlets must be a "
+                    f"non-negative int, got {trailing_in!r}"
                 )
             for role in ("inlet_count", "outlet_count"):
                 formula = rule.get(role, "")
@@ -1271,6 +1301,73 @@ class ObjectDatabase:
             return None
         return db_outlets[outlet]
 
+    def resolve_inlet(
+        self,
+        name: str,
+        inlet: int,
+        args: list[str] | None = None,
+        *,
+        count: int | None = None,
+    ) -> dict | None:
+        """The DB inlet entry for inlet *inlet* of a box (CR-01, Q10 gap).
+
+        Without *args*, or for an object whose ``variable_io_rules`` entry
+        has no ``trailing_inlets``, this is a plain index into the DB inlets
+        array (None when out of range). With ``trailing_inlets: K`` and
+        *args*, the inlet count is *count* (the box's saved ``numinlets``)
+        or else :meth:`compute_io_counts`; the last K inlets map to the DB's
+        last K entries and every leading inlet repeats DB inlet 0:
+        ``record~ buf 2`` (K 2) = (signal, signal, start, end), not
+        (signal, start, end, <beyond>). ``K == 0`` (``sfrecord~ N``,
+        ``jit.catch~ N``) makes every inlet repeat DB inlet 0. None for an
+        unknown name, a negative or non-int *inlet*, or an inlet at or past
+        the count.
+        """
+        if type(inlet) is not int or inlet < 0:
+            return None
+        canonical = self._aliases.get(name, name)
+        obj = self._objects.get(canonical)
+        if obj is None:
+            return None
+        db_inlets = obj.get("inlets", [])
+        if not isinstance(db_inlets, list):
+            return None
+        trailing = self._variable_io_rules.get(canonical, {}).get("trailing_inlets")
+        if (
+            args is not None and db_inlets
+            and type(trailing) is int and 0 <= trailing <= len(db_inlets)
+        ):
+            n = (
+                count if type(count) is int and count >= 0
+                else self.compute_io_counts(canonical, args)[0]
+            )
+            if inlet >= n:
+                return None
+            from_end = n - inlet
+            if from_end <= trailing:
+                return db_inlets[len(db_inlets) - from_end]
+            return db_inlets[0]
+        if inlet >= len(db_inlets):
+            return None
+        return db_inlets[inlet]
+
+    def is_shipped_signal_inlet(self, dst_name: str, inlet: int) -> bool:
+        """True when a bundle help patch ships a SIGNAL cord into inlet
+        *inlet* of *dst_name* from any source (idioms.json, Q38; CR-01).
+
+        :meth:`is_shipped_idiom` matches one exact (source, outlet,
+        destination, inlet) cord, so ``<~ -> phasor~ 1`` passed while
+        ``click~ -> phasor~ 1`` was flagged. MAX accepting a signal cord at
+        that inlet is a property of the destination inlet, so validation
+        Layer 3 also asks this. Alias-canonical; False without idioms.json.
+        """
+        if self._idiom_signal_inlets is None:
+            self._idiom_signal_inlets = frozenset(
+                (dst, port) for (_s, _o, cls, dst, port) in self._idioms
+                if cls == "signal"
+            )
+        return (self._aliases.get(dst_name, dst_name), inlet) in self._idiom_signal_inlets
+
     def get_signal_role(
         self, name: str, outlet: int, args: list[str] | None = None
     ) -> str | None:
@@ -1549,7 +1646,10 @@ class ObjectDatabase:
         """Get the outlettype array for a box.
 
         Returns a list of outlet type strings: "signal" for signal outlets,
-        "" (empty string) for control outlets, "multichannelsignal" for MC.
+        "" (empty string) for control outlets, "multichannelsignal" for MC
+        outlets (a DB type containing ``multichannel`` or ``mc_signal``;
+        see :func:`saved_outlet_type`), so a Patcher-built MC box records
+        what MAX saves (CR-01).
 
         The length matches the computed outlet count (handling variable I/O).
 
@@ -1585,26 +1685,11 @@ class ObjectDatabase:
                     self._resolve_outlet(canonical, obj, i, args) or {}
                     if layout else db_outlets[i]
                 )
-                if outlet.get("signal"):
-                    # Check for multichannel
-                    otype = outlet.get("type", "")
-                    if "multichannel" in otype.lower():
-                        result.append("multichannelsignal")
-                    else:
-                        result.append("signal")
-                else:
-                    result.append("")
+                result.append(saved_outlet_type(outlet))
             else:
                 # Beyond the database outlets (variable I/O expansion).
-                # Inherit type from the last known outlet, or default to "".
-                if db_outlets:
-                    last = db_outlets[-1]
-                    if last.get("signal"):
-                        result.append("signal")
-                    else:
-                        result.append("")
-                else:
-                    result.append("")
+                # Inherit the last known outlet's type, or default to "".
+                result.append(saved_outlet_type(db_outlets[-1]) if db_outlets else "")
 
         return result
 

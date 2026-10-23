@@ -1163,6 +1163,13 @@ def _validate_connections(
     (skipped for container sources; mismatches warn, cord kept) -> legacy
     signal/control check. With ``type_checks=False`` (nested rnbo~ scopes,
     Q19) a cord whose bounds pass is not checked further.
+
+    The legacy check (CR-01, quick 261022-ud6) treats ``signal`` and
+    ``multichannelsignal`` outlets alike, never type-checks a cord out of
+    an ``inlet`` box (its outlettype mirrors the parent cord), resolves the
+    destination inlet through the box's args (``record~ buf 2`` inlet 1 is
+    channel 2) and accepts any inlet a shipped help cord feeds with a
+    signal (:meth:`ObjectDatabase.is_shipped_signal_inlet`).
     """
     results: list[ValidationResult] = []
 
@@ -1292,10 +1299,13 @@ def _validate_connections(
                     continue
 
         # --- Signal type compatibility (bounds are OK) ---
+        # An `inlet` box forwards whatever its parent sends; MAX saves its
+        # outlettype from the outer cord and accepts its cords into control
+        # inlets (BEAP help ships signal-typed inlet -> routepass; CR-01).
         src_outlettype = _outlettype(src_box)
         is_signal_source = (
-            src_outlet < len(src_outlettype)
-            and src_outlettype[src_outlet] == "signal"
+            src_box.get("maxclass") != "inlet"
+            and outlet_signal_class(src_outlettype, src_outlet) == "signal"
         )
 
         if is_signal_source:
@@ -1338,27 +1348,47 @@ def _inlet_accepts_signal(box_dict: dict, inlet_idx: int, db: ObjectDatabase) ->
     if name is None:
         return True  # structural objects -- allow anything
 
-    obj_data = db.lookup(name)
-    if obj_data is None:
+    if db.lookup(name) is None:
         # Unknown object -- be permissive
         return True
 
-    inlets = obj_data.get("inlets", [])
-    if inlet_idx < len(inlets):
-        inlet = inlets[inlet_idx]
-        # If the inlet is marked as signal, it accepts signal
-        if inlet.get("signal"):
-            return True
-        # Check the type field for "signal/float" pattern
-        inlet_type = inlet.get("type", "").lower()
-        if "signal" in inlet_type:
-            return True
-        # Purely control inlet
-        return False
+    # A shipped help patch feeds this inlet a signal cord (idioms.json):
+    # MAX accepts signal there, whatever the source (CR-01 cause 3).
+    if db.is_shipped_signal_inlet(name, inlet_idx):
+        return True
 
-    # Inlet index beyond what database knows (e.g., variable I/O)
-    # Be permissive
-    return True
+    inlet = _db_inlet(box_dict, name, inlet_idx, db)
+    if inlet is None:
+        # Inlet index beyond what database knows (e.g., variable I/O)
+        # Be permissive
+        return True
+    # If the inlet is marked as signal, it accepts signal
+    if inlet.get("signal"):
+        return True
+    # Check the type field for "signal/float" pattern
+    inlet_type = inlet.get("type") or ""
+    if isinstance(inlet_type, str) and "signal" in inlet_type.lower():
+        return True
+    # Purely control inlet
+    return False
+
+
+def _db_inlet(box_dict: dict, name: str, inlet_idx: int, db: ObjectDatabase) -> dict | None:
+    """The DB inlet entry for *inlet_idx* of *box_dict*, layout-aware.
+
+    Objects whose inlet layout depends on their args (variable_io_rules
+    ``trailing_inlets``: ``record~ buf 2`` inlet 1 is channel 2, not the
+    start point) resolve through :meth:`ObjectDatabase.resolve_inlet` with
+    the box's args and saved ``numinlets``; others index the DB array.
+    None when the index is out of the known range.
+    """
+    args = walk.box_args(box_dict) if walk.box_maxclass(box_dict) == "newobj" else None
+    count = box_dict.get("numinlets")
+    entry = db.resolve_inlet(
+        name, inlet_idx, args,
+        count=count if type(count) is int else None,
+    )
+    return entry if isinstance(entry, dict) else None
 
 
 def _classify_dst_inlet(dst_box: dict, dst_inlet: int, db: ObjectDatabase) -> str:
@@ -1385,13 +1415,11 @@ def _classify_dst_inlet(dst_box: dict, dst_inlet: int, db: ObjectDatabase) -> st
     name = walk.object_name(dst_box)
     if name is None:
         return "control"  # structural maxclass; conservative
-    obj = db.lookup(name)
-    if obj is None:
+    if db.lookup(name) is None:
         return "control"
-    inlets = obj.get("inlets", [])
-    if dst_inlet >= len(inlets):
+    inlet = _db_inlet(dst_box, name, dst_inlet, db)
+    if inlet is None:
         return "control"
-    inlet = inlets[dst_inlet]
     inlet_type = (inlet.get("type") or "").lower()
     # "signal/float" inlets are still classified as "signal" for tier-table
     # purposes: a status/trigger/list/data outlet is an event-message stream,
@@ -1432,14 +1460,12 @@ def _classify_role_mismatch(
     carry no role token and still warn.
     """
     name = walk.object_name(dst_box)
-    if name is not None:
-        obj = db.lookup(name)
-        if obj is not None:
-            inlets = obj.get("inlets", [])
-            if 0 <= dst_inlet < len(inlets):
-                inlet_type = (inlets[dst_inlet].get("type") or "").lower()
-                if src_role in inlet_type.split("/"):
-                    return None
+    if name is not None and db.lookup(name) is not None:
+        inlet = _db_inlet(dst_box, name, dst_inlet, db)
+        if inlet is not None:
+            inlet_type = (inlet.get("type") or "").lower()
+            if src_role in inlet_type.split("/"):
+                return None
     dst_kind = _classify_dst_inlet(dst_box, dst_inlet, db)
     entry = _ROLE_TIER_TABLE.get((src_role, dst_kind))
     if entry is None:
@@ -1491,12 +1517,10 @@ def _validate_domain_rules(
         if not src_box:
             continue
 
-        # Determine if this is a signal connection
-        src_outlettype = _outlettype(src_box)
-        is_signal = (
-            src_outlet < len(src_outlettype)
-            and src_outlettype[src_outlet] == "signal"
-        )
+        # Determine if this is a signal connection (signal or
+        # multichannelsignal: MAX saves MC outlets as the latter, and so do
+        # Patcher-built MC boxes since CR-01)
+        is_signal = outlet_signal_class(_outlettype(src_box), src_outlet) == "signal"
 
         if is_signal:
             signal_adj[src_id].append(dst_id)
@@ -1520,11 +1544,7 @@ def _validate_domain_rules(
         if not src_box:
             continue
 
-        src_outlettype = _outlettype(src_box)
-        is_sig = (
-            src_outlet < len(src_outlettype)
-            and src_outlettype[src_outlet] == "signal"
-        )
+        is_sig = outlet_signal_class(_outlettype(src_box), src_outlet) == "signal"
         if not is_sig:
             ctrl_adj[src_id].append(dst_id)
 
@@ -1761,8 +1781,10 @@ def _check_unterminated_chains(
             continue
 
         # Check if this object has signal outlets
-        outlettype = box.get("outlettype", [])
-        has_signal_outlet = any(ot == "signal" for ot in outlettype)
+        outlettype = _outlettype(box)
+        has_signal_outlet = any(
+            outlet_signal_class(outlettype, i) == "signal" for i in range(len(outlettype))
+        )
         if not has_signal_outlet:
             continue
 

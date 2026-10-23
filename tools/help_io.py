@@ -106,6 +106,13 @@ SKIPPED_NAMESPACES = frozenset({"dsp.gen", "jit.gen", "rnbo"})
 # never copied, so the oracle and the patch builder agree (S4).
 CONTENT_DEFINED = CONTENT_DEFINED_NAMES | _CONTAINER_NAMES
 
+# Boxes whose saved outlettype comes from the cord INTO their patcher, not
+# from the box: an `inlet` saves "signal" when its parent cord is a signal
+# and "" otherwise. Their counts are compared, their outlet types are not
+# (quick 261022-ud6 WP1: once the DB gave `inlet` MAX's 0/1 I/O, the 1845
+# bundle inlet boxes reached the type comparison).
+CONTEXT_TYPED = frozenset({"inlet"})
+
 BASELINE_GENERATOR = (
     "python3 tools/audit_db.py --help-io --write-baseline "
     "tests/fixtures/help_io_baseline.json"
@@ -341,7 +348,10 @@ class _SourceScan:
                 sig = f"count args={len(args)} max={ni},{no} db={exp_in},{exp_out}"
             else:
                 saved = box.get("outlettype")
-                if isinstance(saved, list) and no > 0 and len(saved) == no:
+                if (
+                    isinstance(saved, list) and no > 0 and len(saved) == no
+                    and canonical not in CONTEXT_TYPED
+                ):
                     max_cls = [signal_class(t) for t in saved]
                     db_cls = [signal_class(t) for t in self.db.get_outlet_types(name, args)]
                     if max_cls != db_cls:
