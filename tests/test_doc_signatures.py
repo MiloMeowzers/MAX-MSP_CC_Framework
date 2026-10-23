@@ -54,7 +54,7 @@ def _read(rel: Path) -> str:
 
 # ── API index ──────────────────────────────────────────────────────
 
-_INDEX_MODULES = (
+_PRIORITY_MODULES = (
     "src.maxpat",
     "src.maxpat.project",
     "src.maxpat.critics",
@@ -66,6 +66,28 @@ _INDEX_MODULES = (
     "src.maxpat.diagnose",
     "src.maxpat.m4l_device",
 )
+
+
+def _index_modules() -> tuple[str, ...]:
+    """Every ``src.maxpat`` module, the historical ones first (first name wins).
+
+    Review 261022-ud6 docs IN-11: a hand-picked list left out dsp_sim, walk,
+    quickfix, edit_session, ..., which let a raising ``run_simulation`` call
+    form through. ``__main__`` modules are skipped (importing one runs a CLI).
+    """
+    import pkgutil
+
+    import src.maxpat as pkg
+
+    found = [
+        info.name for info in pkgutil.walk_packages(pkg.__path__, prefix="src.maxpat.")
+        if not info.name.endswith("__main__")
+    ]
+    rest = sorted(n for n in found if n not in _PRIORITY_MODULES)
+    return _PRIORITY_MODULES + tuple(rest)
+
+
+_INDEX_MODULES = _index_modules()
 
 
 def _safe_signature(obj) -> inspect.Signature | None:
@@ -449,6 +471,9 @@ BAD_FORMS = [
     pytest.param('`Box("gen~", ["smooth-ramp"], db)`', id="Box-db-on-box_id"),
     pytest.param("`apply_layout(patcher, layout_options=opts)`", id="apply_layout-kw"),
     pytest.param("`patcher.insert_into_connection(src, dst, new_box)`", id="insert-new_box"),
+    # Review 261022-ud6 docs WR-03 / IN-11: keyword-only API outside the old index
+    pytest.param("`run_simulation(patch_path, topology, params, sweep_param, sweep)`",
+                 id="run_simulation-positional"),
     pytest.param('`patcher.replace_box(box, "phasor~", ["220"])`', id="replace_box-positional"),
     pytest.param("`save_patch_roundtrip(patcher, path)`", id="roundtrip-patcher"),
     pytest.param('`patcher.find_box("cycle~", "name", True)`', id="find_box-positional"),
