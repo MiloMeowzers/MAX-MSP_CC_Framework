@@ -70,7 +70,7 @@
         "box": {
           "maxclass": "codebox",
           "id": "obj-2",
-          "code": "// === PARAMETERS ===\nParam division(4, min=1, max=32);\n\n// === DSP ===\nout1 = wrap(in1 * division, 0, 1);\n",
+          "code": "// smoke: in1=phasor:2 control out1\n// === PARAMETERS ===\nParam division(4, min=1, max=32);\n\n// === DSP ===\nout1 = wrap(in1 * division, 0, 1);\n",
           "numinlets": 1,
           "numoutlets": 1,
           "outlettype": [

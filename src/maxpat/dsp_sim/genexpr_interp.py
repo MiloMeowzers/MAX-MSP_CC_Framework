@@ -216,14 +216,17 @@ _LOWER_CONSTANTS = {
 assert set(_LOWER_CONSTANTS) == set(CONSTANTS)
 
 # Q22's 13 lowercase names, phi (in the installed Gen refpage list) and the
-# uppercase PI / TWOPI / HALFPI used by MAX-confirmed shipped codeboxes.
-# TWOPI and HALFPI use the exact expressions genrun.py uses, for parity.
-GEN_CONSTANTS: dict[str, float] = {
+# upper-case alias of every one of them (PI, TWOPI, ..., PHI, E: the Max 9
+# Gen operator guide; genexpr_parse.BUILTIN_CONSTANTS, quick 261022-ud6
+# WP4 -> WP7a). Each alias is the same float as its lower-case name, so
+# TWOPI and HALFPI keep the exact expressions genrun.py uses, for parity.
+_NAMED_CONSTANTS = {
     **_LOWER_CONSTANTS,
     "phi": (1.0 + math.sqrt(5.0)) / 2.0,
-    "PI": math.pi,
-    "TWOPI": 2 * math.pi,
-    "HALFPI": math.pi / 2,
+}
+GEN_CONSTANTS: dict[str, float] = {
+    **_NAMED_CONSTANTS,
+    **{name.upper(): value for name, value in _NAMED_CONSTANTS.items()},
 }
 
 LOOP_CAP = 100_000          # for-loop iterations per loop per sample

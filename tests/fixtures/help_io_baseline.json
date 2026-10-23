@@ -2193,14 +2193,6 @@
     },
     "type_mismatches": 0
    },
-   "bach.slice": {
-    "boxes": 19,
-    "count_mismatches": 19,
-    "signatures": {
-     "count args=1 max=1,2 db=1,1": 19
-    },
-    "type_mismatches": 0
-   },
    "bach.sort": {
     "boxes": 9,
     "count_mismatches": 9,
@@ -2479,14 +2471,6 @@
     "count_mismatches": 4,
     "signatures": {
      "count args=0 max=2,1 db=1,1": 4
-    },
-    "type_mismatches": 0
-   },
-   "bach.slice": {
-    "boxes": 2,
-    "count_mismatches": 2,
-    "signatures": {
-     "count args=1 max=1,2 db=1,1": 2
     },
     "type_mismatches": 0
    },
@@ -3803,8 +3787,8 @@
   "package:bach": {
    "boxes_compared": 11991,
    "files": 240,
-   "mismatching_boxes": 790,
-   "mismatching_names": 61,
+   "mismatching_boxes": 771,
+   "mismatching_names": 60,
    "version": "0.8.3"
   },
   "package:cv.jit": {
@@ -3817,8 +3801,8 @@
   "package:dada": {
    "boxes_compared": 2353,
    "files": 31,
-   "mismatching_boxes": 220,
-   "mismatching_names": 31,
+   "mismatching_boxes": 218,
+   "mismatching_names": 30,
    "version": "0.3.1"
   },
   "package:ears": {
@@ -3859,10 +3843,10 @@
  },
  "totals": {
   "boxes_compared": 127312,
-  "count_mismatch_names": 302,
+  "count_mismatch_names": 301,
   "files": 3447,
-  "mismatching_boxes": 3324,
-  "mismatching_names": 367,
+  "mismatching_boxes": 3303,
+  "mismatching_names": 366,
   "type_mismatch_names": 73
  }
 }

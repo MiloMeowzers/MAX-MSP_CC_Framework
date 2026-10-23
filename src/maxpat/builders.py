@@ -1051,6 +1051,7 @@ class BuildersMixin:
         banks: bool = True,
         presentation: bool = True,
         modmode: Any = None,
+        info_text: bool | None = None,
     ) -> Any:
         """Build a Max for Live device skeleton of one of three kinds. EXPERIMENTAL.
 
@@ -1079,6 +1080,30 @@ class BuildersMixin:
         ``presentation=True`` the dial grid starts right of any existing
         presentation UI and ``devicewidth`` only grows; Push banks cover
         every parameter already in the patcher plus the new ones.
+
+        Existing device content is reused, never doubled (review BL-01,
+        quick 261022-ud6), so a second call extends the same device:
+
+        - The kind's top-scope ``plugin~`` / ``plugout~`` / ``midiin`` /
+          ``midiout`` and ``live.thisdevice`` are reused when present; two
+          of one name raise ValueError (ambiguous).
+        - The pass-through only feeds output inlets nothing feeds yet, so a
+          ``plugin~ -> fx -> plugout~`` chain never gets a dry path (no
+          +6 dB). A source into an inlet another source already feeds
+          raises ValueError; the same cord again is a no-op.
+        - A reused ``live.thisdevice`` keeps one cord from outlet 0: an
+          all-bang ``t b ...`` it feeds is extended for the new dials,
+          other cords move onto a new ``t b ...``.
+        - Refusal (review WR-01): a param name equal to an existing
+          ``parameter_longname``, or an explicit short name equal to an
+          existing one (or to another explicit one), raises ValueError; auto
+          short names avoid existing ones (``Amount2``).
+        - New boxes that would overlap a pre-existing box shift right
+          together, as one block.
+
+        Info text (review IN-06): new dials get ``annotation`` /
+        ``annotation_name`` (Live's Info View) when ``info_text`` is True;
+        ``info_text=None`` follows ``presentation``.
 
         Each param dict ``{name, min, max, default, unit?, type?, steps?,
         short_name?, varname?, param_connect?, modmode?}`` becomes one
@@ -1121,13 +1146,16 @@ class BuildersMixin:
             presentation: Lay the dials out in presentation (Rule #9).
             modmode: Default ``parameter_modmode`` for specs without one
                 (None = ``ModMode.NONE``, as kicksynth-m4l used).
+            info_text: Write dial info text; None (default) = ``presentation``.
 
         Returns:
             An :class:`src.maxpat.m4l_device.M4LDevice` naming the boxes.
 
         Raises:
-            ValueError: unknown kind, a bad source, or an invalid param spec
-                (see ``resolve_param_specs``). Nothing is created.
+            ValueError: unknown kind, a bad source, an invalid param spec
+                (see ``resolve_param_specs``), a param / short name already
+                taken in the patcher, or two top-scope boxes of one device
+                I/O name. Nothing is created.
         """
         from src.maxpat.m4l_constants import ModMode
         from src.maxpat.m4l_device import build_m4l_device
@@ -1143,6 +1171,7 @@ class BuildersMixin:
             banks=banks,
             presentation=presentation,
             modmode=ModMode.NONE if modmode is None else modmode,
+            info_text=info_text,
         )
 
     def add_m4l_gen_synth(

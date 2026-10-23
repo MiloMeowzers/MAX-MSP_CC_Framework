@@ -375,7 +375,10 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
     first) and the patcher background. A missing or invalid textcolor is
     the Max 9 theme text color MAX_THEME_TEXT (0.85); an untinted
     object / message / umenu box reads against the theme box fill 0.172
-    (Q26 / E7).
+    (Q26 / E7), an untinted number / flonum against 0.125 and an untinted
+    textbutton against 0.262 (``aesthetics.THEME_FILLS``). Self-painted
+    boxes of unknown colour (``aesthetics.paints_unknown_background``) are
+    skipped.
 
     Severity:
       - ``warning`` when the background is KNOWN and the ratio falls short.
@@ -389,6 +392,7 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
         contrast_ratio,
         is_text_contrast_target,
         is_valid_color,
+        paints_unknown_background,
         resolve_effective_background,
         resolve_patcher_background,
     )
@@ -407,6 +411,12 @@ def _check_text_contrast(box_list: list[dict], patcher_props: dict) -> list[Crit
         if box.get("maxclass") == "panel":
             continue
         if not is_text_contrast_target(walk.box_maxclass(box) or None, box):
+            continue
+        # A box that paints its own background in a colour we cannot know
+        # (bach.roll's white staff, jit.cellblock, textedit, ...) is not scored
+        # against the panel or canvas behind it -- the repair pass skips it
+        # too (review 261022-ud6 WR-07; WP7a).
+        if paints_unknown_background(walk.box_maxclass(box) or None, box):
             continue
 
         textcolor = box.get("textcolor")

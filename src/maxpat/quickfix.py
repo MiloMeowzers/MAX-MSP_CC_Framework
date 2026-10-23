@@ -15,10 +15,12 @@ Flow (``/max-iterate --fix``)::
 
 A finding is selected by its key ``(rule, box_ids, port, path)`` -- the same
 identity tests/review_blocker_allowlist.json uses (:func:`finding_key`) --
-or by the CriticResult itself. The save gate's own blocker key is
-``hooks._finding_key``; it is not guaranteed to equal this one (a finding
-reworded without a rule change is new to a text-keyed gate but not to this
-selection; review-validation IN-01).
+or by the CriticResult itself. The save gate's blocker key
+(``hooks._finding_key``) is built on the same ``(rule, box_ids, port, path)``
+identity, plus the finding's origin and any proposed cord removal, so a
+reworded finding is neither new to the gate nor to this selection. Only a
+result with no rule or no box ids falls back to the gate's text template
+(review-validation IN-01; quick 261022-ud6 WP2 / WP7a).
 
 This module never saves, writes or commits: saving is the edit_patch
 session's job (stale check, save gate, atomic write, path-scoped commit,

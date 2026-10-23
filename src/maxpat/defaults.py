@@ -194,6 +194,12 @@ MAX_DEFAULT_PANEL_BG = [0.85, 0.85, 0.85, 1.0]
 MAX_THEME_TEXT = [0.85, 0.85, 0.85, 1.0]
 MAX_THEME_CANVAS_BG = [0.235, 0.235, 0.235, 1.0]
 MAX_THEME_BOX_FILL = [0.172, 0.172, 0.172, 1.0]
+# Theme fills of the UI boxes whose refpage `bgcolor` names a theme colour as
+# its `dynamiccolor_default` (quick 261022-ud6 WP7a, Q26 follow-up; Max 9.2.0):
+# number / flonum -> styledefaults `bgcolor` (0.125); textbutton ->
+# colors `live_control_bg` (0.262, its off state, where `textcolor` is drawn).
+MAX_THEME_NUMBER_FILL = [0.125, 0.125, 0.125, 1.0]
+MAX_THEME_TEXTBUTTON_FILL = [0.262, 0.262, 0.262, 1.0]
 
 # A fill whose alpha is below this is treated as transparent: the surface
 # beneath it shows through (35 corpus flonums and 10 number boxes carry

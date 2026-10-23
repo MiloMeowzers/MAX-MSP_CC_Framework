@@ -175,12 +175,14 @@ def scan_patch(path) -> dict:
     _instrument_patcher and _inject_note run on a throwaway in-memory
     Patcher, so the choice never disagrees with what ``check`` taps.
     inputs / input_where come from the wider raw-JSON audio-input scan.
-    """
-    from src.maxpat.patcher import Patcher
 
+    The file is parsed by the bridge's own ``_load_patch``, so a malformed
+    or non-patch file raises ValueError (OSError when unreadable) -- the
+    same input ``check`` refuses with exit 2 (quick 261022-ud6 WP7a).
+    """
     path = Path(path)
-    data = json.loads(path.read_text())
-    p = Patcher.from_dict(data)
+    p, text = bridge._load_patch(path)
+    data = json.loads(text)
     scratch: dict = {"taps": {"L": 0, "R": 0}, "tap_boxes": [], "unsupported": [],
                      "warnings": [], "note_target": None}
     bridge._instrument_patcher(p, "top", scratch)
@@ -500,6 +502,15 @@ def run_live(patches, opts, *, project=None, excluded=None) -> dict:
             continue
         try:
             scan = scan_patch(path)
+        except (OSError, ValueError) as exc:
+            # Bad input, not a crash (WP6 handoff; quick 261022-ud6 WP7a):
+            # the same refusal and text ``max_bridge.py check`` gives alone.
+            entry["status"] = "refused"
+            entry["findings"].append(_row("note", f"cannot read {path}: {exc}"))
+            print(f"[{i + 1}/{total}] {entry['name']}: refused (cannot read: {exc})",
+                  file=sys.stderr)
+            continue
+        try:
             argv, mode, reasons = check_argv(path, scan, opts)
             entry.update(mode=mode, argv=argv, reasons=reasons)
             print(f"[{i + 1}/{total}] {entry['name']}: {mode} ({'; '.join(reasons)})",

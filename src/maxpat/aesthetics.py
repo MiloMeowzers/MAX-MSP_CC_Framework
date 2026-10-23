@@ -14,6 +14,8 @@ from src.maxpat.defaults import (
     MAX_DEFAULT_PANEL_BG,
     MAX_THEME_BOX_FILL,
     MAX_THEME_CANVAS_BG,
+    MAX_THEME_NUMBER_FILL,
+    MAX_THEME_TEXTBUTTON_FILL,
     MIN_CONTRAST_RATIO,
     MIN_VISIBLE_FILL_ALPHA,
 )
@@ -287,9 +289,20 @@ def fill_is_visible(color) -> bool:
 # Fill attribute keys a box may carry (resolve_fill_color's encodings).
 _FILL_KEYS = ("bgfillcolor", "grad1", "bgcolor")
 
-# Classes whose refpages document ``bgfillcolor``, the theme's box-fill key: a
-# box of one of these with NO fill attribute renders on MAX_THEME_BOX_FILL.
-THEME_FILL_MAXCLASSES = frozenset({"newobj", "message", "umenu"})
+# Theme fill each class paints when it carries NO fill attribute. newobj /
+# message / umenu: refpages document ``bgfillcolor``, the theme's box-fill key
+# (MAX_THEME_BOX_FILL). number / flonum / textbutton (Q26 follow-up, quick
+# 261022-ud6 WP7a): their refpage ``bgcolor`` defaults to a theme colour, see
+# MAX_THEME_NUMBER_FILL / MAX_THEME_TEXTBUTTON_FILL in defaults.py.
+THEME_FILLS = {
+    "newobj": MAX_THEME_BOX_FILL,
+    "message": MAX_THEME_BOX_FILL,
+    "umenu": MAX_THEME_BOX_FILL,
+    "number": MAX_THEME_NUMBER_FILL,
+    "flonum": MAX_THEME_NUMBER_FILL,
+    "textbutton": MAX_THEME_TEXTBUTTON_FILL,
+}
+THEME_FILL_MAXCLASSES = frozenset(THEME_FILLS)
 
 # Classes that draw their text straight onto whatever lies beneath them
 # (review 261022-ud6 WR-07). Every other text-bearing class paints its own
@@ -578,9 +591,10 @@ def resolve_effective_background(
       1. D-2 -- the box's OWN background, if it paints a visible one
          (alpha >= MIN_VISIBLE_FILL_ALPHA; Q26 / E7). A box that paints its
          own background IS its own background, in both coordinate spaces. A
-         *maxclass* in THEME_FILL_MAXCLASSES (newobj, message, umenu) with
-         NO fill attribute at all paints the theme box fill
-         MAX_THEME_BOX_FILL (0.172). A transparent fill falls through.
+         *maxclass* in THEME_FILL_MAXCLASSES with NO fill attribute at all
+         paints its theme fill (THEME_FILLS: 0.172 for newobj / message /
+         umenu, 0.125 for number / flonum, 0.262 for textbutton). A
+         transparent fill falls through.
       2. Presentation space, when the box is in presentation (D-1: presentation
          is the user-facing surface, so it decides on conflict).
       3. Patching space.
@@ -599,7 +613,7 @@ def resolve_effective_background(
         and maxclass in THEME_FILL_MAXCLASSES
         and not any(key in attrs for key in _FILL_KEYS)
     ):
-        fill = list(MAX_THEME_BOX_FILL)
+        fill = list(THEME_FILLS[maxclass])
         return BackgroundResolution(fill, False, "own", [list(fill)], list(fill))
 
     patching_bg = _bg_under_rect(patching_rect, patching_layers, patcher_bg)
@@ -657,8 +671,8 @@ def _apply_text_contrast(
     Review 261022-ud6 WR-07:
 
     - a box that paints its own background in an unknown colour
-      (:func:`paints_unknown_background`: bach.roll, jit.cellblock, a
-      textbutton without a fill, ...) is skipped -- its text sits on its
+      (:func:`paints_unknown_background`: bach.roll, jit.cellblock,
+      textedit, ...) is skipped -- its text sits on its
       own surface, not on the panel behind it;
     - over a gradient panel the text is scored against both stops
       (:func:`gradient_stops`); when no candidate reads on both, an

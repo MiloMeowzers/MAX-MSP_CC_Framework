@@ -695,6 +695,8 @@ def _blocking_findings(
     scope: "str | None" = None,
     *,
     is_new: bool = False,
+    patch_path: "str | Path | None" = None,
+    original: "dict | None" = None,
 ) -> list:
     """Blocking validation errors and critic blockers of *patch_dict*.
 
@@ -706,12 +708,20 @@ def _blocking_findings(
     here. *scope* is passed to validate_patch (None auto-detects; Q12).
     *is_new* is passed to review_patch: with True a Q24 uninitialized-state
     finding is a blocker, otherwise a warning that never blocks.
+
+    *patch_path* (Q23 D3; WP1 -> WP7a) and *original* (the Q22 tabs
+    decision; WP7a) are passed to validate_patch: an unknown name that no
+    project abstraction resolves is an error, and tab lines already in the
+    *original* codebox only warn.
     """
     from src.maxpat.critics import review_patch
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        v_results = validate_patch(copy.deepcopy(patch_dict), db=_gate_db(), scope=scope)
+        v_results = validate_patch(
+            copy.deepcopy(patch_dict), db=_gate_db(), scope=scope,
+            patch_path=patch_path, original=original,
+        )
         c_results = review_patch(copy.deepcopy(patch_dict), db=_gate_db(), is_new=is_new)
 
     found = [
@@ -897,6 +907,8 @@ def _gate_report(
     baseline_dict: "dict | None",
     ref_dicts: list,
     scope: "str | None" = None,
+    *,
+    patch_path: "str | Path | None" = None,
 ) -> GateReport:
     """Compare *new_dict* with its blocker baseline and cord/port references.
 
@@ -908,12 +920,21 @@ def _gate_report(
     finding (a UI value holder reaching DSP with nothing setting it at
     load) blocks only a file with no baseline; an edit reviews both sides
     with the default, where it is a warning.
+
+    Both sides are validated with ``original=baseline_dict`` (tab lines the
+    baseline codebox already had warn, so only new tab lines block) and with
+    *patch_path* (an unresolved unknown name is an error; WP7a).
     """
-    new_findings = _blocking_findings(new_dict, scope=scope, is_new=baseline_dict is None)
+    new_findings = _blocking_findings(
+        new_dict, scope=scope, is_new=baseline_dict is None,
+        patch_path=patch_path, original=baseline_dict,
+    )
     if baseline_dict is None:
         new_blockers = list(new_findings)
     else:
-        base_counts = Counter(_finding_key(r) for r in _blocking_findings(baseline_dict, scope=scope))
+        base_counts = Counter(_finding_key(r) for r in _blocking_findings(
+            baseline_dict, scope=scope, patch_path=patch_path, original=baseline_dict,
+        ))
         seen: Counter = Counter()
         new_blockers = []
         for r in new_findings:
@@ -993,7 +1014,7 @@ def _run_save_gate(
 
     report = _gate_report(
         patch_dict, baseline, [d for _, d in refs],
-        scope=SCOPE_BY_SUFFIX.get(path.suffix),
+        scope=SCOPE_BY_SUFFIX.get(path.suffix), patch_path=path,
     )
 
     # 1. Removed cords: one warning, whatever force is (review §4.1 class 9).
@@ -1115,8 +1136,11 @@ def _edit_gendsp_in_place(
     # WR-08): code that stops reading in2 keeps ``in 2`` and the parent
     # gen~'s inlet 1. Ports are removed only for explicit counts.
     det_in, det_out = parse_genexpr_io(code)
+    # A codebox always has at least 1 inlet (WP4 IN-02), so numinlets 1 says
+    # nothing about ports: a 0-input codebox must not grow an ``in 1``
+    # (quick 261022-ud6 WP7a). A wired inlet still counts.
     existing_in = max(
-        [cb.numinlets or 0]
+        [(cb.numinlets or 0) if (cb.numinlets or 0) > 1 else 0]
         + [pl.dest_inlet + 1 for pl in patcher.lines if pl.dest_id == cb.id]
     )
     existing_out = max(
@@ -1130,8 +1154,15 @@ def _edit_gendsp_in_place(
     # Only changed values are written, so unchanged code is a true no-op.
     if cb.extra_attrs.get("code") != code:
         cb.extra_attrs["code"] = code
-    if cb.numinlets != n_in:
-        cb.numinlets = n_in
+    # A codebox with 0 inputs: MAX authors it with 1 inlet (WP4 IN-02, as
+    # generate_gendsp writes it), and never 0 is written here; an existing
+    # 0 or 1 is kept, since MAX loads and re-saves both (granular-engine,
+    # q29-grow) and a no-op edit must stay byte-identical (Q29 / B8).
+    if n_in > 0:
+        if cb.numinlets != n_in:
+            cb.numinlets = n_in
+    elif cb.numinlets not in (0, 1):
+        cb.numinlets = 1
     if cb.numoutlets != n_out or len(cb.outlettype or []) != n_out:
         types = list(cb.outlettype or [])[:n_out]
         cb.outlettype = types + [""] * (n_out - len(types))
@@ -1313,6 +1344,12 @@ def validate_file(path: str | Path) -> list[ValidationResult]:
     .gendsp / .genjit files validate in gen scope and .rnbopat in rnbo
     scope (SCOPE_BY_SUFFIX); other suffixes auto-detect (Q12 / C3).
 
+    The file is treated as loaded (quick 261022-ud6 WP7a): ``patch_path``
+    is its path, so an unknown name resolves against the project's
+    abstractions and an unresolved one is an error (Q23 D3); its own
+    codeboxes are the ``original``, so their tab lines are one warning each
+    rather than an error (Q22 locked tabs decision).
+
     Args:
         path: Path to the .maxpat file.
 
@@ -1336,8 +1373,14 @@ def validate_file(path: str | Path) -> list[ValidationResult]:
             f"Invalid JSON: {e}",
         )]
 
-    # Run the validation pipeline on the loaded dict
-    return validate_patch(data, scope=SCOPE_BY_SUFFIX.get(path.suffix))
+    # Run the validation pipeline on the loaded dict. The file is what MAX
+    # loads: its path resolves project abstractions (Q23 D3) and its own
+    # codeboxes are the loaded baseline, so tabs already in them warn (Q22;
+    # quick 261022-ud6 WP7a).
+    return validate_patch(
+        data, scope=SCOPE_BY_SUFFIX.get(path.suffix),
+        patch_path=path, original=copy.deepcopy(data),
+    )
 
 
 _JS_ENGINE_NAMES = {"js": "js", "jsui": "js", "v8": "v8", "v8ui": "v8"}
@@ -1435,6 +1478,7 @@ def validate_code_file(
     path: str | Path,
     *,
     engine: str | None = None,
+    loaded: bool = True,
 ) -> list[ValidationResult]:
     """Validate a .gendsp or .js code file from disk.
 
@@ -1445,7 +1489,12 @@ def validate_code_file(
     codebox, at the top level, returns validate_genexpr's output unchanged.
     Otherwise each finding's message is prefixed
     ``[path] codebox '<id>': `` (the ``[path] `` part only when nested) and
-    carries ``path`` (the box-id chain of its patcher).
+    carries ``path`` (the box-id chain of its patcher). The codebox code
+    on disk is loaded code (Q22 locked tabs decision; quick 261022-ud6
+    WP7a): with ``loaded=True`` (default) each codebox is its own
+    ``validate_genexpr(original=...)``, so tab lines are one warning;
+    ``loaded=False`` checks it as generated code, where every tab is an
+    error (use it right after writing generated code).
 
     For .js files: reads content, uses detect_js_type to determine
     if N4M or js object, and runs the appropriate validator. A js-object
@@ -1460,6 +1509,8 @@ def validate_code_file(
         path: Path to the .gendsp or .js file.
         engine: Optional explicit engine ("js", "jsui", "v8", "v8ui") for a
             js-object file; overrides the project scan.
+        loaded: Keyword-only, .gendsp only. True (default): tabs already in
+            the file warn; False: every tab is an error.
 
     Returns:
         List of ValidationResult from the code validator.
@@ -1515,8 +1566,11 @@ def validate_code_file(
             )]
 
         db = _gate_db()
+        def _check(code):
+            return validate_genexpr(code, db=db, original=code if loaded else None)
+
         if len(codeboxes) == 1 and codeboxes[0][0] == ():
-            return validate_genexpr(codeboxes[0][1]["code"], db=db)
+            return _check(codeboxes[0][1]["code"])
 
         results: list[ValidationResult] = []
         for cb_path, box in codeboxes:
@@ -1524,7 +1578,7 @@ def validate_code_file(
                 f"{walk.path_prefix(cb_path)}codebox "
                 f"'{box.get('id', '<unknown>')}': "
             )
-            for r in validate_genexpr(box["code"], db=db):
+            for r in _check(box["code"]):
                 results.append(ValidationResult(
                     r.layer, r.level, f"{label}{r.message}",
                     auto_fixed=r.auto_fixed,
