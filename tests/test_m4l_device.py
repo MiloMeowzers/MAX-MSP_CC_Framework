@@ -953,11 +953,25 @@ def test_review_mixed_params_clean(kind):
 
 
 def test_gen_synth_delegates_to_add_m4l_device():
-    import inspect
+    """Behaviour, not source text (Q40 review IN-04): one delegate call, the
+    instrument kind with the legacy flags, and gen~-bound param_connect."""
+    from unittest import mock
 
-    src = inspect.getsource(Patcher.add_m4l_gen_synth)
-    assert "self.add_m4l_device(" in src
-    assert 'f"{gen_varname}::{name}"' in src
+    p = Patcher()
+    with mock.patch.object(Patcher, "add_m4l_device", autospec=True,
+                           side_effect=Patcher.add_m4l_device) as spy:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            gen, dials, plugout = p.add_m4l_gen_synth(
+                [("freq", 20.0, 2000.0), ("amp", 0.0, 1.0)], gen_varname="osc")
+    assert spy.call_count == 1
+    args, kwargs = spy.call_args
+    assert args[0] is p and args[1] == "instrument"
+    assert [s["param_connect"] for s in args[2]] == ["osc::freq", "osc::amp"]
+    assert kwargs == {"audio_source": (gen, 0), "midi_in": False, "init_chain": False,
+                      "banks": False, "presentation": False}
+    assert [d.extra_attrs["param_connect"] for d in dials] == ["osc::freq", "osc::amp"]
+    assert plugout.name == "plugout~"
 
 
 def test_gen_synth_duplicate_name_now_raises():
