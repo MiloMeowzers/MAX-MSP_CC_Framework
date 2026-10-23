@@ -658,6 +658,95 @@ class TestContrastResolution:
         assert gradient_stops({"bgfillcolor": {"type": "color", "color": a}}) is None
 
 
+# ---------------------------------------------------------------------------
+# WR-08: write_gendsp with unchanged code is a true no-op and never shrinks
+# ports; IN-06: added port boxes do not land on user boxes
+# ---------------------------------------------------------------------------
+
+
+def _single_codebox_gendsps() -> list[str]:
+    out = []
+    for path in sorted((REPO_ROOT / "patches").rglob("*.gendsp")):
+        d = json.loads(path.read_text())
+        cbs = [e for e in d["patcher"]["boxes"] if e["box"].get("maxclass") == "codebox"]
+        if len(cbs) == 1:
+            out.append(str(path.relative_to(REPO_ROOT)))
+    return out
+
+
+def _codebox_code(d: dict) -> str:
+    return next(e["box"]["code"] for e in d["patcher"]["boxes"]
+                if e["box"].get("maxclass") == "codebox")
+
+
+class TestWriteGendspNoShrink:
+    @pytest.mark.parametrize("rel", _single_codebox_gendsps())
+    def test_unchanged_code_is_byte_identical(self, tmp_path, rel):
+        from src.maxpat.hooks import write_gendsp
+
+        target = tmp_path / Path(rel).name
+        target.write_bytes((REPO_ROOT / rel).read_bytes())
+        before = target.read_bytes()
+        code = _codebox_code(json.loads(before))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            result = write_gendsp(code, target)
+        assert result.orphaned == []
+        assert target.read_bytes() == before
+
+    def test_code_dropping_an_input_keeps_the_port(self, tmp_path):
+        from src.maxpat.codegen import generate_gendsp
+        from src.maxpat.hooks import write_gendsp, read_patch
+
+        target = tmp_path / "x.gendsp"
+        target.write_text(json.dumps(generate_gendsp("out1 = in1 + in2;"), indent=4))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            result = write_gendsp("out1 = in1;", target)
+        assert result.orphaned == []
+        p, _ = read_patch(target)
+        cb = next(b for b in p.boxes if b.maxclass == "codebox")
+        assert cb.numinlets == 2
+        assert sorted(b.text for b in p.boxes if (b.text or "").startswith("in ")) == ["in 1", "in 2"]
+
+    def test_explicit_counts_still_remove_ports(self, tmp_path):
+        from src.maxpat.codegen import generate_gendsp
+        from src.maxpat.hooks import write_gendsp, read_patch
+
+        target = tmp_path / "x.gendsp"
+        target.write_text(json.dumps(generate_gendsp("out1 = in1 + in2;"), indent=4))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            write_gendsp("out1 = in1;", target, num_inputs=1, num_outputs=1)
+        p, _ = read_patch(target)
+        assert [b.text for b in p.boxes if (b.text or "").startswith("in ")] == ["in 1"]
+
+    def test_added_port_does_not_overlap_user_box(self, tmp_path):
+        from src.maxpat.codegen import generate_gendsp
+        from src.maxpat.hooks import write_gendsp, read_patch
+        from src.maxpat.sizing import rendered_rect
+
+        d = generate_gendsp("out1 = in1;")
+        in1 = next(e["box"] for e in d["patcher"]["boxes"] if e["box"].get("text") == "in 1")
+        x, y = in1["patching_rect"][0] + 80.0, in1["patching_rect"][1]
+        d["patcher"]["boxes"].append({"box": {
+            "id": "obj-99", "maxclass": "comment", "text": "user note here",
+            "numinlets": 1, "numoutlets": 0, "patching_rect": [x - 5, y, 120.0, 20.0],
+        }})
+        target = tmp_path / "x.gendsp"
+        target.write_text(json.dumps(d, indent=4))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            write_gendsp("out1 = in1 + in2;", target)
+        p, _ = read_patch(target)
+        in2 = next(b for b in p.boxes if b.text == "in 2")
+        note = next(b for b in p.boxes if b.id == "obj-99")
+        a, b = rendered_rect(in2), rendered_rect(note)
+        overlap = (a[0] < b[0] + b[2] and b[0] < a[0] + a[2]
+                   and a[1] < b[1] + b[3] and b[1] < a[1] + a[3])
+        assert not overlap
+
+
 @pytest.mark.parametrize("rel", [
     ".claude/skills/max-patch-agent/SKILL.md",
     ".claude/commands/max-build.md",

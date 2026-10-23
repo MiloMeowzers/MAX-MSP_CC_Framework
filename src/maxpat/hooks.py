@@ -1065,6 +1065,28 @@ def _gen_port_index(box) -> "tuple[str, int] | None":
     return tokens[0], int(tokens[1])
 
 
+def _shift_right_off_overlap(patcher: "Patcher", box, step: float = 40.0) -> None:
+    """Move *box* right in *step* px until its rendered rect, padded by 5 px,
+    overlaps no other box (at most 200 steps). Never moves it up or down."""
+    from src.maxpat.sizing import rendered_rect
+
+    def rect(b):
+        r = rendered_rect(b)
+        return r if r is not None else b.patching_rect
+
+    others = [rect(b) for b in patcher.boxes if b is not box]
+    for _ in range(200):
+        x, y, w, h = rect(box)[:4]
+        hit = any(
+            x - 5 < o[0] + o[2] and o[0] < x + w + 5
+            and y - 5 < o[1] + o[3] and o[1] < y + h + 5
+            for o in others
+        )
+        if not hit:
+            return
+        box.patching_rect[0] += step
+
+
 def _edit_gendsp_in_place(
     patcher: "Patcher",
     path: Path,
@@ -1089,30 +1111,45 @@ def _edit_gendsp_in_place(
         )
     cb = codeboxes[0]
 
-    if num_inputs is None or num_outputs is None:
-        det_in, det_out = parse_genexpr_io(code)
-        n_in = det_in if num_inputs is None else num_inputs
-        n_out = det_out if num_outputs is None else num_outputs
-    else:
-        n_in, n_out = num_inputs, num_outputs
+    # Auto-detected counts never shrink the file's ports (review 261022-ud6
+    # WR-08): code that stops reading in2 keeps ``in 2`` and the parent
+    # gen~'s inlet 1. Ports are removed only for explicit counts.
+    det_in, det_out = parse_genexpr_io(code)
+    existing_in = max(
+        [cb.numinlets or 0]
+        + [pl.dest_inlet + 1 for pl in patcher.lines if pl.dest_id == cb.id]
+    )
+    existing_out = max(
+        [cb.numoutlets or 0]
+        + [pl.source_outlet + 1 for pl in patcher.lines if pl.source_id == cb.id]
+    )
+    n_in = num_inputs if num_inputs is not None else max(det_in, existing_in)
+    n_out = num_outputs if num_outputs is not None else max(det_out, existing_out)
 
-    # Code and I/O counts (tracked fields; Q28 writes them back on save)
-    cb.extra_attrs["code"] = code
-    cb.numinlets = n_in
-    cb.numoutlets = n_out
-    cb.outlettype = [""] * n_out
+    # Code and I/O counts (tracked fields; Q28 writes them back on save).
+    # Only changed values are written, so unchanged code is a true no-op.
+    if cb.extra_attrs.get("code") != code:
+        cb.extra_attrs["code"] = code
+    if cb.numinlets != n_in:
+        cb.numinlets = n_in
+    if cb.numoutlets != n_out or len(cb.outlettype or []) != n_out:
+        types = list(cb.outlettype or [])[:n_out]
+        cb.outlettype = types + [""] * (n_out - len(types))
+        cb.numoutlets = n_out
 
     orphaned: list[dict] = []
     targets = {"in": n_in, "out": n_out}
+    explicit = {"in": num_inputs is not None, "out": num_outputs is not None}
 
-    # Surplus port boxes: remove only when they touch nothing but the codebox
+    # Surplus port boxes: remove only for an explicit count, and only when
+    # they touch nothing but the codebox
     ports: dict[str, dict[int, object]] = {"in": {}, "out": {}}
     for box in list(patcher.boxes):
         info = _gen_port_index(box)
         if info is None:
             continue
         kind, idx = info
-        if idx > targets[kind]:
+        if idx > targets[kind] and explicit[kind]:
             touching = [
                 pl for pl in patcher.lines
                 if pl.source_id == box.id or pl.dest_id == box.id
@@ -1139,8 +1176,11 @@ def _edit_gendsp_in_place(
                 continue
             x = next_x if next_x is not None else 50.0 + (k - 1) * 80.0
             box = patcher.add_box(kind, [str(k)], x, row_y, skip_overlap_check=True)
+            # Step right along the port row past any box it would cover
+            # (review 261022-ud6 IN-06).
+            _shift_right_off_overlap(patcher, box)
             if next_x is not None:
-                next_x += 80.0
+                next_x = box.patching_rect[0] + 80.0
             ports[kind][k] = box
             if kind == "in":
                 patcher.add_connection(box, 0, cb, k - 1)
@@ -1179,13 +1219,21 @@ def write_gendsp(
     the file first to regenerate it, or edit it with read_patch + the
     Patcher API + save_patch_roundtrip). Only these change:
 
-    - the codebox ``code``, numinlets, numoutlets and outlettype;
-    - missing ``in N`` / ``out N`` boxes are added, wired to the codebox;
-    - surplus ``in N`` / ``out N`` boxes (N above the new count) are removed
-      when every cord touching them goes to the codebox (or they have no
-      cords); a surplus port that also feeds the user's own gen graph is
-      kept;
-    - cords on codebox inlets/outlets the new code lacks are removed.
+    - the codebox ``code``, numinlets, numoutlets and outlettype, each only
+      when it changes (so the file's own code is a true no-op: nothing
+      written, nothing committed);
+    - port counts: an explicit ``num_inputs`` / ``num_outputs`` is used as
+      given; an auto-detected count never goes below the file's existing
+      count (the codebox's numinlets / numoutlets or its highest wired
+      port; review 261022-ud6 WR-08), so code that stops reading ``in2``
+      keeps ``in 2`` and the parent gen~'s inlet;
+    - missing ``in N`` / ``out N`` boxes are added, wired to the codebox,
+      on the port row, stepped right past any box they would cover (IN-06);
+    - with an explicit count only, surplus ``in N`` / ``out N`` boxes (N
+      above it) are removed when every cord touching them goes to the
+      codebox (or they have no cords); a surplus port that also feeds the
+      user's own gen graph is kept, and cords on codebox inlets/outlets
+      above the count are removed.
 
     Every other box, position, comment, cord and patcher property is kept.
     The result is saved through save_patch_roundtrip with the file's text
