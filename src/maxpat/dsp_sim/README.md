@@ -100,6 +100,11 @@ shell gate directly:
 | `mode_competition` | 2 |
 | `no_oscillation` | 3 |
 | `runaway` | 4 |
+| usage error, nothing ran | 64 |
+
+Exit 64 (BSD `EX_USAGE`) covers argparse usage errors, a malformed `--sweep` / `--params` /
+`--mirror`, and a `TopologyError` such as an undeclared `--param` or `--params` key. It is
+deliberately not 2: argparse's default usage code would read as `mode_competition`.
 
 ### `python -m src.maxpat.dsp_sim smoke`: GenExpr codebox smoke test
 

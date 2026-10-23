@@ -129,8 +129,8 @@ class TestRegistry:
             get_topology("nonexistent")
         assert "unknown topology" in str(excinfo.value).lower()
 
-    def test_cli_bore_only_exits_2(self):
-        """Q25 / H4: `--topology bore_only` is an unknown topology (CLI exit 2)."""
+    def test_cli_bore_only_exits_usage(self):
+        """Q25 / H4: `--topology bore_only` is an unknown topology (CLI exit 64, EX_USAGE; WR-05)."""
         import subprocess
         import sys
         proc = subprocess.run(
@@ -139,7 +139,7 @@ class TestRegistry:
              "--sweep", "0,1,2", "--params", "freq=220"],
             capture_output=True, text=True, timeout=60,
         )
-        assert proc.returncode == 2, proc.stderr
+        assert proc.returncode == 64, proc.stderr
 
     def test_every_topology_declares_params(self):
         """Q25 / H4: every topology declares a frozenset PARAMS holding freq and breath."""

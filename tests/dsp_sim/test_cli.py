@@ -19,7 +19,7 @@ import math
 
 import pytest
 
-from src.maxpat.dsp_sim.cli import _load_mirror, _parse_params, _parse_sweep, main
+from src.maxpat.dsp_sim.cli import EXIT_USAGE, _load_mirror, _parse_params, _parse_sweep, main
 
 
 # ===========================================================================
@@ -65,15 +65,15 @@ class TestParseSweep:
     def test_valid_sweep_with_whitespace(self):
         assert _parse_sweep(" 0.0 , 1.0 , 32 ") == (0.0, 1.0, 32)
 
-    def test_malformed_sweep_two_parts_exits_2(self):
+    def test_malformed_sweep_two_parts_exits_usage(self):
         with pytest.raises(SystemExit) as exc:
             _parse_sweep("0,1")
-        assert exc.value.code == 2
+        assert exc.value.code == EXIT_USAGE
 
-    def test_malformed_sweep_garbage_exits_2(self):
+    def test_malformed_sweep_garbage_exits_usage(self):
         with pytest.raises(SystemExit) as exc:
             _parse_sweep("not_a_sweep")
-        assert exc.value.code == 2
+        assert exc.value.code == EXIT_USAGE
 
 
 class TestParseParams:
@@ -97,15 +97,15 @@ class TestParseParams:
             "breath": 0.6,
         }
 
-    def test_non_numeric_value_exits_2(self):
+    def test_non_numeric_value_exits_usage(self):
         with pytest.raises(SystemExit) as exc:
             _parse_params("freq=not_a_number")
-        assert exc.value.code == 2
+        assert exc.value.code == EXIT_USAGE
 
-    def test_missing_equals_exits_2(self):
+    def test_missing_equals_exits_usage(self):
         with pytest.raises(SystemExit) as exc:
             _parse_params("frequency_220")
-        assert exc.value.code == 2
+        assert exc.value.code == EXIT_USAGE
 
 
 # ===========================================================================
@@ -116,31 +116,31 @@ class TestParseParams:
 class TestLoadMirror:
     """_load_mirror uses importlib (no eval/exec) and rejects malformed specs."""
 
-    def test_no_colon_exits_2(self):
+    def test_no_colon_exits_usage(self):
         with pytest.raises(SystemExit) as exc:
             _load_mirror("just_a_module_name")
-        assert exc.value.code == 2
+        assert exc.value.code == EXIT_USAGE
 
-    def test_unimportable_module_exits_2(self):
+    def test_unimportable_module_exits_usage(self):
         with pytest.raises(SystemExit) as exc:
             _load_mirror("zzz_does_not_exist_xyz:foo")
-        assert exc.value.code == 2
+        assert exc.value.code == EXIT_USAGE
 
-    def test_missing_attribute_exits_2(self):
+    def test_missing_attribute_exits_usage(self):
         with pytest.raises(SystemExit) as exc:
             _load_mirror("os.path:zzz_not_a_real_attr")
-        assert exc.value.code == 2
+        assert exc.value.code == EXIT_USAGE
 
     def test_loads_valid_callable(self):
         # os.path.join is a known top-level callable
         fn = _load_mirror("os.path:join")
         assert callable(fn)
 
-    def test_non_callable_attribute_exits_2(self):
+    def test_non_callable_attribute_exits_usage(self):
         # `os.sep` is a string attribute, not callable.
         with pytest.raises(SystemExit) as exc:
             _load_mirror("os:sep")
-        assert exc.value.code == 2
+        assert exc.value.code == EXIT_USAGE
 
 
 # ===========================================================================
@@ -222,19 +222,19 @@ class TestExitCodes:
         ])
         assert rc == 3
 
-    def test_unimportable_mirror_exits_2(self, capsys):
-        # _load_mirror raises SystemExit(2) directly (it doesn't return);
+    def test_unimportable_mirror_exits_usage(self, capsys):
+        # _load_mirror raises SystemExit(EXIT_USAGE) directly (it doesn't return);
         # main() does not catch it, so it propagates -- matches the
         # behaviour of `audit_signal_role.py` argparse usage errors.
         with pytest.raises(SystemExit) as exc:
             main(_BASE_ARGS + [
                 "--mirror", "module.does.not.exist:foo",
             ])
-        assert exc.value.code == 2
+        assert exc.value.code == EXIT_USAGE
 
     def test_topology_and_mirror_mutually_exclusive(self, capsys):
         # argparse mutually-exclusive group rejects this at parse time
-        # with exit 2 (argparse default for usage errors).
+        # with EXIT_USAGE (64, not the argparse default 2: 2 is mode_competition).
         with pytest.raises(SystemExit) as exc:
             main([
                 "--patch", "x",
@@ -243,7 +243,7 @@ class TestExitCodes:
                 "--param", "x",
                 "--sweep", "0,1,4",
             ])
-        assert exc.value.code == 2
+        assert exc.value.code == EXIT_USAGE
 
     def test_topology_pass_against_live_bassoon_shape(self, capsys):
         """The reed_bore_post_radiation topology with bassoon defaults
@@ -289,3 +289,39 @@ class TestOutputRendering:
         assert rc == 4
         out = capsys.readouterr().out
         assert "suggested fix" in out.lower()
+
+
+# ===========================================================================
+# 261022-ud6 WR-05: "nothing ran" never shares an exit code with a verdict
+# ===========================================================================
+
+
+class TestWr05UsageExitCode:
+    """A typo'd --param (TopologyError) or an argparse usage error exits 64
+    (EX_USAGE), never 2, which is the mode_competition verdict."""
+
+    def test_usage_code_is_distinct_from_every_verdict(self):
+        from src.maxpat.dsp_sim.cli import _EXIT_CODE
+
+        assert EXIT_USAGE == 64
+        assert EXIT_USAGE not in _EXIT_CODE.values()
+
+    def test_undeclared_sweep_param_exits_usage(self, capsys):
+        rc = main([
+            "--patch", "x", "--topology", "reed_bore", "--param", "bore_dmp",
+            "--sweep", "0,1,2", "--params", "freq=220",
+        ])
+        assert rc == EXIT_USAGE
+        assert "does not declare" in capsys.readouterr().err
+
+    def test_argparse_usage_error_exits_usage(self, capsys):
+        with pytest.raises(SystemExit) as exc:
+            main(["--patch", "x", "--topology", "reed_bore"])  # no --param / --sweep
+        assert exc.value.code == EXIT_USAGE
+        assert "required" in capsys.readouterr().err
+
+    def test_help_documents_usage_code(self, capsys):
+        with pytest.raises(SystemExit) as exc:
+            main(["--help"])
+        assert exc.value.code == 0
+        assert "64" in capsys.readouterr().out
