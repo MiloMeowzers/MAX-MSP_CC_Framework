@@ -627,9 +627,11 @@ def _check_unsafe_gain_sources(
     a gain stage:
 
     * a box whose signal output reaches any inlet of an oscillator
-      (cycle~, saw~, rect~, tri~, phasor~ and mc. forms), directly or
-      through signal arithmetic / mtof~, scales a frequency or phase and is
-      skipped (:func:`_feeds_oscillator`);
+      (cycle~, saw~, rect~, tri~, phasor~ and mc. forms), or a filter /
+      delay parameter inlet (lores~ cutoff, svf~, onepole~, reson~ freq/Q,
+      cross~, comb~ / allpass~ delay; :data:`_PARAMETER_INLETS`), directly
+      or through signal arithmetic / mtof~, scales a frequency or phase and
+      is skipped (:func:`_feeds_oscillator`);
     * an inlet is traced only when the *other* inlet carries audio
       (:func:`_inlet_has_audio`): a ramp source (line~, curve~, sig~,
       adsr~, number~), a constant ``*~ k`` argument with inlet 1 unfed, or a
@@ -741,6 +743,28 @@ _MODULATED_OSCILLATORS = frozenset(
     for name in (base, "mc." + base)
 )
 
+# WP3 follow-up (quick 261022-ud6 WP7a): filter / delay inlets that take a
+# frequency, resonance or delay time, never audio or a gain (DB digests:
+# lores~ 1 cutoff / 2 resonance, svf~ 1 cutoff / 2 resonance, onepole~ 1
+# cutoff, reson~ 2 centre frequency / 3 Q -- inlet 1 is its input GAIN and
+# stays out --, cross~ 1 crossover, comb~ / allpass~ 1 delay ms,
+# filtercoeff~ 0 frequency / 2 Q). A *~ whose output reaches one of these
+# scales Hz like an oscillator's frequency input.
+_PARAMETER_INLETS = {
+    name: inlets
+    for base, inlets in (
+        ("lores~", frozenset({1, 2})),
+        ("svf~", frozenset({1, 2})),
+        ("onepole~", frozenset({1})),
+        ("reson~", frozenset({2, 3})),
+        ("cross~", frozenset({1})),
+        ("comb~", frozenset({1})),
+        ("allpass~", frozenset({1})),
+        ("filtercoeff~", frozenset({0, 2})),
+    )
+    for name in (base, "mc." + base)
+}
+
 # Signal arithmetic: a value passes through it unchanged in kind.
 _SIGNAL_ARITH = frozenset(
     name
@@ -766,7 +790,9 @@ def _feeds_oscillator(box_id, box_lookup, sig_out) -> bool:
 
     Forward walk over signal cords through signal arithmetic (``+~``, ``*~``,
     ...) and ``mtof~``. Every inlet of cycle~ / saw~ / rect~ / tri~ / phasor~
-    (and the mc. forms) is a frequency, phase or shape input, never a gain.
+    (and the mc. forms) is a frequency, phase or shape input, never a gain;
+    so are the filter / delay parameter inlets in :data:`_PARAMETER_INLETS`
+    (an LFO depth into a lores~ cutoff, WP7a).
     """
     seen = {box_id}
     queue = deque([box_id])
@@ -780,6 +806,8 @@ def _feeds_oscillator(box_id, box_lookup, sig_out) -> bool:
                 continue
             name = walk.box_name(dst)
             if name in _MODULATED_OSCILLATORS:
+                return True
+            if edge.inlet in _PARAMETER_INLETS.get(name, ()):
                 return True
             if (name in _SIGNAL_ARITH or name in _FREQ_CONVERTERS) and edge.dst not in seen:
                 seen.add(edge.dst)
