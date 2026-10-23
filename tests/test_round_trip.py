@@ -1132,27 +1132,32 @@ class TestFileLevelRoundTrip:
             "File-level round-trip produced different output for MAX-saved file"
         )
 
-    @pytest.mark.xfail(
-        reason="rhythmic-sampler.maxpat re-saved by MAX with 4-space indent (was 2-space)",
-        strict=False,
-    )
-    def test_framework_file_byte_identical(self, tmp_path):
-        """Framework-generated 2-space file round-trips to byte-identical output."""
+    @pytest.mark.parametrize("name", ["simple_synth.maxpat", "subpatcher_example.maxpat"])
+    def test_framework_file_byte_identical(self, tmp_path, name):
+        """Framework-generated 2-space file round-trips to byte-identical output.
+
+        Quick 261022-ud6 WP7a: this was a non-strict xfail on
+        rhythmic-sampler.maxpat, which MAX re-saved in 4-space layout, so it
+        failed on its own precondition and tested nothing. The golden
+        fixtures under tests/fixtures/expected/ are framework-written in the
+        2-space expanded layout and never re-saved by MAX.
+        """
+        from src.maxpat import maxjson
         from src.maxpat.hooks import save_patch_roundtrip, detect_indent
-        # Use a framework-generated file (rhythmic-sampler.maxpat has 2-space indent)
-        path = PATCHES_DIR / "rhythmic-sampler" / "generated" / "rhythmic-sampler.maxpat"
+        path = FIXTURES_DIR / "expected" / name
         original_text = path.read_text()
         original_data = json.loads(original_text)
 
-        # Verify it uses 2-space indent
+        # Precondition: the framework's 2-space expanded layout
         assert detect_indent(original_text) == "  "
+        assert maxjson.detect_layout(original_text) == "expanded"
 
         # Round-trip through Patcher
         p = Patcher.from_dict(original_data)
         result = p.to_dict()
 
         # Write via save_patch_roundtrip
-        out_path = tmp_path / "rhythmic-sampler-rt.maxpat"
+        out_path = tmp_path / f"rt-{name}"
         save_patch_roundtrip(result, out_path, original_text=original_text)
 
         # Read back and compare
