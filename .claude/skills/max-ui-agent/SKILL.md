@@ -35,7 +35,7 @@ Before any generation:
 - Consistent spacing and alignment across control groups
 
 ### Layout Engine Integration (Patching Mode)
-- `finalize_patch(patcher, is_new=True)` -- single-call layout cleanup: styling, layout, comments, midpoints (new); midpoints + comments (edit)
+- `finalize_patch(patcher, is_new=True, force_layout=False)` -- single-call layout cleanup: styling, layout, comments, midpoints (new); comments + routing of new or touched cords that have no midpoints, never moving boxes or clearing midpoints (edit). With `is_new=True` it raises `LayoutRefusedError` (from `src.maxpat.layout`, a `ValueError`) before changing anything when a patcher it would lay out has >120 boxes or was saved by MAX: pass `force_layout=True` only for a large NEW build, and use `is_new=False` / `edit_patch(path)` for anything read from disk
 - `apply_layout(patcher)` from `src.maxpat.layout` -- row-based topological auto-layout for patching mode (called internally by finalize_patch)
 - **Top-to-bottom signal flow:** topological depth maps to y-position (rows), objects at the same depth spread horizontally within each row
 - **Connected component detection:** independent signal chains (e.g., transport vs mixer) are automatically detected and placed side by side as separate vertical groups
@@ -84,7 +84,7 @@ Before any generation:
 
 ## Builder API (Phase 31)
 
-Prefer the `Patcher` builders over restating their recipes: `add_overlay_readout`, `add_labeled_param_bank`, `add_m4l_gen_synth` (experimental) and the passive `_ROLE_COMPANION_MAP` companion placement applied by `apply_layout`. Signatures, arguments and the quick-reference table: "Builder API" in `.claude/skills/references/shared-capabilities.md`.
+Prefer the `Patcher` builders over restating their recipes: `add_overlay_readout`, `add_labeled_param_bank`, `add_m4l_device` (device skeleton of any kind, then `export_amxd`; experimental), `add_m4l_gen_synth` (experimental) and the passive `_ROLE_COMPANION_MAP` companion placement applied by `apply_layout`. Signatures, arguments and the quick-reference table: "Builder API" in `.claude/skills/references/shared-capabilities.md`.
 
 ## Package Intelligence
 

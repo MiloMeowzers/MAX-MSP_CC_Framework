@@ -18,7 +18,7 @@ results = review_patch(patch_dict, code_context=code_context, ext_code=ext_code,
 
 `is_new` must match the save that follows: `True` for a new file (`/max-build`, or any flow that creates a file), `False` (the default) for an edit of an existing one. The save gate reviews a file with no baseline with `is_new=True`, where a Q24 uninitialized-state finding is a blocker; reviewing it with `is_new=False` in the loop would approve a warning the gate then refuses.
 
-This invokes the DSP critic (`review_dsp`), structure critic (`review_structure`), and conditionally the RNBO critic (`review_rnbo`, when rnbo~ boxes detected) and external critic (`review_external`, when `ext_code` provided).
+This always invokes the DSP critic (`review_dsp`), structure critic (`review_structure`) and layout critic (`review_layout`), each over every non-gen scope, and conditionally the RNBO critic (`review_rnbo`, when rnbo~ boxes are detected), the M4L critic (`review_m4l`, when `plugin~` / `plugout~` / `live.thisdevice` is found), the package critic (`review_packages`, when package objects are present) and the external critic (`review_external`, when `ext_code` is provided).
 
 ### Step 3: Classify Results
 
