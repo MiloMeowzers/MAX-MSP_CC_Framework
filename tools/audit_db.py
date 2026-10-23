@@ -80,6 +80,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # Allow `from src.maxpat.db_lookup import ObjectDatabase`
 sys.path.insert(0, str(ROOT))
 
+from src.maxpat.atomic_io import atomic_write_bytes  # noqa: E402
 from src.maxpat.db_lookup import DOMAIN_LOAD_ORDER, ObjectDatabase  # noqa: E402
 from src.maxpat.maxclass_map import UI_MAXCLASSES  # noqa: E402
 from tools import help_io  # noqa: E402
@@ -128,37 +129,64 @@ class OutputPathRejected(ValueError):
 PROTECTED_SUBTREES = ("patches", ".claude/max-objects")
 
 
-def guard_output_path(json_path: str | Path, repo_root: str | Path) -> Path:
-    """Resolve a --json target, refusing any path inside a protected tree.
+def guard_output_path(
+    json_path: str | Path,
+    repo_root: str | Path,
+    db_root: str | Path | None = None,
+) -> Path:
+    """Resolve an output target, refusing any path inside a protected tree.
 
     This is the single structural guarantee behind the tool's "writes nothing
-    under patches/ or .claude/max-objects/" claim (T-knq-01), and the only
-    place the tool opens a file for writing. Kept as a named, importable
-    function so the test suite can exercise it directly.
+    under patches/ or .claude/max-objects/" claim (T-knq-01). Every output
+    target (--json, --write-baseline) is screened here before any work runs.
+    Kept as a named, importable function so the test suite can exercise it
+    directly.
+
+    Protected (WR-03, quick 261022-ud6): ``patches/`` and
+    ``.claude/max-objects/`` under *repo_root* AND under this tool's own
+    repository (a foreign ``--repo-root`` must not unprotect the real DB),
+    plus *db_root*, the DB actually being audited.
 
     Args:
         json_path: The requested output path (may be relative).
         repo_root: The repository root the protected trees are relative to.
+        db_root: The audited object-DB root (``--db-root``), if any.
 
     Returns:
         The resolved absolute output path.
 
     Raises:
-        OutputPathRejected: when the resolved path is the protected tree
+        OutputPathRejected: when the resolved path is a protected tree
             itself or lives anywhere beneath it.
     """
-    root = Path(repo_root).resolve()
     # strict=False: the output file legitimately does not exist yet.
     target = Path(json_path).resolve()
-    for sub in PROTECTED_SUBTREES:
-        protected = (root / sub).resolve()
-        if target == protected or protected in target.parents:
+    roots = []
+    for base in (Path(repo_root).resolve(), ROOT.resolve()):
+        if base not in roots:
+            roots.append(base)
+    for root in roots:
+        for sub in PROTECTED_SUBTREES:
+            protected = (root / sub).resolve()
+            if target == protected or protected in target.parents:
+                raise OutputPathRejected(
+                    f"refusing to write {target}: resolves inside the read-only "
+                    f"tree {protected}. This tool never writes under "
+                    f"{' or '.join(PROTECTED_SUBTREES)}."
+                )
+    if db_root is not None:
+        db = Path(db_root).resolve()
+        if target == db or db in target.parents:
             raise OutputPathRejected(
-                f"refusing to write {target}: resolves inside the read-only "
-                f"tree {protected}. This tool never writes under "
-                f"{' or '.join(PROTECTED_SUBTREES)}."
+                f"refusing to write {target}: inside the DB root {db}"
             )
     return target
+
+
+def _write_output(path: Path, text: str) -> None:
+    """Atomic write of a report/baseline (temp file + fsync + rename)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_bytes(path, text.encode("utf-8"))
 
 
 # ---------------------------------------------------------------------------
@@ -1151,7 +1179,9 @@ def _main_help_io(args, repo_root: Path, out_path: Path | None) -> int:
     baseline_path: Path | None = None
     if args.write_baseline:
         try:
-            baseline_path = guard_output_path(args.write_baseline, repo_root)
+            baseline_path = guard_output_path(
+                args.write_baseline, repo_root, _db_root(args, repo_root)
+            )
         except OutputPathRejected as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
@@ -1171,14 +1201,17 @@ def _main_help_io(args, repo_root: Path, out_path: Path | None) -> int:
         return 1
 
     if out_path is not None:
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(envelope, indent=2, sort_keys=False) + "\n")
+        _write_output(out_path, json.dumps(envelope, indent=2, sort_keys=False) + "\n")
     if baseline_path is not None:
-        baseline_path.parent.mkdir(parents=True, exist_ok=True)
-        baseline_path.write_text(help_io.dump_baseline(help_io.build_baseline(section)))
+        _write_output(baseline_path, help_io.dump_baseline(help_io.build_baseline(section)))
 
     print(help_io.format_help_io_summary(envelope, out_path, baseline_path))
     return 0
+
+
+def _db_root(args, repo_root: Path) -> Path:
+    """The audited DB root: --db-root, else <repo-root>/.claude/max-objects."""
+    return Path(args.db_root) if args.db_root else Path(repo_root) / ".claude" / "max-objects"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1193,7 +1226,9 @@ def main(argv: list[str] | None = None) -> int:
     out_path: Path | None = None
     if args.json_path:
         try:
-            out_path = guard_output_path(args.json_path, repo_root)
+            out_path = guard_output_path(
+                args.json_path, repo_root, _db_root(args, repo_root)
+            )
         except OutputPathRejected as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
@@ -1209,8 +1244,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if out_path is not None:
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(report, indent=2, sort_keys=False) + "\n")
+        _write_output(out_path, json.dumps(report, indent=2, sort_keys=False) + "\n")
 
     print(format_summary(report))
     if out_path is not None:

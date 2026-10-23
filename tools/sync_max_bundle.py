@@ -2441,11 +2441,7 @@ def write_report(path: Path, payload: dict) -> None:
 
 def guard_report_path(target: str | Path, repo_root: Path, db_root: Path) -> Path:
     """Refuse report targets under patches/, the repo DB tree, or the active DB root."""
-    resolved = guard_output_path(target, repo_root)
-    db = Path(db_root).resolve()
-    if resolved == db or db in resolved.parents:
-        raise OutputPathRejected(f"refusing to write {resolved}: inside the DB root {db}")
-    return resolved
+    return guard_output_path(target, repo_root, db_root)
 
 
 # ---------------------------------------------------------------------------

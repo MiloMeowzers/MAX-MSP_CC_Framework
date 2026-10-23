@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import json
 import plistlib
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -432,6 +433,64 @@ class TestWriteGuard:
         root = _make_fake_repo(tmp_path)
         target = root / "patches-backup" / "out.json"
         assert audit_db.guard_output_path(target, root) == target.resolve()
+
+    # WR-03 (quick 261022-ud6 WP6): --db-root and the tool's own repo are
+    # protected too, whatever --repo-root says.
+
+    def test_db_root_is_refused(self, tmp_path: Path) -> None:
+        root = _make_fake_repo(tmp_path)
+        scratch_db = tmp_path / "scratch-db"
+        scratch_db.mkdir()
+        with pytest.raises(audit_db.OutputPathRejected):
+            audit_db.guard_output_path(scratch_db / "msp" / "objects.json", root,
+                                       db_root=scratch_db)
+        with pytest.raises(audit_db.OutputPathRejected):
+            audit_db.guard_output_path(scratch_db, root, db_root=scratch_db)
+
+    @pytest.mark.parametrize("relative", [".claude/max-objects/max/objects.json",
+                                          "patches/x.json"])
+    def test_tool_repo_protected_under_foreign_repo_root(
+        self, tmp_path: Path, relative: str
+    ) -> None:
+        root = _make_fake_repo(tmp_path)
+        with pytest.raises(audit_db.OutputPathRejected):
+            audit_db.guard_output_path(audit_db.ROOT / relative, root)
+
+    def test_cli_json_into_db_root_writes_nothing(self, tmp_path: Path, capsys) -> None:
+        root = _make_fake_repo(tmp_path)
+        scratch_db = tmp_path / "scratch-db"
+        shutil.copytree(root / ".claude" / "max-objects", scratch_db)
+        target = scratch_db / "max" / "objects.json"
+        before = target.read_bytes()
+        rc = audit_db.main(["--repo-root", str(root), "--db-root", str(scratch_db),
+                            "--max-app", str(tmp_path / "absent.app"),
+                            "--json", str(target)])
+        assert rc == 2
+        assert target.read_bytes() == before
+        assert "inside the DB root" in capsys.readouterr().err
+
+    def test_cli_write_baseline_into_db_root_refused(self, tmp_path: Path, capsys) -> None:
+        root = _make_fake_repo(tmp_path)
+        scratch_db = tmp_path / "scratch-db"
+        shutil.copytree(root / ".claude" / "max-objects", scratch_db)
+        target = scratch_db / "baseline.json"
+        rc = audit_db.main(["--repo-root", str(root), "--db-root", str(scratch_db),
+                            "--max-app", str(tmp_path / "absent.app"),
+                            "--help-io", "--write-baseline", str(target)])
+        assert rc == 2 and not target.exists()
+
+    def test_cli_json_write_is_atomic(self, tmp_path: Path, monkeypatch) -> None:
+        root = _make_fake_repo(tmp_path)
+        target = tmp_path / "out" / "report.json"
+        calls = []
+        real = audit_db.atomic_write_bytes
+        monkeypatch.setattr(audit_db, "atomic_write_bytes",
+                            lambda p, b: (calls.append(Path(p)), real(p, b)))
+        rc = audit_db.main(["--repo-root", str(root),
+                            "--max-app", str(tmp_path / "absent.app"),
+                            "--json", str(target)])
+        assert rc == 0 and calls == [target.resolve()]
+        assert json.loads(target.read_text())["sections"]
 
 
 # ── full envelope on the fake repo ────────────────────────────────
