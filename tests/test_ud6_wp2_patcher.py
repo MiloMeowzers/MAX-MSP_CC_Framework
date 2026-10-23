@@ -624,7 +624,11 @@ class TestContrastResolution:
 
         assert paints_unknown_background("bach.roll", {})
         assert paints_unknown_background("jit.cellblock", {})
-        assert paints_unknown_background("textbutton", {})
+        # WP7a (Q26 follow-up): an untinted textbutton paints the theme's
+        # live_control_bg (0.262), a known colour -- see
+        # tests/test_ud6_wp7a_contrast.py. textedit stays unknown.
+        assert not paints_unknown_background("textbutton", {})
+        assert paints_unknown_background("textedit", {})
         assert not paints_unknown_background("comment", {})
         assert not paints_unknown_background("live.comment", {})
         assert not paints_unknown_background("newobj", {})
