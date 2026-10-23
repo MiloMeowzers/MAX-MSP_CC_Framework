@@ -1939,6 +1939,30 @@
         "confidence": "MEDIUM"
       }
     },
+    "jit.cellblock": {
+      "inlets": [
+        {
+          "id": 0,
+          "type": "anything/signal"
+        },
+        {
+          "id": 1
+        }
+      ],
+      "_evidence": "inlet 0 accepts signal: Max 9 refpage lists a signal method; help/msp/mc.combine~.maxhelp ships mc.combine~ / mc.pack~ / mc.number~ / mc.sig~ -> 0. Kept signal:false so role checks still classify it as a control inlet"
+    },
+    "inlet": {
+      "inlets": [],
+      "_evidence": "WR-06: 0 inlets / 1 outlet on 1845 MAX-saved bundle boxes, Max 7.0.0-9.3.0 (tools/audit_db.py --help-io)"
+    },
+    "outlet": {
+      "inlets": [
+        {
+          "id": 0
+        }
+      ],
+      "_evidence": "WR-06: 1 inlet / 0 outlets on 1629 MAX-saved bundle boxes, Max 7.0.0-9.3.0 (tools/audit_db.py --help-io)"
+    },
     "_domain_msp": "--- MSP Objects ---",
     "2d.wave~": {
       "outlets": [
@@ -2556,7 +2580,7 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
@@ -2578,13 +2602,14 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "outlet_type_finding"
-      }
+      },
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mcs.play~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
@@ -2600,7 +2625,8 @@
         "instances": 2,
         "agreement": 1.0,
         "source": "outlet_type_finding"
-      }
+      },
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mcs.poly~": {
       "inlets": [
@@ -2633,15 +2659,15 @@
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal/float",
+          "signal": true,
+          "digest": "(signal/float) Delay Time in ms"
         },
         {
           "id": 2,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal/float",
+          "signal": true,
+          "digest": "(signal/float) Delay Time in ms"
         }
       ],
       "outlets": [
@@ -2654,13 +2680,14 @@
       "_audit": {
         "source": "Q11 / C9 (261013-e43): C74/help/msp/tapout~.maxhelp `mcs.tapout~ 100 200 300` => (3,1) [\"multichannelsignal\"] (9.0.0), 1 box",
         "confidence": "HIGH"
-      }
+      },
+      "_evidence": "inlets 1-2 signal/float: one delay-time inlet per tap like tapout~; help/msp/tapout~.maxhelp ships sig~ -> 1 and mc.pack~ -> 2"
     },
     "mcs.vst~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
@@ -2706,7 +2733,8 @@
         "instances": 1,
         "agreement": 1.0,
         "source": "outlet_type_finding"
-      }
+      },
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "meter~": {
       "outlets": [
@@ -2813,9 +2841,9 @@
         },
         {
           "id": 2,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal/float",
+          "signal": true,
+          "digest": "Pitchshift factor (int or float) when the channel argument is 2"
         }
       ],
       "outlets": [
@@ -2839,7 +2867,8 @@
       "_audit": {
         "source": "Q11 / C9 (261013-e43): C74/help/msp/pitchshift~.maxhelp `pitchshift~ 2` => (3,3) [\"signal\",\"signal\",\"\"] (9.0.0), 1 box",
         "confidence": "HIGH"
-      }
+      },
+      "_evidence": "inlet 2: help pitchshift~ 2 saves 3 inlets (2 channels + factor); refpage factor inlet type Signal"
     },
     "playlist~": {
       "outlets": [
@@ -3482,17 +3511,18 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal",
+          "signal": true,
+          "digest": "(signal) Input"
         },
         {
           "id": 1,
-          "type": "",
+          "type": "symbol",
           "signal": false,
-          "digest": ""
+          "digest": "Window function (applied by a message box in the abstraction)"
         }
-      ]
+      ],
+      "_evidence": "inlet 0 signal: help (filterdesign, framesmooth~) ships +~ / cascade~ / cross~ / noise~ / saw~ -> 0; inlet 1 control: C74 windowed-fft~.maxpat abstraction feeds it to a message box"
     },
     "zigzag~": {
       "outlets": [
@@ -4056,6 +4086,24 @@
         "date": "2026-10-02"
       }
     },
+    "jit.vcr": {
+      "inlets": [
+        {
+          "id": 0,
+          "type": "signal/message",
+          "signal": true
+        },
+        {
+          "id": 1,
+          "type": "signal",
+          "signal": true
+        },
+        {
+          "id": 2
+        }
+      ],
+      "_evidence": "inlets 0-1 signal: refpage digests \"MSP audio in 1/2\", method signal; help/jitter/jit.vcr.maxhelp ships p some-noises -> 0 and 1"
+    },
     "_domain_mc": "--- MC Objects ---",
     "mc.adsr~": {
       "inlets": [
@@ -4129,13 +4177,13 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
@@ -4183,13 +4231,14 @@
           "signal": true,
           "digest": ""
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.bands~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
@@ -4215,35 +4264,36 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal",
+          "signal": true,
+          "digest": "(multichannel signal) Input"
         },
         {
           "id": 1,
-          "type": "",
+          "type": "float",
           "signal": false,
-          "digest": ""
+          "digest": "Crossover / band setting (float)"
         },
         {
           "id": 2,
-          "type": "",
+          "type": "float",
           "signal": false,
-          "digest": ""
+          "digest": "Band setting (float)"
         },
         {
           "id": 3,
-          "type": "",
+          "type": "float",
           "signal": false,
-          "digest": ""
+          "digest": "Band setting (deferred message)"
         },
         {
           "id": 4,
-          "type": "",
+          "type": "float",
           "signal": false,
-          "digest": ""
+          "digest": "Band setting (float)"
         }
-      ]
+      ],
+      "_evidence": "inlet 0 signal: help/msp/limi~.maxhelp ships mc.unpack~ -> 0; inlets 1-4 control: the C74 mc.bands~.maxpat abstraction routes them into flonum / defer boxes | signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.edge~": {
       "inlets": [
@@ -4285,49 +4335,49 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 2,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 3,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 4,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 5,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 6,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 7,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         }
@@ -4345,7 +4395,8 @@
           "signal": true,
           "digest": ""
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.gen": {
       "inlets": [
@@ -4381,19 +4432,19 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 2,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         }
@@ -4423,13 +4474,14 @@
           "signal": true,
           "digest": ""
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.line~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
@@ -4465,7 +4517,8 @@
           "signal": true,
           "digest": ""
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.noteallocator~": {
       "outlets": [
@@ -4553,7 +4606,7 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
@@ -4583,7 +4636,8 @@
           "signal": true,
           "digest": ""
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.poly~": {
       "outlets": [
@@ -4625,9 +4679,9 @@
         },
         {
           "id": 2,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal",
+          "signal": true,
+          "digest": "(signal) Input"
         }
       ],
       "outlets": [
@@ -4640,13 +4694,14 @@
       "_audit": {
         "source": "Q11 / C9 (261013-e43): C74/help/msp/stash~.maxhelp `mc.selector~ 2 1 @ramptime 100` => (3,1) [\"multichannelsignal\"] (9.0.0), 3 boxes (2 bundle + 1 grainflow)",
         "confidence": "HIGH"
-      }
+      },
+      "_evidence": "inlet 2 signal: refpage inlets 1..N are signal; help mc.snowphasor~ / stash~ ship mc.*~ / mc.cycle~ -> 2"
     },
     "mc.sfplay~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
@@ -4662,7 +4717,8 @@
         "instances": 9,
         "agreement": 1.0,
         "source": "outlet_type_finding"
-      }
+      },
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.snapshot~": {
       "inlets": [
@@ -4756,19 +4812,19 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 2,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         }
@@ -4788,17 +4844,18 @@
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal/float",
+          "signal": true,
+          "digest": "(signal/float) Delay Time in ms"
         },
         {
           "id": 2,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal/float",
+          "signal": true,
+          "digest": "(signal/float) Delay Time in ms"
         }
-      ]
+      ],
+      "_evidence": "inlets 1-2 signal/float: one delay-time inlet per tap like tapout~; help/msp/tapout~.maxhelp ships sig~ -> 1 and mc.pack~ -> 2 | signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.targetlist": {
       "inlets": [
@@ -4853,7 +4910,7 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
@@ -4895,7 +4952,8 @@
           "signal": true,
           "digest": ""
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.voiceallocator~": {
       "outlets": [
@@ -4923,13 +4981,13 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         },
@@ -4995,7 +5053,8 @@
           "signal": true,
           "digest": ""
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "_domain_gen": "--- Gen Objects ---",
     "bool": {
@@ -5912,15 +5971,15 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal/float",
+          "signal": true,
+          "digest": "(signal/float) Value for the Live parameter"
         },
         {
           "id": 1,
-          "type": "",
+          "type": "anything",
           "signal": false,
-          "digest": ""
+          "digest": "id of the Live object to control (id N)"
         }
       ],
       "outlets": [
@@ -5936,7 +5995,8 @@
         "instances": 4,
         "agreement": 1.0,
         "source": "io_count_finding"
-      }
+      },
+      "_evidence": "inlet 0 signal/float: refpage methods signal/float, help ships cycle~/phasor~/selector~/downsamp~ -> 0; inlet 1 control: id messages from live.path / message only"
     },
     "live.scope~": {
       "inlets": [
@@ -7029,7 +7089,7 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         }
@@ -7043,11 +7103,12 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
+          "type": "symbol",
           "signal": false,
-          "digest": ""
+          "digest": "set: change the receive name"
         }
-      ]
+      ],
+      "_evidence": "inlet 0 control: receive~ set message; help ships message -> 0 only | signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.send~": {
       "inlets": [
@@ -7085,17 +7146,18 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal",
+          "signal": true,
+          "digest": "(multichannel signal) Input to sum"
         }
-      ]
+      ],
+      "_evidence": "inlet 0 signal: help/msp/mc.op~.maxhelp ships mc.list~ / mc.pack~ -> mc.sum~ 0 (idioms.json)"
     },
     "mcp.record~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         }
@@ -7109,23 +7171,24 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal",
+          "signal": true,
+          "digest": "(multichannel signal) Record input, 1 Starts, 0 Stops"
         },
         {
           "id": 1,
-          "type": "",
+          "type": "double",
           "signal": false,
-          "digest": ""
+          "digest": "Recording Start Point in ms"
         },
         {
           "id": 2,
-          "type": "",
+          "type": "double",
           "signal": false,
-          "digest": ""
+          "digest": "Recording End Point in ms"
         }
-      ]
+      ],
+      "_evidence": "record~ layout (refpage); help/msp/record~.maxhelp ships mc.pack~ -> mcp.record~ 0 | signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mcs.loudness~": {
       "inlets": [
@@ -7186,7 +7249,7 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Signal output",
           "signal_role": "audio"
         }
@@ -7200,17 +7263,18 @@
       "inlets": [
         {
           "id": 0,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal",
+          "signal": true,
+          "digest": "Note Number or midievent Message"
         },
         {
           "id": 1,
-          "type": "",
-          "signal": false,
-          "digest": ""
+          "type": "signal",
+          "signal": true,
+          "digest": "Velocity"
         }
-      ]
+      ],
+      "_evidence": "inlets 0-1 mirror sfizz~ (the mcs. wrapper keeps the wrapped I/O layout) | signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "value": {
       "inlets": [
@@ -11071,39 +11135,39 @@
         },
         {
           "id": 5,
-          "type": "",
+          "type": "float",
           "signal": false,
-          "digest": ""
+          "digest": "Envelope setting (control; help feeds it from live.adsrui / flonum only)"
         },
         {
           "id": 6,
-          "type": "",
+          "type": "float",
           "signal": false,
-          "digest": ""
+          "digest": "Envelope setting (control; help feeds it from live.adsrui / flonum only)"
         },
         {
           "id": 7,
-          "type": "",
+          "type": "float",
           "signal": false,
-          "digest": ""
+          "digest": "Envelope setting (control; help feeds it from live.adsrui / flonum only)"
         },
         {
           "id": 8,
-          "type": "",
+          "type": "float",
           "signal": false,
-          "digest": ""
+          "digest": "Envelope setting (control; help feeds it from live.adsrui / flonum only)"
         },
         {
           "id": 9,
-          "type": "",
+          "type": "float",
           "signal": false,
-          "digest": ""
+          "digest": "Envelope setting (control; help feeds it from live.adsrui / flonum only)"
         },
         {
           "id": 10,
-          "type": "",
+          "type": "float",
           "signal": false,
-          "digest": ""
+          "digest": "Envelope setting (control; help feeds it from live.adsrui / flonum only)"
         }
       ],
       "outlets": [
@@ -11126,7 +11190,8 @@
       "_audit": {
         "source": "Q11 / C2 (261013-e43): C74/packages/maxforlive-elements/help/live.adsr~.maxhelp `live.adsr~ 600. 100. 0.5 1000.` => (11,3) [\"signal\",\"signal\",\"\"] (8.2.0), 20 boxes (also C74/packages/ableton-dsp/help/abl.dsp.dualbasicshapes~.maxhelp 9.0.0; inlets 0-4 receive cords from MAX-saved signal outlets, 5-10 control only; no refpage)",
         "confidence": "HIGH"
-      }
+      },
+      "_evidence": "inlets 5-10 control: every shipped cord into them comes from live.adsrui / flonum (maxforlive-elements help)"
     },
     "mira.motion": {
       "inlets": [
@@ -12671,47 +12736,51 @@
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Channel 1 Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mcs.fffb~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "signal output from filter 0",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mcs.gate~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mcs.gen~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "out 1",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mcs.groove~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Multichannel output",
           "signal_role": "audio"
         },
@@ -12721,23 +12790,25 @@
           "digest": "Loop Sync Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mcs.limi~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mcs.matrix~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         },
@@ -12747,7 +12818,8 @@
           "digest": "inlets outlets gains",
           "signal_role": "list"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mcs.selector~": {
       "outlets": [
@@ -12763,21 +12835,23 @@
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mcs.wave~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "minimum~": {
       "outlets": [
@@ -13107,7 +13181,18 @@
           "digest": "Output (ramp cycle from 0 to 1)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "inlets": [
+        {
+          "id": 0
+        },
+        {
+          "id": 1,
+          "type": "float/signal",
+          "signal": true
+        }
+      ],
+      "_evidence": "inlet 1 signal: refpage digest \"Phase (float), Trigger Reset (signal)\"; help/msp/phasor~.maxhelp ships <~ -> phasor~ 1"
     },
     "pink~": {
       "outlets": [
@@ -13457,7 +13542,15 @@
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "inlets": [
+        {
+          "id": 0,
+          "type": "signal/float",
+          "signal": true
+        }
+      ],
+      "_evidence": "inlet 0 signal: refpage \"(signal) Order Forcing, float Sets Value\"; help/msp/begin~.maxhelp ships begin~ -> sig~ 0"
     },
     "sinh~": {
       "outlets": [
@@ -13943,231 +14036,254 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Difference Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.!/~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Quotient Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.!=~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Comparison Result (1 or 0)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.%~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Modulo Result",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.*~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Multiplication Result",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.+=~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Accumulator Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.+~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Addition Result",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.-~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Subtraction Result",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc./~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Division Result",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.2d.wave~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Channel 1 Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.<=~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Comparison Result (1 or 0)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.<~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Comparison Result (1 or 0)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.==~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Comparison Result (1 or 0)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.>=~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Comparison Result (1 or 0)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.>~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Comparison Result (1 or 0)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.abs~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Absolute Value of Input",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.acosh~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Acosh (x) Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.acos~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Acos (x) Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.adc~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Audio Input (multichannel)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.allpass~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Filter Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.apply~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Function Applied to Channels",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.asinh~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Asinh (x) Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.asin~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Asin (x) Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.assign": {
       "outlets": [
@@ -14183,51 +14299,56 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "atan2(y/x)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.atanh~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Atanh (x) Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.atan~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Atan (x) Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.atodb~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Gain/Attenuation dB",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.average~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Running Mean Average Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.avg~": {
       "outlets": [
@@ -14243,107 +14364,117 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.bitand~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.bitnot~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.bitor~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.bitsafe~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.bitshift~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.bitxor~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.buffir~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.cartopol~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) amplitude/alpha output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) phase/theta output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.cascade~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) filtered signal out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.cell": {
       "outlets": [
@@ -14359,11 +14490,12 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) 0. if Unchanged; -1. (decreasing) or 1. (increasing) if Changed.",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.channelcount~": {
       "outlets": [
@@ -14385,13 +14517,13 @@
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "List Values",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "1 if On, 0 if Off",
           "signal_role": "audio"
         },
@@ -14407,109 +14539,119 @@
           "digest": "Last Index Recalled",
           "signal_role": "data"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.click~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Impulse Signal Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.clip~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Clipped Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.combine~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.comb~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Filter Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.cosh~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Cosh (x) Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.cosx~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Cos (x) Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.cos~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Cosine Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.count~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Count Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.cross~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Lowpass Filtered Output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Highpass Filtered Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.curve~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output Ramp",
           "signal_role": "audio"
         },
@@ -14519,109 +14661,119 @@
           "digest": "bang When Curve Reaches Destination",
           "signal_role": "trigger"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.cycle~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.dbtoa~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Amplitude Scalar",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.degrade~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.deinterleave~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Deinterleaved Output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Deinterleaved Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.delay~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Delayed Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.deltaclip~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.delta~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Differences Between Input Samples",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.downsamp~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.dup~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "input duplicated",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.evolve~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         },
@@ -14637,139 +14789,149 @@
           "digest": "Query value of the output range",
           "signal_role": "float"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.ezadc~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output from Audio Device Input",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.fft~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Real Output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Imaginary Output",
           "signal_role": "audio"
         },
         {
           "id": 2,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Ramp from 0 to Number of Points - 1",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.filtercoeff~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Gain (FF Coefficient 0)",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) FF Coefficient 1",
           "signal_role": "audio"
         },
         {
           "id": 2,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) FF Coefficient 2",
           "signal_role": "audio"
         },
         {
           "id": 3,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) FB Coefficient 1",
           "signal_role": "audio"
         },
         {
           "id": 4,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) FB Coefficient 2",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.frameaccum~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) FFT Running Phase Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.frameaverage~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "FFT Running Phase Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.framedelta~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) FFT Phase Deviation",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.framesmooth~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "FFT Running Phase Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.freqshift~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Frequency-shifted Signal (Positive Sideband)",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Frequency-shifted Signal (Negative Sideband)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.ftom~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Floating-point MIDI Note Number",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.function": {
       "outlets": [
@@ -14831,7 +14993,7 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Scaled Output",
           "signal_role": "audio"
         },
@@ -14841,37 +15003,41 @@
           "digest": "Slider Value",
           "signal_role": "float"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.gate~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.generate~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.gen~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "out 1",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.getattr": {
       "outlets": [
@@ -14899,7 +15065,7 @@
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         },
@@ -14915,123 +15081,132 @@
           "digest": "Output function values for input",
           "signal_role": "list"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.hilbert~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) cosine/real output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) sine/imag output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.ifft~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Real Output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Imaginary Output",
           "signal_role": "audio"
         },
         {
           "id": 2,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Ramp from 0 to Number of Points - 1",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.index~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Sample Value at Index",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Audio Channel In buffer~",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.interleave~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Interleaved Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.in~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Inputs",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.jit.peek~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "value",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "dumpout",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.kink~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Disorted Phase Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.limi~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.line": {
       "outlets": [
         {
           "id": 0,
-          "type": "control",
+          "type": "multichannelsignal",
           "digest": "Ramp Output",
           "signal_role": "audio"
         },
@@ -15041,23 +15216,25 @@
           "digest": "Signals End of Ramp",
           "signal_role": "trigger"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.list~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.live.gain~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Scaled Signal (ch 1)",
           "signal_role": "audio"
         },
@@ -15082,37 +15259,41 @@
       "_audit": {
         "source": "Q11 / C9 (261013-e43): C74/help/max/mc.assign.maxhelp `mc.live.gain~` => (1,4) [\"multichannelsignal\",\"\",\"float\",\"list\"] (9.0.0), 109 boxes",
         "confidence": "HIGH"
-      }
+      },
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.log~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) log of Input to Base",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.lookup~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Distorted Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.lores~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.loudness~": {
       "outlets": [
@@ -15168,13 +15349,13 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output 0",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output 1",
           "signal_role": "audio"
         },
@@ -15190,17 +15371,19 @@
           "signal": false,
           "digest": "Control output (MAX-saved help box mc.matrix~ 3 2; not in the 9.2 refpage)"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.maximum~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Maximum of Left and Right Signals",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.midiplayer~": {
       "outlets": [
@@ -15232,23 +15415,24 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Minimum of Left and Right Signals",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.minmax~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Minimum",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Maximum",
           "signal_role": "audio"
         },
@@ -15264,23 +15448,25 @@
           "digest": "(float) Maximum",
           "signal_role": "float"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.mixdown~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.mstosamps~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Samples At Input signal or Current Sampling Rate",
           "signal_role": "audio"
         },
@@ -15290,43 +15476,47 @@
           "digest": "(float) Samples At Input signal or Current Sampling Rate",
           "signal_role": "float"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.mtof~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Frequency in Hz",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.noise~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) The Noise",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.normalize~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Normalized Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.number~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Entered or received float values as a multichannel signal",
           "signal_role": "audio"
         },
@@ -15342,19 +15532,20 @@
           "digest": "Output Channel for Signal Value",
           "signal_role": "float"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.omx.4band~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Left Output Channel",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Right Output Channel",
           "signal_role": "audio"
         },
@@ -15370,19 +15561,20 @@
           "digest": "(list) Meter Output",
           "signal_role": "list"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.omx.5band~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Left Output Channel",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Right Output Channel",
           "signal_role": "audio"
         },
@@ -15398,19 +15590,20 @@
           "digest": "(list) Meter Output",
           "signal_role": "list"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.omx.comp~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Left Output Channel",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Right Output Channel",
           "signal_role": "audio"
         },
@@ -15426,19 +15619,20 @@
           "digest": "(list) Meter Output",
           "signal_role": "list"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.omx.peaklim~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Left Output Channel",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Right Output Channel",
           "signal_role": "audio"
         },
@@ -15454,17 +15648,19 @@
           "digest": "(list) Meter Output",
           "signal_role": "list"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.onepole~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) filter output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.op~": {
       "outlets": [
@@ -15480,33 +15676,35 @@
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Signal Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.pack~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.pattern~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Pattern(s)",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Pattern Data in Response to getcontent Message",
           "signal_role": "audio"
         },
@@ -15516,7 +15714,8 @@
           "digest": "Pattern Data in Response to getcontent Message",
           "signal_role": "list"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.peek~": {
       "outlets": [
@@ -15532,73 +15731,79 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Connect to groove~",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.phaseshift~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.phasewrap~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Phase-Wrapped Signal Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.phasor~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output (ramp cycle from 0 to 1)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.pink~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) The Noise",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.pitchshift~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "pitchshifted signal, channel: 1",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Current latency, reported in samples",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.playlist~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         },
@@ -15623,59 +15828,64 @@
       "_audit": {
         "source": "Q11 / C9 (261013-e43): C74/help/msp/matrix~.maxhelp `mc.playlist~` => (1,4) [\"multichannelsignal\",\"signal\",\"\",\"dictionary\"] (9.0.0), 19 boxes",
         "confidence": "HIGH"
-      }
+      },
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.poltocar~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "real/x output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "imaginary/y output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.pong~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.pow~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Base raised to Input",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.rampsmooth~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Smoothed result",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.ramp~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Ramp Output",
           "signal_role": "audio"
         },
@@ -15685,23 +15895,25 @@
           "digest": "bang When Ramp Completes",
           "signal_role": "trigger"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.rand~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) The Noise Path",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.range~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Range",
           "signal_role": "audio"
         },
@@ -15717,17 +15929,19 @@
           "digest": "Range",
           "signal_role": "float"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.rate~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Time-Scaled Version of the Input",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.record~": {
       "outlets": [
@@ -15743,55 +15957,58 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.resize~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.reson~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Filtered Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.retune~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "retuned signal",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "detected frequency",
           "signal_role": "audio"
         },
         {
           "id": 2,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "closest note",
           "signal_role": "audio"
         },
         {
           "id": 3,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "deviation in cents",
           "signal_role": "audio"
         },
@@ -15801,17 +16018,19 @@
           "digest": "closest note and deviation in cents",
           "signal_role": "float"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.round~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.route": {
       "outlets": [
@@ -15835,27 +16054,29 @@
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.sah~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.sampstoms~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Milliseconds At Input signal or Current Sampling Rate",
           "signal_role": "audio"
         },
@@ -15865,53 +16086,58 @@
           "digest": "(float) Milliseconds At Input signal or Current Sampling Rate",
           "signal_role": "float"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.sash~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.saw~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Input signal",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.scale~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) scaled output value",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.separate~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Separated Output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Separated Output 2 (1 Channels)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.seq~": {
       "outlets": [
@@ -15939,43 +16165,46 @@
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Audio Output 1",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Audio Output 2",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.sfrecord~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) elapsed time (ms)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.shape~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Time-Scaled Function",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.sig~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
@@ -15996,73 +16225,80 @@
         "deviate",
         "spread",
         "spreadinclusive"
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.sinh~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Sinh (x) Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.sinx~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Sin (x) Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.slide~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.snowfall~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Particle Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.snowphasor~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Phasors",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.sqrt~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Square Root",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.stash~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         },
@@ -16075,71 +16311,76 @@
       "_audit": {
         "source": "Q11 / C9 (261013-e43): C74/help/msp/stash~.maxhelp `mc.stash~` => (4,2) [\"multichannelsignal\",\"multichannelsignal\"] (9.0.0), 1 box (refpage outlet 1 is a signal \"Index\")",
         "confidence": "HIGH"
-      }
+      },
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.stepdiv~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Step Number",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.stepfun~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Step Number",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.stereo~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Output (2 Channels)",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.stutter~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Playback Output 1",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.subdiv~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Step Number",
           "signal_role": "audio"
         },
@@ -16149,47 +16390,49 @@
           "digest": "Control output",
           "signal_role": "status"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.svf~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Low-pass Output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) High-pass Output",
           "signal_role": "audio"
         },
         {
           "id": 2,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Band-pass Output",
           "signal_role": "audio"
         },
         {
           "id": 3,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Notch Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.swing~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Step Number",
           "signal_role": "audio"
         },
@@ -16199,13 +16442,14 @@
           "digest": "Step Number",
           "signal_role": "float"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.sync~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "synchronized ramp (0-1)",
           "signal_role": "audio"
         },
@@ -16221,37 +16465,41 @@
           "digest": "MIDI beat clock",
           "signal_role": "status"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.table~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.tanh~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Tanh (x) Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.tanx~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Tan (x) Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.target": {
       "outlets": [
@@ -16273,87 +16521,95 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Filter Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.thresh~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.transpose~": {
       "outlets": [
         {
           "id": 0,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Transposed Output",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "mc_signal",
+          "type": "multichannelsignal",
           "digest": "Transposed Output 2",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.trapezoid~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.triangle~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.tri~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.trunc~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Integer Part of Input",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.twist~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Curved Ramp Out",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.unpack~": {
       "outlets": [
@@ -16375,37 +16631,40 @@
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Trapezoidal Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.vectral~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output Value",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.wave~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.what~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Impulse if Values Detect, 0 Otherwise",
           "signal_role": "audio"
         },
@@ -16415,51 +16674,54 @@
           "digest": "Index of Matched Item",
           "signal_role": "data"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.where~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Elapsed Time",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Predicted Time Until Reset",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.zerox~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Number of Zero-Crossings per Signal Vector",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "Clicks at Zero-Crossings",
           "signal_role": "audio"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "mc.zigzag~": {
       "outlets": [
         {
           "id": 0,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Output Ramp",
           "signal_role": "audio"
         },
         {
           "id": 1,
-          "type": "signal",
+          "type": "multichannelsignal",
           "digest": "(signal) Current Index",
           "signal_role": "audio"
         },
@@ -16475,7 +16737,8 @@
           "digest": "bang When Line Reaches Destination",
           "signal_role": "trigger"
         }
-      ]
+      ],
+      "_evidence": "signal outlet type = what MAX saves: multichannelsignal for MC outlets, signal for the single-channel ones help boxes save as signal (mc.sum~, mc.unpack~, ...)"
     },
     "send": {
       "inlets": [
@@ -17070,11 +17333,12 @@
       "inlet_count": "second_arg+2",
       "outlet_count": "fixed:1",
       "default_inlets": 3,
-      "description": "record~ buf N: N signal inlets + start and end point inlets; fewer than 2 args = 1 channel (3 inlets). Inlet layout (channel 2 at inlet 1) is not modelled (S6/Q33).",
+      "description": "record~ buf N: N signal inlets + start and end point inlets; fewer than 2 args = 1 channel (3 inlets). trailing_inlets 2: with args, the LAST two inlets are the DB's last two (start / end) and every earlier inlet repeats DB inlet 0 (signal).",
       "_audit": {
         "source": "Q10 / C1 (261013-cyg): MAX-saved `record~ this 2` = 4/1 (C74/media/legacy-tutorials/msp-tut/mypvoc2~.maxpat), `record~ foo` = 3/1 (C74/help/msp/plugphasor~.maxhelp)",
         "confidence": "HIGH"
-      }
+      },
+      "trailing_inlets": 2
     },
     "jit.pack": {
       "inlet_count": "first_arg",
@@ -17104,6 +17368,30 @@
       "description": "mc.route N: 2 inlets, N outlets; bare = 2 outlets. Outlet signal roles are Q11 (C9) scope.",
       "_audit": {
         "source": "Q10 / C1 (261013-cyg): MAX-saved `mc.route 4` = 2/4 (C74/help/msp/mc.pack~.maxhelp)",
+        "confidence": "HIGH"
+      }
+    },
+    "sfrecord~": {
+      "inlet_count": "first_arg",
+      "outlet_count": "fixed:1",
+      "default_inlets": 1,
+      "default_outlets": 1,
+      "trailing_inlets": 0,
+      "description": "sfrecord~ N: one signal inlet per input channel (inlet 0 also takes the open/record messages); no arg = 1 channel. trailing_inlets 0: every inlet repeats DB inlet 0.",
+      "_audit": {
+        "source": "WR-03 (quick 261022-ud6): refpage objarg number-of-input-channels; MAX-saved sfrecord~ 2 = 2/1 and sfrecord~ 8 = 8/1 (bundle help)",
+        "confidence": "HIGH"
+      }
+    },
+    "jit.catch~": {
+      "inlet_count": "first_arg",
+      "outlet_count": "fixed:2",
+      "default_inlets": 1,
+      "default_outlets": 2,
+      "trailing_inlets": 0,
+      "description": "jit.catch~ N: one signal inlet per channel; no arg = 1. trailing_inlets 0: every inlet repeats DB inlet 0.",
+      "_audit": {
+        "source": "WR-03 (quick 261022-ud6): MAX-saved jit.catch~ 1/2/7 = 1/2/7 inlets, bare jit.catch~ = 1 (bundle help); listed in tests/fixtures/help_io_baseline.json",
         "confidence": "HIGH"
       }
     }

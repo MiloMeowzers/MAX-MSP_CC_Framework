@@ -14,8 +14,11 @@ Flow (``/max-iterate --fix``)::
     print(session.diff.render())
 
 A finding is selected by its key ``(rule, box_ids, port, path)`` -- the same
-identity the save gate and tests/review_blocker_allowlist.json use
-(:func:`finding_key`) -- or by the CriticResult itself.
+identity tests/review_blocker_allowlist.json uses (:func:`finding_key`) --
+or by the CriticResult itself. The save gate's own blocker key is
+``hooks._finding_key``; it is not guaranteed to equal this one (a finding
+reworded without a rule change is new to a text-keyed gate but not to this
+selection; review-validation IN-01).
 
 This module never saves, writes or commits: saving is the edit_patch
 session's job (stale check, save gate, atomic write, path-scoped commit,
@@ -50,7 +53,8 @@ class FixError(ValueError):
 
 
 def finding_key(result) -> tuple:
-    """``(rule, box_ids, port, path)`` of a CriticResult; a 4-tuple passes through."""
+    """``(rule, box_ids, port, path)`` of a CriticResult or (since quick
+    261022-ud6 WP1) a ValidationResult; a 4-tuple passes through."""
     if isinstance(result, tuple):
         if len(result) != 4:
             raise FixError(f"a finding key is (rule, box_ids, port, path), got {result!r}")

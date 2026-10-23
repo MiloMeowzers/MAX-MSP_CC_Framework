@@ -110,7 +110,9 @@ def _valid_id(value) -> bool:
 
 
 def _valid_port(value) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool)
+    """A non-negative int port index (bools excluded; WR-01: a negative
+    index used to pass and read ports from the end)."""
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
 def _entry_box(entry):

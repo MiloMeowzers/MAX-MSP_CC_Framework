@@ -955,8 +955,10 @@ def test_trailing_outlet_types_matrix_play_mc_matrix():
         "signal", "signal", ""]
     assert db.get_outlet_types("play~", ["foo", "2"]) == [
         "signal", "signal", ""]
+    # MAX saves `mc.matrix~ 3 2` as (multichannelsignal x2, "", "")
+    # (bundle help; CR-01 MC outlet flavour)
     assert db.get_outlet_types("mc.matrix~", ["3", "2"]) == [
-        "signal", "signal", "", ""]
+        "multichannelsignal", "multichannelsignal", "", ""]
 
 
 def test_patcher_builds_matrix_and_play_with_trailing_outlet():

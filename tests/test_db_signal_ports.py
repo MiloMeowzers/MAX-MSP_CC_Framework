@@ -199,6 +199,57 @@ class TestBuildInletArrayNeverDowngrades:
             ("", False), ("", False),
         ]
 
+    def test_io_count_path_never_downgrades_signal_outlets(self, tmp_path):
+        """WR-02: the count path built outlets as [""] * n (signal False),
+        which the Q11 per-port merge applies over a base signal outlet."""
+        gen = _generator(tmp_path)
+        findings = {
+            "sigobj": make_findings(
+                name="sigobj",
+                io_count_finding={
+                    "confidence": "HIGH", "agreement": 1.0, "help_outlets": 2,
+                },
+            ),
+        }
+        outlets = gen.generate_proposed_overrides(findings)["objects"]["sigobj"]["outlets"]
+        assert [(o["type"], o["signal"]) for o in outlets] == [
+            ("signal", True), ("", False),
+        ]
+
+    def test_empty_io_path_never_downgrades_signal_outlets(self, tmp_path):
+        gen = _generator(tmp_path)
+        proposed = gen.generate_proposed_overrides(
+            {},
+            empty_io_data={"objects": {"sigobj": {
+                "has_help_data": True, "proposed_inlets": 2,
+                "proposed_outlets": 1,
+            }}},
+        )
+        outlets = proposed["objects"]["sigobj"]["outlets"]
+        assert [(o["type"], o["signal"]) for o in outlets] == [("signal", True)]
+
+    def test_unknown_object_outlets_get_control_default(self, tmp_path):
+        gen = _generator(tmp_path)
+        proposed = gen.generate_proposed_overrides(
+            {},
+            empty_io_data={"objects": {"nosuchobj": {
+                "has_help_data": True, "proposed_inlets": 0,
+                "proposed_outlets": 2,
+            }}},
+        )
+        outlets = proposed["objects"]["nosuchobj"]["outlets"]
+        assert [(o["type"], o["signal"]) for o in outlets] == [
+            ("", False), ("", False),
+        ]
+
+    def test_outlet_type_finding_path_still_uses_help_types(self, tmp_path):
+        """Help-saved outlettypes are evidence: that path is unchanged."""
+        gen = _generator(tmp_path)
+        arr = gen._build_outlet_array(["", "signal"])
+        assert [(o["type"], o["signal"]) for o in arr] == [
+            ("", False), ("signal", True),
+        ]
+
     def test_beyond_db_array_gets_control_default(self, tmp_path):
         gen = _generator(tmp_path)
         arr = gen._build_inlet_array(4, "sigobj")

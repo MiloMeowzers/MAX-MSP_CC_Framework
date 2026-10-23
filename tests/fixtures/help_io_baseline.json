@@ -216,29 +216,12 @@
     },
     "type_mismatches": 0
    },
-   "inlet": {
-    "boxes": 1845,
-    "count_mismatches": 1845,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 1845
-    },
-    "type_mismatches": 0
-   },
    "jit.avc": {
     "boxes": 5,
     "count_mismatches": 5,
     "signatures": {
      "count args=0 max=1,0 db=2,1": 2,
      "count args=0 max=1,1 db=2,1": 3
-    },
-    "type_mismatches": 0
-   },
-   "jit.catch~": {
-    "boxes": 13,
-    "count_mismatches": 2,
-    "signatures": {
-     "count args=1 max=2,2 db=1,2": 1,
-     "count args=1 max=7,2 db=1,2": 1
     },
     "type_mismatches": 0
    },
@@ -617,14 +600,6 @@
     },
     "type_mismatches": 0
    },
-   "outlet": {
-    "boxes": 1629,
-    "count_mismatches": 1629,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 1629
-    },
-    "type_mismatches": 0
-   },
    "plot~": {
     "boxes": 100,
     "count_mismatches": 35,
@@ -983,14 +958,6 @@
     },
     "type_mismatches": 0
    },
-   "inlet": {
-    "boxes": 69,
-    "count_mismatches": 69,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 69
-    },
-    "type_mismatches": 0
-   },
    "interleave": {
     "boxes": 3,
     "count_mismatches": 3,
@@ -1084,14 +1051,6 @@
     "count_mismatches": 1,
     "signatures": {
      "count args=3 max=1,1 db=2,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "outlet": {
-    "boxes": 80,
-    "count_mismatches": 80,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 80
     },
     "type_mismatches": 0
    },
@@ -1246,14 +1205,6 @@
     },
     "type_mismatches": 0
    },
-   "inlet": {
-    "boxes": 20,
-    "count_mismatches": 20,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 20
-    },
-    "type_mismatches": 0
-   },
    "live.gain~": {
     "boxes": 13,
     "count_mismatches": 8,
@@ -1268,14 +1219,6 @@
     "signatures": {
      "count args=5 max=5,1 db=1,1": 16,
      "count args=6 max=6,1 db=1,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "outlet": {
-    "boxes": 21,
-    "count_mismatches": 21,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 21
     },
     "type_mismatches": 0
    }
@@ -1674,14 +1617,6 @@
     },
     "type_mismatches": 0
    },
-   "inlet": {
-    "boxes": 340,
-    "count_mismatches": 340,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 340
-    },
-    "type_mismatches": 0
-   },
    "jstrigger": {
     "boxes": 1,
     "count_mismatches": 1,
@@ -1695,14 +1630,6 @@
     "count_mismatches": 11,
     "signatures": {
      "count args=0 max=1,4 db=2,5": 11
-    },
-    "type_mismatches": 0
-   },
-   "outlet": {
-    "boxes": 319,
-    "count_mismatches": 319,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 319
     },
     "type_mismatches": 0
    },
@@ -1724,27 +1651,11 @@
     },
     "type_mismatches": 0
    },
-   "inlet": {
-    "boxes": 11,
-    "count_mismatches": 11,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 11
-    },
-    "type_mismatches": 0
-   },
    "join": {
     "boxes": 7,
     "count_mismatches": 1,
     "signatures": {
      "count args=2 max=2,1 db=0,1": 1
-    },
-    "type_mismatches": 0
-   },
-   "outlet": {
-    "boxes": 8,
-    "count_mismatches": 8,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 8
     },
     "type_mismatches": 0
    },
@@ -1774,27 +1685,11 @@
     },
     "type_mismatches": 0
    },
-   "inlet": {
-    "boxes": 32,
-    "count_mismatches": 32,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 32
-    },
-    "type_mismatches": 0
-   },
    "limi~": {
     "boxes": 1,
     "count_mismatches": 1,
     "signatures": {
      "count args=0 max=1,1 db=2,2": 1
-    },
-    "type_mismatches": 0
-   },
-   "outlet": {
-    "boxes": 37,
-    "count_mismatches": 37,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 37
     },
     "type_mismatches": 0
    },
@@ -1823,6 +1718,34 @@
     "type_mismatches": 0
    }
   },
+  "package:Vision": {
+   "dict.unpack": {
+    "boxes": 25,
+    "count_mismatches": 11,
+    "signatures": {
+     "count args=2 max=1,3 db=1,2": 4,
+     "count args=3 max=1,4 db=1,2": 6,
+     "count args=6 max=1,7 db=1,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.gl.environment": {
+    "boxes": 1,
+    "count_mismatches": 1,
+    "signatures": {
+     "count args=0 max=1,2 db=2,2": 1
+    },
+    "type_mismatches": 0
+   },
+   "jit.glue": {
+    "boxes": 2,
+    "count_mismatches": 2,
+    "signatures": {
+     "count args=0 max=6,2 db=4,2": 2
+    },
+    "type_mismatches": 0
+   }
+  },
   "package:abclib": {
    "abc.hoa.map~": {
     "boxes": 23,
@@ -1843,14 +1766,6 @@
     },
     "type_mismatches": 1
    },
-   "inlet": {
-    "boxes": 127,
-    "count_mismatches": 127,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 127
-    },
-    "type_mismatches": 0
-   },
    "live.gain~": {
     "boxes": 2,
     "count_mismatches": 2,
@@ -1864,14 +1779,6 @@
     "count_mismatches": 1,
     "signatures": {
      "count args=2 max=1,3 db=1,2": 1
-    },
-    "type_mismatches": 0
-   },
-   "outlet": {
-    "boxes": 77,
-    "count_mismatches": 77,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 77
     },
     "type_mismatches": 0
    }
@@ -2411,14 +2318,6 @@
     },
     "type_mismatches": 0
    },
-   "inlet": {
-    "boxes": 178,
-    "count_mismatches": 178,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 178
-    },
-    "type_mismatches": 0
-   },
    "jstrigger": {
     "boxes": 15,
     "count_mismatches": 15,
@@ -2443,14 +2342,6 @@
     },
     "type_mismatches": 0
    },
-   "outlet": {
-    "boxes": 169,
-    "count_mismatches": 169,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 169
-    },
-    "type_mismatches": 0
-   },
    "preset": {
     "boxes": 7,
     "count_mismatches": 7,
@@ -2461,14 +2352,6 @@
    }
   },
   "package:cv.jit": {
-   "inlet": {
-    "boxes": 54,
-    "count_mismatches": 54,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 54
-    },
-    "type_mismatches": 0
-   },
    "live.gain~": {
     "boxes": 1,
     "count_mismatches": 1,
@@ -2482,14 +2365,6 @@
     "count_mismatches": 2,
     "signatures": {
      "count args=0 max=1,5 db=1,10": 2
-    },
-    "type_mismatches": 0
-   },
-   "outlet": {
-    "boxes": 57,
-    "count_mismatches": 57,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 57
     },
     "type_mismatches": 0
    }
@@ -2735,27 +2610,11 @@
     },
     "type_mismatches": 0
    },
-   "inlet": {
-    "boxes": 20,
-    "count_mismatches": 20,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 20
-    },
-    "type_mismatches": 0
-   },
    "live.gain~": {
     "boxes": 11,
     "count_mismatches": 11,
     "signatures": {
      "count args=0 max=1,4 db=2,5": 11
-    },
-    "type_mismatches": 0
-   },
-   "outlet": {
-    "boxes": 17,
-    "count_mismatches": 17,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 17
     },
     "type_mismatches": 0
    },
@@ -3621,14 +3480,6 @@
     },
     "type_mismatches": 0
    },
-   "inlet": {
-    "boxes": 22,
-    "count_mismatches": 22,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 22
-    },
-    "type_mismatches": 0
-   },
    "mc.curve~": {
     "boxes": 1,
     "count_mismatches": 1,
@@ -3636,34 +3487,9 @@
      "count args=0 max=3,3 db=3,2": 1
     },
     "type_mismatches": 0
-   },
-   "outlet": {
-    "boxes": 30,
-    "count_mismatches": 30,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 30
-    },
-    "type_mismatches": 0
    }
   },
-  "package:ease": {
-   "inlet": {
-    "boxes": 9,
-    "count_mismatches": 9,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 9
-    },
-    "type_mismatches": 0
-   },
-   "outlet": {
-    "boxes": 6,
-    "count_mismatches": 6,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 6
-    },
-    "type_mismatches": 0
-   }
-  },
+  "package:ease": {},
   "package:grainflow": {
    "dict": {
     "boxes": 20,
@@ -3813,14 +3639,6 @@
     },
     "type_mismatches": 0
    },
-   "inlet": {
-    "boxes": 32,
-    "count_mismatches": 32,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 32
-    },
-    "type_mismatches": 0
-   },
    "jit.gl.multiple": {
     "boxes": 1,
     "count_mismatches": 1,
@@ -3836,25 +3654,9 @@
      "count args=1 max=1,2 db=1,1": 8
     },
     "type_mismatches": 0
-   },
-   "outlet": {
-    "boxes": 61,
-    "count_mismatches": 61,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 61
-    },
-    "type_mismatches": 0
    }
   },
   "package:ml.star": {
-   "inlet": {
-    "boxes": 38,
-    "count_mismatches": 38,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 38
-    },
-    "type_mismatches": 0
-   },
    "ml.vmm.bin": {
     "boxes": 4,
     "count_mismatches": 4,
@@ -3873,14 +3675,6 @@
     },
     "type_mismatches": 0
    },
-   "outlet": {
-    "boxes": 19,
-    "count_mismatches": 19,
-    "signatures": {
-     "count args=0 max=1,0 db=2,0": 19
-    },
-    "type_mismatches": 0
-   },
    "seq": {
     "boxes": 7,
     "count_mismatches": 7,
@@ -3891,14 +3685,6 @@
    }
   },
   "package:nn_tilde": {
-   "inlet": {
-    "boxes": 8,
-    "count_mismatches": 8,
-    "signatures": {
-     "count args=0 max=0,1 db=1,1": 8
-    },
-    "type_mismatches": 0
-   },
    "mc.nn~": {
     "boxes": 14,
     "count_mismatches": 10,
@@ -3961,115 +3747,122 @@
   "bundle": {
    "boxes_compared": 77911,
    "files": 2114,
-   "mismatching_boxes": 4324,
-   "mismatching_names": 90,
+   "mismatching_boxes": 848,
+   "mismatching_names": 87,
    "version": "9.2.0"
   },
   "package:CNMAT Externals": {
    "boxes_compared": 4444,
    "files": 58,
-   "mismatching_boxes": 418,
-   "mismatching_names": 51,
+   "mismatching_boxes": 269,
+   "mismatching_names": 49,
    "version": "1.0.5"
   },
   "package:FlowSwing": {
    "boxes_compared": 664,
    "files": 7,
-   "mismatching_boxes": 67,
-   "mismatching_names": 5,
+   "mismatching_boxes": 26,
+   "mismatching_names": 3,
    "version": "2.6.1"
   },
   "package:FluidCorpusManipulation": {
    "boxes_compared": 7312,
    "files": 78,
-   "mismatching_boxes": 939,
-   "mismatching_names": 53,
+   "mismatching_boxes": 280,
+   "mismatching_names": 51,
    "version": "1.0.9"
   },
   "package:RNBO": {
    "boxes_compared": 2605,
    "files": 563,
-   "mismatching_boxes": 29,
-   "mismatching_names": 6,
+   "mismatching_boxes": 10,
+   "mismatching_names": 4,
    "version": "1.4.3"
   },
   "package:Rhythm and Time Toolkit": {
    "boxes_compared": 1654,
    "files": 27,
-   "mismatching_boxes": 92,
-   "mismatching_names": 7,
+   "mismatching_boxes": 23,
+   "mismatching_names": 5,
    "version": "1.0.0"
+  },
+  "package:Vision": {
+   "boxes_compared": 607,
+   "files": 17,
+   "mismatching_boxes": 14,
+   "mismatching_names": 3,
+   "version": "1.0.2"
   },
   "package:abclib": {
    "boxes_compared": 5278,
    "files": 67,
-   "mismatching_boxes": 231,
-   "mismatching_names": 6,
+   "mismatching_boxes": 27,
+   "mismatching_names": 4,
    "version": "1.1.2"
   },
   "package:bach": {
    "boxes_compared": 11991,
    "files": 240,
-   "mismatching_boxes": 1137,
-   "mismatching_names": 63,
+   "mismatching_boxes": 790,
+   "mismatching_names": 61,
    "version": "0.8.3"
   },
   "package:cv.jit": {
    "boxes_compared": 3042,
    "files": 70,
-   "mismatching_boxes": 114,
-   "mismatching_names": 4,
+   "mismatching_boxes": 3,
+   "mismatching_names": 2,
    "version": "2.0.2"
   },
   "package:dada": {
    "boxes_compared": 2353,
    "files": 31,
-   "mismatching_boxes": 257,
-   "mismatching_names": 33,
+   "mismatching_boxes": 220,
+   "mismatching_names": 31,
    "version": "0.3.1"
   },
   "package:ears": {
    "boxes_compared": 4327,
    "files": 103,
-   "mismatching_boxes": 709,
-   "mismatching_names": 105,
+   "mismatching_boxes": 657,
+   "mismatching_names": 103,
    "version": "0.1.0"
   },
   "package:ease": {
    "boxes_compared": 379,
    "files": 6,
-   "mismatching_boxes": 15,
-   "mismatching_names": 2,
+   "mismatching_boxes": 0,
+   "mismatching_names": 0,
    "version": "1.2.3"
   },
   "package:grainflow": {
    "boxes_compared": 2389,
    "files": 45,
-   "mismatching_boxes": 191,
-   "mismatching_names": 22,
+   "mismatching_boxes": 98,
+   "mismatching_names": 20,
    "version": "2.1.2"
   },
   "package:ml.star": {
    "boxes_compared": 1850,
    "files": 17,
-   "mismatching_boxes": 73,
-   "mismatching_names": 5,
+   "mismatching_boxes": 16,
+   "mismatching_names": 3,
    "version": "1.3.0"
   },
   "package:nn_tilde": {
    "boxes_compared": 506,
    "files": 4,
-   "mismatching_boxes": 51,
-   "mismatching_names": 6,
+   "mismatching_boxes": 43,
+   "mismatching_names": 5,
    "version": "v1.6.0"
   }
  },
  "totals": {
-  "boxes_compared": 126705,
-  "count_mismatch_names": 304,
-  "files": 3430,
-  "mismatching_boxes": 8647,
-  "mismatching_names": 369,
+  "boxes_compared": 127312,
+  "count_mismatch_names": 302,
+  "files": 3447,
+  "mismatching_boxes": 3324,
+  "mismatching_names": 367,
   "type_mismatch_names": 73
  }
 }

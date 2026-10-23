@@ -322,6 +322,45 @@ class TestTargetVersion:
         assert "No such object" in found[0].message
         assert _version(validate_patch(patch, db=real_db, target_version="9.2")) == []
 
+    def test_target_at_or_before_after_says_lost(self, real_db: ObjectDatabase) -> None:
+        """IN-04: the evidence brackets a change (after, by]. A target at or
+        before ``after`` certainly lacks the port."""
+        patch = _patch(_mousestate_scope())
+        [r] = _version(validate_patch(patch, db=real_db, target_version="9.0"))
+        assert "is lost on Max 9.0" in r.message
+        assert (r.rule, r.box_ids, r.port) == ("version_io_port", ("obj-1",), 7)
+
+    def test_target_inside_interval_says_may_be_missing(self, real_db: ObjectDatabase) -> None:
+        """IN-04: after < target < by -- the evidence cannot say which side
+        of the change the target build is on."""
+        patch = _patch(_mousestate_scope())
+        [r] = _version(validate_patch(patch, db=real_db, target_version="9.0.3"))
+        assert "is lost" not in r.message
+        assert "may be missing on Max 9.0.3" in r.message
+        assert "changed between 9.0.0 and 9.0.5" in r.message
+
+    def test_live_meter_target_8_may_be_missing(self, real_db: ObjectDatabase) -> None:
+        patch = _patch({
+            "boxes": [
+                {"box": {"id": "obj-1", "maxclass": "newobj", "text": "live.meter~",
+                         "numinlets": 1, "numoutlets": 2, "outlettype": ["", ""],
+                         "patching_rect": [10, 10, 80, 22]}},
+                {"box": {"id": "obj-2", "maxclass": "newobj", "text": "print",
+                         "numinlets": 1, "numoutlets": 0, "patching_rect": [10, 60, 40, 22]}},
+            ],
+            "lines": [{"patchline": {"source": ["obj-1", 1], "destination": ["obj-2", 0]}}],
+        })
+        def port_rows(target):
+            return [r for r in _version(validate_patch(patch, db=real_db,
+                                                       target_version=target))
+                    if r.rule == "version_io_port"]
+
+        [r] = port_rows("8.0")
+        assert "may be missing on Max 8.0" in r.message
+        assert "changed between 7.0.3 and 9.0.0" in r.message
+        [r7] = port_rows("7.0")
+        assert "is lost on Max 7.0" in r7.message
+
     def _wrapped(self, text: str, inner: dict) -> dict:
         return _patch({"boxes": [{"box": {
             "id": "obj-9", "maxclass": "newobj", "text": text,

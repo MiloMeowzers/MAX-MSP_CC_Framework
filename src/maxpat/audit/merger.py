@@ -16,12 +16,31 @@ Q30 / I5:
   trailing newline, writes atomically keeping the file's mode, does nothing
   on identical bytes, and raises :class:`OverridesChangedError` if the file
   changed since ``merge()`` read it.
+
+Load safety (quick 261022-ud6 WP1, review CR-02). Since Q11 the loader
+(``ObjectDatabase._apply_object_overrides``) raises on an ``objects`` key
+with no base domain entry and on two keys that resolve to one canonical name
+through aliases.json, so:
+
+* :meth:`OverrideMerger.merge` never adds a proposal whose canonical name has
+  no domain entry; it lands in :attr:`OverrideMerger.skipped` as
+  ``NO_BASE_ENTRY`` (no inactive ``_note`` entry is written any more).
+* New entries are keyed by the canonical name. When an alias and its
+  canonical name (``t`` / ``trigger``) are both proposed, the canonical
+  spelling wins (else the first alias in name order); the rest are skipped
+  as ``DUPLICATE_OF <canonical>``.
+* :meth:`OverrideMerger.write` rehearses a load of the merged dict (a
+  scratch DB root whose other files link to the real ones) and raises
+  :class:`OverridesLoadError` without writing when ``ObjectDatabase`` would
+  reject it.
 """
 
 from __future__ import annotations
 
 import copy
 import json
+import shutil
+import tempfile
 from pathlib import Path
 
 from src.maxpat.atomic_io import atomic_write_bytes, json_style
@@ -51,6 +70,52 @@ class OverridesChangedError(Exception):
     """overrides.json changed on disk since merge() read it; write() refuses (Q30 PD-8)."""
 
 
+class OverridesLoadError(ValueError):
+    """The merged dict would make ``ObjectDatabase()`` raise; write() refuses (CR-02)."""
+
+
+NO_BASE_ENTRY = "NO_BASE_ENTRY"
+DUPLICATE_OF = "DUPLICATE_OF"
+
+
+def _rehearsal_root(overrides_path: Path, db: ObjectDatabase) -> Path | None:
+    """The DB root a rehearsal load mirrors: the overrides file's own
+    directory when it is a DB root (holds aliases.json), else the root *db*
+    was loaded from; None when neither is known."""
+    parent = Path(overrides_path).parent
+    if (parent / "aliases.json").is_file():
+        return parent
+    root = getattr(db, "db_root", None)
+    return Path(root) if root is not None else None
+
+
+def rehearse_load(merged: dict, db_root: Path) -> None:
+    """Load ``ObjectDatabase`` from a scratch copy of *db_root* whose
+    overrides.json is *merged*. Raises :class:`OverridesLoadError` naming
+    the loader's message when it rejects the dict. Every other entry of the
+    root is symlinked (copied where symlinks are unavailable)."""
+    with tempfile.TemporaryDirectory(prefix="overrides-rehearsal-") as tmp:
+        scratch = Path(tmp)
+        for entry in Path(db_root).iterdir():
+            if entry.name == "overrides.json":
+                continue
+            target = scratch / entry.name
+            try:
+                target.symlink_to(entry, target_is_directory=entry.is_dir())
+            except OSError:
+                if entry.is_dir():
+                    shutil.copytree(entry, target)
+                else:
+                    shutil.copy2(entry, target)
+        (scratch / "overrides.json").write_text(json.dumps(merged, indent=2))
+        try:
+            ObjectDatabase(scratch)
+        except ValueError as exc:
+            raise OverridesLoadError(
+                f"merged overrides.json would not load: {exc}"
+            ) from exc
+
+
 class OverrideMerger:
     """Merges proposed audit overrides into the production overrides.json.
 
@@ -78,6 +143,9 @@ class OverrideMerger:
         self._db = db
         self._raw: bytes = b""
         self._existing: dict = {}
+        # Proposal name -> reason, for proposals the last merge() did not add
+        # (NO_BASE_ENTRY, "DUPLICATE_OF <canonical>"); conflicts are separate.
+        self.skipped: dict[str, str] = {}
         self._read_live()
 
     def _read_live(self) -> None:
@@ -150,9 +218,12 @@ class OverrideMerger:
         Re-reads overrides.json and recomputes conflicts against it (Q30
         PD-8): a proposal whose name has a live manual entry is a conflict
         and lands only through ``conflict_resolutions`` (replaced in place).
-        Every other proposal is added at the end of its domain group; nothing
-        already in the file moves. version_map, variable_io_rules and every
-        other top-level section are preserved unchanged.
+        Every other proposal is added, under its canonical name, at the end
+        of its domain group; nothing already in the file moves. A proposal
+        with no base domain entry, or a second spelling of one canonical
+        name, is not added and is reported in :attr:`skipped` (CR-02).
+        version_map, variable_io_rules and every other top-level section are
+        preserved unchanged.
 
         Args:
             conflict_resolutions: Dict mapping object name to resolution
@@ -173,18 +244,30 @@ class OverrideMerger:
         merged = copy.deepcopy(self._existing)
         objects: dict = copy.deepcopy(self._existing.get("objects", {}))
 
-        new_entries: dict[str, dict] = {}
-        for name, entry in self._proposals().items():
+        # CR-02: key new entries by canonical name and never add one the Q11
+        # loader rejects (no base domain entry / alias + canonical twice).
+        self.skipped = {}
+        proposals = self._proposals()
+        chosen: dict[str, str] = {}  # canonical -> proposal name
+        for name in sorted(proposals):
             if name in conflicts:
                 continue
-            obj_entry = copy.deepcopy(entry)
-            # Flag orphan objects not in any domain JSON
-            if not self._db.exists(name):
-                obj_entry["_note"] = (
-                    "No base domain entry -- override inactive until "
-                    "object added to domain JSON"
-                )
-            new_entries[name] = obj_entry
+            canonical = self._canonical(name)
+            if not self._db.exists(canonical):
+                self.skipped[name] = NO_BASE_ENTRY
+                continue
+            previous = chosen.get(canonical)
+            if previous is None:
+                chosen[canonical] = name
+            elif name == canonical:
+                self.skipped[previous] = f"{DUPLICATE_OF} {canonical}"
+                chosen[canonical] = name
+            else:
+                self.skipped[name] = f"{DUPLICATE_OF} {canonical}"
+        new_entries: dict[str, dict] = {
+            canonical: copy.deepcopy(proposals[name])
+            for canonical, name in chosen.items()
+        }
 
         # Conflicts land only through conflict_resolutions, replaced in place.
         for name, conflict in conflicts.items():
@@ -222,6 +305,8 @@ class OverrideMerger:
         Raises:
             OverridesChangedError: the file changed since the last merge()
                 read it (nothing written).
+            OverridesLoadError: ``ObjectDatabase`` would reject *merged*
+                (rehearsal load against a scratch DB root; nothing written).
         """
         current = self._overrides_path.read_bytes()
         if current != self._raw:
@@ -229,6 +314,9 @@ class OverrideMerger:
                 f"{self._overrides_path} changed on disk since merge() read it; "
                 "re-run the merge"
             )
+        root = _rehearsal_root(self._overrides_path, self._db)
+        if root is not None:
+            rehearse_load(merged, root)
         style = json_style(current, json.loads(current))
         if style is None:
             ensure_ascii, trailing_newline = True, current.endswith(b"\n")

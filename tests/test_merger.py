@@ -437,10 +437,10 @@ class TestExistingManualEntriesPreserved:
 
 
 class TestOrphanObjectsFlagged:
-    """test_orphan_objects_flagged: Objects not in any domain JSON get _note
-    field indicating no base domain entry."""
+    """Objects not in any domain JSON are skipped and reported, never written
+    with an inactive ``_note`` (the Q11 loader rejects such a key; CR-02)."""
 
-    def test_orphan_gets_note(self, tmp_merger):
+    def test_orphan_is_skipped_not_noted(self, tmp_merger):
         # Use an object name known not to be in any domain JSON
         objects = {
             "fake_nonexistent_obj_xyz": _make_audit_entry(
@@ -455,9 +455,8 @@ class TestOrphanObjectsFlagged:
         merger, _, _ = tmp_merger(proposed, existing)
 
         merged = merger.merge()
-        obj = merged["objects"]["fake_nonexistent_obj_xyz"]
-        assert "_note" in obj
-        assert "no base domain entry" in obj["_note"].lower() or "inactive" in obj["_note"].lower()
+        assert "fake_nonexistent_obj_xyz" not in merged["objects"]
+        assert merger.skipped == {"fake_nonexistent_obj_xyz": "NO_BASE_ENTRY"}
 
 
 class TestAuditMetadataOnEveryEntry:
@@ -613,3 +612,116 @@ class TestCLIMergeFlag:
             "--dry-run",
         ])
         assert result == 0
+
+
+# ---- Q11 load safety (quick 261022-ud6 WP1, review-validation CR-02) ----
+
+
+def _db_copy(tmp_path: Path) -> Path:
+    """A scratch copy of the real DB root (domain files, aliases, overrides)."""
+    import shutil
+
+    src = REAL_OVERRIDES_PATH.parent
+    dst = tmp_path / "max-objects"
+    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("audit"))
+    return dst
+
+
+class TestMergeKeepsDatabaseLoading:
+    """CR-02: a merge must never write an entry ObjectDatabase() rejects.
+
+    Since Q11, ``ObjectDatabase._apply_object_overrides`` raises on an
+    objects key with no base domain entry and on two keys that resolve to the
+    same canonical name through aliases.json.
+    """
+
+    def test_unknown_object_is_skipped_and_reported(self, tmp_merger):
+        proposed = _make_proposed(objects={
+            "notarealobject~": _make_audit_entry(inlets=[_inlet(0)]),
+            "adsr~": _make_audit_entry(outlets=[_signal_outlet(0)]),
+        })
+        merger, _, _ = tmp_merger(proposed, _make_existing())
+        merged = merger.merge()
+        assert "notarealobject~" not in merged["objects"]
+        assert "adsr~" in merged["objects"]
+        assert merger.skipped["notarealobject~"] == "NO_BASE_ENTRY"
+
+    def test_alias_proposal_is_keyed_by_canonical_name(self, tmp_merger):
+        proposed = _make_proposed(objects={
+            "t": _make_audit_entry(outlets=[_control_outlet(0)]),
+        })
+        merger, _, _ = tmp_merger(proposed, _make_existing())
+        merged = merger.merge()
+        assert "t" not in merged["objects"]
+        assert "trigger" in merged["objects"]
+
+    def test_alias_and_canonical_proposals_collapse_to_one_key(self, tmp_merger):
+        proposed = _make_proposed(objects={
+            "t": _make_audit_entry(outlets=[_control_outlet(0)], instances=3),
+            "trigger": _make_audit_entry(outlets=[_control_outlet(0)], instances=7),
+        })
+        merger, _, _ = tmp_merger(proposed, _make_existing())
+        merged = merger.merge()
+        assert "t" not in merged["objects"]
+        assert merged["objects"]["trigger"]["_audit"]["instances"] == 7
+        assert merger.skipped["t"] == "DUPLICATE_OF trigger"
+
+    def test_merge_run_keeps_object_database_loading(self, tmp_path):
+        root = _db_copy(tmp_path)
+        db = ObjectDatabase(root)
+        proposed = _make_proposed(objects={
+            "notarealobject~": _make_audit_entry(inlets=[_inlet(0)]),
+            "t": _make_audit_entry(outlets=[_control_outlet(0)]),
+            "trigger": _make_audit_entry(outlets=[_control_outlet(0)]),
+            "sel": _make_audit_entry(outlets=[_control_outlet(0)]),
+        })
+        prop_path = tmp_path / "proposed-overrides.json"
+        prop_path.write_text(json.dumps(proposed, indent=2) + "\n")
+        merger = OverrideMerger(prop_path, root / "overrides.json", db)
+        merger.write(merger.merge())
+        ObjectDatabase(root)  # must not raise
+
+    def test_write_refuses_a_dict_the_loader_rejects(self, tmp_path):
+        from src.maxpat.audit.merger import OverridesLoadError
+
+        root = _db_copy(tmp_path)
+        db = ObjectDatabase(root)
+        prop_path = tmp_path / "proposed-overrides.json"
+        prop_path.write_text(json.dumps(_make_proposed(), indent=2) + "\n")
+        overrides = root / "overrides.json"
+        before = overrides.read_bytes()
+        merger = OverrideMerger(prop_path, overrides, db)
+        merged = merger.merge()
+        merged["objects"]["notarealobject~"] = {"inlets": [_inlet(0)]}
+        with pytest.raises(OverridesLoadError, match="notarealobject~"):
+            merger.write(merged)
+        assert overrides.read_bytes() == before
+
+    def test_cli_merge_reports_rejected_write(self, tmp_path, monkeypatch, capsys):
+        """--merge returns 1 (nothing written) when the rehearsal load fails."""
+        from src.maxpat.audit import cli, merger as merger_mod
+
+        root = _db_copy(tmp_path)
+        output_dir = tmp_path / "audit"
+        output_dir.mkdir()
+        (output_dir / "proposed-overrides.json").write_text(
+            json.dumps(_make_proposed(), indent=2) + "\n"
+        )
+        overrides = root / "overrides.json"
+        before = overrides.read_bytes()
+
+        real_merge = merger_mod.OverrideMerger.merge
+
+        def bad_merge(self, conflict_resolutions=None):
+            merged = real_merge(self, conflict_resolutions)
+            merged["objects"]["notarealobject~"] = {"inlets": [_inlet(0)]}
+            return merged
+
+        monkeypatch.setattr(merger_mod.OverrideMerger, "merge", bad_merge)
+        rc = cli.main([
+            "--merge", "--output-dir", str(output_dir),
+            "--overrides", str(overrides),
+        ])
+        assert rc == 1
+        assert "notarealobject~" in capsys.readouterr().err
+        assert overrides.read_bytes() == before

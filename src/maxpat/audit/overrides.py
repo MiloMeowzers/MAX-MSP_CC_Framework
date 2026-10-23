@@ -197,8 +197,8 @@ class OverrideGenerator:
         if help_outlets is not None and "outlets" not in proposed["objects"].get(
             obj_name, {}
         ):
-            io_entry["outlets"] = self._build_outlet_array(
-                [""] * help_outlets
+            io_entry["outlets"] = self._build_count_outlet_array(
+                help_outlets, obj_name
             )
 
         if not io_entry:
@@ -262,8 +262,8 @@ class OverrideGenerator:
                     proposed_inlets, obj_name
                 )
             if proposed_outlets is not None:
-                entry["outlets"] = self._build_outlet_array(
-                    [""] * proposed_outlets
+                entry["outlets"] = self._build_count_outlet_array(
+                    proposed_outlets, obj_name
                 )
 
             entry["_audit"] = {
@@ -302,6 +302,56 @@ class OverrideGenerator:
             })
         return outlets
 
+    def _db_ports(self, obj_name: str | None, field: str) -> list:
+        """The current DB entry's ``inlets`` / ``outlets`` list for
+        *obj_name* (alias-resolved), or ``[]``.
+
+        Reads ``self._db._objects`` directly (the reporter.py precedent)
+        with type guards, so a MagicMock DB in tests stays harmless.
+        """
+        if obj_name is None:
+            return []
+        aliases = getattr(self._db, "_aliases", None)
+        canonical = obj_name
+        if isinstance(aliases, dict):
+            alias_target = aliases.get(obj_name)
+            if isinstance(alias_target, str):
+                canonical = alias_target
+        objects = getattr(self._db, "_objects", None)
+        if not isinstance(objects, dict):
+            return []
+        entry = objects.get(canonical)
+        if entry is None and canonical != obj_name:
+            entry = objects.get(obj_name)
+        if isinstance(entry, dict) and isinstance(entry.get(field), list):
+            return entry[field]
+        return []
+
+    def _build_count_outlet_array(self, count: int, obj_name: str) -> list[dict]:
+        """Outlet array for a count-only finding (io-count / empty-I/O paths).
+
+        Never downgrades a signal outlet (review WR-02, the outlet half of
+        C9 / Q2): these paths know only HOW MANY outlets a help box has, so
+        ``signal`` / ``type`` are copied by index from the current DB entry,
+        exactly as :meth:`_build_inlet_array` does for inlets. Indices
+        beyond the DB array, and objects the DB does not know, keep the
+        control default. Help-saved ``outlettype`` evidence goes through
+        :meth:`_build_outlet_array` instead.
+        """
+        db_outlets = self._db_ports(obj_name, "outlets")
+        types: list[str] = []
+        for i in range(count):
+            src = db_outlets[i] if i < len(db_outlets) else None
+            if isinstance(src, dict) and src.get("signal"):
+                type_str = src.get("type", "")
+                types.append(
+                    type_str if isinstance(type_str, str) and type_str in SIGNAL_TYPES
+                    else "signal"
+                )
+            else:
+                types.append("")
+        return self._build_outlet_array(types)
+
     def _build_inlet_array(
         self, count: int, obj_name: str | None = None
     ) -> list[dict]:
@@ -324,23 +374,7 @@ class OverrideGenerator:
         Returns:
             List of inlet dicts with id, type, signal, digest keys.
         """
-        db_inlets: list = []
-        if obj_name is not None:
-            aliases = getattr(self._db, "_aliases", None)
-            canonical = obj_name
-            if isinstance(aliases, dict):
-                alias_target = aliases.get(obj_name)
-                if isinstance(alias_target, str):
-                    canonical = alias_target
-            objects = getattr(self._db, "_objects", None)
-            if isinstance(objects, dict):
-                entry = objects.get(canonical)
-                if entry is None and canonical != obj_name:
-                    entry = objects.get(obj_name)
-                if isinstance(entry, dict) and isinstance(
-                    entry.get("inlets"), list
-                ):
-                    db_inlets = entry["inlets"]
+        db_inlets = self._db_ports(obj_name, "inlets")
 
         inlets = []
         for i in range(count):

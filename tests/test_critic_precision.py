@@ -514,8 +514,25 @@ class TestCommentHashSetFed:
         hits = [r for r in _comment_hash_warnings(res) if f"({box_id})" in r.message]
         assert hits == []
 
-    def test_committed_prose_comment_still_warns(self, db):
-        rel = "patches/barnett-dbap/generated/barnett-dbap.maxpat"
+    @pytest.mark.parametrize("rel,box_id", [
+        ("patches/barnett-dbap/generated/barnett-dbap.maxpat", "obj-27"),
+        ("patches/looper/generated/looper.maxpat", "obj-18"),
+        ("patches/looper/generated/looper-demo.maxpat", "obj-6"),
+        ("patches/max-bridge/fixtures/fx-nosuchobj.maxpat", "obj-2"),
+    ])
+    def test_committed_prose_comments_clean(self, db, rel, box_id):
+        """IN-03 (quick 261022-ud6 WP1): documentation sentences that
+        mention #N ("buffer~ #1 sample-accurately.", "Rule #1 on purpose,")
+        are prose about the argument, not attempted substitutions."""
         res = validate_patch(copy.deepcopy(_load(rel)), db=db)
-        hits = [r for r in _comment_hash_warnings(res) if "(obj-27)" in r.message]
-        assert len(hits) == 1
+        hits = [r for r in _comment_hash_warnings(res) if f"({box_id})" in r.message]
+        assert hits == []
+
+    @pytest.mark.parametrize("text", [
+        "Channel #1 output level meter",   # 5 words, no sentence punctuation
+        "Slot #2 gain",
+        "#1",
+    ])
+    def test_short_labels_still_warn(self, db, text):
+        patch = _make_patch_dict(boxes=[_comment("obj-1", text)])
+        assert len(_comment_hash_warnings(validate_patch(patch, db=db))) == 1
