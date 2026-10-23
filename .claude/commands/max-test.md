@@ -30,7 +30,7 @@ Generate a manual test checklist for patches in the active project, then record 
    ...
    ```
 
-5. **Record results** -- after the user reports which tests passed/failed, call `save_test_results(project_dir, test_name, results_md)` from `src.maxpat.testing` to persist the results. It overwrites a same-named file, so name it `v<version>-<slug>-checklist` (version from `get_version(project_dir)`). Commit the results file by explicit path: `auto_commit_patch(project_dir, base_dir, description="test results v<version> <slug>", files=[str(path)])`.
+5. **Record results** -- after the user reports which tests passed/failed, call `save_test_results(project_dir, test_name, results_md)` from `src.maxpat.testing` to persist the results. It overwrites a same-named file, so name it `v<version>-<slug>-checklist` (version from `get_version(project_dir)`). Commit the results file by explicit path: `auto_commit_patch(project_dir, base_dir, description="test results v<version> <slug>", files=[str(path)])`; it raises `RuntimeError` on any git failure, so report that to the user (the results file is written but not committed).
 
 6. **Record confirmations** -- whenever the user confirms in MAX that a feature works (a passing checklist item, or in conversation, including after a `/max-iterate` fix), record it:
    ```python
