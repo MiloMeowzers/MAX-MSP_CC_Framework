@@ -1101,12 +1101,14 @@ class TestFileLevelRoundTrip:
         from src.maxpat.hooks import detect_indent
         assert detect_indent('{"patcher": {}}') == "    "
 
-    @pytest.mark.xfail(
-        reason="comp-band.maxpat re-saved by MAX with different array formatting",
-        strict=False,
-    )
     def test_max_saved_file_byte_identical(self, tmp_path):
-        """MAX-saved 4-space file round-trips to byte-identical output."""
+        """MAX-saved 4-space file round-trips to byte-identical output.
+
+        Was a non-strict xfail ("re-saved by MAX with different array
+        formatting"). Q29 made saves reproduce the file's own JSON layout, so
+        it XPASSed and hid any regression (review IN-02, quick 261022-ud6
+        WP6): it is a plain test now.
+        """
         from src.maxpat.hooks import save_patch_roundtrip, detect_indent
         # Use a MAX-saved file (comp-band.maxpat has 4-space indent)
         path = PATCHES_DIR / "performancepatchtest" / "generated" / "comp-band.maxpat"
