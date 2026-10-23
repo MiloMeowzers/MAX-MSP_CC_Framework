@@ -1,0 +1,320 @@
+{
+  "_comment": "Per-version I/O changes mined from the installed Max bundle's help boxes (Q38): a change is recorded only when boxes of one name and argument list, saved by different Max versions, form a strict version-ordered partition of their (numinlets, numoutlets). validate_patch(target_version=...) warns on ports an older build lacks. Regenerated wholesale, only by tools/sync_max_bundle.py --apply version-io.",
+  "generator": "tools/sync_max_bundle.py --apply version-io",
+  "max_version": "9.2.0",
+  "source": "bundle help (*.maxhelp under Contents/Resources/C74), patcher.appversion",
+  "objects": {
+    "live.meter~": {
+      "changes": [
+        {
+          "after": "7.0.3",
+          "by": "9.0.0",
+          "inlets": 0,
+          "outlets": 1,
+          "newer_than_installed": false
+        }
+      ],
+      "evidence": [
+        {
+          "args": [],
+          "segments": [
+            {
+              "inlets": 1,
+              "outlets": 1,
+              "first": "7.0.2",
+              "last": "7.0.3",
+              "boxes": 4
+            },
+            {
+              "inlets": 1,
+              "outlets": 2,
+              "first": "9.0.0",
+              "last": "9.2.0",
+              "boxes": 31
+            }
+          ],
+          "example": "help/m4l/live.meter~.maxhelp"
+        }
+      ]
+    },
+    "metro": {
+      "changes": [
+        {
+          "after": "9.0.0",
+          "by": "9.3.0",
+          "inlets": 0,
+          "outlets": 2,
+          "newer_than_installed": true
+        }
+      ],
+      "evidence": [
+        {
+          "args": [
+            "110"
+          ],
+          "segments": [
+            {
+              "inlets": 2,
+              "outlets": 1,
+              "first": "9.0.0",
+              "last": "9.0.0",
+              "boxes": 1
+            },
+            {
+              "inlets": 2,
+              "outlets": 3,
+              "first": "9.3.0",
+              "last": "9.3.0",
+              "boxes": 1
+            }
+          ],
+          "example": "help/jitter/jit.web.maxhelp"
+        },
+        {
+          "args": [
+            "50"
+          ],
+          "segments": [
+            {
+              "inlets": 2,
+              "outlets": 1,
+              "first": "9.0.0",
+              "last": "9.0.0",
+              "boxes": 6
+            },
+            {
+              "inlets": 2,
+              "outlets": 3,
+              "first": "9.3.0",
+              "last": "9.3.0",
+              "boxes": 2
+            }
+          ],
+          "example": "help/jitter/jit.conway.maxhelp"
+        },
+        {
+          "args": [
+            "80"
+          ],
+          "segments": [
+            {
+              "inlets": 2,
+              "outlets": 1,
+              "first": "9.0.0",
+              "last": "9.0.0",
+              "boxes": 1
+            },
+            {
+              "inlets": 2,
+              "outlets": 3,
+              "first": "9.3.0",
+              "last": "9.3.0",
+              "boxes": 1
+            }
+          ],
+          "example": "help/jitter/jit.web.maxhelp"
+        }
+      ]
+    },
+    "midiformat": {
+      "changes": [
+        {
+          "after": "7.0.3",
+          "by": "8.1.4",
+          "inlets": 0,
+          "outlets": 1,
+          "newer_than_installed": false
+        }
+      ],
+      "evidence": [
+        {
+          "args": [],
+          "segments": [
+            {
+              "inlets": 7,
+              "outlets": 1,
+              "first": "7.0.2",
+              "last": "7.0.3",
+              "boxes": 26
+            },
+            {
+              "inlets": 7,
+              "outlets": 2,
+              "first": "8.1.4",
+              "last": "9.2.0",
+              "boxes": 45
+            }
+          ],
+          "example": "help/max/midiflush.maxhelp"
+        }
+      ]
+    },
+    "midiparse": {
+      "changes": [
+        {
+          "after": "7.0.3",
+          "by": "8.1.4",
+          "inlets": 0,
+          "outlets": 1,
+          "newer_than_installed": false
+        }
+      ],
+      "evidence": [
+        {
+          "args": [],
+          "segments": [
+            {
+              "inlets": 1,
+              "outlets": 7,
+              "first": "7.0.2",
+              "last": "7.0.3",
+              "boxes": 39
+            },
+            {
+              "inlets": 1,
+              "outlets": 8,
+              "first": "8.1.4",
+              "last": "9.1.0",
+              "boxes": 23
+            }
+          ],
+          "example": "help/max/midiflush.maxhelp"
+        }
+      ]
+    },
+    "mousestate": {
+      "changes": [
+        {
+          "after": "9.0.0",
+          "by": "9.0.5",
+          "inlets": 0,
+          "outlets": 5,
+          "newer_than_installed": false
+        }
+      ],
+      "evidence": [
+        {
+          "args": [],
+          "segments": [
+            {
+              "inlets": 1,
+              "outlets": 5,
+              "first": "7.0.3",
+              "last": "9.0.0",
+              "boxes": 4
+            },
+            {
+              "inlets": 1,
+              "outlets": 10,
+              "first": "9.0.5",
+              "last": "9.3.0",
+              "boxes": 2
+            }
+          ],
+          "example": "help/jitter/jit.desktop.maxhelp"
+        }
+      ]
+    },
+    "poke~": {
+      "changes": [
+        {
+          "after": "7.0.0",
+          "by": "9.0.0",
+          "inlets": 0,
+          "outlets": 1,
+          "newer_than_installed": false
+        }
+      ],
+      "evidence": [
+        {
+          "args": [
+            "foo"
+          ],
+          "segments": [
+            {
+              "inlets": 3,
+              "outlets": 0,
+              "first": "7.0.0",
+              "last": "7.0.0",
+              "boxes": 1
+            },
+            {
+              "inlets": 3,
+              "outlets": 1,
+              "first": "9.0.0",
+              "last": "9.0.0",
+              "boxes": 1
+            }
+          ],
+          "example": "help/msp/poke~.maxhelp"
+        }
+      ]
+    },
+    "preset": {
+      "changes": [
+        {
+          "after": "8.2.0",
+          "by": "9.0.0",
+          "inlets": 0,
+          "outlets": 1,
+          "newer_than_installed": false
+        }
+      ],
+      "evidence": [
+        {
+          "args": [],
+          "segments": [
+            {
+              "inlets": 1,
+              "outlets": 4,
+              "first": "7.0.0",
+              "last": "8.2.0",
+              "boxes": 4
+            },
+            {
+              "inlets": 1,
+              "outlets": 5,
+              "first": "9.0.0",
+              "last": "9.2.0",
+              "boxes": 42
+            }
+          ],
+          "example": "help/jitter/jit.eclipse.maxhelp"
+        }
+      ]
+    },
+    "twist~": {
+      "changes": [
+        {
+          "after": "9.0.0",
+          "by": "9.3.0",
+          "inlets": 1,
+          "outlets": 0,
+          "newer_than_installed": true
+        }
+      ],
+      "evidence": [
+        {
+          "args": [],
+          "segments": [
+            {
+              "inlets": 1,
+              "outlets": 1,
+              "first": "9.0.0",
+              "last": "9.0.0",
+              "boxes": 1
+            },
+            {
+              "inlets": 2,
+              "outlets": 1,
+              "first": "9.3.0",
+              "last": "9.3.0",
+              "boxes": 1
+            }
+          ],
+          "example": "help/msp/stepfun~.maxhelp"
+        }
+      ]
+    }
+  }
+}

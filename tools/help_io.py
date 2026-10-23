@@ -83,7 +83,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.maxpat import io_resolvers, walk as _walk  # noqa: E402
-from src.maxpat.db_lookup import outlet_signal_class  # noqa: E402
+from src.maxpat.db_lookup import outlet_signal_class, parse_version  # noqa: E402
 from src.maxpat.patcher import CONTENT_DEFINED_NAMES  # noqa: E402
 from src.maxpat.validation import _CONTAINER_NAMES  # noqa: E402
 
@@ -819,6 +819,162 @@ def scan_help_idioms(max_app) -> dict:
         "pairs": {
             name: sorted(items, key=_idiom_sort_key) for name, items in sorted(pairs.items())
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Per-version I/O (Q38)
+# ---------------------------------------------------------------------------
+
+
+def _vtext(version: tuple[int, int, int]) -> str:
+    return "{}.{}.{}".format(*version)
+
+
+def scan_version_io(max_app, db, installed: str | None = None) -> dict:
+    """Per-name I/O changes from bundle help boxes saved by different Max builds (Q38).
+
+    Bundle only, the same walk as :func:`scan_help_idioms`. Every box whose
+    :func:`idiom_endpoint` is a name ``db.lookup`` resolves (warnings muted)
+    and whose ``numinlets`` / ``numoutlets`` are ints records that I/O under
+    the key ``(name, walk.box_args(box))`` at the file's saving version
+    (``patcher.appversion``; files of unknown version are skipped).
+
+    * A key seen with 2+ distinct I/O values becomes segments, one per I/O
+      value (``first`` / ``last`` version, ``boxes``), sorted by ``first``.
+      It is monotone iff every segment's ``last`` < the next one's
+      ``first``; otherwise it is an ambiguous group (``ambiguous_groups``,
+      its name in ``ambiguous_names``).
+    * A monotone key's transitions are ``(after = seg_i.last, by =
+      seg_{i+1}.first, inlets / outlets deltas)``. When every monotone key
+      of a name has the same delta sequence, the name gets ``changes``:
+      per transition, after = the latest after and by = the earliest by
+      over its keys, which must still satisfy after < by. Otherwise the
+      name is ``conflicting``.
+    * Each change carries ``newer_than_installed`` (``by`` > *installed*,
+      False without *installed*).
+
+    Returns ``objects`` (name -> ``{changes, evidence: [{args, segments,
+    example}]}``), sorted ``conflicting`` / ``ambiguous_names``,
+    ``ambiguous_groups``, ``files``, ``bad_files``, ``available`` and
+    ``reason``. Read-only; nothing raises for a bad help file.
+    """
+    found = _bundle_help_files(max_app)
+    if found is None:
+        c74 = Path(max_app) / "Contents" / "Resources" / "C74"
+        return unavailable_section(f"no C74 resources directory at {c74}")
+    _c74, files = found
+    installed_v = parse_version(installed) if installed is not None else None
+    stats = {"internal_patchers_skipped": 0, "depth_capped": 0}
+    bad_files: list[dict] = []
+    # (name, args) -> io -> {"first", "last", "boxes"}; plus the first file per key
+    groups: dict[tuple[str, tuple[str, ...]], dict[tuple[int, int], dict]] = {}
+    examples: dict[tuple[str, tuple[str, ...]], str] = {}
+    resolves: dict[str, bool] = {}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for rel, path in files:
+            top = _load_help(path, rel, bad_files)
+            if top is None:
+                continue
+            av = _appversion(top)
+            if av == "unknown":
+                continue
+            version = parse_version(av)
+            for patcher in _iter_scopes(top.get("patcher"), 0, stats):
+                for box in _scope_boxes(patcher).values():
+                    name = idiom_endpoint(box)
+                    if name is None:
+                        continue
+                    ni, no = box.get("numinlets"), box.get("numoutlets")
+                    if not _is_count(ni) or not _is_count(no):
+                        continue
+                    if name not in resolves:
+                        try:
+                            resolves[name] = db.lookup(name) is not None
+                        except Exception:  # noqa: BLE001 -- unresolvable is "no evidence"
+                            resolves[name] = False
+                    if not resolves[name]:
+                        continue
+                    key = (name, tuple(_walk.box_args(box)))
+                    examples.setdefault(key, rel)
+                    seg = groups.setdefault(key, {}).setdefault(
+                        (ni, no), {"first": version, "last": version, "boxes": 0}
+                    )
+                    seg["first"] = min(seg["first"], version)
+                    seg["last"] = max(seg["last"], version)
+                    seg["boxes"] += 1
+
+    ambiguous_groups = 0
+    ambiguous_names: set[str] = set()
+    monotone: dict[str, list[tuple[tuple, list[tuple]]]] = {}
+    for key in sorted(groups):
+        by_io = groups[key]
+        if len(by_io) < 2:
+            continue
+        segments = sorted(by_io.items(), key=lambda kv: (kv[1]["first"], kv[1]["last"], kv[0]))
+        if not all(a[1]["last"] < b[1]["first"] for a, b in zip(segments, segments[1:])):
+            ambiguous_groups += 1
+            ambiguous_names.add(key[0])
+            continue
+        monotone.setdefault(key[0], []).append((key, segments))
+
+    objects: dict[str, dict] = {}
+    conflicting: list[str] = []
+    for name in sorted(monotone):
+        keyed = monotone[name]
+        transitions = []
+        for _key, segments in keyed:
+            transitions.append([
+                (a[1]["last"], b[1]["first"], b[0][0] - a[0][0], b[0][1] - a[0][1])
+                for a, b in zip(segments, segments[1:])
+            ])
+        deltas = {tuple((t[2], t[3]) for t in trans) for trans in transitions}
+        if len(deltas) != 1:
+            conflicting.append(name)
+            continue
+        changes = []
+        for i, (d_in, d_out) in enumerate(next(iter(deltas))):
+            after = max(trans[i][0] for trans in transitions)
+            by = min(trans[i][1] for trans in transitions)
+            if not after < by:
+                changes = None
+                break
+            changes.append({
+                "after": _vtext(after),
+                "by": _vtext(by),
+                "inlets": d_in,
+                "outlets": d_out,
+                "newer_than_installed": installed_v is not None and by > installed_v,
+            })
+        if changes is None:
+            conflicting.append(name)
+            continue
+        objects[name] = {
+            "changes": changes,
+            "evidence": [
+                {
+                    "args": list(key[1]),
+                    "segments": [
+                        {"inlets": io[0], "outlets": io[1], "first": _vtext(seg["first"]),
+                         "last": _vtext(seg["last"]), "boxes": seg["boxes"]}
+                        for io, seg in segments
+                    ],
+                    "example": examples[key],
+                }
+                for key, segments in keyed
+            ],
+        }
+    return {
+        "available": True,
+        "reason": None,
+        "files": len(files),
+        "bad_files": bad_files,
+        **stats,
+        "objects": objects,
+        "conflicting": sorted(conflicting),
+        "ambiguous_groups": ambiguous_groups,
+        "ambiguous_names": sorted(ambiguous_names),
     }
 
 

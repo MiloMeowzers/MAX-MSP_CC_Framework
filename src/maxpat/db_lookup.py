@@ -8,6 +8,7 @@ source of truth for object existence and metadata during patch generation.
 import copy
 import itertools
 import json
+import re
 import warnings
 from collections import defaultdict
 from pathlib import Path
@@ -217,6 +218,24 @@ def merge_override_ports(base_ports: list, override_ports: list) -> list:
 
 # Q38: optional bundle-mined DB files (tools/sync_max_bundle.py writes them).
 IDIOMS_FILE = "idioms.json"
+VERSION_IO_FILE = "version_io.json"
+
+_VERSION_RE = re.compile(r"^\d+(\.\d+){0,2}$")
+
+
+def parse_version(text) -> tuple[int, int, int]:
+    """A Max version string as ``(major, minor, revision)`` (Q38).
+
+    ``"9"`` -> (9, 0, 0), ``"9.0"`` -> (9, 0, 0), ``"9.0.3"`` -> (9, 0, 3),
+    ``"9.10"`` -> (9, 10, 0). Only a str of one to three dot-separated ASCII
+    decimal parts is accepted; anything else (numbers and bools included)
+    raises ValueError.
+    """
+    if not isinstance(text, str) or not text.isascii() or not _VERSION_RE.match(text):
+        raise ValueError(f"not a Max version string: {text!r} (expected e.g. '9', '9.0' or '9.0.3')")
+    parts = [int(part) for part in text.split(".")]
+    parts += [0] * (3 - len(parts))
+    return (parts[0], parts[1], parts[2])
 
 _SIGNAL_OUTLET_TYPES = ("signal", "multichannelsignal")
 
@@ -305,6 +324,10 @@ class ObjectDatabase:
         # Q38: cords the bundle's help patches ship, alias-canonical
         # (src, outlet, class, dst, inlet). Layer 3 never type/role-checks one.
         self._idioms: set[tuple[str, int, str, str, int]] = set()
+        # Q38: per-version I/O changes mined from bundle help boxes
+        # (version_io.json), canonical name -> changes sorted by `by`.
+        self._version_io: dict[str, list[dict]] = {}
+        self._version_io_max_version: str | None = None
         self._load(db_root)
 
     def _load(self, db_root: Path) -> None:
@@ -404,6 +427,12 @@ class ObjectDatabase:
         idioms_path = db_root / IDIOMS_FILE
         if idioms_path.exists():
             self._load_idioms(json.loads(idioms_path.read_text(encoding="utf-8")))
+
+        # Per-version I/O (Q38). Optional file, written only by
+        # tools/sync_max_bundle.py --apply version-io.
+        version_io_path = db_root / VERSION_IO_FILE
+        if version_io_path.exists():
+            self._load_version_io(json.loads(version_io_path.read_text(encoding="utf-8")))
 
         # Fail-fast on the v5.0 schema-extension fields (signal_role,
         # domain_restricted, verified_installed). Runs AFTER the merge so
@@ -515,6 +544,45 @@ class ObjectDatabase:
                 self._idioms.add(
                     (csrc, int(parts[0]), parts[1], self._aliases.get(dst, dst), int(parts[3]))
                 )
+
+    def _load_version_io(self, data) -> None:
+        """Index version_io.json ``objects`` into :attr:`_version_io` (Q38).
+
+        Keys canonicalise through aliases.json. Each change needs str
+        ``after`` / ``by`` that :func:`parse_version` accepts with
+        ``after < by``, and int ``inlets`` / ``outlets`` deltas. Anything
+        else raises ValueError naming the file.
+        """
+        objects = data.get("objects") if isinstance(data, dict) else None
+        if not isinstance(objects, dict):
+            raise ValueError(f"{VERSION_IO_FILE} must be an object with an `objects` object")
+        max_version = data.get("max_version")
+        self._version_io_max_version = max_version if isinstance(max_version, str) else None
+        for name, entry in objects.items():
+            changes = entry.get("changes") if isinstance(entry, dict) else None
+            if not isinstance(changes, list):
+                raise ValueError(f"{VERSION_IO_FILE} objects[{name!r}] needs a `changes` list")
+            checked: list[dict] = []
+            for change in changes:
+                ok = isinstance(change, dict)
+                try:
+                    ok = ok and parse_version(change.get("after")) < parse_version(change.get("by"))
+                except ValueError:
+                    ok = False
+                for key in ("inlets", "outlets"):
+                    value = change.get(key) if isinstance(change, dict) else None
+                    if not isinstance(value, int) or isinstance(value, bool):
+                        ok = False
+                if not ok:
+                    raise ValueError(
+                        f"{VERSION_IO_FILE} objects[{name!r}] change {change!r} needs str "
+                        "after < by (Max versions) and int inlets / outlets deltas"
+                    )
+                checked.append(copy.deepcopy(change))
+            canonical = self._aliases.get(name, name)
+            merged = self._version_io.setdefault(canonical, [])
+            merged.extend(checked)
+            merged.sort(key=lambda c: parse_version(c["by"]))
 
     def _load_groups(self, data: dict) -> None:
         """Index groups.json members / profiles; never touches ``_objects``.
@@ -1019,6 +1087,39 @@ class ObjectDatabase:
             self._aliases.get(dst_name, dst_name), dst_inlet,
         )
         return key in self._idioms
+
+    def io_changes(self, name: str) -> list[dict]:
+        """Per-version I/O changes of *name* from version_io.json (Q38).
+
+        Alias-canonical. Each change is ``{"after", "by", "inlets",
+        "outlets", ...}``: help boxes saved by Max ``after`` and earlier show
+        the old I/O, boxes saved by ``by`` and later show it changed by the
+        ``inlets`` / ``outlets`` deltas. Deep copies, sorted by ``by``;
+        ``[]`` for an unknown name or without the file.
+        """
+        canonical = self._aliases.get(name, name)
+        return copy.deepcopy(self._version_io.get(canonical, []))
+
+    @property
+    def version_io_max_version(self) -> str | None:
+        """The installed Max version version_io.json was mined from, or None."""
+        return self._version_io_max_version
+
+    def min_version(self, name: str) -> str | None:
+        """The ``min_version`` string of *name* (alias-canonical), or None.
+
+        Q38 stores every DB min_version as a string; a stray number is
+        returned as ``str(value)``. None for an unknown name or a missing
+        field.
+        """
+        canonical = self._aliases.get(name, name)
+        obj = self._objects.get(canonical)
+        if obj is None:
+            return None
+        value = obj.get("min_version")
+        if value is None or isinstance(value, bool):
+            return None
+        return value if isinstance(value, str) else str(value)
 
     def is_overridden(self, name: str) -> bool:
         """Check whether an object has expert-verified overrides applied.

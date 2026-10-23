@@ -44,6 +44,7 @@ from src.maxpat.db_lookup import (
     ObjectDatabase,
     detect_patcher_scope,
     outlet_signal_class,
+    parse_version,
 )
 from src.maxpat.maxclass_map import is_ui_object, UI_MAXCLASSES
 
@@ -168,6 +169,7 @@ def validate_patch(
     allowed_packages: list[str] | None = None,
     *,
     scope: str | None = None,
+    target_version: str | None = None,
 ) -> list[ValidationResult]:
     """Run the full validation pipeline on a patch and every embedded patcher.
 
@@ -188,6 +190,19 @@ def validate_patch(
             -> gen; else max). Layer 2 errors on rnbo/gen-only names outside
             their scope; Layer 4b skips explicit restrictions that include
             the scope.
+        target_version: Keyword-only, opt-in (Q38). A Max version string
+            ("9.0", "9.0.3"; parsed by ``parse_version``, ValueError when
+            unparsable) for collaborators on an older build. Adds layer
+            ``version`` WARNINGS (never errors, so the save gate and
+            ``has_blocking_errors`` are unchanged) in max scopes only --
+            nested max-scope patchers included, tagged with their path; gen
+            and rnbo scopes share names with Max objects whose versions and
+            I/O differ, so they are skipped. A box warns when its DB
+            ``min_version`` is newer than the target ("No such object" on
+            that build); a cord warns when it uses a port the target build
+            lacks per ``version_io.json`` (changes with target < by <= the
+            installed version, applied only to a box carrying the installed
+            layout). None (the default) runs exactly the pre-Q38 pipeline.
 
     Returns:
         Combined list of ValidationResult from all layers and scopes: the
@@ -220,6 +235,7 @@ def validate_patch(
         raise ValueError(
             f"validate_patch scope must be one of {DOMAIN_SCOPES}, got {scope!r}"
         )
+    target = parse_version(target_version) if target_version is not None else None
 
     # Accept Patcher instance: extract db and convert to dict
     if isinstance(patch, PatcherClass):
@@ -254,11 +270,13 @@ def validate_patch(
     # Layers 2-5 on the top level (unchanged order and messages)
     results.extend(_validate_scope_layers(
         patch_dict, db, allowed_packages, scope, nested=False, state=state,
+        target=target, target_text=target_version,
     ))
 
     # Every embedded patcher, in walker pre-order (Q19 / A7)
     results.extend(_validate_nested_scopes(
         patch_dict, db, allowed_packages, scope, state,
+        target=target, target_text=target_version,
     ))
 
     return results
@@ -281,8 +299,11 @@ def _validate_scope_layers(
     *,
     nested: bool,
     state: _ScopeState,
+    target: tuple[int, int, int] | None = None,
+    target_text: str | None = None,
 ) -> list[ValidationResult]:
-    """Layers 2-5 on one scope (``patch_dict`` is ``{"patcher": ...}``)."""
+    """Layers 2-5 on one scope (``patch_dict`` is ``{"patcher": ...}``),
+    plus the opt-in ``version`` layer in a max scope when *target* is set."""
     results: list[ValidationResult] = []
 
     # Layer 2: Object existence
@@ -318,6 +339,97 @@ def _validate_scope_layers(
     # Layer 5: GenExpr codeboxes of the gen patchers embedded in this scope
     results.extend(_validate_embedded_genexpr(patch_dict, db, scope))
 
+    # Opt-in version layer (Q38): max scope only, warnings only
+    if target is not None and scope == "max":
+        results.extend(_validate_target_version(patch_dict, db, target, target_text))
+
+    return results
+
+
+def _validate_target_version(
+    patch_dict: dict,
+    db: ObjectDatabase,
+    target: tuple[int, int, int],
+    target_text: str,
+) -> list[ValidationResult]:
+    """Layer ``version`` (Q38): what breaks on Max *target_text*. Warnings only.
+
+    1. A box whose DB ``min_version`` parses newer than the target: MAX on
+       that build reports "No such object".
+    2. A box carrying the installed I/O layout (``compute_io_counts``) whose
+       name has ``version_io.json`` changes with target < by <= installed:
+       every cord on a port beyond the target build's count warns.
+    """
+    results: list[ValidationResult] = []
+    installed_text = db.version_io_max_version
+    try:
+        installed = parse_version(installed_text) if installed_text else None
+    except ValueError:
+        installed = None
+    lines = patch_dict["patcher"].get("lines", [])
+    for box_entry in patch_dict["patcher"].get("boxes", []):
+        box = box_entry.get("box") if isinstance(box_entry, dict) else None
+        if not isinstance(box, dict):
+            continue
+        name = walk.object_name(box)
+        if not name:
+            continue
+        box_id = box.get("id")
+
+        mv = db.min_version(name)
+        if mv is not None:
+            try:
+                too_new = parse_version(mv) > target
+            except ValueError:
+                too_new = False
+            if too_new:
+                results.append(ValidationResult(
+                    "version", "warning",
+                    f"Box '{box_id}' ('{name}') needs Max {mv}; on the target "
+                    f"{target_text} build MAX reports No such object",
+                ))
+
+        if installed is None:
+            continue
+        pending = []
+        for change in db.io_changes(name):
+            try:
+                by = parse_version(change["by"])
+            except (KeyError, ValueError):
+                continue
+            if target < by <= installed:
+                pending.append(change)
+        if not pending:
+            continue
+        ni, no = box.get("numinlets"), box.get("numoutlets")
+        try:
+            current = db.compute_io_counts(name, walk.box_args(box))
+        except Exception:  # noqa: BLE001 -- no layout, no claim
+            continue
+        if (ni, no) != tuple(current):
+            continue
+        inlets_t = ni - sum(c["inlets"] for c in pending)
+        outlets_t = no - sum(c["outlets"] for c in pending)
+        interval = ", ".join(f"{c['after']} -> {c['by']}" for c in pending)
+        for line_entry in lines:
+            pl = line_entry.get("patchline") if isinstance(line_entry, dict) else None
+            if not isinstance(pl, dict):
+                continue
+            src, dst = pl.get("source"), pl.get("destination")
+            ports = []
+            if (isinstance(src, list) and len(src) >= 2 and src[0] == box_id
+                    and isinstance(src[1], int) and src[1] >= outlets_t):
+                ports.append(f"outlet {src[1]}")
+            if (isinstance(dst, list) and len(dst) >= 2 and dst[0] == box_id
+                    and isinstance(dst[1], int) and dst[1] >= inlets_t):
+                ports.append(f"inlet {dst[1]}")
+            for port in ports:
+                results.append(ValidationResult(
+                    "version", "warning",
+                    f"Box '{box_id}' ('{name}') {port} is lost on Max {target_text}: "
+                    f"version_io records an I/O change {interval} "
+                    f"(the target build has {inlets_t} inlet(s), {outlets_t} outlet(s))",
+                ))
     return results
 
 
@@ -381,8 +493,12 @@ def _validate_nested_scopes(
     allowed_packages: list[str] | None,
     scope: str,
     state: _ScopeState,
+    *,
+    target: tuple[int, int, int] | None = None,
+    target_text: str | None = None,
 ) -> list[ValidationResult]:
-    """Layers 1-5 on every embedded patcher, tagged with its path."""
+    """Layers 1-5 (plus the opt-in version layer) on every embedded patcher,
+    tagged with its path."""
     results: list[ValidationResult] = []
     pruned: list[tuple] = []
     for path, inner, context in walk.iter_patchers(patch_dict, scope=scope):
@@ -400,6 +516,7 @@ def _validate_nested_scopes(
             _validate_scope_layers(
                 wrapped, db, allowed_packages, walk.scope_of(context),
                 nested=True, state=state,
+                target=target, target_text=target_text,
             ),
             path,
         ))

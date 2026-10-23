@@ -23,8 +23,10 @@ What this is, and is not
   into the DB tree are :func:`write_groups_file` (``--apply groups``), which
   can only write ``<db-root>/groups.json``, :func:`write_aliases_file`
   (``--apply aliases``), which can only add to ``<db-root>/aliases.json``,
-  and :func:`write_idioms_file` (``--apply idioms``, Q38), which can only
-  additively write ``<db-root>/idioms.json``.
+  :func:`write_idioms_file` (``--apply idioms``, Q38), which can only
+  additively write ``<db-root>/idioms.json``, and
+  :func:`write_version_io_file` (``--apply version-io``, Q38), which can only
+  write ``<db-root>/version_io.json``.
   The other write sites
   are :func:`write_report` (``--json`` / ``--snapshot-io`` targets), which
   refuses any path inside ``patches/`` or the DB tree, and
@@ -81,6 +83,12 @@ Sources of shape
   destination, inlet) by ``tools/help_io.scan_help_idioms``. Section
   ``idioms``; ``--apply idioms`` writes ``idioms.json`` (additive, canonical).
   Validation Layer 3 never type/role-checks a listed cord; bounds always.
+* Per-version I/O (Q38): bundle help boxes whose saving Max versions
+  (``appversion``) disagree on (numinlets, numoutlets) for the same name and
+  arguments, recorded only for a strict version-ordered partition
+  (``tools/help_io.scan_version_io``). Section ``version_io``;
+  ``--apply version-io`` regenerates ``version_io.json`` wholesale (mined
+  evidence, not curation -- the dry-run's +/-/~ counts are the review step).
 * UI maxclasses: every box maxclass the bundle's .maxpat/.maxhelp files carry
   (section ``ui_maxclasses``, review C5 / Q13), diffed against UI_MAXCLASSES;
   report-only.
@@ -101,6 +109,7 @@ Usage
     python3 tools/sync_max_bundle.py --apply aliases --names hslider mc.times~
     python3 tools/sync_max_bundle.py --apply aliases --shadowed --names list.len
     python3 tools/sync_max_bundle.py --apply idioms
+    python3 tools/sync_max_bundle.py --apply version-io
     python3 tools/sync_max_bundle.py --refresh-log           # after an apply
     python3 tools/sync_max_bundle.py --snapshot-io /tmp/io.json
     python3 tools/sync_max_bundle.py --compare-io /tmp/io.json
@@ -182,7 +191,9 @@ _WHOLE_VALUE_TOKENS = ("undefined", "Dummy")
 # Bound on recursion into nested patchers when walking help patches (T-hwb-06).
 MAX_PATCHER_DEPTH = 32
 
-APPLY_MODES = ("new", "define", "deltas", "inherited", "groups", "aliases", "idioms")
+APPLY_MODES = (
+    "new", "define", "deltas", "inherited", "groups", "aliases", "idioms", "version-io",
+)
 
 SECTION_KEYS = [
     "install",
@@ -193,6 +204,7 @@ SECTION_KEYS = [
     "inherited_attributes",
     "groups",
     "idioms",
+    "version_io",
     "collisions",
     "alias_docs",
     "shadowed_by_override",
@@ -1878,6 +1890,7 @@ def run_report(db_root: str | Path, max_app: str | Path, index: dict | None = No
     groups.pop("_target")
     sections["groups"] = groups
     sections["idioms"] = section_idioms(index, db_root)
+    sections["version_io"] = section_version_io(index, db_root)
     sections["collisions"] = {
         "available": True,
         "count": len(classified["collisions"]),
@@ -2257,6 +2270,122 @@ def apply_idioms(index: dict, db_root: Path) -> dict:
     added = len(_idiom_items(target) - _idiom_items(existing))
     written = write_idioms_file(Path(db_root) / IDIOMS_FILE, target, db_root)
     return {"written": written, "pairs": len(_idiom_items(target)), "added": added, "file": IDIOMS_FILE}
+
+
+VERSION_IO_FILE = "version_io.json"
+
+VERSION_IO_COMMENT = (
+    "Per-version I/O changes mined from the installed Max bundle's help boxes "
+    "(Q38): a change is recorded only when boxes of one name and argument list, "
+    "saved by different Max versions, form a strict version-ordered partition "
+    "of their (numinlets, numoutlets). validate_patch(target_version=...) warns "
+    "on ports an older build lacks. Regenerated wholesale, only by "
+    "tools/sync_max_bundle.py --apply version-io."
+)
+VERSION_IO_GENERATOR = "tools/sync_max_bundle.py --apply version-io"
+VERSION_IO_SOURCE = "bundle help (*.maxhelp under Contents/Resources/C74), patcher.appversion"
+
+
+def canonical_version_io_bytes(data: dict) -> bytes:
+    """The one serialization version_io.json is ever written in.
+
+    Indent 2, ``ensure_ascii=False``, a trailing newline, top-level keys in
+    the order given and ``objects`` keys sorted.
+    """
+    out = dict(data)
+    out["objects"] = dict(sorted((data.get("objects") or {}).items()))
+    return (json.dumps(out, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def load_version_io(db_root: str | Path) -> dict | None:
+    """The version_io.json on disk, or None when there is none."""
+    path = Path(db_root) / VERSION_IO_FILE
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not isinstance(data.get("objects"), dict):
+        raise StyleUnreproducible(f"{path}: not a version_io file (object with an `objects` object)")
+    return data
+
+
+def write_version_io_file(path: str | Path, data: dict, db_root: str | Path) -> bool:
+    """Write <db_root>/version_io.json -- its only writer (Q38).
+
+    Refuses any other path (WriteRefused). Regenerates the file wholesale:
+    it is mined evidence, not curation, so no additive check applies (the
+    dry-run's +/-/~ counts are the review step). Atomic, keeps the file's
+    mode; returns False (writes nothing) on identical bytes.
+    """
+    root = Path(db_root).resolve()
+    target = Path(path).resolve()
+    if target != root / VERSION_IO_FILE:
+        raise WriteRefused(
+            f"refusing to write {target}: the version-io writer only writes {root / VERSION_IO_FILE}"
+        )
+    payload = canonical_version_io_bytes(data)
+    if target.exists() and target.read_bytes() == payload:
+        return False
+    atomic_write_bytes(target, payload)
+    return True
+
+
+def build_version_io_target(scan: dict, install: dict) -> dict:
+    """The version_io.json document for one scan."""
+    return {
+        "_comment": VERSION_IO_COMMENT,
+        "generator": VERSION_IO_GENERATOR,
+        "max_version": install.get("short_version"),
+        "source": VERSION_IO_SOURCE,
+        "objects": dict(sorted((scan.get("objects") or {}).items())),
+    }
+
+
+def _scan_version_io(index: dict, db_root: str | Path) -> dict:
+    return help_io.scan_version_io(
+        index["install"]["app_path"], load_db(Path(db_root)),
+        installed=index["install"].get("short_version"),
+    )
+
+
+def section_version_io(index: dict, db_root: str | Path) -> dict:
+    """Dry-run section: mined names and +/-/~ against the committed file."""
+    scan = _scan_version_io(index, db_root)
+    if not scan.get("available"):
+        return _unavailable(scan.get("reason") or "help scan unavailable")
+    new = scan["objects"]
+    old = (load_version_io(db_root) or {}).get("objects") or {}
+    return {
+        "available": True,
+        "files": scan["files"],
+        "bad_files": scan["bad_files"],
+        "names": len(new),
+        "objects": sorted(new),
+        "newer_than_installed": sorted(
+            n for n, e in new.items() if any(c.get("newer_than_installed") for c in e["changes"])
+        ),
+        "ambiguous_groups": scan["ambiguous_groups"],
+        "ambiguous_names": scan["ambiguous_names"],
+        "conflicting": scan["conflicting"],
+        "added": len(set(new) - set(old)),
+        "removed": len(set(old) - set(new)),
+        "changed": sum(1 for n in set(new) & set(old) if not _same(new[n], old[n])),
+        "file": VERSION_IO_FILE,
+    }
+
+
+def apply_version_io(index: dict, db_root: Path) -> dict:
+    """--apply version-io: regenerate version_io.json wholesale from the bundle.
+
+    Mined evidence, not curation: the file is rewritten from the scan each
+    time (a name whose evidence vanished is dropped). Review the dry-run's
+    +added -removed ~changed counts before applying.
+    """
+    scan = _scan_version_io(index, db_root)
+    if not scan.get("available"):
+        raise OSError(f"cannot mine help boxes: {scan.get('reason')}")
+    target = build_version_io_target(scan, index["install"])
+    written = write_version_io_file(Path(db_root) / VERSION_IO_FILE, target, db_root)
+    return {"written": written, "names": len(target["objects"]), "file": VERSION_IO_FILE}
 
 
 ALIASES_FILE = "aliases.json"
@@ -3078,6 +3207,16 @@ def format_summary(report: dict) -> str:
         )
     else:
         lines.append(f"  idioms          : unavailable ({idioms.get('reason')})")
+    vio = s["version_io"]
+    if vio.get("available"):
+        lines.append(
+            f"  version io      : {vio['names']} names with per-version I/O changes "
+            f"({vio['ambiguous_groups']} ambiguous arg groups, {len(vio['conflicting'])} conflicting); "
+            f"+{vio['added']} -{vio['removed']} ~{vio['changed']} vs version_io.json "
+            "(--apply version-io)"
+        )
+    else:
+        lines.append(f"  version io      : unavailable ({vio.get('reason')})")
     lines.append(f"  collisions      : {s['collisions']['count']} (reported, ignored)")
     lines.append(f"  alias documents : {s['alias_docs']['count']}")
     shadow = s["shadowed_by_override"]
@@ -3129,7 +3268,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Apply mode; repeatable. new / define / aliases require --names; inherited "
             "requires --attributes; groups takes no allow-list and writes only "
             "groups.json; aliases writes only aliases.json; idioms takes no "
-            "allow-list and writes only idioms.json."
+            "allow-list and writes only idioms.json; version-io takes no "
+            "allow-list and regenerates only version_io.json."
         ),
     )
     parser.add_argument(
@@ -3250,6 +3390,8 @@ def main(argv: list[str] | None = None) -> int:
                     applied["groups"] = apply_groups(index, db_root)
                 if "idioms" in modes:
                     applied["idioms"] = apply_idioms(index, db_root)
+                if "version-io" in modes:
+                    applied["version_io"] = apply_version_io(index, db_root)
                 if "aliases" in modes:
                     applied["aliases"] = apply_aliases(
                         index, db_root, args.names, shadowed=args.shadowed
@@ -3310,6 +3452,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  applied idioms  : {a['file']} -- {a['pairs']} pairs, +{a['added']} added")
         else:
             print(f"  applied idioms  : {a['file']} unchanged ({a['pairs']} pairs)")
+
+    if "version_io" in applied:
+        a = applied["version_io"]
+        state = "written" if a["written"] else "unchanged"
+        print(f"  applied version io: {a['file']} {state} -- {a['names']} names")
 
     if args.refresh_log:
         if not index["available"]:
