@@ -212,6 +212,7 @@ def validate_patch(
     scope: str | None = None,
     target_version: str | None = None,
     patch_path=None,
+    original=None,
 ) -> list[ValidationResult]:
     """Run the full validation pipeline on a patch and every embedded patcher.
 
@@ -253,6 +254,15 @@ def validate_patch(
             ``patches/<project>/`` tree, case-insensitive): resolved gives
             no finding, unresolved is an ``objects`` error carrying the box
             id. None (the default) keeps the ``Unknown object`` warning.
+        original: Keyword-only (Q22 locked tabs decision; quick 261022-ud6
+            WP7a). The patch as it was loaded (dict or Patcher) when
+            *patch* is an edit of it. Layer 5 passes each codebox's code in
+            *original* -- matched by the box-id path of its scope, its
+            container id and its own id -- to ``validate_genexpr(original=)``,
+            so tab lines already in a loaded codebox are one warning and
+            only new tab lines are an error. A codebox with no counterpart
+            (and every codebox when None, the default) is generated code:
+            every tab is an error.
 
     Returns:
         Combined list of ValidationResult from all layers and scopes: the
@@ -316,13 +326,14 @@ def validate_patch(
         return results  # Stop early -- structure is broken
 
     state = _ScopeState(
-        _project_abstractions(patch_path) if patch_path is not None else None
+        _project_abstractions(patch_path) if patch_path is not None else None,
+        _original_codeboxes(original, scope) if original is not None else None,
     )
 
     # Layers 2-5 on the top level (unchanged order and messages)
     results.extend(_validate_scope_layers(
         patch_dict, db, allowed_packages, scope, nested=False, state=state,
-        target=target, target_text=target_version,
+        target=target, target_text=target_version, path=(),
     ))
 
     # Every embedded patcher, in walker pre-order (Q19 / A7)
@@ -337,12 +348,60 @@ def validate_patch(
 class _ScopeState:
     """Per-``validate_patch`` state shared across scopes."""
 
-    __slots__ = ("warned_packages", "abstractions")
+    __slots__ = ("warned_packages", "abstractions", "original_codes")
 
-    def __init__(self, abstractions: frozenset | None = None) -> None:
+    def __init__(
+        self,
+        abstractions: frozenset | None = None,
+        original_codes: dict | None = None,
+    ) -> None:
         self.warned_packages: set[str] = set()
         # Casefolded abstraction stems (patch_path given), else None.
         self.abstractions = abstractions
+        # (scope box-id path, container id, codebox id) -> loaded code
+        # (``original`` given), else None (WP7a).
+        self.original_codes = original_codes
+
+
+def _gen_codeboxes(patcher: dict, scope: str):
+    """Yield ``(container box, codebox box)`` for the codeboxes of every gen
+    patcher embedded in *patcher* (the boxes Layer 5 checks)."""
+    for box_entry in patcher.get("boxes") or ():
+        box = box_entry.get("box") if isinstance(box_entry, dict) else None
+        if not isinstance(box, dict):
+            continue
+        inner = walk.inner_patcher(box)
+        if inner is None or walk.inner_scope(box, scope) != "gen":
+            continue
+        inner_boxes = inner.get("boxes")
+        if not isinstance(inner_boxes, list):
+            continue
+        for inner_entry in inner_boxes:
+            inner_box = inner_entry.get("box") if isinstance(inner_entry, dict) else None
+            if isinstance(inner_box, dict) and inner_box.get("maxclass") == "codebox":
+                yield box, inner_box
+
+
+def _original_codeboxes(original, scope: str) -> dict:
+    """Map every Layer 5 codebox of *original* to its code (WP7a).
+
+    Key: ``(scope box-id path, container id, codebox id)``. *original* is a
+    patch dict or a Patcher; anything else maps nothing.
+    """
+    from src.maxpat.patcher import Patcher as PatcherClass
+
+    if isinstance(original, PatcherClass):
+        original = original.to_dict()
+    codes: dict = {}
+    if not isinstance(original, dict) or not isinstance(original.get("patcher"), dict):
+        return codes
+    for path, inner, context in walk.iter_patchers(original, scope=scope):
+        ids = tuple(p[0] for p in path)
+        for container, codebox in _gen_codeboxes(inner, walk.scope_of(context)):
+            code = codebox.get("code")
+            if isinstance(code, str):
+                codes[(ids, container.get("id"), codebox.get("id"))] = code
+    return codes
 
 
 _ABSTRACTION_SUFFIXES = (".maxpat", ".js", ".gendsp")
@@ -390,6 +449,7 @@ def _validate_scope_layers(
     state: _ScopeState,
     target: tuple[int, int, int] | None = None,
     target_text: str | None = None,
+    path: tuple = (),
 ) -> list[ValidationResult]:
     """Layers 2-5 on one scope (``patch_dict`` is ``{"patcher": ...}``),
     plus the opt-in ``version`` layer in a max scope when *target* is set."""
@@ -428,7 +488,10 @@ def _validate_scope_layers(
     results.extend(_validate_domain_restrictions(patch_dict, db, scope))
 
     # Layer 5: GenExpr codeboxes of the gen patchers embedded in this scope
-    results.extend(_validate_embedded_genexpr(patch_dict, db, scope))
+    results.extend(_validate_embedded_genexpr(
+        patch_dict, db, scope,
+        originals=state.original_codes, path=tuple(p[0] for p in path),
+    ))
 
     # Opt-in version layer (Q38): max scope only, warnings only
     if target is not None and scope == "max":
@@ -634,7 +697,7 @@ def _validate_nested_scopes(
             _validate_scope_layers(
                 wrapped, db, allowed_packages, walk.scope_of(context),
                 nested=True, state=state,
-                target=target, target_text=target_text,
+                target=target, target_text=target_text, path=path,
             ),
             path,
         ))
@@ -1817,6 +1880,9 @@ def _validate_embedded_genexpr(
     patch_dict: dict,
     db: ObjectDatabase,
     scope: str = "max",
+    *,
+    originals: dict | None = None,
+    path: tuple = (),
 ) -> list[ValidationResult]:
     """Check the GenExpr codeboxes of every gen patcher embedded in this scope.
 
@@ -1840,6 +1906,11 @@ def _validate_embedded_genexpr(
 
     Layer 5 is validate_patch's only GenExpr channel: Layer 4 has no
     codebox check, and a top-level codebox is a Layer 4b restriction error.
+
+    *originals* (``validate_patch(original=)``, WP7a) maps ``(path,
+    container id, codebox id)`` to the loaded code; *path* is this scope's
+    box-id path. A matched codebox runs ``validate_genexpr(original=...)``
+    (tab lines already there warn); an unmatched one runs as generated.
     """
     # Deferred import -- code_validation imports validation, so avoid a
     # circular import at module top.
@@ -1848,36 +1919,22 @@ def _validate_embedded_genexpr(
     if scope not in DOMAIN_SCOPES:
         scope = "max"
     results: list[ValidationResult] = []
-    for box_entry in patch_dict["patcher"]["boxes"]:
-        box = box_entry.get("box") if isinstance(box_entry, dict) else None
-        if not isinstance(box, dict):
-            continue
-        inner = walk.inner_patcher(box)
-        if inner is None:
-            continue
-        if walk.inner_scope(box, scope) != "gen":
-            continue
-        inner_boxes = inner.get("boxes")
-        if not isinstance(inner_boxes, list):
-            continue
+    for box, inner_box in _gen_codeboxes(patch_dict["patcher"], scope):
         container = walk.box_name(box) or walk.box_maxclass(box)
         box_id = box.get("id", "<unknown>")
-        for inner_entry in inner_boxes:
-            inner_box = inner_entry.get("box") if isinstance(inner_entry, dict) else None
-            if not isinstance(inner_box, dict):
-                continue
-            if inner_box.get("maxclass") != "codebox":
-                continue
-            code = inner_box.get("code")
-            if not isinstance(code, str) or not code:
-                continue
-            for r in validate_genexpr(code, db=db):
-                results.append(ValidationResult(
-                    r.layer, r.level,
-                    f"{container} '{box_id}' codebox: {r.message}",
-                    auto_fixed=r.auto_fixed,
-                    rule="genexpr_codebox", box_ids=(box.get("id"),),
-                ))
+        code = inner_box.get("code")
+        if not isinstance(code, str) or not code:
+            continue
+        baseline = None
+        if originals is not None:
+            baseline = originals.get((path, box.get("id"), inner_box.get("id")))
+        for r in validate_genexpr(code, db=db, original=baseline):
+            results.append(ValidationResult(
+                r.layer, r.level,
+                f"{container} '{box_id}' codebox: {r.message}",
+                auto_fixed=r.auto_fixed,
+                rule="genexpr_codebox", box_ids=(box.get("id"),),
+            ))
     return results
 
 
