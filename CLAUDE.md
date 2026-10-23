@@ -19,11 +19,13 @@ The object knowledge base lives at `.claude/max-objects/`: one `objects.json` pe
 ### Supplementary Files
 
 - **`overrides.json`** -- expert corrections that take precedence over extracted data (merged per port; semantics in `db-maintenance.md`).
-- **`aliases.json`** -- shortcuts mapped to canonical names (`t` -> `trigger`, `b` -> `bangbang`, `sel` -> `select`).
+- **`aliases.json`** -- shortcuts mapped to canonical names (`t` -> `trigger`, `b` -> `bangbang`, `sel` -> `select`); also the bundle's `max objectfile` shortcuts (`mc.times~`, `hslider`, `list.*` -> `zl.*`, `jit.+`, Vizzie short names).
 - **`relationships.json`** -- common pairings and companions (`tapin~`/`tapout~`, `notein`/`stripnote`).
 - **`pd-blocklist.json`** -- Pure Data objects that do NOT exist in MAX, with their MAX equivalents.
 - **`extraction-log.json`** -- extraction metadata and statistics.
 - **`groups.json`** -- inherited group names (mc wrapper, shared Jitter, thispatcher selectors); written only by `tools/sync_max_bundle.py --apply groups`, merged at call time by `ObjectDatabase`, never copied into domain files.
+- **`idioms.json`** -- cords the bundle's own help patches ship; validation Layer 3 never type/role-checks a listed cord (bounds always); written only by `--apply idioms`.
+- **`version_io.json`** -- per-version I/O changes mined from help boxes saved by different Max builds; written only by `--apply version-io`.
 
 ### How to Use the Database
 
@@ -56,7 +58,7 @@ DB rules (detail and evidence: `db-maintenance.md`):
 
 ### Rule #1: Never Guess Objects
 
-THE cardinal rule. If an object is not in the database, DO NOT use it. Do not hallucinate object names, inlet counts, outlet counts, or behaviors from training data: look it up, and if it is not there it does not exist for our purposes. Flag the gap with a comment: `// UNKNOWN OBJECT: [name] -- not in database, verify manually`. Being in the database is not enough: check `lookup()['domain']` — an object whose only entries are RNBO or Gen (`expr~`, `wrap~`, `counter~`, `history`) is "No such object" in a Max/MSP patcher. `db.get_effective_restrictions(name)` says where it may go (`[]` means anywhere; a few RNBO-domain entries such as `rnbo~` and the `list.*` objects are real Max objects marked `[]`); `Patcher.add_box` raises outside those contexts, and `validate_patch` errors on it at the top level.
+THE cardinal rule. If an object is not in the database, DO NOT use it. Do not hallucinate object names, inlet counts, outlet counts, or behaviors from training data: look it up, and if it is not there it does not exist for our purposes. Flag the gap with a comment: `// UNKNOWN OBJECT: [name] -- not in database, verify manually`. Being in the database is not enough: check `lookup()['domain']` — an object whose only entries are RNBO or Gen (`expr~`, `wrap~`, `counter~`, `history`) is "No such object" in a Max/MSP patcher. `db.get_effective_restrictions(name)` says where it may go (`[]` means anywhere; the RNBO-domain entries `rnbo~` and `rnbo.remote` are real Max objects marked `[]`, and the `list.*` names are aliases of their `zl.*` objects); `Patcher.add_box` raises outside those contexts, and `validate_patch` errors on it at the top level.
 
 This applies to everything: object names, argument formats, message names, attribute names, inlet/outlet counts. The database is the single source of truth.
 
@@ -228,6 +230,7 @@ All patches target MAX 9 -- do not ask users to choose a version.
 
 - Check `min_version` field before using objects: MAX 9 objects (`array.*`, `string.*`, `abl.*`) need MAX 9+; MC objects (`mc.*`) need MAX 8.1+.
 - The 12 Max 9.2 objects (`min_version: 9.2`) and the 9.2 messages/attributes (NOT version-tagged in the DB) are listed in `.claude/skills/references/max-9.2-changes.md`. A patch meant to open on an older 9.x build must avoid both.
+- `validate_patch(patch, target_version="9.0")` warns (layer `version`) when a box needs a newer Max or uses a port an older build lacks; use it for collaborators on older 9.x builds.
 
 ## Bpatcher and Abstraction Arguments (`#N` Substitution)
 

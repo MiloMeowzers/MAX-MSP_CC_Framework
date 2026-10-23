@@ -7,12 +7,16 @@
 
 | | Validator | Critics |
 |---|---|---|
-| Entry point | `validate_patch(patch, db=None, allowed_packages=None, *, scope=None)` | `review_patch(patch_dict, code_context=None, ext_code=None, ext_archetype="message", *, db=None)` |
+| Entry point | `validate_patch(patch, db=None, allowed_packages=None, *, scope=None, target_version=None)` | `review_patch(patch_dict, code_context=None, ext_code=None, ext_archetype="message", *, db=None)` |
 | Result type | `ValidationResult` with `layer`, `level`, `message`, `proposed_removal` (plus the legacy `auto_fixed` flag) | `CriticResult` with `severity`, `finding`, `suggestion` |
 | Question it answers | Is the patch mechanically valid? (JSON shape, objects exist, cords in range, domain rules, embedded GenExpr) | Is it well designed? (gain staging, fan-out, layout, contrast, device rules) |
 | Levels | `error`, `warning`, `info` | `blocker`, `warning`, `note` |
 
 `validate_patch` runs Layer 1 (json), Layer 2 (objects, plus maxclass usage, package gating and community extraction), Layer 3 (connections), Layer 4 (domain rules), Layer 4b (domain restrictions) and Layer 5 (GenExpr inside codeboxes of top-level `gen~` boxes). A Layer 1 error stops the pipeline: nothing after it runs.
+
+Layer 3 skips type/role checks (the `Unverified outlet types` warning, role-tier warnings, `Signal outlet to control-only inlet`) for a known companion pair (`relationships.json`) and for a cord listed in `idioms.json` -- a cord the bundle's own help patches ship, keyed by both names, both ports and the source outlet's signal class. Bounds, missing-box and malformed-cord errors are never skipped.
+
+`target_version="9.0"` (opt-in, Q38) adds a `version` layer in max scopes only (nested max-scope patchers included): a `warning` for a box whose `min_version` is newer than the target, and for a cord on a port the target build lacks according to `version_io.json`. It never emits an error, so it never blocks `has_blocking_errors` or a save. An unparsable target raises ValueError.
 
 `review_patch` always runs the DSP, structure and layout critics. It adds the RNBO critic when an `rnbo~` box is present, the M4L critic when `plugin~`, `plugout~` or `live.thisdevice` is present, the package critic when package objects are present, and the external critic when `ext_code` is passed.
 

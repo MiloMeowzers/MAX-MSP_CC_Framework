@@ -118,7 +118,7 @@ Each object is keyed by name in its domain file. Full schema:
   "attributes": {},
   "seealso": ["bangbang", "jstrigger", "message"],
   "tags": ["Max", "Control", "Right-to-Left"],
-  "min_version": 8,
+  "min_version": "8",
   "verified": true,
   "variable_io": true,
   "rnbo_compatible": true
@@ -129,7 +129,7 @@ Key fields:
 - **`inlets`/`outlets`**: Arrays with `id`, `type`, `signal` (bool), `hot` (inlets only)
 - **`variable_io`**: If `true`, actual I/O count depends on arguments — compute it with `db.compute_io_counts(name, args)` (rules live in `overrides.json` → `variable_io_rules` and `src/maxpat/io_resolvers.py`; see Variable I/O Rules below)
 - **`rnbo_compatible`**: Whether the object can be used in RNBO export patches
-- **`min_version`**: Minimum MAX version required (all patches target MAX 9)
+- **`min_version`**: Minimum MAX version required, as a version string (`"8"`, `"8.1"`, `"9.2"`; all patches target MAX 9)
 
 #### Schema-Hardening Fields (v5.0, Phase 28)
 
