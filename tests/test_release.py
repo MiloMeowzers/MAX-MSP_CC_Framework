@@ -357,6 +357,14 @@ class TestCiConfig:
         assert "|| [[" not in text, "release.yml masks an exit code"
         assert "tar czf" not in text
 
+    def test_test_workflow_checks_python_310_syntax_and_apis(self):
+        """BL-01 follow-up (quick 261022-ud6 WP6): math.exp2 (3.11+) passed CI
+        because no test reached it; vermin flags any 3.11+ API statically."""
+        text = (WORKFLOWS / "test.yml").read_text()
+        assert re.search(r"vermin -t=3\.10- --violations\b.*\bsrc tools tests scripts "
+                         r"\.claude/scripts", text), text
+        assert 'python -m pip install "vermin>=1.6,<2"' in text
+
     # WR-05 / IN-07 (quick 261022-ud6 WP6): npm trusted publishing (OIDC), no
     # long-lived token, publish verified before the GitHub release goes public,
     # and only full semver tags trigger a release.
