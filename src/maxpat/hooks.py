@@ -1342,7 +1342,10 @@ def validate_file(path: str | Path) -> list[ValidationResult]:
     """Load and validate an existing .maxpat file from disk.
 
     .gendsp / .genjit files validate in gen scope and .rnbopat in rnbo
-    scope (SCOPE_BY_SUFFIX); other suffixes auto-detect (Q12 / C3).
+    scope (SCOPE_BY_SUFFIX); other suffixes auto-detect (Q12 / C3). The
+    file path is passed as ``patch_path`` (fix-plan Q23 D3): an unknown
+    object is an error unless an abstraction resolves beside the file or in
+    its ``patches/<project>/`` tree.
 
     The file is treated as loaded (quick 261022-ud6 WP7a): ``patch_path``
     is its path, so an unknown name resolves against the project's
