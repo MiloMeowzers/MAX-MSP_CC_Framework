@@ -60,7 +60,7 @@ from src.maxpat.hooks import save_patch_roundtrip
 ### Key Functions
 
 - `RNBODatabase()`: RNBO-specific object database; `.is_rnbo_compatible(name)` and `.lookup(name)` methods
-- `add_rnbo(patcher, objects, params, target, audio_ins, audio_outs)`: Add rnbo~ container to an existing Patcher
+- `add_rnbo(patcher, objects, params, target, audio_ins, audio_outs)`: Add rnbo~ container to an existing Patcher. Writes MAX's shape (golden `tests/fixtures/expected/rnbo_box_shapes.json`): newobj `rnbo~`, `max(1, audio_ins)` inlets (inlet 0 also takes messages), `audio_outs + 1` outlets (the last is `list`), inner `classnamespace "rnbo"`, and params as `param <name> <initial> @min <lo> @max <hi>`. EXPERIMENTAL: not yet opened in MAX
 - `generate_rnbo_wrapper(params, target, audio_ins, audio_outs)`: Build complete adc~ -> rnbo~ -> dac~ wrapper Patcher
 - `parse_genexpr_params(code)`: Extract Param declarations from GenExpr code
 - `validate_rnbo_patch(patch_dict, target)`: 3-layer validation on the **inner RNBO patcher** (not the full rnbo~ wrapper). Checks: rnbo-objects, rnbo-target, rnbo-contained

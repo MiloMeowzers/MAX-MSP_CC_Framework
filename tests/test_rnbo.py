@@ -267,25 +267,25 @@ def test_add_rnbo_rejects_non_rnbo():
 
 
 def test_add_rnbo_box_new_pattern():
-    """Parent box uses Box.__new__, maxclass is 'rnbo~'."""
+    """Parent box is a structural newobj with text 'rnbo~' (MAX's shape;
+    quick 261022-ud6 WP4, review WR-05 / E8 -- was maxclass 'rnbo~')."""
     p = Patcher()
     box, inner = add_rnbo(p, audio_ins=1, audio_outs=1)
-    # Box.__new__ pattern means maxclass is set directly (not via DB lookup)
-    assert box.maxclass == "rnbo~"
-    # Should have text "rnbo~"
+    assert box.maxclass == "newobj"
     assert box.text == "rnbo~"
 
 
 def test_add_rnbo_variable_io():
-    """numinlets/numoutlets match audio I/O + 1 message."""
+    """MAX's counts (golden tests/fixtures/expected/rnbo_box_shapes.json):
+    one inlet per in~ (inlet 0 also takes messages), one outlet per out~
+    plus the trailing list outlet."""
     p = Patcher()
     box, inner = add_rnbo(p, audio_ins=3, audio_outs=2)
-    # 3 audio inputs + 1 message inlet = 4
-    assert box.numinlets == 4
-    # 2 audio outputs + 1 message outlet = 3
+    assert box.numinlets == 3
     assert box.numoutlets == 3
-    # Outlet types: 2 signal + 1 control
-    assert box.outlettype == ["signal", "signal", ""]
+    assert box.outlettype == ["signal", "signal", "list"]
+    box0, _ = add_rnbo(p, audio_ins=0, audio_outs=0)
+    assert (box0.numinlets, box0.numoutlets, box0.outlettype) == (1, 1, ["list"])
 
 
 def test_add_rnbo_inport_outport():
@@ -330,7 +330,7 @@ def test_rnbo_generation_serializes():
     rnbo_box_dict = None
     for box_entry in patch_dict["patcher"]["boxes"]:
         box_d = box_entry.get("box", {})
-        if box_d.get("maxclass") == "rnbo~":
+        if box_d.get("maxclass") == "newobj" and box_d.get("text") == "rnbo~":
             rnbo_box_dict = box_d
             break
 

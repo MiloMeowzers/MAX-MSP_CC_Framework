@@ -483,7 +483,7 @@ class TestAddRnboNoneBounds:
             audio_ins=1, audio_outs=1,
         )
         (pbox,) = [b for b in inner.boxes if b.name == "param"]
-        assert "@initial 0.5" in pbox.text
+        assert pbox.text == "param g 0.5"  # positional initial (WP4, E8)
         assert "None" not in pbox.text
         assert "@min" not in pbox.text
         assert "@max" not in pbox.text
@@ -494,7 +494,7 @@ class TestAddRnboNoneBounds:
 
         _box, inner = add_rnbo(Patcher(), params=[{"name": "g"}], audio_ins=1, audio_outs=1)
         (pbox,) = [b for b in inner.boxes if b.name == "param"]
-        assert pbox.text == "param @name g @min 0.0 @max 1.0 @initial 0.0"
+        assert pbox.text == "param g 0.0 @min 0.0 @max 1.0"  # MAX's form (WP4, E8)
 
 
 # ---------------------------------------------------------------------------
