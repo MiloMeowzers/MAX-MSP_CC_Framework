@@ -11435,6 +11435,23 @@
         "finding": "quick-260921-g5d: sibling of bach.llll2list. The same audit source names BOTH objects, but only bach.llll2list carried verified_installed: false -- bach.list2llll was left unaudited (get_install_state -> None) while still resolving via lookup() with full plausible I/O, so generators could emit it into a patch that fails at load with 'No such object'. Marked false to match the sibling and close the asymmetry. Not independently re-verified against the installed bach package: bach is a USER package under ~/Documents/Max 9/Packages, which macOS TCC blocks this process from reading."
       }
     },
+    "bach.slice": {
+      "outlets": [
+        {
+          "id": 0,
+          "type": "",
+          "signal": false,
+          "digest": "The left part of the splitted llll"
+        },
+        {
+          "id": 1,
+          "type": "",
+          "signal": false,
+          "digest": "The right part of the splitted llll"
+        }
+      ],
+      "_evidence": "quick 261022-ud6 WP7a: bach refpage bach.slice.maxref.xml lists 2 outlets (left/right part of the split llll); help box 'bach.slice 3 @out t' is saved numinlets 1 / numoutlets 2, outlettype ['', '']"
+    },
     "snapshot~": {
       "outlets": [
         {
@@ -14014,23 +14031,24 @@
         },
         {
           "id": 1,
-          "type": "float",
+          "type": "list",
           "digest": "List of Zero Coordinate Pairs",
           "signal_role": "list"
         },
         {
           "id": 2,
-          "type": "float",
+          "type": "list",
           "digest": "List of Pole Coordinate Pairs",
           "signal_role": "list"
         },
         {
           "id": 3,
-          "type": "float",
+          "type": "list",
           "digest": "List of 2nd Order Filter Gains",
           "signal_role": "list"
         }
-      ]
+      ],
+      "_evidence": "quick 261022-ud6 WP7a: outlets 1-3 are list (refpage digests 'List of ... Pairs/Gains'; both zplane~ help boxes save outlettype ['list','list','list','list']); the refpage 'float' type was wrong"
     },
     "mc.!-~": {
       "outlets": [
@@ -15921,7 +15939,7 @@
           "id": 1,
           "type": "list",
           "digest": "Range",
-          "signal_role": "float"
+          "signal_role": "list"
         },
         {
           "id": 2,
