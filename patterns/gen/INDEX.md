@@ -70,7 +70,7 @@ Send parameters as plain name messages (NOT @ syntax):
 
 | Pattern | File | In | Out | Params | Use Instead Of | Description |
 |---------|------|----|-----|--------|----------------|-------------|
-| Simple Reverb | `dsp/simple-reverb` | 2 | 2 | `decay`, `damping`, `drywet` | External reverb~ | Schroeder reverb (4 comb + 2 allpass) |
+| Simple Reverb | `dsp/simple-reverb` | 2 | 2 | `decay`, `damping`, `drywet` | Third-party reverb externals or plugins | Schroeder reverb (4 comb + 2 allpass) |
 | Multi-Tap Delay | `dsp/multi-tap-delay` | 1 | 1 | `time_ms`, `feedback`, `drywet` | tapin~/tapout~ chains | Single delay line with feedback and mix |
 | Compressor | `dsp/compressor` | 1 | 1 | `threshold` (dB), `ratio`, `attack_ms`, `release_ms`, `makeup` (dB) | External plugins | dB-domain envelope detection + gain reduction |
 | Noise Generator | `dsp/noise-generator` | 0 | 1 | `type` (0=white, 1=pink, 2=brown) | noise~ only | White, pink, and brown noise in one generator |

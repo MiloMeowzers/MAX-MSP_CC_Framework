@@ -19,7 +19,7 @@ The Patch agent generates MAX/MSP .maxpat files focused on control-rate operatio
 ## Domain Context Loading
 
 Before any generation:
-1. Read `CLAUDE.md` at project root -- follow all 5 rules and patch style guidelines
+1. Read `CLAUDE.md` at project root -- follow every rule (Rules #1-#9) and the patch style guidelines
 2. Use `ObjectDatabase` from `src.maxpat.db_lookup` for all object lookups -- it loads all domains, resolves aliases, checks PD blocklist, and provides relationship data automatically
 3. Read `.claude/max-objects/relationships.json` for common object pairings (if needed for design decisions)
 4. Read project `config.json` via `load_project_config()` from `src.maxpat.project` for allowed packages. Pass `allowed_packages` to `Patcher(allowed_packages=allowed)` so package objects outside the project's selection are blocked at creation time. If `load_project_config()` returns None (no config.json), use `allowed = []` (core-only), never None -- None allows every package.
@@ -40,9 +40,9 @@ Before any generation:
 - `Patcher.add_connection(src_box, src_outlet, dst_box, dst_inlet)` -- connect boxes
 - `Patcher.add_subpatcher(name, inlets=1, outlets=1, x=0.0, y=0.0, inlet_comments=None, outlet_comments=None)` -- add a subpatcher with labeled I/O
 - `Patcher.populate_assistance_comments()` -- auto-fill empty inlet/outlet comments from connection context
-- `finalize_patch(patcher, is_new=True, force_layout=False)` -- single-call layout cleanup: styling, layout, comments, midpoints (new); midpoints + comments (edit). With `is_new=True` it raises `LayoutRefusedError` (from `src.maxpat.layout`) before changing anything when a patcher it would lay out has >120 boxes or was saved by MAX; see "Output Protocol (New Patches)"
+- `finalize_patch(patcher, is_new=True, force_layout=False)` -- single-call layout cleanup: styling, layout, comments, midpoints (new); comments + routing of new or touched cords that have no midpoints, never moving boxes or clearing midpoints (edit). With `is_new=True` it raises `LayoutRefusedError` (from `src.maxpat.layout`) before changing anything when a patcher it would lay out has >120 boxes or was saved by MAX; see "Output Protocol (New Patches)"
 - `apply_layout(patcher, options=None, force=False)` -- row-based topological layout positioning (accepts LayoutOptions); same refusal, `force=True` overrides
-- `validate_patch(patcher.to_dict(), db=patcher.db)` -- run four-layer validation pipeline
+- `validate_patch(patcher.to_dict(), db=patcher.db)` -- run the validation pipeline (Layers 1-5, every scope; pass `patch_path=` to resolve abstractions beside the file)
 - `save_patch_roundtrip(patcher.to_dict(), path)` -- write .maxpat to disk
 - `Patcher.add_comment(text, x, y)` -- add a comment box (for inline annotations, critic notes)
 - `Patcher.add_message(text, x, y)` -- add a message box (for triggering messages, storing values)
@@ -78,7 +78,7 @@ Before any generation:
 
 ## Builder API (Phase 31)
 
-Prefer the `Patcher` builders over restating their recipes: `add_overlay_readout`, `add_labeled_param_bank`, `add_m4l_gen_synth` (experimental) and the passive `_ROLE_COMPANION_MAP` companion placement applied by `apply_layout`. Signatures, arguments and the quick-reference table: "Builder API" in `.claude/skills/references/shared-capabilities.md`.
+Prefer the `Patcher` builders over restating their recipes: `add_overlay_readout`, `add_labeled_param_bank`, `add_m4l_device` (device skeleton of any kind, then `export_amxd`; experimental), `add_m4l_gen_synth` (experimental) and the passive `_ROLE_COMPANION_MAP` companion placement applied by `apply_layout`. Signatures, arguments and the quick-reference table: "Builder API" in `.claude/skills/references/shared-capabilities.md`.
 
 ## Package Intelligence
 

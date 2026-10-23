@@ -112,16 +112,16 @@ Overlays are not agents. When an overlay's keywords or object names match, it se
 **Object references:** `plugin~`, `plugout~`, `live.thisdevice`, `live.dial`, `live.slider`, `live.numbox`, `live.menu`, `live.text`, `live.toggle`, `live.tab`, `live.meter~`, `live.object`, `live.path`, `live.observer`, `live.remote~`, `midiin`, `midiout`
 
 **Agents:**
-- audio effect or instrument: lead max-dsp-agent (the `add_m4l_gen_synth` builder, experimental);
-- MIDI effect: lead max-patch-agent;
+- audio effect or instrument: lead max-dsp-agent (`add_m4l_device("audio_effect" | "instrument", params)`, or `add_m4l_gen_synth` for a gen~ synth body; both experimental);
+- MIDI effect: lead max-patch-agent (`add_m4l_device("midi_effect", params)`, experimental);
 - plus max-ui-agent for `live.*` controls in presentation;
 - plus max-js-agent only for Live API scripting asked for in JS.
 
-**Pass to specialists:** CLAUDE.md "Max for Live (M4L / .amxd)" (no `gain~` / `live.gain~` / `ezdac~` before `plugout~`; `live.dial` / `live.slider` bind through `param_connect` with `parameter_enable`); the `add_m4l_gen_synth` docstring; "Builder API" in `.claude/skills/references/shared-capabilities.md`.
+**Pass to specialists:** CLAUDE.md "Max for Live (M4L / .amxd)" (no `gain~` / `live.gain~` / `ezdac~` before `plugout~`; `live.dial` / `live.slider` bind through `param_connect` with `parameter_enable`); the `add_m4l_device` and `add_m4l_gen_synth` docstrings; "Builder API" in `.claude/skills/references/shared-capabilities.md` (both builders, and `export_amxd`).
 
 **Checks:**
-- `review_patch` runs the M4L critic only when `detect_m4l_device_type` finds `plugin~`, `plugout~` or `live.thisdevice` (`plugin~` gives an audio effect, else `plugout~` an instrument, else a MIDI effect), so every M4L build includes them;
-- the framework writes .maxpat only (there is no .amxd writer);
+- `review_patch` runs the M4L critic only when `detect_m4l_device_type` finds `plugin~`, `plugout~` or `live.thisdevice` (`plugin~` gives an audio effect, else `plugout~` an instrument, else `midiin` / `midiout` a MIDI effect; `live.thisdevice` alone is a helper abstraction, `m4l_abstraction`, which gets only the per-scope checks), so every M4L build includes them;
+- the `.maxpat` is the source of truth: save it, then write the `.amxd` next to it with `export_amxd(maxpat_path)` from `src.maxpat.m4l_device` (experimental; it refuses a helper abstraction unless `kind=` is given);
 - report the result as experimental.
 
 ### poly~ (polyphonic voices)

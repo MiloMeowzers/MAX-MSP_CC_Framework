@@ -31,7 +31,7 @@ Scaffold, generate, build, and validate C++ externals using the Min-DevKit. Supp
 ## Domain Context Loading
 
 When invoked:
-1. Read `CLAUDE.md` externals section for conventions and patterns
+1. Read `.claude/skills/max-ext-agent/BOUNDARIES.md` for scope and conventions, and TECHNICAL.md "External Critic (`ext_critic.py`)" for what the critic checks (CLAUDE.md has no externals section beyond the `.mxo` file convention)
 2. No object database needed -- externals are custom objects not in the DB
 
 ## Python API References

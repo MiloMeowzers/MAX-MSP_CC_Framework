@@ -73,7 +73,7 @@ gen_box.outlettype = ["signal"]  # Use ["signal", "signal"] for stereo
 | Volume control | Raw *~ at full level | `safe-gain` |
 
 ### Layout and Finalization
-- `finalize_patch(patcher, is_new=True)` -- single-call layout cleanup: styling, layout, comments, midpoints (new); midpoints + comments (edit)
+- `finalize_patch(patcher, is_new=True, force_layout=False)` -- single-call layout cleanup: styling, layout, comments, midpoints (new); comments + routing of new or touched cords that have no midpoints, never moving boxes or clearing midpoints (edit). With `is_new=True` it raises `LayoutRefusedError` on MAX-saved or large patchers (see Output Protocol step 3)
 - `apply_layout(patcher)` -- row-based topological auto-layout (called internally by finalize_patch)
 
 ### Signal Chain Construction
@@ -106,6 +106,8 @@ gen_box.outlettype = ["signal"]  # Use ["signal", "signal"] for stereo
 - See shared-capabilities.md "Control-Rate Fan-Out Rule" for the full rule and examples
 
 > **Shared Capabilities:** See `.claude/skills/references/shared-capabilities.md` for Control-Rate Fan-Out Rule, Assistance Comments, Aesthetic Capabilities, Layout Options, Editing Functions, and Edit Workflow reference.
+
+**Max for Live devices (experimental, unconfirmed in Live):** lead audio-effect and instrument builds with `Patcher.add_m4l_device(kind, params)` (or `add_m4l_gen_synth(params)` for a gen~ synth body), save the `.maxpat`, then write the `.amxd` with `export_amxd(maxpat_path)` from `src.maxpat.m4l_device`. Signatures and reuse / refusal rules: "Builder API" in `.claude/skills/references/shared-capabilities.md`; device rules: CLAUDE.md "Max for Live (M4L / .amxd)".
 
 ## Package Intelligence
 
@@ -274,7 +276,7 @@ Extends the canonical BEAP templates in `.claude/max-objects/PACKAGES.md` (see a
 
 1. Generate GenExpr code and/or MSP signal chain
 2. If GenExpr: validate with `validate_genexpr()` from `src.maxpat.code_validation`
-3. If .maxpat with signal objects: `finalize_patch(patcher, is_new=True)` -- applies styling, layout, assistance comments, and midpoint generation for all patchers and subpatchers. Then serialize via `patch_dict = patcher.to_dict()` and validate a copy via `results = validate_patch(copy.deepcopy(patch_dict), db=patcher.db)`. Proposed removals mean inspect, don't save: if any result has `proposed_removal` set, inspect each `(src_id, outlet, dst_id, inlet)` -- fix a real wiring mistake and re-validate, or keep a false-positive cord and report the checker gap; call `apply_fixes(patch_dict, results)` only when removal is explicitly wanted, then re-validate
+3. If .maxpat with signal objects: `finalize_patch(patcher, is_new=True)` -- applies styling, layout, assistance comments, and midpoint generation for all patchers and subpatchers. It raises `LayoutRefusedError` (`from src.maxpat.layout import LayoutRefusedError`, a `ValueError`) before changing anything when the patcher, or a subpatcher the layout recurses into, has more than 120 boxes or was saved by MAX: for a large NEW build call `finalize_patch(patcher, is_new=True, force_layout=True)`; for a build that embeds a MAX-saved patcher or edits a file from disk never force -- use `finalize_patch(patcher, is_new=False)` or `edit_patch(path)`. Then serialize via `patch_dict = patcher.to_dict()` and validate a copy via `results = validate_patch(copy.deepcopy(patch_dict), db=patcher.db)`. Proposed removals mean inspect, don't save: if any result has `proposed_removal` set, inspect each `(src_id, outlet, dst_id, inlet)` -- fix a real wiring mistake and re-validate, or keep a false-positive cord and report the checker gap; call `apply_fixes(patch_dict, results)` only when removal is explicitly wanted, then re-validate
 4. If standalone .gendsp: generate via `generate_gendsp()`
 5. Return output for critic review (DSP critic checks signal flow, gen~ I/O matching)
 6. Apply revisions if critic requests them
@@ -294,10 +296,26 @@ catalogue and threshold defaults.
 ### Codebox smoke test (advisory)
 
 After writing or editing a gen~ codebox, run the offline GenExpr smoke test on the saved file.
-It runs every codebox at the default and per-Param min/max corners and flags NaN/inf, peak > 4,
-permanent silence and self-sustain (a latched `tanh(x*g)/tanh(g)` loop); UNSUPPORTED never passes.
+It runs every codebox at the default and per-Param min/max corners; UNSUPPORTED never passes.
 Report any FAIL or UNSUPPORTED finding to the user, but never block a save on it. Details:
 `src/maxpat/dsp_sim/README.md`.
+
+- **Port kinds come from the host patch.** An outlet that reaches `dac~` / `plugout~` / `out~` /
+  `gain~` / a meter through signal consumers is **audio** and gets every check (NaN/inf, peak > 4,
+  permanent silence, self-sustain such as a latched `tanh(x*g)/tanh(g)` loop, DC, denormal). Any
+  other outlet is **control** (Hz, ms, indices, flags) and gets only the NaN/inf FAIL and the
+  `denormal` WARN. Inlets get a stimulus by what feeds them (`click~` -> gate, `sig~` / `line~` ->
+  control, nothing -> zero, else audio noise).
+- **Smoke the host `.maxpat`** rather than a bare `.gendsp`: a lone `.gendsp` finds its host only
+  among sibling `.maxpat` files, and with no host every port is audio.
+- **`// smoke:` directive** for standalone code and patterns: a comment line in the codebox such
+  as `// smoke: control out2 trigger in1 in3=phasor:2` (`control outN`, `audio outN`,
+  `trigger inN`, `inN=SPEC`) overrides the inferred kinds. An unusable token is a
+  `smoke_directive` WARN.
+- A `silence` WARN after the louder rerun (a gate, threshold or one-shot that stays quiet on
+  noise) is not a defect; only silence that survives the rerun FAILs.
+- Build-time WARNs (`loop_bound_param`, `hoist_alias`, `implicit_channel`) point at the
+  codebox safe-construct rules in `genexpr-rules.md`.
 
 ```bash
 python3 -m src.maxpat.dsp_sim smoke patches/<project>/generated/<name>.maxpat
@@ -361,8 +379,8 @@ token.
 
 For a patch at `patches/<project>/generated/<name>.maxpat`:
 
-1. Pick a topology from `src/maxpat/dsp_sim/topologies/` (`bore_only`,
-   `reed_bore`, `reed_bore_post_radiation`) or write a custom mirror.
+1. Pick a topology from `src/maxpat/dsp_sim/topologies/` (`reed_bore`,
+   `reed_bore_post_radiation`; `bore_only` was removed in Q25) or write a custom mirror.
 2. Create `tests/dsp_sim/test_<name>.py` calling
    `run_simulation(patch_path=..., topology=..., params=..., sweep_param=..., sweep=(lo, hi, n))`.
 3. Assert `report.verdict == "pass"`.

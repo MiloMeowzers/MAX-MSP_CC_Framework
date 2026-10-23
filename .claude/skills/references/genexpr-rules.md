@@ -16,7 +16,9 @@ Full gen~ rule set for codebox code, `.gendsp` patchers and `mc.gen~`. max-dsp-a
 
 ## Declaration ordering
 
-**Declaration ordering**: ALL declarations (`Param`, `History`, `Delay`, `Buffer`, `Data`) MUST appear before ANY expressions or assignments. gen~ will refuse to compile code with declarations after expressions. The `add_gen()` method auto-reorders declarations, but always write code with declarations at the top: Params first, then Delay, then History, then Buffer/Data, then all expressions.
+**Declaration ordering**: ALL declarations (`Param`, `History`, `Delay`, `Buffer`, `Data`) MUST appear before ANY expressions or assignments. gen~ will refuse to compile code with declarations after expressions. The `add_gen()` method auto-reorders declarations, but always write code with declarations at the top: Params first, then Delay, then History, then Buffer/Data, then all expressions
+
+**Functions come first.** A user function definition (`name(args) { ... }`) goes before every declaration and statement: the codebox order is functions, then declarations, then statements. This is the form every shipped Cycling '74 codebox with functions uses (gen.maxhelp, jit.gl.material) and the Max user guide's rule ("functions must be declared before all statements"). `validate_genexpr` reports a function after a statement as an **error** and a function after declarations only as a **warning**; it judges statement order outside function bodies. `reorder_genexpr_declarations` (used by `add_gen`) emits functions, then declarations, then statements, never hoists a Param above a function, and leaves the C74 form byte-identical. [code + bundle evidence; the error case is not yet reproduced in MAX].
 
 ## Setting Param values from MAX
 
@@ -97,17 +99,25 @@ The in-repo simulator and its verdicts are documented in max-dsp-agent SKILL.md 
 
 ## Built-in constant names
 
-**Never use GenExpr built-in constant names as variable names** (`e`, `pi`, `twopi`, `halfpi`, `invpi`, `ln2`, `ln10`, `log10e`, `log2e`, `sqrt2`, `sqrt1_2`, `degtorad`, `radtodeg`). Assigning to them does not create a local — the constant wins silently, no compile error. sample-layers v0.3.0 used `e` as the master-envelope ramp variable: `env = e` pinned the envelope at 2.718, `e*e` became a constant ~7.4x gain, and the on/off gate passed audio permanently. Renamed to `ev` in v0.3.1.
+**Never use GenExpr built-in constant names as variable names** (`e`, `pi`, `twopi`, `halfpi`, `invpi`, `ln2`, `ln10`, `log10e`, `log2e`, `sqrt2`, `sqrt1_2`, `degtorad`, `radtodeg`, `phi`, and every upper-case alias: `E`, `PI`, `TWOPI`, `HALFPI`, `INVPI`, `LN2`, `LN10`, `LOG10E`, `LOG2E`, `SQRT2`, `SQRT1_2`, `DEGTORAD`, `RADTODEG`, `PHI`; `genexpr_parse.BUILTIN_CONSTANTS`, which the linter and the dsp_sim interpreter both use). Assigning to them does not create a local — the constant wins silently, no compile error. sample-layers v0.3.0 used `e` as the master-envelope ramp variable: `env = e` pinned the envelope at 2.718, `e*e` became a constant ~7.4x gain, and the on/off gate passed audio permanently. Renamed to `ev` in v0.3.1.
 
 ## Codebox safe-construct rules
 
 **Codebox safe-construct rules** (learned from spectraldetector v0.1.x, which failed with a generic `dsp.gen: ... failed to compile genpatcher` Lua error and no codebox-specific message; fixed in v0.2.0, confirmed working in MAX):
-- **Spaces only, NEVER tab characters** in codebox code strings. The failing codebox was the only one in the repo containing tabs; all working codeboxes are pure spaces. Prime suspect for the generic compile failure.
+- **Spaces only, NEVER tab characters** in codebox code strings. The failing codebox was the only one in the repo containing tabs; all working codeboxes are pure spaces. Prime suspect for the generic compile failure. Enforcement (Q22 locked decision): a tab in generated or edited code is a validator **error**; tab lines already present in a loaded codebox are one **warning** (74 of 146 shipped C74 codeboxes contain tabs and compile). `validate_genexpr(code, db, *, original=...)` makes the split: lines found verbatim in `original` warn, new tab lines error, and `original=None` (generated code) errors on every tab. `validate_patch(..., original=loaded)`, the save gate (baseline as `original`) and `validate_code_file` (disk file = loaded; `loaded=False` for code just generated) pass it.
 - **No `else if` chains** — use nested `else { if ... }` or sequential guarded ifs. No working codebox in the repo uses `else if`; plain `if`/`else` is proven fine.
 - **`peek`/`poke` always with explicit channel arg**: `peek(buf, idx, 0)`, `poke(buf, val, idx, 0)`. All confirmed-working codeboxes use these arities.
 - **For loops: single, non-nested, CONSTANT bounds** (`for (i = 0; i < 600; i += 1)`), with a variable inner guard (`if (i < win) { ... }`) when the effective range is runtime-dependent. No confirmed-working codebox uses variable loop bounds or nested loops (the two patches that did — scala-synth, spectraldetector v0.1.x — both failed to compile).
 - **Amortize heavy scans across samples** instead of bursting inside one sample: keep a `History` cursor (e.g. one autocorrelation lag evaluated per sample) and publish the result when the cursor wraps. Same average CPU as a per-hop burst, no CPU spike, and it avoids the nested-loop pattern entirely.
 - Caveat: v0.2.0 fixed tabs + loops + else in one pass, so causes are not individually isolated — treat the full set as the proven-safe pattern. A minimal bisect codebox is the next diagnostic step if a codebox ever fails with this generic error again.
+
+## `.gendsp` edits and codebox inlets
+
+`write_gendsp` on an existing `.gendsp` never shrinks ports from auto-detected counts: surplus `in N` / `out N` boxes are removed only when `num_inputs` / `num_outputs` are passed explicitly. Unchanged code is a true no-op. A codebox with no inputs keeps an existing `numinlets` of 0 or 1 (MAX-resaved files store 0) and never gains a spurious `in 1`; a new 0-input codebox is written with `numinlets: 1`, the shape MAX's own help patches use. `generate_gendsp` writes codebox `numinlets: max(1, n_in)`.
+
+## `// smoke:` directive (dsp_sim)
+
+A `// smoke:` comment line in a codebox overrides the port kinds the dsp_sim smoke test infers from the host patch, for standalone `.gendsp` files and patterns with no host: `// smoke: control out2 trigger in1 in3=phasor:2` (`control outN`, `trigger inN`, `inN=SPEC`). GenExpr ignores it as a comment. Syntax and port inference: `src/maxpat/dsp_sim/README.md`.
 
 ## Max 9.2 compiler fixes
 

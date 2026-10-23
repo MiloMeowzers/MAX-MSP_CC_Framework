@@ -58,7 +58,7 @@ DB rules (detail and evidence: `db-maintenance.md`):
 
 ### Rule #1: Never Guess Objects
 
-THE cardinal rule. If an object is not in the database, DO NOT use it. Do not hallucinate object names, inlet counts, outlet counts, or behaviors from training data: look it up, and if it is not there it does not exist for our purposes. Flag the gap with a comment: `// UNKNOWN OBJECT: [name] -- not in database, verify manually`. Being in the database is not enough: check `lookup()['domain']` — an object whose only entries are RNBO or Gen (`expr~`, `wrap~`, `counter~`, `history`) is "No such object" in a Max/MSP patcher. `db.get_effective_restrictions(name)` says where it may go (`[]` means anywhere; the RNBO-domain entries `rnbo~` and `rnbo.remote` are real Max objects marked `[]`, and the `list.*` names are aliases of their `zl.*` objects); `Patcher.add_box` raises outside those contexts, and `validate_patch` errors on it at the top level.
+THE cardinal rule. If an object is not in the database, DO NOT use it. Do not hallucinate object names, inlet counts, outlet counts, or behaviors from training data: look it up, and if it is not there it does not exist for our purposes. Flag the gap with a comment: `// UNKNOWN OBJECT: [name] -- not in database, verify manually`. Being in the database is not enough: check `lookup()['domain']` — an object whose only entries are RNBO or Gen (`expr~`, `wrap~`, `counter~`, `history`) is "No such object" in a Max/MSP patcher. `db.get_effective_restrictions(name)` says where it may go (`[]` means anywhere; the RNBO-domain entries `rnbo~` and `rnbo.remote` are real Max objects marked `[]`, and the `list.*` names are aliases of their `zl.*` objects); `Patcher.add_box` raises outside those contexts, and `validate_patch` errors on it in every Max scope. An unknown name blocks a save unless an abstraction (`NAME.maxpat`/`.js`/`.gendsp`) sits beside the patch or in its project: save abstractions first.
 
 This applies to everything: object names, argument formats, message names, attribute names, inlet/outlet counts. The database is the single source of truth.
 
@@ -93,7 +93,7 @@ When sending multiple values to an object:
 
 Judge text color by WCAG contrast ratio (minimum 4.5:1, `MIN_CONTRAST_RATIO` in `defaults.py`) against the surface it is displayed on, never by a `luminance > 0.5` flip or the editing background alone. Precedence: the box's own `bgcolor` > panels under its `presentation_rect` when the box is in presentation > panels under its `patching_rect` > patcher background as fallback. Panels encode their fill three ways and all three must be read.
 
-`ensure_text_contrast(patcher)` runs automatically only for new patches (`finalize_patch(is_new=True)`); on edited patches call `repair_text_contrast(patcher)`. Algorithm: `.claude/skills/references/ui-presets.md` "Text Contrast Resolution".
+`ensure_text_contrast(patcher)` runs automatically only for new patches (`finalize_patch(is_new=True)`). Edits recolour only added boxes that carry an explicit `textcolor`, never a comment without one; whole-patch `repair_text_contrast(patcher)` only when the user asks. Algorithm: `.claude/skills/references/ui-presets.md` "Text Contrast Resolution".
 
 #### Multislider as Labeled Parameter Bank
 
@@ -105,7 +105,7 @@ Manual banks: `orientation: 0`, `contdata: 1`, `setstyle: 1`, height = size * 24
 
 ### Rule #5: No Generator Scripts
 
-Never create `generate.py` or similar scripts that regenerate `.maxpat` files from scratch (regeneration overwrites manual edits). The Patcher API (`src.maxpat`) is the only sanctioned way to create and edit patches: build in memory during `/max-build` or `/max-iterate`, write via `save_patch_roundtrip()`. Saves keep the file's JSON layout (MAX 9 inline arrays, or the framework's expanded arrays), so a no-op save is byte-identical; `write_gendsp()` edits an existing `.gendsp` in place (codebox code and in/out ports) instead of regenerating it.
+Never create `generate.py` or similar scripts that regenerate `.maxpat` files from scratch (regeneration overwrites manual edits). The Patcher API (`src.maxpat`) is the only sanctioned way to create and edit patches: build in memory during `/max-build`, edit with `edit_patch(path)` during `/max-iterate`, write via `save_patch_roundtrip()`. Saves keep the file's JSON layout and spellings (any Max version, CRLF too), so a no-op save is byte-identical; `write_gendsp()` edits an existing `.gendsp` in place (codebox code and in/out ports; ports are removed only with explicit `num_inputs`/`num_outputs`) instead of regenerating it. `finalize_patch(is_new=True)` raises `LayoutRefusedError` on MAX-saved or large patchers (`force_layout=True` for a large new build).
 
 `Patcher.from_dict` -> `Patcher.to_dict()` round-trips are lossless; the standalone `Box.to_dict()` is lossy -- never serialize a single Box. **Edits to loaded boxes and cords reach disk**: `from_dict` deep-copies its input and snapshots each box's `extra_attrs` and font and each cord's order, hidden, midpoints, color and `extra_attrs`; `to_dict` writes back every field that changed, in-place list edits included. A direct `box._raw` key write still lands while its field is unchanged; verify the attribute on disk after save. Investigate a suspected `.maxpat` regression by diffing committed objects (`git show A:file` vs `git show B:file`), never the working tree.
 
@@ -128,13 +128,13 @@ Every patch save MUST be committed to git: `save_patch_roundtrip()`, `write_gend
 
 `Patcher.replace_box(old, new_name, args=...)` does NOT preserve connections: every line touching the old box is returned in `EditResult.orphaned` and removed. After every `replace_box` call, iterate `result.orphaned` and re-add each connection via `add_connection(...)`, mapping indices through when the I/O layout matches and rewiring by hand when it differs. **Never assume connections survive a replace.**
 
-**Prefer `Patcher.replace_box_safe(old, new_name, args=..., rewire="auto")` for new code.** It rewires every cord whose outlet/inlet index still exists on the new box (midpoints, order and colour kept) and returns the rest in `result.orphaned`: indices the new box lacks, and signal cords that would land on a control-only inlet. `rewire="manual"` opts out. Both calls keep the box's identity: its place in the boxes list (z-order), presentation rect, `varname`, colours and parameter blocks. Use plain `replace_box` when you need to inspect or transform orphans.
+**Prefer `Patcher.replace_box_safe(old, new_name, args=..., rewire="auto")` for new code.** It rewires every cord whose outlet/inlet index still exists on the new box (midpoints, order and colour kept) and returns the rest in `result.orphaned`: indices the new box lacks, and signal cords that would land on a control-only inlet. `rewire="manual"` opts out. Both calls keep the box's identity: its id, size, place in the boxes list (z-order), presentation rect, `varname`, colours and parameter blocks. An embedded patcher moves only for the same name or `gen~` <-> `mc.gen~`; any other replace of such a box raises `ValueError`. Use plain `replace_box` when you need to inspect or transform orphans.
 
 ### Rule #9: Presentation Mode Parity
 
 If the target patch uses presentation mode (any box has `presentation: 1`), every interactive control added or made user-facing by an edit MUST be added to presentation in the same edit, with its label comment: `Patcher.add_to_presentation(box, rect)` with an explicit `presentation_rect` matching the section's column/row rhythm (audit neighbors' `presentation_rect`s). Treat the layout critic's "Presentation coverage" warnings as must-fix before save; record deliberate exclusions (e.g. a slaved stereo `gain~`) in the project's `context.md`.
 
-**Presentation parity includes contrast parity.** A control or label promoted into presentation must be readable against its presentation-mode background: verify with `ensure_text_contrast()` after any presentation-layout edit, and treat "Low contrast text" warnings as must-fix before save.
+**Presentation parity includes contrast parity.** A control or label promoted into presentation must be readable against its presentation-mode background: treat "Low contrast text" warnings on the promoted boxes as must-fix before save.
 
 Set the patcher-level **`bgcolor`** key, not just `editing_bgcolor`/`locked_bgcolor`: MAX honors `bgcolor` in locked and presentation mode and otherwise falls back to its light default. `set_canvas_background()` writes all three.
 
@@ -148,7 +148,7 @@ Set the patcher-level **`bgcolor`** key, not just `editing_bgcolor`/`locked_bgco
 - `gain~` is different: its left inlet takes int slider positions 0 to size-1 (default 0-157); drive `gain~` with slider position values, never 0-1 gains.
 - Signal objects (names ending in `~`) process at audio rate and are always on once connected. Use `snapshot~` for control-rate display values, `meter~` or `levelmeter~` for level monitoring.
 - Multichannel: `mc.` objects carry multiple channels; convert with `mc.pack~`/`mc.unpack~`.
-- `line~` replaces the active ramp on every new message: send a multi-segment envelope as one space-delimited list (`$1 $2 0. $3`, no comma) -- comma segments arrive in one tick and only the last takes effect. Control-rate `line` queues comma segments correctly.
+- `line~` replaces the active ramp on every new message: send a multi-segment envelope as one space-delimited list (`$1 $2 0. $3`, no comma) -- comma segments arrive in one tick and only the last takes effect (validation errors on a comma after a ramp; a leading jump `0, 1 500` is fine). Control-rate `line` queues comma segments correctly.
 - `buffer~` has no `info` query and bare `sizeinsamps`/`samplerate` are setters: read contents/size via `fluid.buf2list` (`buffer <name>` then `bang`), `jit.buffer~` + `jit.matrixinfo`, or `peek~` driven by `uzi N`. The right outlet emits state only after operations like `read`.
 - `buffer~` `replacechannel` / `replacechannel_samples`, `trim` / `trim_samples` and `url` are 9.2-only (argument forms in `max-9.2-changes.md`); the `setsize` / `sizeinsamps` retain-contents argument is untested -- do not generate it.
 - If validation flags a control cord from an MSP object's non-primary outlet, the DB likely mis-marks that outlet as signal: fix the outlet type in `overrides.json`, don't reroute (`db-maintenance.md`).
@@ -164,7 +164,7 @@ Full text, derivations and per-version evidence: `.claude/skills/references/gene
 - Delay lines: declare `Delay myDelay(max_samples);` and use `myDelay.write(x)` / `myDelay.read(t)`; the `delay()` function is NOT supported in codebox (use Delay.read and Delay.write).
 - Variables used inside `if`/`else` must be initialized before the block.
 - Codebox objects embed GenExpr in `.maxpat` patches; `.gendsp` files are standalone Gen~ patchers.
-- **Declaration ordering**: ALL declarations before ANY expression -- `Param`, then `Delay`, `History`, `Buffer`/`Data`.
+- **Declaration ordering**: functions first, then ALL declarations before ANY expression -- `Param`, then `Delay`, `History`, `Buffer`/`Data` (a function after a statement is an error; `add_gen` reorders).
 - **Setting Param values from MAX:** send `param_name $1` to the gen~ inlet (NO `@` prefix); `attrui` connected to gen~ gives an all-params interface.
 - **Waveguide loop filters:** resonant filters (Q >= ~1.5) go POST-LOOP, never inside the feedback loop (this includes "source-side" filters between a driver nonlinearity and the delay-line injection); low-Q in-loop filters must subtract analytic **phase delay**, never group delay, from the target period.
 - **mc.gen~ via `add_gen()` + rename:** build with `add_gen(code, ...)`, then set the box's `name` and `text` to `"mc.gen~"`.
@@ -172,8 +172,8 @@ Full text, derivations and per-version evidence: `.claude/skills/references/gene
 - **In-loop saturation: normalize by the drive gain, never by `1/tanh(drive)`:** use `tanh(x*g)/g`.
 - **No local aliases in Param-only expressions.** Write `samplerate` and literal constants directly; prefer range tests over `==` in `if`.
 - **Hoisted temps can be emitted out of order — de-hoist any Param-only setup chain:** `History one(1);`, then `srs = samplerate * one;` and `k_<param> = <param> * one;` at the top of the per-sample body.
-- **Never use GenExpr built-in constant names as variable names** (`e`, `pi`, `twopi`, `halfpi`, `invpi`, `ln2`, `ln10`, `log10e`, `log2e`, `sqrt2`, `sqrt1_2`, `degtorad`, `radtodeg`): the constant wins silently.
-- **Codebox safe-construct rules** (treat the full set as the proven-safe pattern): spaces only, NEVER tab characters; no `else if` chains (nest `else { if ... }`); `peek(buf, idx, 0)` / `poke(buf, val, idx, 0)` with explicit channel; for loops single, non-nested, CONSTANT bounds with a variable inner guard; Amortize heavy scans across samples with a `History` cursor.
+- **Never use GenExpr built-in constant names as variable names** (`e`, `pi`, `twopi`, `halfpi`, `invpi`, `ln2`, `ln10`, `log10e`, `log2e`, `sqrt2`, `sqrt1_2`, `degtorad`, `radtodeg`, `phi`, and their upper-case `PI`, `E`, ...): the constant wins silently.
+- **Codebox safe-construct rules** (treat the full set as the proven-safe pattern): spaces only, NEVER tab characters (error in new code, warning in a loaded codebox); no `else if` chains (nest `else { if ... }`); `peek(buf, idx, 0)` / `poke(buf, val, idx, 0)` with explicit channel; for loops single, non-nested, CONSTANT bounds with a variable inner guard; Amortize heavy scans across samples with a `History` cursor.
 - **Max 9.2's Gen compiler fixes do NOT retire any rule above**; each workaround stays until individually re-verified in MAX.
 
 ### Subpatcher Inlet/Outlet Access
@@ -208,7 +208,7 @@ Inside a subpatcher from `add_subpatcher()`, get inlet/outlet boxes by index wit
 
 **Experimental:** not yet confirmed in MAX or Live.
 
-> Codified (EXPERIMENTAL, unconfirmed in Live; the combined Q15/Q40 Live check is pending): `Patcher.add_m4l_device(kind, params)` (Q40; kind `instrument` / `audio_effect` / `midi_effect`) builds the skeleton: Live-template wiring, the `live.thisdevice` init chain, `live.dial` params with unit/type inferred from range and name (explicit keys win), unique short names and Push `parameterbanks`. `Patcher.add_m4l_gen_synth(params)` (Phase 31) is built on it. Save the .maxpat (the source of truth), then `export_amxd(maxpat_path)` from `src.maxpat.m4l_device` writes the .amxd next to it. The rules below still apply.
+> Codified (EXPERIMENTAL, unconfirmed in Live): `Patcher.add_m4l_device(kind, params)` (kind `instrument` / `audio_effect` / `midi_effect`) builds the skeleton: Live-template wiring, the `live.thisdevice` init chain, `live.dial` params with unit/type inferred from range and name (explicit keys win), unique short names and Push `parameterbanks`. `Patcher.add_m4l_gen_synth(params)` (Phase 31) is built on it. Save the .maxpat (the source of truth), then `export_amxd(maxpat_path)` from `src.maxpat.m4l_device` writes the .amxd next to it. It reuses existing device I/O and refuses taken parameter names; `export_amxd` refuses a `live.thisdevice`-only helper abstraction without `kind=`. The rules below still apply.
 
 - **No `gain~` / `live.gain~` / `ezdac~` before `plugout~`.** Route the final stage directly to `plugout~`; Ableton's mixer handles volume, pan and mute (`gain~` defaults to 0, silence on load).
 - **`live.dial` / `live.slider` bind to gen~ Params via `param_connect`, not message-box patching:** `param_connect: "<gen~_varname>::<param_name>"`, `parameter_enable: 1` and the `saved_attribute_attributes.valueof` block (keys in the `add_m4l_gen_synth` docstring). The gen~ needs a stable `varname` matching the prefix; no patch cord -- `param_connect` IS the binding.
@@ -238,7 +238,7 @@ When a `.maxpat` is loaded as a bpatcher or abstraction, MAX substitutes `#1`, `
 
 - **Critical rule: `#N` must be a standalone token in the object text, never embedded in a compound string:** WRONG `buffer~ slot-#1`, RIGHT `buffer~ #1` with `"slot-1"` passed as the arg.
 - Pass each distinct name as a separate argument (`"args": [ "slot-1", "slot-1-out" ]`, then `buffer~ #1` and `send~ #2` inside). This applies equally to newobj boxes and message boxes (`set #1`, `setbuffer #1`).
-- **Numeric bpatcher args must be serialized as JSON numbers, not strings** (`args=[slot, 0]`, not `args=[slot, "0"]`): a string `"0"` substitutes as a quoted symbol and `-~ #2` fails with "bad arguments creating object". To fix an existing patch, convert numeric strings in `box._raw["args"]` (post-round-trip `box.args` is empty) and `save_patch_roundtrip`.
+- **Numeric bpatcher args must be serialized as JSON numbers, not strings** (`args=[slot, 0]`, not `args=[slot, "0"]`): a string `"0"` substitutes as a quoted symbol and `-~ #2` fails with "bad arguments creating object". `add_bpatcher` coerces them and validation errors on numeric strings. To fix an existing patch, convert numeric strings in `box._raw["args"]` (post-round-trip `box.args` is empty) and `save_patch_roundtrip`.
 - **Comment boxes do NOT perform `#N` substitution** (only `newobj` and `message` boxes do): for dynamic labels use `loadbang` -> `message "set Label #1"` -> `comment`.
 
 ## Variable I/O Objects

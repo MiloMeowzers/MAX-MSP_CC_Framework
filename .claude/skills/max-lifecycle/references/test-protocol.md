@@ -67,7 +67,7 @@ save_test_results(
 )
 ```
 
-Results are saved to `test-results/test-NNN.md` with incrementing numbers.
+Results are saved to `test-results/<test_name>.md`; saving the same `test_name` again overwrites it, so put the version in the name (`v<version>-<slug>-checklist`).
 
 ## Integration
 

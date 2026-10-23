@@ -27,6 +27,11 @@ jobs:
       - name: Build release archive
         run: bash scripts/build_release.sh "$RUNNER_TEMP/framework.tar.gz"
 
+      # The release body is this tag's CHANGELOG.md section. Extracted before
+      # anything is published: a tag with no section fails here, not after npm.
+      - name: Extract release notes
+        run: bash scripts/release_notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
+
       # npm trusted publishing needs Node >= 22.14 and npm >= 11.5.1; no
       # long-lived npm token or repo secret is used (review WR-05). The publisher is linked
       # on npmjs.com: create-max-framework -> Settings -> Trusted Publisher.
@@ -70,3 +75,4 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ runner.temp }}/framework.tar.gz
+          body_path: ${{ runner.temp }}/release-notes.md

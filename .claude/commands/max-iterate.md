@@ -1,7 +1,7 @@
 ---
 name: max-iterate
 description: Modify existing patches or code in the active project
-argument-hint: "[--full|--discuss|--research|--fix] [changes]"
+argument-hint: "[--full|--discuss|--research|--plan|--fix] [changes]"
 ---
 
 # /max-iterate
@@ -85,7 +85,7 @@ After all flagged phases complete, proceed to the standard edit flow (steps 10+)
 10. **Parse change request** -- interpret the user's desired modifications against the analysis context. Identify which objects, sections, or signal chains are affected.
 
 11. **Choose edit strategy** (transparent to user) -- the agent selects an approach and explains it before executing:
-    - **Surgical edit** -- for small, targeted changes: use `find_box()` to locate targets, then `modify_box()` or `replace_box_safe()` to make changes in place. Positions are preserved; connections survive only when `replace_box_safe()` finds a matching I/O layout -- on a mismatch, rewire `result.orphaned` (Rule #8).
+    - **Surgical edit** -- for small, targeted changes: use `find_box()` to locate targets, then `modify_box()` or `replace_box_safe()` to make changes in place. Positions are preserved; `replace_box_safe()` keeps the box id and rewires every cord whose outlet/inlet index still exists on the new box -- rewire whatever comes back in `result.orphaned` (Rule #8).
     - **Section rebuild** -- for larger structural changes: use `connected_components()` to identify the affected group, `remove_box()` each object in the group, then rebuild with new objects and connections. Reconnect to the rest of the patch.
 
 12. **Preserve existing objects** -- unconditionally preserve all objects the user did not ask to change. If the requested edit would affect objects the user added manually in MAX (e.g., removing an object that user-added objects connect to), warn before proceeding.
@@ -113,15 +113,15 @@ After all flagged phases complete, proceed to the standard edit flow (steps 10+)
     ```
     Run the whole block in ONE Python script: a `with` block cannot span separate tool calls. API inside the block:
     - `find_box()` / `find_boxes()` for locating targets
-    - `modify_box()` for in-place attribute changes
-    - `replace_box_safe()` for swapping object types (auto-rewires only on matching inlet/outlet counts; otherwise rewire `result.orphaned`, Rule #8)
+    - `modify_box()` for in-place attribute changes: `args` sets the text of a newobj, message, comment or text UI box (textbutton, live.text, live.comment, textedit) and raises on any other UI box -- set a dial's range, a toggle's colour etc. with `extra_attrs`; structural `extra_attrs` keys (`id`, `maxclass`, `numinlets`, `numoutlets`, `outlettype`, `patcher`) raise
+    - `replace_box_safe()` for swapping object types (keeps the box id; rewires every cord whose index is still in range on the new box and returns the rest in `result.orphaned`, Rule #8; replacing a box with an embedded patcher works only for the same name or `gen~` <-> `mc.gen~`, anything else raises `ValueError`)
     - `insert_into_connection(src, dst, name, args)` for inserting objects into existing signal chains
     - `remove_box()` for removing objects (with automatic patchline cleanup)
     - `add_box()` / `add_connection()` for adding new objects
 
 15. **Critic loop** -- validate and review the modified patch:
     - Run `validate_patch(patcher)` for structural validation
-    - Run `review_patch(patcher.to_dict())` via the max-critic skill
+    - Run `review_patch(patcher.to_dict())` via the max-critic skill (the default `is_new=False` is right for an edit; pass `is_new=True` when the iteration creates a new file, e.g. a new abstraction, because the gate reviews a file with no baseline that way)
     - Same quality gate as `/max-build` -- blockers require revision; warnings and notes are listed in the summary, never written into the patch or code
     - On blockers, raise inside the `with` block to discard the edit (nothing is routed, written or committed), then fix and re-run the session
 
@@ -131,7 +131,7 @@ After all flagged phases complete, proceed to the standard edit flow (steps 10+)
 
 18. **Save = leaving the with-block** -- a clean exit from `with session as patcher:` saves:
     - routes touched cords only (new cords, and cords of boxes added or moved, that have no midpoints; existing midpoints are never cleared);
-    - sets text contrast on added, moved and presentation-changed boxes only (no whole-patch restyle);
+    - sets text contrast only on boxes the session added that carry an explicit textcolor (moved, presentation-changed and replaced boxes keep their colour, a comment without a textcolor is never given one, and there is no whole-patch restyle);
     - runs the save gate, including the stale check, and writes atomically through `save_patch_roundtrip` in the file's own JSON layout (indentation, key ordering and untracked metadata preserved);
     - commits only that path (`session.commit_hash`). A no-op session writes and commits nothing (`session.saved` is False).
 
@@ -145,6 +145,7 @@ After all flagged phases complete, proceed to the standard edit flow (steps 10+)
     from src.maxpat.project import auto_commit_patch
     auto_commit_patch(project_dir, base_dir, description=f"v{new_version}: {change_description}", files=[str(path), str(project_dir / "versions.json")])
     ```
+    Called directly, `auto_commit_patch()` raises `RuntimeError` on any git failure (not a repository, ignored path, index.lock): report it to the user; the files are saved but not committed.
 
 20. **Update progress** -- increment progress via `update_status()`.
 

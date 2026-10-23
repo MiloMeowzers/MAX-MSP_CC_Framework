@@ -29,7 +29,9 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v5.0)
 Phase: —
 Plan: —
 Status: v5.0 shipped; awaiting `/gsd-new-milestone` to start next cycle
-Last activity: 2026-10-22 - Completed quick task 261022-pqu: Implement Q40 in .planning/reviews/2026-10-11-fix-plan.md — M4L device builder and .amxd export
+Last activity: 2026-10-23 - Completed quick task 261022-ud6: Q1-Q40 regression review fixed (WP1-WP8), Q23 executed, docs + v6.0.0 CHANGELOG
+
+Previous: 2026-10-22 - Completed quick task 261022-pqu: Implement Q40 in .planning/reviews/2026-10-11-fix-plan.md — M4L device builder and .amxd export
 
 Previous: 2026-09-21 - Completed quick task 260921-kfd: SF-04/SF-06/SF-07 closed — CLAUDE.md `live.*` extraction note revised (all 30 resolve); added refpage `<c74object name>`-is-authoritative rule and refpage-placeholder (54.5%) counts-not-types / never-overwrite-overrides rule
 
@@ -60,7 +62,8 @@ v5.0-specific roadmap decisions:
 
 ### Pending Todos
 
-None.
+- v6.0.0 release (261022-ud6): full suite green on 3.10, then tag `v6.0.0` (user confirms the push); link the npm trusted publisher on npmjs.com before the tag run.
+- MAX / Live confirmation items listed in the 261022-ud6 wp*-SUMMARY.md files (theme fills, legacy-layout writer on a Max 8 file, gen~ -> mc.gen~ replace, M4L Q15/Q40 Live check, RNBO builder shape).
 
 ### Blockers/Concerns
 
@@ -117,6 +120,7 @@ None.
 | 261015-bt8 | Implement Q21 in .planning/reviews/2026-10-11-fix-plan.md — trigger type, $N arity, trigger order checks | 2026-10-15 | e9c73020 | Verified | [261015-bt8-implement-q21-in-planning-reviews-2026-1](./quick/261015-bt8-implement-q21-in-planning-reviews-2026-1/) |
 | 261015-du0 | Implement Q22 in .planning/reviews/2026-10-11-fix-plan.md — GenExpr parser, codebox lint, js ES5 lint | 2026-10-15 | 78ada853 | Verified | [261015-du0-implement-q22-in-planning-reviews-2026-1](./quick/261015-du0-implement-q22-in-planning-reviews-2026-1/) |
 | 261015-f1o | Fix Q22 review findings CR-01 (js _js_mask regex literals) and CR-02 (tanh check History one(1) false error) | 2026-10-15 | fcffcb36 | Verified | [261015-f1o-fix-q22-review-findings-cr-01-js-js-mask](./quick/261015-f1o-fix-q22-review-findings-cr-01-js-js-mask/) |
+| 261022-ud6 WP7b (Q23) | Implement Q23 in .planning/reviews/2026-10-11-fix-plan.md — vocabulary checks and cheap wins (planned as 261015-fm1, never run; executed 2026-10-22 as 261022-ud6 WP7b) | 2026-10-22 | 620fa6be (merge 2a2c24a5) | Needs Review | [wp7b-Q23-SUMMARY.md](./quick/261022-ud6-review-q1-q40-improvements-for-regressio/wp7b-Q23-SUMMARY.md) |
 | 261015-j0n | Implement Q24 in .planning/reviews/2026-10-11-fix-plan.md — uninitialized UI→DSP state check | 2026-10-15 | 0028553f | Verified | [261015-j0n-implement-q24-in-planning-reviews-2026-1](./quick/261015-j0n-implement-q24-in-planning-reviews-2026-1/) |
 | 261015-m9b | Implement Q25 in .planning/reviews/2026-10-11-fix-plan.md — dsp_sim pitch detector and false PASS paths | 2026-10-15 | 8c4774ad | Verified | [261015-m9b-implement-q25-in-planning-reviews-2026-1](./quick/261015-m9b-implement-q25-in-planning-reviews-2026-1/) |
 | 261015-nkm | Implement Q26 in .planning/reviews/2026-10-11-fix-plan.md — hot/cold, gain safety, theme-aware contrast, RNBO critic | 2026-10-16 | a841a2e1 | Verified | [261015-nkm-implement-q26-in-planning-reviews-2026-1](./quick/261015-nkm-implement-q26-in-planning-reviews-2026-1/) |
@@ -137,6 +141,7 @@ None.
 | 261022-mis | Implement Q38 in .planning/reviews/2026-10-11-fix-plan.md — idiom allowlist, objectfile aliases, version-aware I/O | 2026-10-23 | 549400aa | Verified | [261022-mis-implement-q38-in-planning-reviews-2026-1](./quick/261022-mis-implement-q38-in-planning-reviews-2026-1/) |
 | 261022-o2q | Implement Q39 in .planning/reviews/2026-10-11-fix-plan.md — critic quick-fix payloads and /max-iterate --fix | 2026-10-23 | a38c65db | Needs Review | [261022-o2q-implement-q39-in-planning-reviews-2026-1](./quick/261022-o2q-implement-q39-in-planning-reviews-2026-1/) |
 | 261022-pqu | Implement Q40 in .planning/reviews/2026-10-11-fix-plan.md — M4L device builder and .amxd export | 2026-10-23 | c0396f5f | Needs Review | [261022-pqu-implement-q40-in-planning-reviews-2026-1](./quick/261022-pqu-implement-q40-in-planning-reviews-2026-1/) |
+| 261022-ud6 | Review Q1-Q40 for regressions and fix every finding (WP1-WP6 parallel, WP7a handoffs, WP7b Q23, WP8 docs + v6.0.0 CHANGELOG) | 2026-10-23 | 2a2c24a5 (code) + WP8 docs | Needs Review | [261022-ud6-review-q1-q40-improvements-for-regressio](./quick/261022-ud6-review-q1-q40-improvements-for-regressio/) |
 
 ## Deferred Items
 

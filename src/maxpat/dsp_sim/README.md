@@ -20,7 +20,7 @@ any gen~ codebox (see [below](#python--m-srcmaxpatdsp_sim-smoke-genexpr-codebox-
 
 The two curated topologies encode the canonical bassoon signal path. If you need to broaden
 this into a general DSP simulator (arbitrary gain chains, filter cascades, etc.), that is a
-deferred v6.0 roadmap item — see [Scope & Future Work](#scope--future-work) below.
+future roadmap item (not part of 6.0.0) — see [Scope & Future Work](#scope--future-work) below.
 
 ## The Two Topologies
 
@@ -279,7 +279,8 @@ calls eval / exec / compile (an AST test pins it). It reproduces `patches/bassoo
 on the bassoon codebox within 1e-12. Supported: Param, History (sequential), Delay
 read/write, Data / Buffer peek / poke / dim / channels, if / else, constant-bound for,
 `+= -= *= /=`, ternary, the math built-ins, `noise phasor cycle latch dcblock triangle selector
-mc_channel`, the lowercase constants plus `phi` and the uppercase `PI TWOPI HALFPI`.
+mc_channel`, and every built-in constant in `genexpr_parse.BUILTIN_CONSTANTS`: the lowercase names, `phi`,
+and each uppercase alias (`PI TWOPI HALFPI INVPI E PHI LN2 ...`).
 Definite assignment is checked at parse time: a local read before it is assigned on every path
 is unsupported (gen's "not defined"). Names first assigned inside an if/else or for block are
 local to that block, and a for loop's counter and body names do not leak past the loop, so a
@@ -359,6 +360,7 @@ is committed.
 
 This module is **intentionally scoped to the bassoon waveguide today**. Broadening it with
 general topologies — a simple gain chain, a feedback delay, a filter cascade — is a deferred
-**v6.0 roadmap item** tracked in `.planning/PROJECT.md` (`### Future`). Until then, use the
+**roadmap item for a later major release** (it was not part of 6.0.0), tracked in the planning
+roadmap (`### Future`). Until then, use the
 `mirror=` escape hatch for one-off, off-catalogue patches rather than adding non-bassoon
 topologies to the curated library.

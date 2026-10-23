@@ -27,7 +27,9 @@ Before running the critic loop:
 - Format blocker findings into actionable revision requests for the generator
 - Track revision history to detect repeated identical findings
 - Report warnings and notes in the review summary (finding plus suggestion); never write them into the patch or code
+- The DSP, structure and layout critics always run, on every non-gen scope (findings carry `path`)
 - The RNBO critic (`review_rnbo`) auto-invokes when rnbo~ boxes are detected in the patch
+- The M4L critic (`review_m4l`) auto-invokes when `plugin~`, `plugout~` or `live.thisdevice` is found in any scope; a `live.thisdevice`-only patch is a helper abstraction and gets only the per-scope checks and parameter-name uniqueness
 - The package critic (`review_packages`) auto-invokes when package objects (BEAP, Bach, community) are detected in the patch
 - The external critic (`review_external`) invokes when `ext_code` is provided
 
@@ -37,7 +39,7 @@ See `references/critic-protocol.md` for the full loop specification.
 
 Summary:
 1. Generator produces output
-2. Critic runs `review_patch()` on the output (RNBO and package critics are conditionally included based on detected objects)
+2. Critic runs `review_patch()` on the output (RNBO, M4L and package critics are conditionally included based on detected objects)
 3. If blockers found: format findings, request revision from generator
 4. If only warnings/notes: report them and proceed
 5. If clean (no findings): approve output
@@ -67,6 +69,26 @@ What each validator level and critic severity means, and which findings block `s
 | Bach llll type mismatch | note | Non-bach, non-command source (not a message box) connected to a bach inlet whose digest says llll |
 | Community package not extracted | warning | Community package object used but the package is not extracted to the object database |
 | Object not installed | blocker | Object marked `verified_installed: false` in the object database (one finding per object name) |
+
+### Structure Critic Checks (beyond fan-out and hot/cold)
+
+| Check | Severity | Trigger |
+|-------|----------|---------|
+| `trigger_types` / `trigger_order` / `dollar_arity` | blocker | `t a` (unknown trigger letter); a trigger feeding a hot inlet before its cold inlets; a `$N` its feeders can never fill |
+| `uninitialized_state` | blocker with `is_new=True`, warning otherwise | A UI value holder reaching DSP with nothing setting it at load |
+| `unmatched_names` | warning | A send / receive, send~ / receive~, `; name`, value or buffer name with no partner in a closed patch tree |
+| `int_truncation` | warning | A float source into arg-less `+ - * /`, arg-less `ftom` or an int-range `scale` |
+| `mc_bare_list` | note | A bare numeric list into an `mc.*` object that takes `applyvalues` |
+
+### M4L Critic Severities
+
+| Check | Severity | Trigger |
+|-------|----------|---------|
+| `gain_plugout` / `device_completeness` / `parameter_uniqueness` | blocker | `gain~` / `live.gain~` / `ezdac~` before `plugout~`; a missing `plugout~` (or `midiin` + `midiout`); a duplicate `parameter_longname` |
+| `empty_longnames`, `device_quality`, `parameter_enable`, `missing_info_text`, `missing_live_banks` | warning | Device hygiene: unnamed params, missing `openinpresentation` / `devicewidth`, live.* without `parameter_enable`, no info text, no Push banks |
+| `duplicate_device_io` | warning | Two `plugin~` / `plugout~` / `midiin` / `midiout` / `live.thisdevice` at the device's top scope |
+| `stereo_out`, `midi_passthrough`, `shortname_unique`, `int_param_range`, `param_range`, `bank_refs`, `device_height` | warning | One-sided `plugout~`; a MIDI effect that cuts midiin -> midiout; duplicate short names; Int ranges over 256 values; mmin >= mmax or an enabled initial value out of range; banks naming missing params; presentation taller than 169 px |
+| `shortname_length` | note | `parameter_shortname` longer than 8 characters |
 
 ## Output Protocol
 

@@ -2,26 +2,26 @@
 
 An AI-assisted MAX/MSP/Jitter/RNBO development system that enables conversational creation and editing of MAX patches and externals. Design, build, and iterate on MAX through dialogue with [Claude Code](https://claude.ai/claude-code).
 
-> **Note:** Patches must be opened and tested in MAX. This framework produces and edits valid `.maxpat` files, Gen~ code, JavaScript, and C++ externals — but there is no in-framework audio preview or simulation. All testing is manual in MAX 9. There are safety checks in place, but audio coding done by AI is still risky so don't blow your ears off!
+> **Note:** Patches must be opened and tested in MAX. This framework produces and edits valid `.maxpat` files, Gen~ code, JavaScript, and C++ externals — but there is no in-framework audio preview. The offline checks (`dsp_sim` waveguide simulation and codebox smoke test) and the opt-in `/max-verify --live` console/level check in a running MAX catch some failures, but listening tests are manual in MAX 9. There are safety checks in place, but audio coding done by AI is still risky so don't blow your ears off!
 
 ## Features
 
 - **Direct .maxpat editing** — reads, edits, and writes `.maxpat` files directly with lossless round-trip preservation; the patch file is the single source of truth
 - **Conversational patch creation** — describe what you want in natural language; Claude generates valid `.maxpat` files
 - **Patch analysis and onboarding** — analyze any existing `.maxpat` file to understand its structure, signal flow, and sections before editing or extending it
-- **Intelligent editing** — modify objects in-place, insert into signal chains, replace/swap objects, query upstream/downstream signal paths, and auto-position new objects
+- **Intelligent editing** — `edit_patch` sessions that modify objects in-place, insert into signal chains, replace/swap objects (box ids kept), query upstream/downstream signal paths, auto-position new objects, and show a semantic diff of what changed; a no-op save is byte-identical for patches from any Max version
 - **3,445-object knowledge base** — verified database covering MAX, MSP, Jitter, MC, Gen~, Max for Live, RNBO, and 29 packages (BEAP, Vizzie, FluCoMa, CNMAT, Bach, and more) with full inlet/outlet schemas and typed per-outlet signal metadata (`signal_role`) backing the connection validator
 - **Package-aware generation** — project-level package selection, DB-driven bpatcher sizing, allowed_packages gating, and community package stubs with extraction CLI for installed packages
 - **9 specialist agents** — router, patch, DSP/Gen~, RNBO, JavaScript, UI layout, C++ externals, critic, and lifecycle management with package-specific domain guidance
-- **5-layer validation pipeline** — structure checks, `signal_role`-aware connection verification, domain-restriction guards, seven domain-specific critics (DSP signal flow, structure, layout, RNBO compatibility, C++ review, package conventions, Max for Live device conventions), and iterative revision
-- **Codified layout/UX builders** — one-call helpers for labeled parameter banks, overlay readouts, safe box replacement with auto-rewiring, and Max for Live gen-synth skeletons. The Max for Live builders (`add_m4l_gen_synth`, `polish_m4l_device`): **Experimental:** not yet confirmed in MAX or Live.
-- **Offline DSP pre-flight simulation** — a numerical waveguide-stability harness (`dsp_sim`) that classifies specific reed/bore topologies before you open the patch in MAX (not a general audio preview)
+- **5-layer validation pipeline** — run on every subpatcher scope: structure checks, `signal_role`-aware connection verification, vocabulary checks (`expr clip()`, `line~` comma segments, bpatcher args, message selectors), domain-restriction guards, seven domain-specific critics (DSP signal flow, structure, layout, RNBO compatibility, C++ review, package conventions, Max for Live device conventions), and iterative revision
+- **Codified layout/UX builders** — one-call helpers for labeled parameter banks, overlay readouts, safe box replacement with auto-rewiring, and Max for Live device skeletons with `.amxd` export. The Max for Live builders (`add_m4l_device`, `add_m4l_gen_synth`, `polish_m4l_device`, `export_amxd`): **Experimental:** not yet confirmed in MAX or Live.
+- **Offline DSP pre-flight simulation** — a numerical waveguide-stability harness (`dsp_sim`) that classifies specific reed/bore topologies before you open the patch in MAX, plus a GenExpr codebox smoke test (`python3 -m src.maxpat.dsp_sim smoke`) that infers audio vs control outputs from the host patch and flags NaN, runaway, silence and self-sustain (not a general audio preview)
 - **Gen~ / GenExpr code generation** — sample-rate DSP code with proper declaration ordering, feedback loops, and parameter mapping
 - **RNBO export support** — generate export-ready patches for VST3/AU plugins, Web Audio, and C++ embedded targets. The RNBO builders (`add_rnbo`, `generate_rnbo_wrapper`): **Experimental:** not yet confirmed in MAX.
 - **Node for Max & js scripting** — generate JavaScript for `js` objects (Legacy Engine, ES5), `v8` objects (Modern Engine), and Node for Max `node.script`
 - **C++ external development** — scaffold, generate, and build Min-DevKit externals with help patches
 - **Help patch audit pipeline** — offline tool that parses 973 .maxhelp files to extract ground truth object metadata and automatically correct database entries
-- **Professional patch aesthetics** — styled section comments, background panels, contrast-aware text colors, obstacle-avoiding cord routing, grid-snapped layout, inlet-aligned cables, and intelligent subpatcher grouping suggestions for polished output
+- **Professional patch aesthetics** — styled section comments, background panels, contrast-aware text colors, obstacle-avoiding cord routing, grid-snapped layout, and inlet-aligned cables for polished output; edits never restyle a patch you arranged in MAX
 - **Project lifecycle management** — structured workflow from ideation through build and verification with automatic version tracking
 
 ## Prerequisites
@@ -29,7 +29,7 @@ An AI-assisted MAX/MSP/Jitter/RNBO development system that enables conversationa
 - **macOS only.** The framework assumes macOS throughout: it reads the Max bundle at `/Applications/Max.app` and packages under `~/Documents/Max 9/Packages`, and checks built externals as arm64 Mach-O binaries with `file` and `lipo`.
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (requires an Anthropic account)
 - [MAX 9](https://cycling74.com/products/max) (required for opening and testing generated patches)
-- Python 3.10+ (for the validation and editing engine), with the packages in `requirements-dev.txt`: numpy and scipy (the `dsp_sim` DSP pre-flight simulation) and pytest (the test suite, and the DSP agent's pre-flight gate, which runs the simulation tests before saving). Install them with `pip install -r requirements-dev.txt`.
+- Python 3.10+ (for the validation and editing engine), with the packages in `requirements-dev.txt`: numpy and scipy (the `dsp_sim` DSP pre-flight simulation) and pytest (the test suite, and the DSP agent's pre-flight gate, which runs the simulation tests before saving). Install them with `python3 -m pip install -r requirements-dev.txt`; `npx create-max-framework --check-deps` or `install.sh --check-deps` re-checks Python, these packages and git without installing.
 - git (every patch save is auto-committed)
 - RNBO (optional — only needed for export targets)
 - System tools needed only for some features:
@@ -100,7 +100,7 @@ Analyzes any `.maxpat` file — from MAX's own examples, third-party sources, or
 /max-verify
 ```
 
-Runs all generated files through the full validation pipeline — structure checks, connection bounds, signal flow analysis. Reports blockers, warnings, and notes.
+Runs all generated files through the full validation pipeline — structure checks, connection bounds, signal flow analysis. Reports blockers, warnings, and notes. `/max-verify --live` also loads each patch in the running MAX through the max-bridge (open `tools/max_bridge/max-bridge.maxpat` first) and reports console errors and output levels.
 
 ### 6. Test in MAX
 
@@ -128,6 +128,7 @@ Optional flags prepend phases before the edit:
 | `--discuss` | Clarify implementation approach interactively |
 | `--research` | Look up objects and techniques from the database |
 | `--plan` | Outline edit steps and get approval before executing |
+| `--fix` | List critic findings that carry a quick fix, preview the diff, and apply the selected fixes |
 
 Flags are composable (`--discuss --research`) and can be combined with inline project switching (`/max-iterate stutter --full add granular engine`).
 
@@ -137,9 +138,10 @@ Flags are composable (`--discuss --research`) and can be combined with inline pr
 |---------|-------------|
 | `/max-new` | Create a new project with kickoff, discussion, and research in one flow |
 | `/max-build` | Generate patches and code via agent dispatch |
-| `/max-iterate` | Read, edit, and write back existing patches or code (`--full`, `--discuss`, `--research`, `--plan`) |
+| `/max-iterate` | Read, edit, and write back existing patches or code (`--full`, `--discuss`, `--research`, `--plan`, `--fix`) |
 | `/max-onboard` | Analyze an existing `.maxpat` file and produce a structured summary |
-| `/max-verify` | Run validation and critic review on all output |
+| `/max-verify` | Run validation and critic review on all output (`--live` adds a load-and-listen check in the running MAX) |
+| `/max-diagnose` | Map pasted MAX console output to causes and fixes, locate the offending boxes, and propose a `/max-iterate` fix (read-only) |
 | `/max-test` | Generate a manual test checklist for MAX |
 | `/max-status` | Show project overview, progress, and current stage |
 | `/max-discuss` | Capture implementation decisions |
@@ -148,7 +150,7 @@ Flags are composable (`--discuss --research`) and can be combined with inline pr
 
 ## Patches
 
-The `patches/` directory contains example and user-created projects:
+The `patches/` directory contains example and user-created projects. It is repository-only: releases (`npx create-max-framework`, `install.sh`) ship an empty `patches/` for your own projects.
 
 | Project | Description | Files |
 |---------|-------------|-------|
@@ -165,7 +167,7 @@ The `patches/` directory contains example and user-created projects:
 | **kicksynth** | Kick drum synthesizer with Gen~ pitch envelopes, click/sub/noise layers, and drive/saturation | `.maxpat`, `.js` |
 | **knock** | Deep knocking-sound generator — a gen~ kick-style voice triggered by velocity, with randomness and bassiness controls that vary each hit | `.maxpat` |
 | **looper** | Pedal-style audio looper with one-button record/play/overdub cycling, overdub feedback, and a waveform display | `.maxpat`, `.gendsp` |
-| **max-bridge** | Spike: resident UDP/OSC bridge patch driven by tools/max_bridge.py — opens a patch in running MAX, captures console errors, records output for dsp_sim analysis, screenshots the window | `.maxpat` |
+| **max-bridge** | Fixtures and manual checklists for the resident UDP/OSC bridge driven by tools/max_bridge.py (opens a patch in running MAX, captures console errors, records output, screenshots the window). The bridge patch itself ships at `tools/max_bridge/max-bridge.maxpat` | `.maxpat` |
 | **minitaur** | Digital recreation of the Moog Minitaur bass synthesizer with dual VCOs, Moog ladder filter, and LFO modulation | `.maxpat`, `.js` |
 | **mixer** | Virtual mixing console with channel strips, aux buses, master section, and per-track sends | `.maxpat`, `.js` |
 | **performancepatchtest** | Live performance cue system with multiband compression, feedback delay, distortion, and soundfile playback | `.maxpat`, `.gendsp` |
@@ -190,13 +192,13 @@ The `patches/` directory contains example and user-created projects:
 
 The framework has four core layers:
 
-**Direct .maxpat Editing (v3.0)** — The `.maxpat` file is the single source of truth. Patches are loaded into `Patcher`/`Box`/`Patchline` objects, edited with search, mutation, and graph query methods, and written back with lossless round-trip preservation. All user state — positions, colors, varnames, custom attributes, manual edits made in MAX — survives the load-edit-save cycle. Every patch save under `patches/<project>/` auto-commits just that file to git for safety. No intermediate code generation step.
+**Direct .maxpat Editing (v3.0)** — The `.maxpat` file is the single source of truth. Patches are loaded into `Patcher`/`Box`/`Patchline` objects, edited with search, mutation, and graph query methods inside a `with edit_patch(path) as p:` session, and written back with lossless round-trip preservation in the file's own JSON layout. All user state — positions, colors, varnames, custom attributes, manual edits made in MAX — survives the load-edit-save cycle. Every patch save under `patches/<project>/` auto-commits just that file to git for safety. No intermediate code generation step.
 
 **Object Database** — A verified knowledge base of 3,445 MAX objects (`.claude/max-objects/`) across 7 core domains plus 29 packages (bundled and community) with full inlet/outlet schemas, typed per-outlet signal metadata (`signal_role`), domain-restriction and install-state flags, argument formats, variable I/O rules, RNBO compatibility flags, and package source tracking. Package objects include DB-driven bpatcher dimensions for layout. Every object used in generation is looked up here — nothing is guessed.
 
 **Agent System** — A router analyzes your task description and dispatches to one or more specialist agents (DSP, patch, RNBO, js, UI, externals). Agents read existing patches, analyze their structure, make surgical edits or build new ones, and write the result directly.
 
-**Validation Pipeline** — Every patch passes through structure validation, `signal_role`-aware connection bounds and signal-type checking, package gating, domain-restriction guards, and an embedded GenExpr codebox walker, followed by seven domain-specific critics (DSP signal flow, structure, layout, RNBO compatibility, C++ code review, package conventions — BEAP signal standards, Bach llll type checking, community package extraction verification — and Max for Live device conventions). Blockers trigger automatic revision before output is written. As a backstop, `save_patch_roundtrip` and `write_gendsp` re-run validation and the critics before writing: they refuse any blocker the save would introduce (blockers already in the file being edited are allowed) and any change to a subpatcher's port order, and warn about removed cords; `force=True` overrides. Aesthetic styling (panels, comments, patcher colors) is applied automatically during generation.
+**Validation Pipeline** — Every patch passes through structure validation, `signal_role`-aware connection bounds and signal-type checking, package gating, domain-restriction guards, and an embedded GenExpr codebox walker, followed by seven domain-specific critics (DSP signal flow, structure, layout, RNBO compatibility, C++ code review, package conventions — BEAP signal standards, Bach llll type checking, community package extraction verification — and Max for Live device conventions). Blockers trigger automatic revision before output is written. As a backstop, `save_patch_roundtrip` and `write_gendsp` re-run validation and the critics before writing: they refuse any blocker the save would introduce (blockers already in the file being edited are allowed), including an unknown object that no abstraction beside the patch resolves, and any change to a subpatcher's port order, and warn about removed cords; `force=True` overrides. Validation never removes anything itself: an invalid cord is reported as a proposed removal. Aesthetic styling (panels, comments, patcher colors) is applied automatically during generation.
 
 For full technical documentation — agent internals, validation details, object database schema, and architecture — see [TECHNICAL.md](TECHNICAL.md).
 
@@ -208,8 +210,9 @@ MAX-MSP_CC_Framework/
 │   ├── max-objects/        # Object database (3,445 objects across 7 core domains + 29 packages)
 │   ├── skills/             # Agent definitions (9 specialist agents)
 │   └── commands/           # Slash command definitions
-├── src/maxpat/             # Python editing, validation, and analysis engine (~22,200 LOC)
-├── tests/                  # Test suite (3,345 tests)
+├── src/maxpat/             # Python editing, validation, and analysis engine (~40,800 LOC)
+├── tools/                  # DB audit/sync tools, max-bridge client + bridge patch (tools/max_bridge/)
+├── tests/                  # Test suite (7,509 tests)
 ├── patches/                # Your projects live here
 │   ├── .active-project.json
 │   └── {project-name}/
@@ -217,6 +220,7 @@ MAX-MSP_CC_Framework/
 │       ├── status.md       # Project stage and progress
 │       ├── generated/      # Output (.maxpat, .gendsp, .js)
 │       └── test-results/   # Manual test records
+├── CHANGELOG.md            # Release notes (each section is the GitHub release body)
 └── CLAUDE.md               # Framework rules (enforced automatically)
 ```
 
@@ -254,6 +258,7 @@ Planning artifacts live in `.planning/`:
 | **v2.4.0 Visual Organization** | 2026-04-05 | — | — | Obstacle-aware cord routing (dog-leg around intermediate objects), 21 live.* objects added to UI system, contrast-adaptive text colors, subpatcher grouping heuristic |
 | **v3.0.0 Milestone Archive** | 2026-04-09 | 7 | 15 | v2.0 milestone archived — 26/26 requirements verified, full PROJECT.md evolution, retrospective |
 | **v4.0 Package Integration** | 2026-04-15 | 6 | 17 | Package-aware DB (2,450 objects), bundled extraction (BEAP/Vizzie/Jitter), generation gating, agent intelligence, community stubs (10 packages), package critics |
+| **v6.0.0 Non-destructive Validation + Safe Saves** | 2026-10-23 | — | — | Fix-plan Q1-Q40 + review fixes: non-destructive `validate_patch` + `apply_fixes`, per-scope validation and critics, save gate (`PatchValidationError`, `LayoutRefusedError`), byte-identical no-op saves for every Max layout, `edit_patch` sessions + semantic diff, Q23 vocabulary checks, codebox smoke test, `/max-diagnose`, `/max-verify --live`, critic quick fixes, M4L device builder + `.amxd` export (experimental), npm trusted publishing. See [CHANGELOG.md](CHANGELOG.md) |
 | **v5.0 DB Schema Hardening + Validator Depth** | 2026-05-01 | 5 | 24 | `signal_role`/`domain_restricted`/`verified_installed` schema fields, deepened validation pipeline (Layers 1-5 with sub-layers), MSP outlet coverage sweep, Phase 31 layout/UX builders (labeled param banks, overlay readouts, safe box replacement, M4L gen-synth), dsp_sim pre-flight simulation |
 
 ## License

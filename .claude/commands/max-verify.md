@@ -14,11 +14,11 @@ Run the full validation pipeline and critic review on all generated files in the
 2. **Find generated files** -- scan the project's `generated/` directory for all `.maxpat`, `.gendsp`, and `.js` files.
 
 3. **Run mechanical validation** -- for each file:
-   - `.maxpat` files: call `validate_file()` from `src.maxpat` to check JSON structure, object validity, connection bounds
-   - `.js` / `.gendsp` files: call `validate_code_file()` from `src.maxpat` for code-level validation
+   - `.maxpat` files: call `validate_file()` from `src.maxpat` to check JSON structure, object validity, connection bounds. It passes the file's path, so an unknown object that no abstraction beside the patch (or in its project) resolves is an error, and treats codeboxes as loaded (tab lines warn)
+   - `.js` / `.gendsp` files: call `validate_code_file()` from `src.maxpat` for code-level validation (a `.gendsp` on disk is loaded code: tab lines warn)
 
 4. **Run critic review** -- invoke the max-critic skill:
-   - Call `review_patch(patch_dict, code_context)` from `src.maxpat.critics`
+   - Call `review_patch(patch_dict, code_context)` from `src.maxpat.critics` (default `is_new=False` for committed files; pass `is_new=True` for a patch that has never been saved, so an uninitialized control is reported as the blocker the save gate will raise)
    - Collect all `CriticResult` findings across files
 
 5. **Display results** grouped by severity:
@@ -32,6 +32,7 @@ Run the full validation pipeline and critic review on all generated files in the
    - Run `python3 tools/max_verify_live.py --json` plus the pass-through flags (`--record S`, `--note P V`, `--no-shot`, `--live-inputs`). Give no PATH: the tool reads the same active-project pointer and drops the abstractions and bpatcher children that a sibling references, so only top-level patches are loaded.
    - **Exit 0 or 1** -- append a "Live check (MAX 9.2):" section built from the JSON: per patch, the `LIVE BLOCKER` / `LIVE WARNING` / `LIVE NOTE` lines with their suggestions, the shot path and the run dir. Optionally Read each shot PNG to eyeball the layout, and flag visual issues.
    - **Exit 2** -- one line: `live check skipped: <hint>` (no bridge, MAX not running, toggle OFF), or `live check aborted: <hint>` plus the not-checked patches. The static report and its counts stay exactly as they were.
+   - A file that is not a readable patch (truncated JSON, undecodable bytes, non-patch JSON) is listed as `refused` with one `cannot read <path>: ...` note, and the batch goes on.
    - Live findings are report-only (`.claude/skills/references/severity-contract.md` section 7): never feed them into the critic revision loop, never change step 6's status record from them, and never auto-fix. Offer `/max-iterate` for the fixes.
 
 ## Live check safety
