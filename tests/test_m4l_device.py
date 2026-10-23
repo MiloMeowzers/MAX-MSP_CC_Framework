@@ -992,7 +992,7 @@ from src.maxpat.critics.m4l_critic import review_m4l  # noqa: E402
 
 Q40_RULES = (
     "stereo_out", "midi_passthrough", "shortname_length", "int_param_range", "param_range",
-    "shortname_unique", "bank_refs", "device_height",
+    "shortname_unique", "bank_refs", "device_height", "duplicate_device_io",
 )
 
 
@@ -1132,13 +1132,16 @@ def test_int_param_range():
 def test_param_range():
     def run(**v):
         return _rules(_m4l(_patch([_plugout(), _pdial("obj-3", **v)])), "param_range")
+    # Q40 IN-03 (quick 261022-ud6 WP7a): parameter_initial counts only when
+    # parameter_initial_enable is set -- see tests/test_ud6_wp7a_m4l.py.
+    on = {"parameter_initial_enable": 1}
     assert len(run(parameter_mmin=10, parameter_mmax=10)) == 1
-    hits = run(parameter_mmin=0, parameter_mmax=100, parameter_initial=[500])
+    hits = run(parameter_mmin=0, parameter_mmax=100, parameter_initial=[500], **on)
     assert len(hits) == 1 and hits[0].severity == "warning"
-    assert not run(parameter_mmin=0, parameter_mmax=100, parameter_initial=[50])
-    assert not run(parameter_mmin="0", parameter_mmax=100, parameter_initial=[500])
-    assert not run(parameter_mmax=100, parameter_initial=[500])
-    assert not run(parameter_mmin=0, parameter_mmax=100, parameter_initial=500)
+    assert not run(parameter_mmin=0, parameter_mmax=100, parameter_initial=[50], **on)
+    assert not run(parameter_mmin="0", parameter_mmax=100, parameter_initial=[500], **on)
+    assert not run(parameter_mmax=100, parameter_initial=[500], **on)
+    assert not run(parameter_mmin=0, parameter_mmax=100, parameter_initial=500, **on)
 
 
 # --- device-level rules ------------------------------------------------------------

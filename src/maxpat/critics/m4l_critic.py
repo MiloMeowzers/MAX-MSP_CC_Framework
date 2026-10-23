@@ -36,10 +36,13 @@ Live, so every one is a warning or a note and none blocks a save:
     a midiin with no outgoing cord or a midiout with no incoming one),
     ``shortname_length`` (note: shortname over 8 characters),
     ``int_param_range`` (Int type spanning more than 256 values),
-    ``param_range`` (mmin >= mmax, or parameter_initial outside the range);
+    ``param_range`` (mmin >= mmax, or an enabled parameter_initial outside
+    the range);
   - device level (once, at the top): ``shortname_unique``, ``bank_refs``
     (a parameterbanks slot naming no device parameter), ``device_height``
-    (a presentation box below Live's 169 px device height).
+    (a presentation box below Live's 169 px device height),
+    ``duplicate_device_io`` (two plugin~ / plugout~ / live.thisdevice in the
+    top scope; ``m4l_device.duplicate_device_io_results``).
 """
 
 from __future__ import annotations
@@ -213,6 +216,12 @@ def review_m4l(
         top.patcher, {ln for ln, _ref, status in all_params if status == "ok"}
     ))
     results.extend(_check_device_height(top.patcher, _scope_boxes(top) if top_is_device else []))
+    # Review BL-01 hook (quick 261022-ud6 WP4 -> WP7a): two plugin~ / plugout~
+    # / live.thisdevice in the top scope double the pass-through or the init
+    # chain. Imported here: m4l_device imports this module.
+    from src.maxpat.m4l_device import duplicate_device_io_results
+
+    results.extend(duplicate_device_io_results(patch_dict))
 
     for scope in scopes:
         if scope is top:
@@ -713,7 +722,7 @@ def _check_int_param_range(boxes: list) -> list[CriticResult]:
 
 
 def _check_param_range(boxes: list) -> list[CriticResult]:
-    """mmin >= mmax, or a parameter_initial outside [mmin, mmax]."""
+    """mmin >= mmax, or an enabled parameter_initial outside [mmin, mmax]."""
     results: list[CriticResult] = []
     for box_id, valueof in _param_valueofs(boxes):
         mn = valueof.get("parameter_mmin")
@@ -723,6 +732,10 @@ def _check_param_range(boxes: list) -> list[CriticResult]:
         if mn >= mx:
             finding = f"Parameter ({box_id}) has mmin {mn} >= mmax {mx}"
         else:
+            # Q40 IN-03: Live applies parameter_initial only when
+            # parameter_initial_enable is set; otherwise it is inert.
+            if not valueof.get("parameter_initial_enable"):
+                continue
             initial = valueof.get("parameter_initial")
             first = initial[0] if isinstance(initial, list) and initial else None
             if not _is_number(first) or mn <= first <= mx:

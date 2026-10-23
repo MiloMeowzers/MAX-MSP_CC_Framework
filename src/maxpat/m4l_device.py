@@ -295,7 +295,9 @@ def export_amxd(
 
     Raises:
         ValueError: out_path missing or not ``.amxd``; kind unknown or not
-            detectable; ``patcher.project.amxdtype`` disagrees with the kind.
+            detectable; the patch is a live.thisdevice-only helper
+            abstraction and no explicit kind was given;
+            ``patcher.project.amxdtype`` disagrees with the kind.
             Nothing is written.
     """
     src_path: "Path | None" = None
@@ -321,9 +323,17 @@ def export_amxd(
     if out.suffix.lower() != ".amxd":
         raise ValueError(f"out_path must end in .amxd, got {str(out)!r}")
 
-    from src.maxpat.critics.m4l_critic import detect_m4l_device_type
+    from src.maxpat.critics.m4l_critic import M4L_ABSTRACTION, detect_m4l_device_type
 
     detected = detect_m4l_device_type(patch)
+    if kind is None and detected == M4L_ABSTRACTION or kind == M4L_ABSTRACTION:
+        # quick 261022-ud6 WP7a: say why instead of "unknown device kind".
+        raise ValueError(
+            "a live.thisdevice-only patch (no plugin~, plugout~, midiin or "
+            "midiout) is a helper abstraction, not a device: export the device "
+            "that uses it, or pass kind='audio_effect' / 'instrument' / "
+            "'midi_effect' explicitly"
+        )
     if kind is None:
         kind = detected
         if kind is None:
