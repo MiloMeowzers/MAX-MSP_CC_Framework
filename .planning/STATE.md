@@ -2,10 +2,10 @@
 gsd_state_version: "1.0"
 milestone: v5.0
 status: completed
-last_updated: "2026-10-23T02:44:42.541Z"
-last_activity: 2026-10-22
+last_updated: "2026-10-23T23:40:38.748Z"
+last_activity: 2026-10-23
 last_activity_desc: "Completed quick task 261001-hwb: Max 9.2.0 update — object DB re-synced from the installed bundle, 9.2 guidance added"
-state_head: c0396f5f3abfc47d61932c21440d5697d277af8f
+state_head: 837acc8f2eea4a63163dc29310d51995f968adda
 progress:
   total_phases: 5
   completed_phases: 5
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v5.0)
 Phase: —
 Plan: —
 Status: v5.0 shipped; awaiting `/gsd-new-milestone` to start next cycle
-Last activity: 2026-10-23 - Completed quick task 261022-ud6: Q1-Q40 regression review fixed (WP1-WP8), Q23 executed, docs + v6.0.0 CHANGELOG
+Last activity: 2026-10-23 - Completed quick task 261023-mma: Vision package (jit.vis.*) added to the object DB
 
 Previous: 2026-10-22 - Completed quick task 261022-pqu: Implement Q40 in .planning/reviews/2026-10-11-fix-plan.md — M4L device builder and .amxd export
 
@@ -142,6 +142,7 @@ None.
 | 261022-o2q | Implement Q39 in .planning/reviews/2026-10-11-fix-plan.md — critic quick-fix payloads and /max-iterate --fix | 2026-10-23 | a38c65db | Needs Review | [261022-o2q-implement-q39-in-planning-reviews-2026-1](./quick/261022-o2q-implement-q39-in-planning-reviews-2026-1/) |
 | 261022-pqu | Implement Q40 in .planning/reviews/2026-10-11-fix-plan.md — M4L device builder and .amxd export | 2026-10-23 | c0396f5f | Needs Review | [261022-pqu-implement-q40-in-planning-reviews-2026-1](./quick/261022-pqu-implement-q40-in-planning-reviews-2026-1/) |
 | 261022-ud6 | Review Q1-Q40 for regressions and fix every finding (WP1-WP6 parallel, WP7a handoffs, WP7b Q23, WP8 docs + v6.0.0 CHANGELOG) | 2026-10-23 | 2a2c24a5 (code) + WP8 docs | Released v6.0.0 | [261022-ud6-review-q1-q40-improvements-for-regressio](./quick/261022-ud6-review-q1-q40-improvements-for-regressio/) |
+| 261023-mma | Add Cycling 74 Vision package (22 jit.vis.* entries) to the object DB | 2026-10-23 | 837acc8f | — | [261023-mma-add-cycling-74-vision-package-to-the-obj](./quick/261023-mma-add-cycling-74-vision-package-to-the-obj/) |
 
 ## Deferred Items
 
