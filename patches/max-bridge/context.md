@@ -16,7 +16,7 @@ Design source: `.planning/quick/261016-uy1-implement-q34-in-planning-reviews-202
 
 ## Pieces
 
-- `generated/max-bridge.maxpat`: the resident bridge patch. Open it in MAX and leave it open while `tools/max_bridge.py` runs.
+- `tools/max_bridge/max-bridge.maxpat` (repo root): the resident bridge patch. Open it in MAX and leave it open while `tools/max_bridge.py` runs. It lived at `generated/max-bridge.maxpat` until quick 261022-ud6 (WR-01) moved it, content unchanged, so releases ship it (`/patches` is export-ignored); the checklists in `test-results/` keep the old path as a historical record.
 - `tools/max_bridge.py` (repo root): the client, with the `ping`, `check` and `analyze` subcommands.
 - `tests/test_max_bridge.py`: hermetic tests that run against an in-process fake bridge. No MAX is needed.
 - `tools/max_verify_live.py` (v0.3.0): the `/max-verify --live` wrapper. It picks the project's top-level patches, chooses the `check` options per patch, runs them one after another and maps each report to live findings.

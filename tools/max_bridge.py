@@ -8,7 +8,7 @@ v0.2.0-bridge-checklist.md; 2026-10-21, commit dc0cde91). v0.3.0 adds
 tools/max_verify_live.py, pending
 patches/max-bridge/test-results/v0.3.0-verify-live-checklist.md.
 
-Protocol. The bridge patch (patches/max-bridge/generated/max-bridge.maxpat)
+Protocol. The bridge patch (tools/max_bridge/max-bridge.maxpat)
 is a dumb UDP pass-through; this client owns all the sequencing:
 
     Python -> MAX  (OSC over UDP to 127.0.0.1:7400)
@@ -107,7 +107,9 @@ REPLY_RECEIVE = "__maxbridge_reply"
 # /query reply addresses: adstatus switch, adstatus sr, dspstate~ outlet 1
 STATE_ADDRESSES = ("/state/dsp", "/state/adsr", "/state/sr")
 COPY_PREFIX = "__maxbridge_"
-BRIDGE_PATCH = REPO_ROOT / "patches" / "max-bridge" / "generated" / "max-bridge.maxpat"
+# Shipped with the tools (WR-01, quick 261022-ud6): /patches is export-ignored,
+# and a patch under patches/ would show up as a user project in /max-switch.
+BRIDGE_PATCH = REPO_ROOT / "tools" / "max_bridge" / "max-bridge.maxpat"
 
 DEFAULT_TIMEOUT = 2.0
 MAX_EVENTS = 1000
@@ -1378,8 +1380,16 @@ def run_check(args) -> dict:
     return report
 
 
+def bridge_patch_display() -> str:
+    """BRIDGE_PATCH relative to the repo root (absolute when it lies outside)."""
+    try:
+        return str(BRIDGE_PATCH.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(BRIDGE_PATCH)
+
+
 def _bridge_hint(host: str, port: int) -> str:
-    rel = BRIDGE_PATCH.relative_to(REPO_ROOT)
+    rel = bridge_patch_display()
     return (f"MAX bridge at {host}:{port} did not answer: open {rel} in MAX "
             f"(MAX 9.2 must be running) and turn ON its enable toggle "
             f"(the kill switch is OFF whenever the bridge patch opens)")

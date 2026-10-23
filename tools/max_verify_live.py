@@ -313,11 +313,12 @@ def preflight(opts) -> str | None:
     The hint for a closed bridge (or the toggle OFF) is the bridge's own:
     it tells the user to turn the toggle ON. This tool never does (D-04).
     """
+    rel = bridge.bridge_patch_display()
     if not bridge.BRIDGE_PATCH.is_file():
-        return "bridge patch not available in this install (patches/ is not shipped in releases)"
+        return f"bridge patch not available in this install ({rel} is missing)"
     if _max_running() is False:
-        return ("MAX is not running: start MAX 9.2, open "
-                "patches/max-bridge/generated/max-bridge.maxpat and turn ON its enable toggle")
+        return (f"MAX is not running: start MAX 9.2, open {rel} "
+                "and turn ON its enable toggle")
     port, reply, timeout = _net(opts)
     try:
         with bridge.Bridge(bridge.HOST, port, reply, timeout) as b:

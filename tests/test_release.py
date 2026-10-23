@@ -57,6 +57,10 @@ RUNTIME_FILES = (
     "src/maxpat/__init__.py",
     ".claude/max-objects/max/objects.json",
     "tools/sync_max_bundle.py",
+    # WR-01 (quick 261022-ud6 WP6): /max-verify --live needs the bridge patch
+    "tools/max_bridge.py",
+    "tools/max_verify_live.py",
+    "tools/max_bridge/max-bridge.maxpat",
     WIDTH_TABLE,
 )
 ARCHIVE_SUFFIXES = (".tar.gz", ".tgz", ".tar", ".zip")
@@ -248,6 +252,26 @@ print(json.dumps({"first": first, "second": second}))
         assert not patches.exists(), "patches/ shipped in the release"
         res = _run_in_archive(root, code)
         assert res == {"first": None, "second": None}
+
+    def test_live_check_bridge_patch_available(self, release_archive):
+        """WR-01 (quick 261022-ud6 WP6): /max-verify --live can find its bridge
+        patch in a release install (patches/ is not shipped)."""
+        _, root, _ = release_archive
+        code = r"""
+import json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root))
+import tools.max_bridge as bridge
+print(json.dumps({
+    "file": bridge.BRIDGE_PATCH.is_file(),
+    "inside": str(bridge.BRIDGE_PATCH.resolve()).startswith(str(root.resolve())),
+    "hint": bridge._bridge_hint(bridge.HOST, bridge.BRIDGE_PORT),
+}))
+"""
+        res = _run_in_archive(root, code)
+        assert res["file"] and res["inside"], res
+        assert "tools/max_bridge/max-bridge.maxpat" in res["hint"]
 
 
 class TestGitattributes:
