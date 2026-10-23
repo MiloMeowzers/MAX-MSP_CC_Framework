@@ -3,7 +3,9 @@
 Catches structural issues that the mechanical validation pipeline does
 not detect:
   - Fan-out without trigger (ordering ambiguity): blocker when branches
-    reconverge on one box at different inlets, otherwise warning (Q3 / E1)
+    reconverge on one box at different inlets, otherwise warning (Q3 / E1).
+    The blocker carries an ``insert_trigger`` quick-fix payload
+    (``CriticResult.fix``, Q39) ordering cold-inlet branches first.
   - Hot/cold inlet ordering (Q26 / E5): one upstream event reaching a box's
     hot inlet 0 and a DB-cold inlet, with the cold update fired at or after
     the last hot firing (right-to-left outlet order at the divergence box).
@@ -249,23 +251,19 @@ def _is_jitter_setter_hop(src_box, dst_box) -> bool:
     return walk.box_name(dst_box).startswith("jit.") and _is_setter_message(src_box)
 
 
-def _paths_reconverge(
+def _branch_hits(
     src_id: str,
     branches: list[tuple[str, int]],
     ctrl_adj: dict[str, list[tuple[str, int]]],
     box_lookup: dict[str, dict],
-) -> str | None:
-    """Return the id of a box where two branches meet at different inlets.
+) -> list[dict[str, set[int]]]:
+    """One ``box id -> inlets reached`` map per branch (Q3; factored out for Q39).
 
     Each branch ``(dst_id, inlet)`` is walked breadth-first over control
-    cords, recording every inlet reached on every box. Two branches
-    reconverge when some box outside ``_ALL_HOT_NAMES`` is reached by both
-    at different inlets (the stale-cold-value hazard). Returns the first
-    such box in sorted id order, or None.
-
-    A Jitter setter hop (:func:`_is_jitter_setter_hop`), including the
-    first hop from the fan-out source, records the hit at the jit.* box
-    but does not expand past it (Q20).
+    cords, recording every inlet reached on every box. A Jitter setter hop
+    (:func:`_is_jitter_setter_hop`), including the first hop from the
+    fan-out source, records the hit at the jit.* box but does not expand
+    past it (Q20).
     """
     src_box = box_lookup.get(src_id)
     hit_maps: list[dict[str, set[int]]] = []
@@ -287,7 +285,11 @@ def _paths_reconverge(
                     seen.add(nxt)
                     queue.append(nxt)
         hit_maps.append(hits)
+    return hit_maps
 
+
+def _meeting_boxes(hit_maps: list[dict[str, set[int]]], box_lookup: dict[str, dict]) -> set:
+    """Every box (outside ``_ALL_HOT_NAMES``) two branches reach at different inlets."""
     meeting: set[str] = set()
     for k in range(len(hit_maps)):
         for l in range(k + 1, len(hit_maps)):
@@ -298,7 +300,88 @@ def _paths_reconverge(
                     continue
                 if any(a != b for a in hits_k[box_id] for b in hits_l[box_id]):
                     meeting.add(box_id)
+    return meeting
+
+
+def _paths_reconverge(
+    src_id: str,
+    branches: list[tuple[str, int]],
+    ctrl_adj: dict[str, list[tuple[str, int]]],
+    box_lookup: dict[str, dict],
+    hit_maps: list | None = None,
+) -> str | None:
+    """Return the id of a box where two branches meet at different inlets.
+
+    Two branches reconverge when some box outside ``_ALL_HOT_NAMES`` is
+    reached by both at different inlets (the stale-cold-value hazard; hit
+    maps from :func:`_branch_hits`). Returns the first such box in sorted id
+    order, or None. Pass *hit_maps* when they are already computed.
+    """
+    if hit_maps is None:
+        hit_maps = _branch_hits(src_id, branches, ctrl_adj, box_lookup)
+    meeting = _meeting_boxes(hit_maps, box_lookup)
     return min(meeting) if meeting else None
+
+
+# Source outlettype -> trigger letter for the Q39 insert_trigger payload
+_FIX_TRIGGER_LETTER = {"bang": "b", "int": "i", "float": "f", "list": "l", "": "l"}
+
+
+def _fan_out_trigger_fix(
+    src_box: dict,
+    src_id: str,
+    src_outlet: int,
+    branches: list[tuple[str, int]],
+    hit_maps: list[dict[str, set[int]]],
+    meetings: set,
+    box_lookup: dict[str, dict],
+):
+    """insert_trigger payload for a reconverging fan-out, or None (Q39).
+
+    Letter from the source outlettype (bang -> b, int -> i, float -> f,
+    list or "" -> l); any other type, a missing entry or a duplicate branch
+    cord gives None. Order: at every meeting box, a branch reaching it at an
+    inlet > 0 fires before a different branch reaching it at inlet 0 (cold
+    before hot). A stable topological sort keeps ties in cord order; a
+    cycle (conflicting constraints) gives None.
+    """
+    from src.maxpat.critics.fixes import trigger_fix
+
+    outlettype = src_box.get("outlettype") if isinstance(src_box, dict) else None
+    if not isinstance(outlettype, list) or not (0 <= src_outlet < len(outlettype)):
+        return None
+    kind = outlettype[src_outlet]
+    if not isinstance(kind, str) or kind not in _FIX_TRIGGER_LETTER:
+        return None
+    letter = _FIX_TRIGGER_LETTER[kind]
+    if len(set(branches)) != len(branches) or len(branches) != len(hit_maps):
+        return None
+
+    n = len(branches)
+    before: dict[int, set[int]] = {i: set() for i in range(n)}  # j in before[i]: j fires before i
+    for m in meetings:
+        cold = [c for c in range(n) if any(x > 0 for x in hit_maps[c].get(m, ()))]
+        hot = [h for h in range(n) if 0 in hit_maps[h].get(m, ())]
+        for c in cold:
+            for h in hot:
+                if c != h:
+                    before[h].add(c)
+
+    order: list[int] = []
+    placed: set[int] = set()
+    while len(order) < n:
+        nxt = next((i for i in range(n) if i not in placed and before[i] <= placed), None)
+        if nxt is None:
+            return None  # cycle: no safe order
+        order.append(nxt)
+        placed.add(nxt)
+
+    ordered = []
+    for i in order:
+        dst_id, dst_inlet = branches[i]
+        dst_box = box_lookup.get(dst_id)
+        ordered.append((dst_id, dst_inlet, walk.box_name(dst_box) if dst_box else dst_id))
+    return trigger_fix(src_id, src_outlet, walk.box_name(src_box), letter, ordered)
 
 
 def _check_fan_out_without_trigger(
@@ -328,6 +411,10 @@ def _check_fan_out_without_trigger(
     changes the result. Otherwise WARNING. (History: promoted to an
     unconditional blocker by 260427-hox §P0-1; narrowed by Q3 because most
     of those blockers were false positives.)
+
+    The blocker carries an ``insert_trigger`` quick-fix payload (Q39,
+    :func:`_fan_out_trigger_fix`) when a safe cold-before-hot order exists;
+    a warning never does.
     """
     results: list[CriticResult] = []
 
@@ -388,7 +475,9 @@ def _check_fan_out_without_trigger(
             f"{src_outlet} connected to {len(branches)} destinations "
             f"({', '.join(dst_names)}) --"
         )
-        meet_id = _paths_reconverge(src_id, branches, ctrl_adj, box_lookup)
+        hit_maps = _branch_hits(src_id, branches, ctrl_adj, box_lookup)
+        meet_id = _paths_reconverge(src_id, branches, ctrl_adj, box_lookup, hit_maps)
+        fix = None
         if meet_id is not None:
             meet_box = box_lookup.get(meet_id)
             meet_name = walk.box_name(meet_box) if meet_box else meet_id
@@ -396,6 +485,10 @@ def _check_fan_out_without_trigger(
             finding = (
                 f"{prefix} paths reconverge on '{meet_name}' ({meet_id}) at "
                 f"different inlets, so execution order changes the result"
+            )
+            fix = _fan_out_trigger_fix(
+                src_box, src_id, src_outlet, branches, hit_maps,
+                _meeting_boxes(hit_maps, box_lookup), box_lookup,
             )
         else:
             severity = "warning"
@@ -409,6 +502,7 @@ def _check_fan_out_without_trigger(
             rule="fan_out_without_trigger",
             box_ids=finding_ids(src_id, *(d for d, _ in branches), meet_id),
             port=src_outlet,
+            fix=fix,
         ))
 
     return results

@@ -6,7 +6,12 @@ with severity, description, and suggestion for how to fix it.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from src.maxpat import walk
+
+if TYPE_CHECKING:
+    from src.maxpat.critics.fixes import Fix
 
 
 class CriticResult:
@@ -35,12 +40,16 @@ class CriticResult:
             identity -- the source outlet for ``fan_out_without_trigger``,
             the gain inlet for ``unsafe_gain_sources`` and the destination
             inlet for ``bach_llll_types`` -- else None.
+        fix: Keyword-only. An optional machine-applicable payload
+            (:class:`src.maxpat.critics.fixes.Fix`, fix-plan Q39), default
+            None. Not part of the finding key; applied only by
+            :mod:`src.maxpat.quickfix` (``/max-iterate --fix``).
 
     The review allowlist (tests/review_blocker_allowlist.json) keys on
     ``(rule, box_ids, port, path)``.
     """
 
-    __slots__ = ("severity", "finding", "suggestion", "path", "rule", "box_ids", "port")
+    __slots__ = ("severity", "finding", "suggestion", "path", "rule", "box_ids", "port", "fix")
 
     def __init__(
         self,
@@ -52,6 +61,7 @@ class CriticResult:
         rule: str = "",
         box_ids=(),
         port: int | None = None,
+        fix: "Fix | None" = None,
     ):
         self.severity = severity
         self.finding = finding
@@ -60,6 +70,7 @@ class CriticResult:
         self.rule = rule
         self.box_ids = tuple(box_ids)
         self.port = port
+        self.fix = fix
 
     def __repr__(self) -> str:
         return f"[{self.severity}] {self.finding}"
