@@ -2174,7 +2174,7 @@ def _is_prose(text: str) -> bool:
     ("records buffer~ #1 sample-accurately.") rather than trying to
     substitute one; short labels ("Bus #1", "Freq: #1 Hz") still count."""
     return (
-        len(text.split()) >= _PROSE_MIN_WORDS
+        len(_re.findall(r"\S+", text)) >= _PROSE_MIN_WORDS
         and any(mark in text for mark in _PROSE_MARKS)
     )
 
