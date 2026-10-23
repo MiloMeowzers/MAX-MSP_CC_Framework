@@ -6,10 +6,18 @@ Maintainer detail for `.claude/max-objects/`; CLAUDE.md keeps the one-line rules
 
 ## Supplementary files: merge and inheritance semantics
 
-- **`overrides.json`** -- Expert corrections that take precedence over extracted data. Merged per port: an override's `inlets`/`outlets` array sets the count, and each port replaces only the keys it sets, so base digests, `hot` flags and port types survive (generator placeholder digests and an empty `type` on a control port never replace base values; `{"id": N}` inherits the base port). Other keys replace whole; keys are canonicalized through `aliases.json`, and an unknown or duplicate key fails at load.
+- **`overrides.json`** -- Expert corrections that take precedence over extracted data. Merged per port: an override's `inlets`/`outlets` array sets the count, and each port replaces only the keys it sets, so base digests, `hot` flags and port types survive (generator placeholder digests and an empty `type` on a control port never replace base values; `{"id": N}` inherits the base port). Other keys replace whole; keys are canonicalized through `aliases.json`, and an unknown or duplicate key fails at load. A corrected entry carries an `_evidence` comment key (the refpage, help box or bundle source the values come from); keys starting with `_` are comments, never data.
+- **MC outlet flavour** -- every MC-family signal outlet in `overrides.json` is typed the way MAX saves it in the bundle help: `multichannelsignal`, except the outlets MAX saves as plain `signal` (`mc.sum~`, `mc.unpack~`, `mc.channelcount~` 1, `mc.midiplayer~` 0, `mc.op~` 0, `mc.playlist~` 1, `mc.record~` 0, `mcs.groove~` 1, `mcs.selector~` 0). `db_lookup.saved_outlet_type()` emits the saved spelling and `get_outlet_types` uses it; validation treats both flavours as signal.
+- **`variable_io_rules.trailing_inlets: K`** (non-negative int, validated at load) -- with arguments, the last K inlets map to the DB's last K entries and every leading inlet repeats DB inlet 0: `record~ buf 2` (K 2) is (signal, signal, start, end). `K == 0` (`sfrecord~ N`, `jit.catch~ N`) makes every inlet repeat inlet 0. `ObjectDatabase.resolve_inlet(name, inlet, args, *, count=)` applies it (Layer 3 resolves the destination inlet through it, with the box's saved `numinlets` as `count`).
+- **Shipped signal inlets** -- `ObjectDatabase.is_shipped_signal_inlet(dst, inlet)` is True when any shipped help cord (`idioms.json`) feeds that inlet with a signal; Layer 3 then accepts a signal into it from every source. A guard test keeps every shipped signal idiom off a control-only DB inlet, and no unreviewed placeholder inlet may remain on a `~` object.
+- **`inlet` / `outlet`** boxes are 0 inlets / 1 outlet and 1 inlet / 0 outlets in the DB (what MAX saves); their saved outlettype mirrors the parent cord, so the help-io oracle does not compare it (`tools/help_io.py` `CONTEXT_TYPED`).
 - **`groups.json`** -- Inherited group names: MC wrapper methods/attributes (refpage `<mcwrapper>`), shared Jitter methods and OB3D/MOP/geometry attributes (refpage `<jittermethodlist>`/`<jitterattributelist>`, typed from the group pages), and thispatcher's help-patch selectors. Written only by `tools/sync_max_bundle.py --apply groups`, merged at call time by `ObjectDatabase`, never copied into domain files.
 
 - **`aliases.json`** -- the 12 hand aliases plus the bundle's `max objectfile` shortcuts (Q38): the 13 `mc.wrapper~` shortcuts (`mc.times~` -> `mc.*~`), `hslider` -> `slider`, 31 `list.*` -> `zl.*`, 97 `jit.op` shortcuts (`jit.+` -> `jit.op`) and 90 Vizzie short names (`4mixr` -> `vz.4mixr`). The other unresolved objectfile names (`python3 tools/sync_max_bundle.py` lists them) stay unaliased: outside those groups, no candidate, or help boxes that disagree. The 11 file-basis `mc.*` names (`mc.meter~`, `mc.plugout~`, ...) are mono externals reading their own name with no help evidence for their I/O, so they are not aliased to `mc.wrapper~` targets.
+
+## Merging audit proposals into `overrides.json`
+
+`OverrideMerger` (`src/maxpat/audit/merger.py`, the audit CLI's `--merge` step) merges only proposals for names that have a base domain entry. A proposal with no base entry is skipped and reported in `merger.skipped` as `NO_BASE_ENTRY` (it is never written as an inactive `_note`). New keys use the canonical name; when an alias and its canonical name are both proposed, the canonical spelling wins and the other is reported as `DUPLICATE_OF <canonical>`. Before writing, `write()` rehearses an `ObjectDatabase` load of the merged file against a scratch root; if the load fails it raises `OverridesLoadError` and writes nothing. `--merge` prints the skipped proposals and returns 1 on a rejected write (`OverridesLoadError` or `OverridesChangedError`); a no-op merge leaves the file byte-identical.
 
 ## Shipped idioms (`idioms.json`)
 
@@ -37,7 +45,7 @@ Maintainer detail for `.claude/max-objects/`; CLAUDE.md keeps the one-line rules
 
 ## MSP outlets mis-marked as signal
 
-If a control connection from an MSP object's non-primary outlet gets stripped by validation, the DB likely mis-marks that outlet as signal (bulk-extraction bug — many MSP right outlets are actually bangs/floats/indices). Fix the outlet types in `overrides.json` rather than rerouting the patch.
+If a control connection from an MSP object's non-primary outlet is flagged by validation (a proposed removal), the DB likely mis-marks that outlet as signal (bulk-extraction bug — many MSP right outlets are actually bangs/floats/indices). Fix the outlet types in `overrides.json` rather than rerouting the patch.
 
 ## After a Max update
 

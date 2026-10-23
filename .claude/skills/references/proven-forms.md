@@ -120,7 +120,7 @@ Every object, message and attribute named below resolves in `ObjectDatabase` or 
 ### no global apply_layout on large existing patches
 
 - **Rule:** never run `apply_layout()` over a large existing or hand-arranged patch. Preserve the user's macro arrangement and make only local fixes.
-- **Form:** local alignment and spacing within a section, `send` / `receive` for long cords. `finalize_patch(patcher, is_new=False)` regenerates midpoints without moving boxes, which is fine on small new grids; on a large patch re-saved in MAX it re-routes every cord, so call only `patcher.populate_assistance_comments()` and route new cords by hand.
+- **Form:** local alignment and spacing within a section, `send` / `receive` for long cords. `finalize_patch(patcher, is_new=False)` and `edit_patch` sessions never move boxes and never clear existing midpoints: they route only cords that have no midpoints and are new or touch an added or moved box, so they are safe on large MAX-saved patches. `finalize_patch(is_new=True)` refuses a MAX-saved or large patcher with `LayoutRefusedError` before anything moves.
 - **Why:** the row-based layout maps depth to rows and spreads each row sideways: about 200 objects became a ~7900 px wide band, stacked co-targeted controls, and illegible flow. User arrangements encode grouping the engine cannot see. Even on a new build with large UI boxes, hand-place sections.
 - Evidence: [observed] ji-harmonizer v0.7.1 (the user rejected it; reverted in v0.7.2); [observed] barnett-dbap v0.1.0 and v0.5.0 (2026-09-19).
 
