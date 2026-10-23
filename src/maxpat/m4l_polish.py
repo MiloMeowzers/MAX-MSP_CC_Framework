@@ -278,6 +278,52 @@ def _message_segments(text: str) -> list[str]:
     return _MESSAGE_SPLIT.split(text)
 
 
+def _set_feeders(patcher: dict, scope: str = "max") -> set:
+    """``id()`` of every max-scope message box with a cord into a box whose
+    ``set`` renames what it refers to: a declarer, a buffer user or a
+    waveform~ in the same patcher (review IN-05, quick 261022-ud6).
+
+    Only these messages' ``set <name>`` targets are rewritable positions;
+    a ``set <name>`` feeding anything else (a message box display, umenu,
+    prepend) or nothing is plain text.
+    """
+    found: set = set()
+    if not isinstance(patcher, dict):
+        return found
+    by_id: dict = {}
+    for entry in patcher.get("boxes") or []:
+        box = entry.get("box", entry) if isinstance(entry, dict) else None
+        if not isinstance(box, dict):
+            continue
+        if "id" in box:
+            by_id[box["id"]] = box
+        inner = box.get("patcher")
+        if isinstance(inner, dict):
+            found |= _set_feeders(inner, inner_patcher_scope(box, scope))
+    if scope != "max":
+        return found
+    for entry in patcher.get("lines") or []:
+        line = entry.get("patchline") if isinstance(entry, dict) else None
+        if not isinstance(line, dict):
+            continue
+        try:
+            src = by_id.get(line["source"][0])
+            dst = by_id.get(line["destination"][0])
+        except (KeyError, IndexError, TypeError):
+            continue
+        if not (isinstance(src, dict) and isinstance(dst, dict)):
+            continue
+        if src.get("maxclass") != "message":
+            continue
+        if dst.get("maxclass") == "waveform~":
+            found.add(id(src))
+            continue
+        toks = _tokens(dst) if dst.get("maxclass") == "newobj" else []
+        if toks and (toks[0] in _DECLARER_CLASSES or toks[0] in _BUFFER_USER_CLASSES):
+            found.add(id(src))
+    return found
+
+
 def _set_target(segment: str) -> str | None:
     """The name of a ``set <name>`` message segment, else None."""
     toks = segment.split()
@@ -306,7 +352,9 @@ def plan_m4l_prefixes(patch_dict: dict, db=None) -> dict:
       - Positions the pass can rewrite (max scope only): tokens[1] of
         declarers and buffer users (play~/groove~/index~/peek~/poke~/info~),
         waveform~ ``buffername``, and the target of ``set <name>`` message
-        segments.
+        segments of a message box that cords into a declarer, a buffer
+        user or a waveform~ (review IN-05). Any other ``set <name>`` is a
+        plain message token.
       - A candidate is report-only when the name also appears anywhere else
         (any scope): as another newobj token (p/patcher titles excepted), a
         message token (e.g. ``; level 0.5``), a delimited word in a box's
@@ -320,6 +368,7 @@ def plan_m4l_prefixes(patch_dict: dict, db=None) -> dict:
     """
     patcher = patch_dict.get("patcher", {}) if isinstance(patch_dict, dict) else {}
     walked = list(_walk_patch_boxes(patcher.get("boxes", [])))
+    feeders = _set_feeders(patcher)
 
     candidates: set[str] = set()
     buffer_declared: set[str] = set()
@@ -393,7 +442,8 @@ def plan_m4l_prefixes(patch_dict: dict, db=None) -> dict:
             for seg in _message_segments(text):
                 if seg in (",", ";"):
                     continue
-                target = _set_target(seg) if scope == "max" else None
+                target = (_set_target(seg)
+                          if scope == "max" and id(box) in feeders else None)
                 for i, tok in enumerate(seg.split()):
                     tok = tok.rstrip(",;")
                     if tok.startswith(_PREFIX):
@@ -437,7 +487,8 @@ def ensure_m4l_prefixes(patch_dict: dict, db=None) -> dict:
 
     Uses plan_m4l_prefixes: each name in ``rename`` is rewritten at every
     handled max-scope position (declarer / buffer-user tokens[1], waveform~
-    buffername, ``set <name>`` message targets), so senders, receivers and
+    buffername, ``set <name>`` targets of messages that cord into a
+    declarer, buffer user or waveform~), so senders, receivers and
     buffer users stay linked. Names in ``report_only`` are left untouched and
     reported in one UserWarning. Comments are never touched. Idempotent.
     """
@@ -445,10 +496,11 @@ def ensure_m4l_prefixes(patch_dict: dict, db=None) -> dict:
     rename = set(plan["rename"])
     if rename:
         patcher = patch_dict.get("patcher", {})
+        feeders = _set_feeders(patcher)
         for box, scope in list(_walk_patch_boxes(patcher.get("boxes", []))):
             if scope != "max":
                 continue
-            _rename_in_box(box, rename)
+            _rename_in_box(box, rename, feeders)
     if plan["report_only"]:
         details = "; ".join(f"{n} ({r})" for n, r in plan["report_only"].items())
         warnings.warn(
@@ -460,8 +512,9 @@ def ensure_m4l_prefixes(patch_dict: dict, db=None) -> dict:
     return patch_dict
 
 
-def _rename_in_box(box: dict, rename: set) -> None:
-    """Rewrite the handled positions of one max-scope box."""
+def _rename_in_box(box: dict, rename: set, feeders: set = frozenset()) -> None:
+    """Rewrite the handled positions of one max-scope box (a message's
+    ``set`` target only when the box is in *feeders*)."""
     maxclass = box.get("maxclass", "")
     if maxclass == "newobj":
         toks = _tokens(box)
@@ -472,7 +525,7 @@ def _rename_in_box(box: dict, rename: set) -> None:
             box["text"] = " ".join(toks)
     elif maxclass == "message":
         text = box.get("text")
-        if not isinstance(text, str):
+        if not isinstance(text, str) or id(box) not in feeders:
             return
         parts = _message_segments(text)
         changed = False
