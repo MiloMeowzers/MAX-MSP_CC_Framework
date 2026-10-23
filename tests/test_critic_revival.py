@@ -423,13 +423,15 @@ class TestM4LDispatch:
             [_b("obj-1", "live.thisdevice", 1), _b("obj-2", "midiin", 1)], [])
         assert detect_m4l_device_type(patch) == "midi_effect"
 
-    def test_detect_midi_effect_maxclass_thisdevice(self):
+    def test_detect_abstraction_maxclass_thisdevice(self):
+        """live.thisdevice alone (maxclass form) is a helper abstraction, not a
+        midi_effect (quick 261022-ud6 WR-02)."""
         patch = _make_patch([{
             "id": "obj-1", "maxclass": "live.thisdevice",
             "numinlets": 1, "numoutlets": 3,
             "outlettype": ["bang", "int", "int"],
         }], [])
-        assert detect_m4l_device_type(patch) == "midi_effect"
+        assert detect_m4l_device_type(patch) == "m4l_abstraction"
 
     def test_detect_none_for_plain_patch(self):
         assert detect_m4l_device_type(_plain_audio_patch()) is None
@@ -459,11 +461,19 @@ class TestM4LRequiredObjects:
 
     def test_midi_effect_requires_midiin_midiout(self):
         patch = _make_patch([_b("obj-1", "live.thisdevice", 1)], [])
-        blockers = sorted(r.finding for r in _blockers(review_patch(patch)))
+        blockers = sorted(r.finding for r in _blockers(review_m4l(patch, "midi_effect")))
         assert blockers == [
             "M4L midi_effect missing required object: midiin",
             "M4L midi_effect missing required object: midiout",
         ]
+        # detected from the patch: midiin marks a midi_effect, midiout missing
+        patch = _make_patch([_b("obj-1", "live.thisdevice", 1), _b("obj-2", "midiin", 1)], [])
+        blockers = sorted(r.finding for r in _blockers(review_patch(patch)))
+        assert blockers == ["M4L midi_effect missing required object: midiout"]
+        # live.thisdevice alone is a helper abstraction: no completeness blocker
+        # (quick 261022-ud6 WR-02)
+        patch = _make_patch([_b("obj-1", "live.thisdevice", 1)], [])
+        assert _blockers(review_patch(patch)) == []
 
     def test_audio_effect_requires_plugout(self):
         patch = _make_patch(

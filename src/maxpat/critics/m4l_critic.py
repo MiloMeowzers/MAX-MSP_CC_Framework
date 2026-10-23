@@ -15,7 +15,10 @@ does not detect:
 
 review_patch invokes this critic via detect_m4l_device_type when any
 non-gen scope contains plugin~, plugout~ or live.thisdevice (Q4 / D4, quick
-261012-egf; Q20).
+261012-egf; Q20). A patch with live.thisdevice and none of plugin~,
+plugout~, midiin, midiout is a helper abstraction (``M4L_ABSTRACTION``,
+quick 261022-ud6 WR-02): it gets the per-scope checks and parameter
+uniqueness only, never the device completeness / quality checks.
 
 Scopes (Q20): device-level checks (completeness, openinpresentation /
 devicewidth on the top patcher, parameter_longname uniqueness across all
@@ -64,6 +67,11 @@ _M4L_GAIN_STAGE_NAMES = frozenset({"gain~", "live.gain~"})
 # Top-level box names that mark a patch as an M4L device (Q4 / D4).
 _M4L_MARKER_NAMES = frozenset({"plugin~", "plugout~", "live.thisdevice"})
 
+# detect_m4l_device_type's value for a patch whose only marker is
+# live.thisdevice (WR-02): a helper abstraction / bpatcher face, reviewed with
+# the per-scope checks only.
+M4L_ABSTRACTION = "m4l_abstraction"
+
 # Parameter-capable live.* classes (review D5, Q15): exactly the live.*
 # refpages in Max 9.2.0 m4l-ref that carry a <parameter /> element (name read
 # from <c74object name>, never the filename). Pinned by
@@ -103,7 +111,11 @@ def detect_m4l_device_type(
 
     Returns None unless some non-gen scope contains plugin~, plugout~ or
     live.thisdevice (newobj or maxclass). Then plugin~ -> "audio_effect",
-    else plugout~ -> "instrument", else "midi_effect".
+    else plugout~ -> "instrument", else midiin or midiout ->
+    "midi_effect", else (live.thisdevice alone) ``M4L_ABSTRACTION`` -- a
+    helper abstraction or bpatcher face that uses live.thisdevice for init
+    (quick 261022-ud6 WR-02). That value is not a device kind:
+    ``export_amxd`` refuses it.
     """
     if graph is None:
         graph = PatchGraph.build(patch_dict)
@@ -115,7 +127,9 @@ def detect_m4l_device_type(
         return "audio_effect"
     if "plugout~" in names:
         return "instrument"
-    return "midi_effect"
+    if names & {"midiin", "midiout"}:
+        return "midi_effect"
+    return M4L_ABSTRACTION
 
 
 def _present_names(graph: PatchGraph) -> set:
@@ -139,7 +153,9 @@ def review_m4l(
 
     Args:
         patch_dict: A .maxpat-format dict.
-        device_type: One of "audio_effect", "instrument", "midi_effect".
+        device_type: One of "audio_effect", "instrument", "midi_effect", or
+            ``M4L_ABSTRACTION`` (a live.thisdevice helper abstraction: the
+            per-scope checks and parameter uniqueness only -- WR-02).
             If None, returns empty list (caller should detect type).
         graph: The shared PatchGraph of *patch_dict* (review_patch passes
             it); built here when None.
@@ -159,6 +175,23 @@ def review_m4l(
     scopes = _device_scopes(graph)
     top_is_device = top.context != "gen"
     all_params = _collect_parameter_longnames(graph)
+
+    if device_type == M4L_ABSTRACTION:
+        # WR-02: a helper abstraction is part of a device, not one -- only the
+        # per-scope checks (and parameter uniqueness, which still clashes in
+        # the host device) apply; completeness, device quality, live.banks and
+        # the Q40 device-level checks do not.
+        results.extend(_check_parameter_uniqueness(all_params))
+        for scope in scopes:
+            boxes = _scope_boxes(scope)
+            found: list[CriticResult] = []
+            found.extend(_check_gain_plugout(scope))
+            found.extend(_check_empty_longnames(scope))
+            found.extend(_check_parameter_enable(boxes))
+            found.extend(_check_missing_info_text(boxes))
+            found.extend(_q40_scope_checks(scope, device_type))
+            results.extend(tag_results(found, scope.path))
+        return results
 
     if top_is_device:
         results.extend(_check_gain_plugout(top))
