@@ -1,7 +1,7 @@
 ---
 name: max-iterate
 description: Modify existing patches or code in the active project
-argument-hint: "[--full|--discuss|--research] [changes]"
+argument-hint: "[--full|--discuss|--research|--fix] [changes]"
 ---
 
 # /max-iterate
@@ -33,11 +33,12 @@ Apply modifications to existing .maxpat patches using the analyze-first protocol
    ```
 
 2. **Parse flags** -- extract workflow flags from the argument string before interpreting the change description:
-   - Scan `change_description` (the text remaining after inline project switch parsing) for `--full`, `--discuss`, `--research`, and `--plan`
+   - Scan `change_description` (the text remaining after inline project switch parsing) for `--full`, `--discuss`, `--research`, `--plan` and `--fix`
    - `--full` expands to all three: discuss + research + plan
    - `--discuss`, `--research`, `--plan` can be used individually or combined
+   - `--fix` switches to Quick-fix mode (see "Quick-fix mode (`--fix`)" below) instead of steps 6-18
    - Strip all recognized flags from `change_description` so downstream steps see only the modification text
-   - Store flags as booleans: `do_discuss`, `do_research`, `do_plan`
+   - Store flags as booleans: `do_discuss`, `do_research`, `do_plan`, `do_fix`
 
 3. **Load active project** -- read `patches/.active-project.json` for the current project (which may have just been set by the step above). If no active project, prompt the user.
 
@@ -147,6 +148,50 @@ After all flagged phases complete, proceed to the standard edit flow (steps 10+)
 
 20. **Update progress** -- increment progress via `update_status()`.
 
+## Quick-fix mode (`--fix`)
+
+Some critic findings carry a machine-applicable fix (`CriticResult.fix`, fix-plan Q39): a correctly ordered `t ...` for a reconverging fan-out, `@param $1` -> `param $1` for a gen~ message, a `scale <lo> <hi> 0. 1.` / `clip 0. 1.` before an unsafe gain input, and `@out t` on a bach object feeding plain MAX objects. With `--fix`, run steps 1 and 3-5; any remaining text only picks the target patch. Then:
+
+a. **List** the fixable findings:
+   ```python
+   from src.maxpat import read_patch, fixable_findings
+
+   patcher, original_text = read_patch(path)
+   candidates = fixable_findings(patcher)
+   for i, r in enumerate(candidates, 1):
+       print(f"{i}. [{r.severity}] {r.finding}\n   fix: {r.fix.description}")
+   ```
+   If there are none, say so and stop; other findings go through a normal `/max-iterate`.
+
+b. **Ask** the user to choose, in multiple-choice form: (A) all, (B) blockers only, (C) pick numbers, (D) cancel. `selected` is the chosen CriticResults (or their `finding_key(r)` tuples).
+
+c. **Preview** the semantic diff (a separate read; nothing is written or committed), then ask: (A) apply, (B) cancel:
+   ```python
+   from src.maxpat import preview_quick_fixes
+
+   print(preview_quick_fixes(path, selected).render())
+   ```
+
+d. **Apply** in ONE Python script and ONE `edit_patch` session, fixes first, then the version bump and comment:
+   ```python
+   from src.maxpat import edit_patch, apply_quick_fixes
+   from src.maxpat.project import bump_version, update_version_comment
+
+   session = edit_patch(path)
+   with session as patcher:
+       applied = apply_quick_fixes(patcher, selected)
+       new_version = bump_version(project_dir, "patch", description, files_changed=[path.name])
+       update_version_comment(patcher, new_version)
+   print(session.diff.render())
+   ```
+   `apply_quick_fixes` re-reviews the session's fresh read before each selected finding and applies the payload found there.
+
+e. **`FixError`** means the patch changed since the preview (a MAX save) or a payload no longer fits. Nothing was written: re-run `/max-iterate --fix`.
+
+f. **Expect a `SaveGateWarning`** naming each cord a fix rerouted through the inserted box (removed cords are reported by the save gate). `StaleFileError` and `PatchValidationError` are handled as in step 18. The save gate is never bypassed in this mode: never pass `force` to `edit_patch` here.
+
+g. Continue with steps 19-20.
+
 ## Skills Referenced
 
 - **max-router** -- domain detection and agent dispatch
@@ -159,6 +204,7 @@ After all flagged phases complete, proceed to the standard edit flow (steps 10+)
 from src.maxpat import edit_patch, read_patch, save_patch_roundtrip, validate_patch, Patcher
 from src.maxpat.project import get_active_project, set_active_project, list_projects, update_status, bump_version, update_version_comment, auto_commit_patch
 from src.maxpat.critics import review_patch, CriticResult
+from src.maxpat import fixable_findings, preview_quick_fixes, apply_quick_fixes, finding_key, FixError
 ```
 
 ## Arguments
@@ -175,6 +221,7 @@ from src.maxpat.critics import review_patch, CriticResult
 | --discuss | Run discuss phase only before build (requires interactive mode) |
 | --research | Run research phase only before build |
 | --plan | Run plan phase only before build (requires interactive mode) |
+| --fix | Quick-fix mode: list the critic findings that carry a fix, preview the semantic diff, apply the selected fixes through one `edit_patch` session (requires interactive mode) |
 
 Flags are composable: `--discuss --research` runs both phases. `--full` is shorthand for `--discuss --research --plan`.
 
@@ -202,4 +249,8 @@ Flags are stripped from the change description before processing.
 /max-iterate --discuss add LFO to filter cutoff
 /max-iterate --research replace cycle~ with wavetable oscillator
 /max-iterate --discuss --research add sidechain compression
+
+# Quick-fix mode (preview, then apply the selected critic fixes):
+/max-iterate --fix
+/max-iterate stutter --fix
 ```

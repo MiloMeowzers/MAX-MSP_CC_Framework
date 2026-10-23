@@ -894,3 +894,69 @@ def test_bach_out_guard_rejects_non_bach_box():
     p = _bach_patcher(["1"])
     bad = Fix("set_bach_out", "d", (FixOp("set_text", box="obj-2", text="expr $i1 + 2", old_text="expr $i1 + 1"),))
     _guard(p, CriticResult("warning", "f", "s", rule="x", fix=bad))
+
+
+# ---------------------------------------------------------------------------
+# Task 3: exports, /max-iterate --fix doc, corpus safety
+# ---------------------------------------------------------------------------
+
+
+def test_exports():
+    import src.maxpat as m
+    import src.maxpat.critics as c
+    from src.maxpat import fixable_findings as ff, preview_quick_fixes as pq, apply_quick_fixes as aq, FixError as fe  # noqa: F401
+    from src.maxpat.critics import Fix as F, FixOp as FO  # noqa: F401
+    for name in ("FixError", "finding_key", "fixable_findings", "apply_fix",
+                 "apply_quick_fixes", "preview_quick_fixes"):
+        assert name in m.__all__, name
+        assert getattr(m, name) is not None
+    for name in ("Fix", "FixOp", "FIX_KINDS", "check_fix_contract"):
+        assert name in c.__all__, name
+        assert getattr(c, name) is not None
+    assert m.FixError is FixError and c.Fix is Fix
+
+
+ITERATE_MD = REPO_ROOT / ".claude" / "commands" / "max-iterate.md"
+
+
+def test_max_iterate_documents_fix():
+    text = ITERATE_MD.read_text(encoding="utf-8")
+    front = text.split("---", 2)[1]
+    hint = next(l for l in front.splitlines() if l.startswith("argument-hint:"))
+    assert "--fix" in hint
+    flags = text.split("## Flags", 1)[1].split("\n## ", 1)[0]
+    assert "| --fix |" in flags
+    for name in ("fixable_findings", "preview_quick_fixes", "apply_quick_fixes",
+                 "edit_patch", "session.diff.render()"):
+        assert name in text, name
+    assert "/max-iterate --fix" in text
+    section = text.split("## Quick-fix mode", 1)[1].split("\n## ", 1)[0]
+    assert "force=True" not in section and "apply_quick_fixes(patcher, selected)" in section
+
+
+def test_corpus_fixes_apply_cleanly():
+    db = _db()
+    exercised = 0
+    files = _tracked()
+    assert files, "no tracked patches"
+    for rel in files:
+        d = json.loads(_head_bytes(rel))
+        found = fixable_findings(d, db=db)
+        if not found:
+            continue
+        pre = review_patch(copy.deepcopy(d), db=db)
+        pre_blockers = {finding_key(r) for r in pre if r.severity == "blocker"}
+        pre_errors = len(_errors(d))
+        for r in found:
+            key = finding_key(r)
+            p = Patcher.from_dict(copy.deepcopy(d))
+            apply_quick_fixes(p, [key], db=db)
+            after_d = p.to_dict()
+            post = review_patch(copy.deepcopy(after_d), db=db)
+            post_keys = {finding_key(x) for x in post}
+            assert key not in post_keys, (rel, key)
+            new_blockers = {finding_key(x) for x in post if x.severity == "blocker"} - pre_blockers
+            assert not new_blockers, (rel, key, new_blockers)
+            assert len(_errors(after_d)) <= pre_errors, (rel, key)
+            exercised += 1
+    assert exercised >= 1, f"corpus: {len(files)} patches, {exercised} fixes exercised"

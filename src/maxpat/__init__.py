@@ -44,6 +44,14 @@ from src.maxpat.hooks import (
     SaveGateWarning,
 )
 from src.maxpat.edit_session import edit_patch, EditSession
+from src.maxpat.quickfix import (
+    FixError,
+    finding_key,
+    fixable_findings,
+    apply_fix,
+    apply_quick_fixes,
+    preview_quick_fixes,
+)
 from src.maxpat.patch_diff import PatchDiff, DiffEntry, diff_patch_dicts, DIFF_KINDS
 from src.maxpat.codegen import (
     build_genexpr,
@@ -101,6 +109,12 @@ __all__ = [
     "read_patch",
     "edit_patch",
     "EditSession",
+    "FixError",
+    "finding_key",
+    "fixable_findings",
+    "apply_fix",
+    "apply_quick_fixes",
+    "preview_quick_fixes",
     "PatchDiff",
     "DiffEntry",
     "diff_patch_dicts",

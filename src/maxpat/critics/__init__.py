@@ -10,6 +10,10 @@ built once per review_patch call (S1, Q20). Nested findings carry
 ``CriticResult.path`` (the box-id chain, ``obj-1/obj-2``) and a
 ``[p synth > gen~] `` finding prefix; top-level findings are unchanged.
 
+A finding may carry ``CriticResult.fix``, a machine-applicable
+:class:`Fix` payload (Q39) that :mod:`src.maxpat.quickfix` applies for
+``/max-iterate --fix``.
+
 Usage:
     from src.maxpat.critics import review_patch, CriticResult
 
@@ -21,6 +25,7 @@ Usage:
 from __future__ import annotations
 
 from src.maxpat.critics.base import CriticResult
+from src.maxpat.critics.fixes import FIX_KINDS, Fix, FixOp, check_fix_contract
 from src.maxpat.critics.dsp_critic import review_dsp
 from src.maxpat.critics.structure_critic import review_structure
 from src.maxpat.critics.layout_critic import review_layout
@@ -156,4 +161,8 @@ __all__ = [
     "review_external",
     "review_packages",
     "CriticResult",
+    "Fix",
+    "FixOp",
+    "FIX_KINDS",
+    "check_fix_contract",
 ]
