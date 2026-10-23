@@ -401,6 +401,36 @@ class TestCiConfig:
         patterns = [p.strip().strip("'\"") for p in m.group(1).split(",")]
         assert patterns == ["v[0-9]+.[0-9]+.[0-9]+"]
 
+    # quick 261022-ud6 WP8: the GitHub release body is the tag's CHANGELOG.md
+    # section, extracted by scripts/release_notes.sh before anything publishes.
+
+    def test_release_body_from_changelog_before_publish(self):
+        text = (WORKFLOWS / "release.yml").read_text()
+        assert 'bash scripts/release_notes.sh "$GITHUB_REF_NAME"' in text
+        assert "body_path: ${{ runner.temp }}/release-notes.md" in text
+        steps = self._release_steps(text)
+        notes = next(i for i, s in enumerate(steps) if s.startswith("Extract release notes"))
+        pub = next(i for i, s in enumerate(steps) if s.startswith("Publish to npm"))
+        assert notes < pub, steps
+
+    @pytest.mark.parametrize("tag", ["v6.0.0", "6.0.0"])
+    def test_release_notes_extract_the_version_section(self, tag):
+        out = subprocess.run(
+            ["bash", str(REPO_ROOT / "scripts" / "release_notes.sh"), tag],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        assert "### Breaking changes" in out and "### Migration notes" in out
+        assert "## [" not in out, "the section must stop at the next version heading"
+
+    def test_release_notes_missing_version_fails(self, tmp_path):
+        log = tmp_path / "CHANGELOG.md"
+        log.write_text("# Changelog\n\n## [1.0.0] - 2026-01-01\n\n- one\n")
+        script = str(REPO_ROOT / "scripts" / "release_notes.sh")
+        ok = subprocess.run(["bash", script, "1.0.0", str(log)], capture_output=True, text=True)
+        assert ok.returncode == 0 and ok.stdout.strip() == "- one"
+        missing = subprocess.run(["bash", script, "9.9.9", str(log)], capture_output=True, text=True)
+        assert missing.returncode == 1
+
     def test_release_ignore_removed(self):
         assert not (REPO_ROOT / ".release-ignore").exists()
 
