@@ -622,3 +622,24 @@ def test_bassoon_parity_with_genrun(genrun, freq, breath, over):
         )
     assert np.max(np.abs(ref)) > 1e-3, "genrun render is silent"
     assert np.max(np.abs(got)) > 1e-3, "interpreter render is silent"
+
+
+# ===========================================================================
+# 261022-ud6 WR-04: exp2 on Python 3.10 (math.exp2 is 3.11+)
+# ===========================================================================
+
+
+@pytest.mark.parametrize("x,want", [(0.0, 1.0), (3.0, 8.0), (-1.0, 0.5), (0.5, math.sqrt(2.0))])
+def test_wr04_exp2_values(x, want):
+    (o,) = run("out1 = exp2(in1);", inputs=[np.full(1, x)], n=1)
+    assert o[0] == pytest.approx(want, rel=1e-15)
+
+
+def test_wr04_exp2_overflow_is_inf_and_runs_without_math_exp2(monkeypatch):
+    """The declared target is Python 3.10, which has no math.exp2."""
+    monkeypatch.delattr(math, "exp2", raising=False)
+    (o,) = run("out1 = exp2(in1);", inputs=[np.array([2000.0, 10.0])], n=2)
+    assert o[0] == math.inf
+    assert o[1] == 1024.0
+    (o,) = run("out1 = exp2(10);", n=1)   # folded at build time
+    assert o[0] == 1024.0

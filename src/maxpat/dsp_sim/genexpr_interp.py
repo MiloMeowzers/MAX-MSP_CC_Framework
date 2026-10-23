@@ -1115,8 +1115,9 @@ def _exp(x):
 
 
 def _exp2(x):
+    # 261022-ud6 WR-04: math.exp2 is Python 3.11+; the declared target is 3.10.
     try:
-        return math.exp2(x)
+        return 2.0 ** x
     except OverflowError:
         return _INF
 
