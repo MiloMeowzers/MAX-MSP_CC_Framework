@@ -501,8 +501,16 @@ class Box:
                         else:
                             d[fld] = cur
 
-            # Overlay mutable fields that Python code may have changed
-            d["patching_rect"] = self.patching_rect
+            # Overlay mutable fields that Python code may have changed. A
+            # file box without patching_rect keeps having none until the
+            # rect changes (review 261022-ud6 IN-01).
+            loaded_rect = getattr(self, "_loaded_rect", None)
+            if not (
+                "patching_rect" not in self._raw
+                and loaded_rect is not None
+                and tuple(self.patching_rect) == loaded_rect
+            ):
+                d["patching_rect"] = self.patching_rect
             d["numinlets"] = self.numinlets
             d["numoutlets"] = self.numoutlets
             if self.text is not None:

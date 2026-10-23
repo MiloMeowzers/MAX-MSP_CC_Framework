@@ -409,5 +409,5 @@ def test_diff_kinds_complete():
     assert DIFF_KINDS == (
         "box_added", "box_removed", "moved", "resized", "text", "attrs",
         "presentation", "subpatcher_added", "subpatcher_removed", "cord_added",
-        "cord_removed", "cord_rerouted", "props", "zorder",
+        "cord_removed", "cord_rerouted", "cord_attrs", "props", "zorder",
     )

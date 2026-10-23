@@ -747,6 +747,51 @@ class TestWriteGendspNoShrink:
         assert not overlap
 
 
+# ---------------------------------------------------------------------------
+# IN-01: a box without patching_rect round-trips without one
+# IN-03: the diff reports cord order / hidden / color changes
+# ---------------------------------------------------------------------------
+
+
+def _two_box_dict() -> dict:
+    return {"patcher": {"boxes": [
+        {"box": {"id": "obj-1", "maxclass": "newobj", "text": "print",
+                 "numinlets": 1, "numoutlets": 0}},
+        {"box": {"id": "obj-2", "maxclass": "newobj", "text": "t b",
+                 "numinlets": 1, "numoutlets": 1, "outlettype": ["bang"],
+                 "patching_rect": [10.0, 10.0, 30.0, 22.0]}},
+    ], "lines": [{"patchline": {"source": ["obj-2", 0], "destination": ["obj-1", 0]}}]}}
+
+
+class TestMissingPatchingRect:
+    def test_absent_rect_not_written_on_round_trip(self):
+        d = _two_box_dict()
+        assert Patcher.from_dict(d).to_dict() == d
+
+    def test_moved_box_without_rect_writes_one(self):
+        p = Patcher.from_dict(_two_box_dict())
+        p.modify_box(_box(p, "obj-1"), position=[40.0, 50.0])
+        assert _box_dict(p.to_dict(), "obj-1")["patching_rect"][:2] == [40.0, 50.0]
+
+
+class TestCordAttrsDiff:
+    def test_order_hidden_color_reported(self):
+        p = Patcher.from_dict(_two_box_dict())
+        pl = p.lines[0]
+        pl.order = 1
+        pl.hidden = True
+        pl.color = [1.0, 0.0, 0.0, 1.0]
+        diff = Patcher.from_dict(_two_box_dict()).diff(p)
+        entries = diff.of("cord_attrs")
+        assert len(entries) == 1
+        assert entries[0].new == ("color", "hidden", "order")
+        assert "attrs color,hidden,order" in diff.render()
+
+    def test_unchanged_cords_report_nothing(self):
+        p = Patcher.from_dict(_two_box_dict())
+        assert not Patcher.from_dict(_two_box_dict()).diff(p)
+
+
 @pytest.mark.parametrize("rel", [
     ".claude/skills/max-patch-agent/SKILL.md",
     ".claude/commands/max-build.md",
