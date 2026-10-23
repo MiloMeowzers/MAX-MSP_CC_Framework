@@ -357,6 +357,42 @@ class TestCiConfig:
         assert "|| [[" not in text, "release.yml masks an exit code"
         assert "tar czf" not in text
 
+    # WR-05 / IN-07 (quick 261022-ud6 WP6): npm trusted publishing (OIDC), no
+    # long-lived token, publish verified before the GitHub release goes public,
+    # and only full semver tags trigger a release.
+
+    @staticmethod
+    def _release_steps(text: str) -> list[str]:
+        return re.findall(r"^\s+- (?:name|uses): (.+)$", text, re.M)
+
+    def test_release_uses_trusted_publishing(self):
+        text = (WORKFLOWS / "release.yml").read_text()
+        assert "NODE_AUTH_TOKEN" not in text and "NPM_TOKEN" not in text
+        assert "secrets." not in text
+        assert re.search(r"^\s+id-token: write\b", text, re.M)
+        assert "npm publish --provenance --access public" in text
+        assert "node-version: '24'" in text
+        assert "npm install -g npm@^11.5.1" in text
+
+    def test_publish_checked_before_github_release(self):
+        text = (WORKFLOWS / "release.yml").read_text()
+        steps = self._release_steps(text)
+        idx = {s: i for i, s in enumerate(steps)}
+        dry = next(i for s, i in idx.items() if "dry run" in s.lower())
+        pub = next(i for s, i in idx.items() if s.startswith("Publish to npm"))
+        gh = next(i for s, i in idx.items() if s.startswith("Create GitHub Release"))
+        assert dry < pub < gh, steps
+        assert "npm publish --dry-run" in text
+        # a re-run after a GitHub-release failure must not fail on "version exists"
+        assert "npm view" in text
+
+    def test_tag_filter_is_full_semver(self):
+        text = (WORKFLOWS / "release.yml").read_text()
+        m = re.search(r"^\s*tags:\s*\[(.*)\]\s*$", text, re.M)
+        assert m, "release.yml has no inline tags filter"
+        patterns = [p.strip().strip("'\"") for p in m.group(1).split(",")]
+        assert patterns == ["v[0-9]+.[0-9]+.[0-9]+"]
+
     def test_release_ignore_removed(self):
         assert not (REPO_ROOT / ".release-ignore").exists()
 
