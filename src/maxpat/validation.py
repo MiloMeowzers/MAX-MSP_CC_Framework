@@ -133,9 +133,29 @@ class ValidationResult:
             the box-id chain of the embedded patcher it was found in
             (``obj-1/obj-2``). Nested findings also carry the label prefix
             (``[p synth > gen~] ``) in *message*.
+        rule: Keyword-only. Stable id of the check that emitted the finding
+            (``signal_to_control_inlet``, ``unterminated_chain``, ...;
+            quick 261022-ud6 WP1, mirroring ``CriticResult.rule``). Every
+            finding ``validate_patch`` emits itself has one; Layer 5
+            codebox findings are ``genexpr_codebox``. ``""`` only for
+            results built elsewhere without one.
+        box_ids: Keyword-only. The box ids (local to *path*) the finding is
+            about, in the order the message names them: ``(src, dst)`` for
+            a cord, the box for a box finding, the cycle for a feedback
+            loop; ``()`` for scope-level findings. A tuple; never holds
+            None or ``"?"``.
+        port: Keyword-only. The port index that is part of the finding's
+            identity (the version layer's lost inlet/outlet), else None.
+            A cord's identity is ``proposed_removal`` / ``box_ids``.
+
+    ``(rule, box_ids, port, path)`` identifies a finding independently of
+    its wording -- the key the save gate can match on (fix-plan Q7 / Q33).
     """
 
-    __slots__ = ("layer", "level", "message", "auto_fixed", "proposed_removal", "path")
+    __slots__ = (
+        "layer", "level", "message", "auto_fixed", "proposed_removal", "path",
+        "rule", "box_ids", "port",
+    )
 
     def __init__(
         self,
@@ -145,6 +165,10 @@ class ValidationResult:
         auto_fixed: bool = False,
         proposed_removal: tuple | list | None = None,
         path: str = "",
+        *,
+        rule: str = "",
+        box_ids=(),
+        port: int | None = None,
     ):
         self.layer = layer
         self.level = level
@@ -154,9 +178,25 @@ class ValidationResult:
             tuple(proposed_removal) if proposed_removal is not None else None
         )
         self.path = path
+        self.rule = rule
+        self.box_ids = _ids(*box_ids) if box_ids else ()
+        self.port = port
 
     def __repr__(self) -> str:
         return f"[{self.layer}:{self.level}] {self.message}"
+
+
+def _ids(*ids) -> tuple:
+    """Box ids for :attr:`ValidationResult.box_ids`: str / non-bool int ids
+    in order, duplicates, None, ``""`` and ``"?"`` dropped (the
+    ``critics.base.finding_ids`` rule, ints allowed as graph ids are)."""
+    out: list = []
+    for i in ids:
+        if isinstance(i, bool):
+            continue
+        if isinstance(i, (str, int)) and i != "" and i != "?" and i not in out:
+            out.append(i)
+    return tuple(out)
 
 
 # ===========================================================================
@@ -387,6 +427,7 @@ def _validate_target_version(
                     "version", "warning",
                     f"Box '{box_id}' ('{name}') needs Max {mv}; on the target "
                     f"{target_text} build MAX reports No such object",
+                    rule="version_min_version", box_ids=(box_id,),
                 ))
 
         if installed is None:
@@ -411,6 +452,10 @@ def _validate_target_version(
         inlets_t = ni - sum(c["inlets"] for c in pending)
         outlets_t = no - sum(c["outlets"] for c in pending)
         interval = ", ".join(f"{c['after']} -> {c['by']}" for c in pending)
+        # IN-04: help boxes only bracket a change -- saved by `after` with
+        # the old I/O, by `by` with the new. A target at or before `after`
+        # certainly lacks the port; one inside (after, by) may or may not.
+        certain = all(_version_at_or_before(target, c.get("after")) for c in pending)
         for line_entry in lines:
             pl = line_entry.get("patchline") if isinstance(line_entry, dict) else None
             if not isinstance(pl, dict):
@@ -418,19 +463,40 @@ def _validate_target_version(
             src, dst = pl.get("source"), pl.get("destination")
             ports = []
             if (isinstance(src, list) and len(src) >= 2 and src[0] == box_id
-                    and isinstance(src[1], int) and src[1] >= outlets_t):
-                ports.append(f"outlet {src[1]}")
+                    and _is_port(src[1]) and src[1] >= outlets_t):
+                ports.append(("outlet", src[1]))
             if (isinstance(dst, list) and len(dst) >= 2 and dst[0] == box_id
-                    and isinstance(dst[1], int) and dst[1] >= inlets_t):
-                ports.append(f"inlet {dst[1]}")
-            for port in ports:
+                    and _is_port(dst[1]) and dst[1] >= inlets_t):
+                ports.append(("inlet", dst[1]))
+            for kind, index in ports:
+                if certain:
+                    claim = (
+                        f"is lost on Max {target_text}: version_io records an "
+                        f"I/O change {interval}"
+                    )
+                else:
+                    between = ", ".join(
+                        f"changed between {c['after']} and {c['by']}" for c in pending
+                    )
+                    claim = (
+                        f"may be missing on Max {target_text}: version_io only "
+                        f"brackets the I/O change ({between})"
+                    )
                 results.append(ValidationResult(
                     "version", "warning",
-                    f"Box '{box_id}' ('{name}') {port} is lost on Max {target_text}: "
-                    f"version_io records an I/O change {interval} "
+                    f"Box '{box_id}' ('{name}') {kind} {index} {claim} "
                     f"(the target build has {inlets_t} inlet(s), {outlets_t} outlet(s))",
+                    rule="version_io_port", box_ids=(box_id,), port=index,
                 ))
     return results
+
+
+def _version_at_or_before(target: tuple[int, int, int], text) -> bool:
+    """True when *target* <= the version string *text* (False when unparsable)."""
+    try:
+        return target <= parse_version(text)
+    except ValueError:
+        return False
 
 
 _RNBO_DB_CACHE: list = []
@@ -473,6 +539,7 @@ def _validate_rnbo_compat(
             "rnbo-objects", "warning",
             f"Object '{name}' is not RNBO-compatible -- "
             f"cannot be used in RNBO patches",
+            rule="rnbo_incompatible_object", box_ids=(box.get("id"),),
         ))
     return results
 
@@ -764,6 +831,7 @@ def _validate_json_structure(patch_dict: dict) -> list[ValidationResult]:
         results.append(ValidationResult(
             "json", "error",
             "Missing 'patcher' key at top level",
+            rule="json_missing_patcher",
         ))
         return results
 
@@ -773,12 +841,14 @@ def _validate_json_structure(patch_dict: dict) -> list[ValidationResult]:
         results.append(ValidationResult(
             "json", "error",
             "Missing or invalid 'boxes' array in patcher",
+            rule="json_missing_boxes",
         ))
 
     if not isinstance(patcher.get("lines"), list):
         results.append(ValidationResult(
             "json", "error",
             "Missing or invalid 'lines' array in patcher",
+            rule="json_missing_lines",
         ))
 
     boxes = patcher.get("boxes")
@@ -792,6 +862,7 @@ def _validate_json_structure(patch_dict: dict) -> list[ValidationResult]:
                 results.append(ValidationResult(
                     "json", "error",
                     f'Malformed box entry at index {idx}: expected {{"box": {{...}}}}',
+                    rule="json_malformed_box",
                 ))
 
     if isinstance(lines, list):
@@ -802,6 +873,7 @@ def _validate_json_structure(patch_dict: dict) -> list[ValidationResult]:
                 results.append(ValidationResult(
                     "json", "error",
                     f'Malformed line entry at index {idx}: expected {{"patchline": {{...}}}}',
+                    rule="json_malformed_line",
                 ))
 
     if isinstance(boxes, list):
@@ -819,6 +891,7 @@ def _validate_json_structure(patch_dict: dict) -> list[ValidationResult]:
                 results.append(ValidationResult(
                     "json", "error",
                     f"Duplicate box id '{box_id}' ({n} boxes)",
+                    rule="json_duplicate_box_id", box_ids=(box_id,),
                 ))
 
     return results
@@ -869,7 +942,7 @@ def _validate_objects_exist(
                 equivalent = db.suggest_max_equivalent(name)
                 if equivalent:
                     msg += f" MAX equivalent: {equivalent}"
-                results.append(ValidationResult("objects", "error", msg))
+                results.append(ValidationResult("objects", "error", msg, rule="scope_restricted_object", box_ids=(box.get("id"),)))
             continue
 
         # Check if it is a PD object with a MAX equivalent
@@ -879,6 +952,7 @@ def _validate_objects_exist(
                 "objects", "error",
                 f"'{name}' is a Pure Data object, not MAX. "
                 f"Use {equivalent} instead.",
+                rule="pd_object", box_ids=(box.get("id"),),
             ))
         else:
             # Check if it is a known UI maxclass that might not be in the db
@@ -887,6 +961,7 @@ def _validate_objects_exist(
             results.append(ValidationResult(
                 "objects", "warning",
                 f"Unknown object: '{name}' -- not in database",
+                rule="unknown_object", box_ids=(box.get("id"),),
             ))
 
     return results
@@ -943,6 +1018,7 @@ def _validate_maxclass_usage(patch_dict: dict) -> list[ValidationResult]:
             f"but should use maxclass='newobj' with text='{name} ...' "
             f"(only UI widgets use their own name as maxclass; see "
             f"UI_MAXCLASSES in src/maxpat/maxclass_map.py)",
+            rule="wrong_maxclass", box_ids=(box.get("id"),),
         ))
 
     return results
@@ -986,6 +1062,7 @@ def _validate_package_gating(
                 "packages", "error",
                 f"Object '{name}' from package '{package}' not in allowed "
                 f"packages (allowed: {allowed_packages})",
+                rule="package_not_allowed", box_ids=(box.get("id"),),
             ))
     return results
 
@@ -1053,7 +1130,7 @@ def _validate_community_extracted(
                 f"then run: python .claude/scripts/extract_objects.py --package \"{package}\""
             )
 
-        results.append(ValidationResult("packages", "warning", msg))
+        results.append(ValidationResult("packages", "warning", msg, rule="package_not_extracted"))
 
     return results
 
@@ -1199,6 +1276,7 @@ def _validate_connections(
                 f"source={source}, destination={destination} "
                 f"{_PROPOSED_SUFFIX}",
                 proposed_removal=key,
+                rule="malformed_patchline", box_ids=(key[0], key[2]),
             ))
             continue
 
@@ -1214,6 +1292,7 @@ def _validate_connections(
                 f"Connection references missing box: "
                 f"source={src_id}, dest={dst_id} {_PROPOSED_SUFFIX}",
                 proposed_removal=key,
+                rule="missing_box", box_ids=(src_id, dst_id),
             ))
             continue
 
@@ -1228,6 +1307,7 @@ def _validate_connections(
                 f"Outlet index {src_outlet} out of bounds on '{src_id}' "
                 f"(has {src_numoutlets} outlet(s)) {_PROPOSED_SUFFIX}",
                 proposed_removal=key,
+                rule="outlet_out_of_bounds", box_ids=(src_id, dst_id),
             ))
             out_of_bounds = True
 
@@ -1239,6 +1319,7 @@ def _validate_connections(
                 f"Inlet index {dst_inlet} out of bounds on '{dst_id}' "
                 f"(has {dst_numinlets} inlet(s)) {_PROPOSED_SUFFIX}",
                 proposed_removal=key,
+                rule="inlet_out_of_bounds", box_ids=(src_id, dst_id),
             ))
             out_of_bounds = True
 
@@ -1293,6 +1374,7 @@ def _validate_connections(
                         "connections", level,
                         f"{message} ('{src_id}' outlet {src_outlet} -> "
                         f"'{dst_id}' inlet {dst_inlet}) -- connection kept",
+                        rule="role_mismatch", box_ids=(src_id, dst_id),
                     ))
                     # Tier result is final — skip legacy is_signal_source
                     # branch for this line (D-02 clean separation).
@@ -1320,6 +1402,7 @@ def _validate_connections(
                     f"{src_outlet} -> '{dst_id}' inlet {dst_inlet} "
                     f"-- source MSP object not in overrides, "
                     f"connection preserved",
+                    rule="unverified_outlet_types", box_ids=(src_id, dst_id),
                 ))
             else:
                 # Overridden MSP or non-MSP: propose removal
@@ -1331,6 +1414,7 @@ def _validate_connections(
                         f"'{src_id}' outlet {src_outlet} -> "
                         f"'{dst_id}' inlet {dst_inlet} {_PROPOSED_SUFFIX}",
                         proposed_removal=key,
+                        rule="signal_to_control_inlet", box_ids=(src_id, dst_id),
                     ))
 
     return results
@@ -1638,6 +1722,7 @@ def _validate_domain_restrictions(
                 f"'{name}' is restricted to {restrictions}; "
                 f"not allowed in a {scope} patcher.",
                 auto_fixed=False,
+                rule="domain_restricted", box_ids=(box.get("id"),),
             ))
             continue
         # A Max top-level patcher is NOT inside any rnbo~/m4l/gen~
@@ -1648,6 +1733,7 @@ def _validate_domain_restrictions(
             f"not allowed at MSP/Max top level. "
             f"Wrap in {restrictions[0]}~ container or use a non-restricted equivalent.",
             auto_fixed=False,
+            rule="domain_restricted", box_ids=(box.get("id"),),
         ))
     return results
 
@@ -1719,6 +1805,7 @@ def _validate_embedded_genexpr(
                     r.layer, r.level,
                     f"{container} '{box_id}' codebox: {r.message}",
                     auto_fixed=r.auto_fixed,
+                    rule="genexpr_codebox", box_ids=(box.get("id"),),
                 ))
     return results
 
@@ -1755,6 +1842,7 @@ def _check_compound_argument_substitution(
                 f"Compound #N substitution in '{text}' ({box_id}) -- "
                 f"#N must be a standalone token (e.g., 'buffer~ #1' not "
                 f"'buffer~ slot-#1'). Pass the full name as the bpatcher arg.",
+                rule="compound_arg_substitution", box_ids=(box_id,),
             ))
 
     return results
@@ -1827,6 +1915,7 @@ def _check_unterminated_chains(
             "domain", "warning",
             f"Unterminated signal chain: '{name}' ({box_id}) has signal "
             f"outlet(s) but no downstream signal connection",
+            rule="unterminated_chain", box_ids=(box_id,),
         ))
 
     return results
@@ -1857,6 +1946,7 @@ def _check_gain_staging(
             f"Missing gain staging: '{osc_name}' ({osc_id}) "
             f"connected to '{next_name}' ({next_id}) without "
             f"passing through a gain object (*~ or gain~)",
+            rule="missing_gain_staging", box_ids=(osc_id, next_id),
         ))
 
     return results
@@ -1893,6 +1983,7 @@ def _check_unsafe_gain_values(
                 f"Unsafe gain multiplier: '*~ {arg_str}' ({box_id}) has value "
                 f"> 1.0 -- gain values should be 0.0-1.0 to prevent dangerous "
                 f"audio levels",
+                rule="unsafe_gain_value", box_ids=(box_id,),
             ))
 
     return results
@@ -1961,6 +2052,7 @@ def _check_feedback_loops(
             results.append(ValidationResult(
                 "domain", "warning",
                 f"Signal feedback loop without delay detected: {node_desc}",
+                rule="feedback_without_delay", box_ids=tuple(cycle),
             ))
 
     return results
@@ -1994,6 +2086,7 @@ def _check_gen_param_message_syntax(
                     "domain", "warning",
                     f"gen~ params use plain name messages ('depth $1'), "
                     f"not '@depth $1' ({box_id})",
+                    rule="gen_param_at_syntax", box_ids=(box_id,),
                 ))
                 break  # one warning per message box
 
@@ -2033,6 +2126,7 @@ def _check_comment_hash_substitution(
                 "domain", "warning",
                 f"Comment boxes don't support #N substitution; use "
                 f"loadbang -> message -> set chain ({box_id})",
+                rule="comment_hash_substitution", box_ids=(box_id,),
             ))
 
     return results
@@ -2062,6 +2156,7 @@ def _check_line_tilde_comma_messages(
                     "domain", "warning",
                     f"line~ replaces ramps on new messages; use single list "
                     f"without comma separators ({box_id})",
+                    rule="line_tilde_comma", box_ids=(box_id,),
                 ))
                 break
 
@@ -2083,6 +2178,7 @@ def _check_multislider_fetchindex(
                 "domain", "error",
                 f"multislider uses 'fetch' not 'fetchindex'; "
                 f"fetchindex does not exist ({box_id})",
+                rule="multislider_fetchindex", box_ids=(box_id,),
             ))
 
     return results
@@ -2108,6 +2204,7 @@ def _check_umenu_items_format(
                 "domain", "warning",
                 f"umenu items need comma separators: "
                 f"['LP', ',', 'HP', ',', 'BP'] ({box_id})",
+                rule="umenu_items_format", box_ids=(box_id,),
             ))
 
     return results
@@ -2128,6 +2225,7 @@ def _check_assistance_comments(
             results.append(ValidationResult(
                 "domain", "info",
                 f"{maxclass} missing assistance comment (tooltip) ({box_id})",
+                rule="missing_assistance", box_ids=(box_id,),
             ))
 
     return results
