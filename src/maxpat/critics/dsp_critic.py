@@ -454,7 +454,8 @@ _NUMBER_ATOM_RE = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$")
 
 _UNSAFE_GAIN_SUGGESTION = (
     "Normalize before the gain input, e.g. 'scale 0 127 0. 1.' or '/ 127.' "
-    "for a 0-127 source, so the value stays within 0.0-1.0"
+    "for a 0-127 int source ('scale 0. 127. 0. 1.' for a float source: "
+    "all-int arguments make scale truncate floats), so the value stays within 0.0-1.0"
 )
 
 
