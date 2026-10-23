@@ -1,7 +1,8 @@
 """M4L constants for parameter types, unit styles, modulation modes, and AMXD format.
 
 Pure data module -- IntEnum classes and named constants only.
-Imported by scaffold (Phase 21), critic (Phase 22), and export (Phase 22) code.
+Imported by scaffold (Phase 21), critic (Phase 22) and the Q40 device
+builder / .amxd codec (src/maxpat/m4l_device.py).
 
 Evidence for the parameter enums (review D1, Q15):
   - The list order in the bundle's ``docs/refpages/m4l-ref/parameters.maxref.xml``
@@ -81,18 +82,38 @@ class ParamVisibility(IntEnum):
 # -----------------------------------------------------------------------
 # AMXD Binary Format Constants
 # -----------------------------------------------------------------------
-# Reverse-engineered from kicksynth-m4l.amxd, confirmed via community docs.
+# An .amxd file is a chunk stream: ``[4-byte tag][uint32 LE length][payload]``
+# repeated, with nothing after the last chunk (quick 261022-pqu, Q40; survey
+# of 309 real files: Live 12/11 bundles, Max.app fourin_fourout.amxd, user
+# devices, and the framework's own kicksynth-m4l.amxd that Live 12.3.6 loaded).
+# An editable device holds three chunks:
+#   ampf  length 4   payload = device kind code (aaaa / iiii / mmmm)
+#   meta  length 4   payload = uint32 LE flags: 0 for every editable
+#                    Max-written device (all Live 12 templates); 1, 4 or 7
+#                    seen in Max 8 saves and frozen files. Optional (a few
+#                    files go straight from ampf to ptch).
+#   ptch  length N   payload = UTF-8 patcher JSON; Max ends it with "\n\0"
+#                    (counted in N). A frozen device's ptch starts "mx@c"
+#                    and an encrypted one has a "ciph" chunk before ptch.
 #
-# Header structure (32 bytes):
+# So AMXD_VERSION and AMXD_META_VERSION are really the ampf and meta chunk
+# LENGTHS (both 4), and the 4 zero bytes at offset 20 are the meta PAYLOAD.
+# The names are kept (tests/test_m4l_constants.py pins them).
+#
+# Header bytes of an editable device (32 bytes):
 #   Offset  Len  Content
-#   0       4    b"ampf"          (magic)
-#   4       4    uint32 LE = 4    (version)
-#   8       4    device type      (aaaa/iiii/mmmm)
-#   12      4    b"meta"          (section marker)
-#   16      4    uint32 LE = 4    (meta version)
-#   20      4    4 zero bytes     (padding)
-#   24      4    b"ptch"          (patch section marker)
-#   28      4    uint32 LE        (JSON byte length)
+#   0       4    b"ampf"          (chunk tag)
+#   4       4    uint32 LE = 4    (ampf chunk length; AMXD_VERSION)
+#   8       4    device type      (aaaa/iiii/mmmm; the ampf payload)
+#   12      4    b"meta"          (chunk tag)
+#   16      4    uint32 LE = 4    (meta chunk length; AMXD_META_VERSION)
+#   20      4    uint32 LE = 0    (meta payload: flags)
+#   24      4    b"ptch"          (chunk tag)
+#   28      4    uint32 LE        (ptch payload length N; file size = 32 + N)
+#
+# AMXD_HEADER_FORMAT is for WRITING only: its ``4x`` discards the meta
+# payload and it cannot describe a file without a meta chunk. Parse chunk by
+# chunk with AMXD_CHUNK_HEADER (src/maxpat/m4l_device.py parse_amxd).
 
 AMXD_MAGIC = b"ampf"
 AMXD_VERSION = 4
@@ -108,3 +129,10 @@ AMXD_TYPE_MIDI_EFFECT = b"mmmm"
 # < = little-endian, 4s = 4-char bytes, I = uint32, 4x = 4 zero bytes
 AMXD_HEADER_FORMAT = "<4sI4s4sI4x4sI"
 AMXD_HEADER_SIZE = 32
+
+# One chunk header: 4-byte tag + uint32 LE payload length (Q40).
+AMXD_CHUNK_HEADER = "<4sI"
+
+# Max ends every ptch JSON payload with a newline and a NUL byte (26 of 26
+# Max-written JSON payloads in the survey); export_amxd writes the same.
+AMXD_PAYLOAD_TERMINATOR = b"\n\x00"

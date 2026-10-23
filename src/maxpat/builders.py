@@ -1036,6 +1036,88 @@ class BuildersMixin:
         self.boxes.append(parent_box)
         return (parent_box, inner)
 
+    def add_m4l_device(
+        self,
+        kind: str,
+        params: list[dict] | None = None,
+        *,
+        audio_source: Any = None,
+        midi_source: Any = None,
+        midi_in: bool = True,
+        presentation: bool = True,
+        modmode: Any = None,
+    ) -> Any:
+        """Build a Max for Live device skeleton of one of three kinds. EXPERIMENTAL.
+
+        EXPERIMENTAL -- not yet confirmed in Live (the combined Q15/Q40 Live
+        check is pending; quick 261022-pqu, fix-plan Q40). Thin delegate to
+        :func:`src.maxpat.m4l_device.build_m4l_device`.
+
+        Wiring per kind is copied from Live 12's own "Max Devices" templates;
+        plugin~ and plugout~ are always bare (stereo, no channel argument):
+
+        - ``"audio_effect"``: plugin~ 0 -> plugout~ 0 and plugin~ 1 ->
+          plugout~ 1 (pass-through).
+        - ``"midi_effect"``: midiin 0 -> midiout 0 (pass-through; no plugin~).
+        - ``"instrument"``: a midiin (omit with ``midi_in=False``) and an
+          unwired plugout~.
+
+        ``audio_source=(box, outlet)`` (instrument / audio_effect) replaces
+        the pass-through and feeds plugout~ inlets 0 AND 1 (a mono source
+        on both channels, the Q15 stereo form); ``((L, o), (R, o))`` feeds
+        L -> 0 and R -> 1. ``midi_source=(box, outlet)`` (midi_effect)
+        replaces midiin -> midiout. Sources are validated before any box is
+        created.
+
+        Each param dict ``{name, min, max, default, unit?, type?, steps?,
+        short_name?, varname?, param_connect?, modmode?}`` becomes one
+        ``live.dial`` with ``parameter_enable: 1`` and a
+        ``saved_attribute_attributes.valueof`` block. Explicit keys always
+        win; otherwise type/unit are inferred from whole name tokens and the
+        range (ms -> Time, hz -> Hertz, db -> deciBel, a 0-1 float range ->
+        Float, attack/decay/... -> Time, freq/cutoff -> Hertz, gain/volume/
+        level below 0 -> deciBel, pan -> Pan, transpose/semitones ->
+        Semitones, all-int -> Int unit; Int type only for an int span <=
+        255). Short names are abbreviated to 8 characters and made unique
+        ("Amount", "Amount2"). ``param_connect`` binds a dial to a gen~
+        Param (``"<gen varname>::<Param>"``).
+
+        With ``presentation=True`` every dial goes into a presentation grid
+        inside Live's 169 px device height and the patcher gets
+        ``openinpresentation 1``, ``devicewidth``, ``openrect`` and
+        ``latency 0``.
+
+        Args:
+            kind: "instrument", "audio_effect" or "midi_effect".
+            params: Parameter spec dicts (see above); None for none.
+            audio_source: ``(Box, outlet)`` or a ``((Box, o), (Box, o))`` pair.
+            midi_source: ``(Box, outlet)`` feeding midiout (midi_effect only).
+            midi_in: Add a midiin to an instrument (Live's template has one).
+            presentation: Lay the dials out in presentation (Rule #9).
+            modmode: Default ``parameter_modmode`` for specs without one
+                (None = ``ModMode.NONE``, as kicksynth-m4l used).
+
+        Returns:
+            An :class:`src.maxpat.m4l_device.M4LDevice` naming the boxes.
+
+        Raises:
+            ValueError: unknown kind, a bad source, or an invalid param spec
+                (see ``resolve_param_specs``). Nothing is created.
+        """
+        from src.maxpat.m4l_constants import ModMode
+        from src.maxpat.m4l_device import build_m4l_device
+
+        return build_m4l_device(
+            self,
+            kind,
+            params,
+            audio_source=audio_source,
+            midi_source=midi_source,
+            midi_in=midi_in,
+            presentation=presentation,
+            modmode=ModMode.NONE if modmode is None else modmode,
+        )
+
     def add_m4l_gen_synth(
         self,
         params: list[tuple[str, float, float]],
