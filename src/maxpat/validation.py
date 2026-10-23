@@ -1502,6 +1502,9 @@ def _validate_domain_rules(
     # Also track which boxes have signal connections going OUT and IN
     has_signal_out: set[str] = set()
     has_signal_in: set[str] = set()
+    # (dst_id, inlet) of every well-formed cord, any type (WR-04: a zero-gain
+    # *~ is a mute sink only while nothing drives its gain inlet)
+    fed_inlets: set[tuple] = set()
 
     for line_entry in lines:
         patchline = line_entry.get("patchline", {})
@@ -1512,6 +1515,7 @@ def _validate_domain_rules(
 
         src_id, src_outlet = source[0], source[1]
         dst_id = destination[0]
+        fed_inlets.add((dst_id, destination[1]))
 
         src_box = box_lookup.get(src_id)
         if not src_box:
@@ -1554,6 +1558,7 @@ def _validate_domain_rules(
     # --- Rule: Unterminated signal chains ---
     results.extend(_check_unterminated_chains(
         box_lookup, has_signal_out, dsp_roles.chain_terminal_names(db),
+        fed_inlets=fed_inlets,
     ))
 
     # --- Rule: Missing gain staging ---
@@ -1755,19 +1760,42 @@ def _check_compound_argument_substitution(
     return results
 
 
+_ZERO_GAIN_SINK_NAMES = frozenset({"*~", "mc.*~"})
+
+
+def _is_zero_gain_sink(box: dict, name: str) -> bool:
+    """True for ``*~`` / ``mc.*~`` whose first argument parses to 0.0
+    (``*~ 0.``, ``*~ 0``); the caller also requires that nothing drives the
+    right (gain) inlet. ``#N`` and other non-numeric args are not zero."""
+    if name not in _ZERO_GAIN_SINK_NAMES:
+        return False
+    args = [a for a in walk.box_args(box) if not a.startswith("@")]
+    if not args:
+        return False
+    try:
+        return float(args[0]) == 0.0
+    except ValueError:
+        return False
+
+
 def _check_unterminated_chains(
     box_lookup: dict[str, dict],
     has_signal_out: set[str],
     terminal_names=frozenset(),
+    *,
+    fed_inlets: set | None = None,
 ) -> list[ValidationResult]:
     """Find MSP objects with signal outlets but no downstream signal connection.
 
     Exceptions: the chain terminals in *terminal_names* (from
     ``dsp_roles.chain_terminal_names(db)``: dac~, ezdac~, plugout~, send~,
-    out~ and their mc.* variants; Q26 / E6), and objects that do have a
-    downstream signal connection.
+    out~ and their mc.* variants; Q26 / E6), a zero-gain mute sink
+    (:func:`_is_zero_gain_sink`: ``*~ 0.`` with nothing driving its gain
+    inlet, the CLAUDE.md-sanctioned terminator; WR-04), and objects that do
+    have a downstream signal connection.
     """
     results: list[ValidationResult] = []
+    fed = fed_inlets or set()
 
     for box_id, box in box_lookup.items():
         name = walk.box_name(box)
@@ -1778,6 +1806,9 @@ def _check_unterminated_chains(
 
         # Skip terminal objects
         if name in terminal_names:
+            continue
+
+        if _is_zero_gain_sink(box, name) and (box_id, 1) not in fed:
             continue
 
         # Check if this object has signal outlets
