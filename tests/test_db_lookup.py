@@ -981,3 +981,89 @@ def test_second_arg_plus_formulas():
         "inlet_count": "", "outlet_count": "second_arg+1",
         "trailing_outlets": 1}}
     db._validate_variable_io_rules()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Vision package (Cycling '74 Vision 1.0.2, Max 9.2+; quick 261023-mma).
+# 12 refpage objects + 10 helpers (v8 define parts/debugdraw, the
+# jit.vis.grab bpatcher and the jit.vis.tondc abstraction). Counts are the
+# MAX-saved help boxes.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def vision_db():
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return ObjectDatabase()
+
+
+_VISION_REFPAGE_IO = {
+    "jit.vis.hands": (1, 3), "jit.vis.body": (1, 3), "jit.vis.face": (1, 3),
+    "jit.vis.facemesh": (1, 3), "jit.vis.holistic": (1, 3),
+    "jit.vis.text": (1, 3), "jit.vis.objectdetect": (1, 3),
+    "jit.vis.posemap": (1, 3), "jit.vis.gesture": (1, 4),
+    "jit.vis.segment": (1, 2), "jit.vis.depth": (1, 2),
+    "jit.vis.bgsubtract": (1, 2),
+}
+
+_VISION_HELPER_IO = {
+    "jit.vis.hands.parts": (1, 7), "jit.vis.hands.parts.left": (1, 7),
+    "jit.vis.hands.parts.right": (1, 7), "jit.vis.body.parts": (1, 7),
+    "jit.vis.face.parts": (1, 6), "jit.vis.facemesh.parts": (1, 9),
+    "jit.vis.holistic.parts": (1, 5), "jit.vis.debugdraw": (1, 1),
+    "jit.vis.grab": (1, 1), "jit.vis.tondc": (1, 1),
+}
+
+
+@pytest.mark.parametrize("name,io", sorted(_VISION_REFPAGE_IO.items()))
+def test_vision_refpage_objects_resolve(vision_db, name, io):
+    obj = vision_db.lookup(name)
+    assert obj is not None
+    assert obj["package"] == "Vision"
+    assert obj["domain"] == "Packages"
+    assert obj["min_version"] == "9.2"
+    assert obj["verified"] is False
+    assert obj["rnbo_compatible"] is False
+    assert vision_db.compute_io_counts(name, []) == io
+    assert vision_db.get_effective_restrictions(name) == []
+    first = "control" if name == "jit.vis.posemap" else "matrix"
+    assert obj["outlets"][0]["type"] == first
+    assert obj["outlets"][-1]["type"] == "control"  # dumpout, help saves ""
+
+
+@pytest.mark.parametrize("name,io", sorted(_VISION_HELPER_IO.items()))
+def test_vision_helpers_resolve(vision_db, name, io):
+    obj = vision_db.lookup(name)
+    assert obj is not None
+    assert obj["name"] == name  # its own entry, never the v8 host
+    assert obj["package"] == "Vision"
+    assert obj["inlets"] and obj["outlets"]
+    assert vision_db.compute_io_counts(name, []) == io
+    assert vision_db.get_effective_restrictions(name) == []
+
+
+def test_vision_define_names_are_own_entries(vision_db):
+    # `max define jit.vis.hands jit.vision.track handpose`
+    assert vision_db.lookup("jit.vis.hands")["name"] == "jit.vis.hands"
+    # `max define jit.vis.hands.parts.left v8 jit.vis.parts.js hands @row 0`
+    left = vision_db.lookup("jit.vis.hands.parts.left")
+    assert left is not None
+    assert left["name"] == "jit.vis.hands.parts.left"
+    assert left["package"] == "Vision"
+    assert len(left["outlets"]) == 7
+    assert len(left["outlets"]) != len(vision_db.lookup("v8")["outlets"])
+    # Deliberately absent: no refpage, no help box, mode-dependent I/O.
+    assert vision_db.exists("jit.vision.track") is False
+
+
+def test_vision_selectors_include_inherited_jitter_names(vision_db):
+    sel = set(vision_db.selectors("jit.vis.hands"))
+    assert {"getskeleton", "outputmatrix", "bang", "adapt"} <= sel
+
+
+def test_vision_package_info_count(vision_db):
+    info = vision_db.get_package_info("Vision")
+    assert info["tier"] == "community"
+    assert info["extracted"] is True
+    assert info["object_count"] == len(vision_db.get_package_objects("Vision")) == 22
