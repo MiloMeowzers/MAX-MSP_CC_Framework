@@ -15,6 +15,7 @@ claude
 - Downloads the latest framework release from GitHub
 - Sets up the project directory with all skills, commands, object database, and Python library
 - Initializes a git repository and prints getting-started instructions
+- Checks Python 3.10+, the Python packages below and git, and warns about anything missing
 
 ## Prerequisites
 
@@ -22,6 +23,14 @@ claude
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (for using the framework)
 - [MAX 9](https://cycling74.com/products/max) (for opening and testing generated patches)
 - [Python 3.10+](https://www.python.org/) (for the validation and editing engine)
+- [git](https://git-scm.com/) (every patch save is committed)
+- numpy, scipy and pytest (the DSP simulation, smoke tests and the DSP pre-flight gate; validation works without them). Install them from the project directory:
+
+  ```bash
+  python3 -m pip install -r requirements-dev.txt
+  ```
+
+Run `npx create-max-framework --check-deps` to repeat the checks without installing.
 
 ## Links
 
