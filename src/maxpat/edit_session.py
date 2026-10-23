@@ -24,10 +24,11 @@ the change-tracked Patcher. On a clean exit, in this order:
    run: it restyles 33 of the 63 committed patches on a no-op;
 3. serialize, and compute ``session.diff`` against the file as read (before
    any save, so it survives a refusal);
-4. no-op rule (D-04): when ``format_patch_text(new, original_text)`` equals
-   the original text, nothing is checked, written or committed
-   (``saved`` False, ``commit_hash`` None) -- the Q29 byte-identical
-   guarantee;
+4. no-op rule (D-04; 261022-ud6 WR-03): when the new dict is strictly
+   identical to the file as read (``maxjson.json_identical``), nothing is
+   checked, written or committed (``saved`` False, ``commit_hash`` None) --
+   the Q29 byte-identical guarantee, for files in any layout (MAX 9.1+,
+   Max 5 - 9.0.x tab layout, CRLF, the framework's expanded layout);
 5. otherwise one ``save_patch_roundtrip(new, path, original_text,
    force=force)`` call: stale check, save gate (new blockers, cord-removal
    SaveGateWarning, port x-rank), the file's own JSON layout, the atomic
@@ -63,6 +64,7 @@ import json
 from pathlib import Path
 
 import src.maxpat.hooks as _hooks
+from src.maxpat.maxjson import json_identical
 from src.maxpat.patch_diff import PatchDiff, diff_patch_dicts
 
 
@@ -120,8 +122,11 @@ class EditSession:
             # 3. Serialize; diff before any save so it survives a refusal (D-01).
             new_dict = self.patcher.to_dict()
             self.diff = diff_patch_dicts(self._baseline, new_dict)
-            # 4. No-op (D-04): no stale check, no gate, no write, no commit.
-            if _hooks.format_patch_text(new_dict, self.original_text) == self.original_text:
+            # 4. No-op (D-04; 261022-ud6 WR-03): decided on content, not
+            # bytes, so files in any layout (Max 8 / 9.0.x tabs, CRLF) count.
+            if json_identical(new_dict, self._baseline) or (
+                _hooks.format_patch_text(new_dict, self.original_text) == self.original_text
+            ):
                 return False
             # 5. One save: stale check, gate, format, atomic write, commit (D-05, D-08).
             self.commit_hash = _hooks.save_patch_roundtrip(

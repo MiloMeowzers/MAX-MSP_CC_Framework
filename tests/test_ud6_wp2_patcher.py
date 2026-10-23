@@ -281,3 +281,115 @@ class TestStructuredFindingKey:
         assert _finding_key(a) == _finding_key(b)
         c = ValidationResult("objects", "error", "Unknown object 'foo' (obj-2)")
         assert _finding_key(c) != _finding_key(a)
+
+
+# ---------------------------------------------------------------------------
+# WR-03: no-op saves of Max 8 / 9.0.x (legacy tab layout) files are
+# byte-identical; edits keep the legacy layout, spellings and CRLF
+# ---------------------------------------------------------------------------
+
+LEGACY = REPO_ROOT / "tests" / "fixtures" / "legacy_layout"
+
+
+def _legacy_copy(tmp_path: Path, name: str, *, crlf: bool | None = None) -> Path:
+    data = (LEGACY / name).read_bytes()
+    if crlf is True and b"\r\n" not in data:
+        data = data.replace(b"\n", b"\r\n")
+    elif crlf is False:
+        data = data.replace(b"\r\n", b"\n")
+    target = tmp_path / name
+    target.write_bytes(data)
+    return target
+
+
+LEGACY_FILES = ["max9.0-lf.maxpat", "max8.3-crlf.maxpat"]
+
+
+class TestLegacyLayoutWriter:
+    @pytest.mark.parametrize("name", LEGACY_FILES)
+    def test_writer_reproduces_fixture(self, name):
+        from src.maxpat import maxjson
+
+        text = (LEGACY / name).read_bytes().decode("utf-8").replace("\r\n", "\n")
+        assert maxjson.detect_layout(text) == "legacy"
+        out = maxjson.dumps_legacy(json.loads(text), maxjson.RawSpellings(text))
+        assert out == text
+
+    def test_spellings_keep_context(self):
+        from src.maxpat import maxjson
+
+        text = '{\n\t"a" : [ ";", "x" ],\n\t"b" : [ "\\u003b" ],\n\t"c" : 11.595186999999999\n}\n'
+        sp = maxjson.RawSpellings(text)
+        assert maxjson.dumps_legacy(json.loads(text), sp) == text
+        assert sp.spell(";", "a") == '";"'
+        assert sp.spell(";", "b") == '"\\u003b"'
+        assert sp.spell(";", "new") == '"\\u003b"'
+        assert sp.spell(0.5, "c") == "0.5"
+
+    def test_detect_layout(self):
+        from src.maxpat import maxjson
+
+        assert maxjson.detect_layout('{\n\t"a" : 1\n}\n') == "legacy"
+        assert maxjson.detect_layout('{\n    "a": [\n        1\n    ]\n}') == "expanded"
+        assert maxjson.detect_layout('{\n    "a": [ 1 ]\n}') == "max9"
+
+    def test_expanded_writer_matches_json_dumps(self):
+        from src.maxpat import maxjson
+
+        d = {"a": [1, 2.5, {"b": []}], "c": {}, "d": "é"}
+        assert maxjson.dumps_expanded(d, "  ") == json.dumps(d, indent="  ", ensure_ascii=False)
+
+    def test_json_identical_is_strict(self):
+        from src.maxpat.maxjson import json_identical
+
+        assert json_identical({"a": [1, 2.0]}, {"a": [1, 2.0]})
+        assert not json_identical({"a": 1}, {"a": 1.0})
+        assert not json_identical({"a": 1}, {"a": True})
+        assert not json_identical({"a": 1, "b": 2}, {"b": 2, "a": 1})
+
+
+class TestLegacyNoOpSave:
+    @pytest.mark.parametrize("crlf", [False, True])
+    @pytest.mark.parametrize("name", LEGACY_FILES)
+    def test_save_patch_roundtrip_noop_byte_identical(self, tmp_path, name, crlf):
+        from src.maxpat.hooks import read_patch, save_patch_roundtrip
+
+        path = _legacy_copy(tmp_path, name, crlf=crlf)
+        before = path.read_bytes()
+        p, text = read_patch(path)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            save_patch_roundtrip(p.to_dict(), path, text)
+        assert path.read_bytes() == before
+
+    @pytest.mark.parametrize("crlf", [False, True])
+    def test_edit_patch_noop_writes_nothing(self, tmp_path, crlf):
+        from src.maxpat.edit_session import edit_patch
+
+        path = _legacy_copy(tmp_path, "max9.0-lf.maxpat", crlf=crlf)
+        before = path.read_bytes()
+        s = edit_patch(path)
+        with s as p:
+            pass
+        assert s.saved is False
+        assert path.read_bytes() == before
+
+    def test_edit_keeps_layout_spellings_and_crlf(self, tmp_path):
+        from src.maxpat.hooks import read_patch, save_patch_roundtrip
+
+        path = _legacy_copy(tmp_path, "max8.3-crlf.maxpat", crlf=True)
+        before = path.read_bytes().decode("utf-8")
+        p, text = read_patch(path)
+        box = p.boxes[0]
+        p.modify_box(box, position=[box.patching_rect[0] + 7, box.patching_rect[1]])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            save_patch_roundtrip(p.to_dict(), path, text)
+        after = path.read_bytes().decode("utf-8")
+        assert "\r\n" in after and "\n" not in after.replace("\r\n", "")
+        old_lines = before.split("\r\n")
+        new_lines = after.split("\r\n")
+        assert len(old_lines) == len(new_lines)
+        changed = [i for i, (a, b) in enumerate(zip(old_lines, new_lines)) if a != b]
+        assert len(changed) == 1, [new_lines[i] for i in changed]
+        assert '"patching_rect" : [ ' in new_lines[changed[0]]

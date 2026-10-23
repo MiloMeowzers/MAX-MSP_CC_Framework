@@ -137,7 +137,7 @@ def _auto_commit_saved_file(path: Path) -> str | None:
     return commit_hash
 
 
-def _write_and_sync(path: Path, content: str) -> None:
+def _write_and_sync(path: Path, content: str, *, newline: str = "\n") -> None:
     """Write content atomically and fsync it, so Finder/MAX see the change (Q36).
 
     The one writer behind save_patch_roundtrip, write_gendsp and write_js:
@@ -149,8 +149,41 @@ def _write_and_sync(path: Path, content: str) -> None:
     is replaced. The bytes are ``content`` encoded as UTF-8, identical to
     the old text-mode write on POSIX. The file gets a new inode, so extended
     attributes on the old file are dropped.
+
+    ``newline`` (keyword-only, default ``"\\n"``): ``"\\r\\n"`` writes every
+    ``\\n`` of *content* as CRLF (a file MAX saved on Windows; WR-03).
     """
+    if newline != "\n":
+        content = content.replace("\r\n", "\n").replace("\n", newline)
     atomic_write_bytes(Path(path).resolve(), content.encode("utf-8"))
+
+
+def _read_bytes_or_none(path: Path) -> "bytes | None":
+    """The file's bytes, or None when it does not exist or cannot be read."""
+    try:
+        return Path(path).read_bytes()
+    except OSError:
+        return None
+
+
+def _unchanged_on_disk(existing: bytes, output: str, newline: str) -> bool:
+    """True when writing *output* would not change the file's content.
+
+    Byte-equal to what would be written, or equal after universal-newline
+    decoding (how read_patch reads it), so a file with mixed line endings is
+    left alone by a no-op save.
+    """
+    text = output.replace("\r\n", "\n")
+    if newline != "\n":
+        text = text.replace("\n", newline)
+    if existing == text.encode("utf-8"):
+        return True
+    try:
+        decoded = existing.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    norm = decoded.replace("\r\n", "\n").replace("\r", "\n")
+    return norm == output.replace("\r\n", "\n")
 
 
 def finalize_patch(
@@ -276,18 +309,30 @@ def detect_indent(file_text: str) -> str:
 def format_patch_text(patch_dict: dict, original_text: str | None = None) -> str:
     """Serialize a patch dict in the layout of the file it came from (Q29 / B9).
 
+    - no-op (review 261022-ud6 WR-03): when original_text parses to a dict
+      strictly identical to patch_dict (``maxjson.json_identical``: types,
+      key order, list order), original_text itself is returned, whatever
+      layout or tool wrote it.
+    - layout (``maxjson.detect_layout(original_text)``):
+      * ``legacy`` -- Max 5 to 9.0.x (tab indent, ``"key" : value``):
+        ``maxjson.dumps_legacy``;
+      * ``expanded`` -- the json.dumps layout the framework used to write:
+        ``maxjson.dumps_expanded`` (== json.dumps with the file's indent);
+      * ``max9`` and new files -- MAX 9.1+'s own layout
+        (``maxjson.dumps_max``: short scalar arrays inline).
+    - scalars keep the file's own spelling (``maxjson.RawSpellings``: e.g.
+      ``11.595186999999999``, ``"\\u003b"``); values the edit introduced
+      are spelled by json.dumps.
     - indent: ``detect_indent(original_text)`` when original_text is given,
-      else 4 spaces (MAX's default).
-    - layout: when original_text is given and uses expanded arrays (the
-      json.dumps layout the framework used to write; ``has_expanded_arrays``),
-      the text is ``json.dumps(patch_dict, indent=indent, ensure_ascii=False)``.
-      Otherwise -- MAX-saved files and new files -- it is MAX 9's own layout
-      (``maxjson.dumps_max``: short scalar arrays inline).
-    - a trailing newline is added only when original_text ends with one
-      (MAX writes none).
+      else 4 spaces (MAX's default); legacy is always tabs.
+    - a trailing newline only when original_text ends with one (MAX 9.1+
+      writes none; the legacy layout always ends with one).
+
+    Text uses ``\\n`` newlines; save_patch_roundtrip restores a file's CRLF
+    line endings when it writes.
 
     So a no-op save is byte-identical whichever tool wrote the file last,
-    and MAX's first re-save of a framework-made file shows only real changes.
+    and an edit of any MAX-saved file shows only its real changes.
 
     Args:
         patch_dict: The patch dict (output of Patcher.to_dict()).
@@ -296,19 +341,28 @@ def format_patch_text(patch_dict: dict, original_text: str | None = None) -> str
     Returns:
         The file text.
     """
-    from src.maxpat.maxjson import dumps_max, has_expanded_arrays
+    from src.maxpat import maxjson
 
-    if original_text is not None:
-        indent = detect_indent(original_text)
+    if original_text is None:
+        return maxjson.dumps_max(patch_dict, "    ")  # MAX default: 4 spaces
+
+    text = original_text.replace("\r\n", "\n")
+    try:
+        if maxjson.json_identical(json.loads(text), patch_dict):
+            return original_text
+    except ValueError:
+        pass
+
+    spellings = maxjson.RawSpellings(text)
+    layout = maxjson.detect_layout(text)
+    if layout == "legacy":
+        output = maxjson.dumps_legacy(patch_dict, spellings).rstrip("\n")
+    elif layout == "expanded":
+        output = maxjson.dumps_expanded(patch_dict, detect_indent(text), spellings)
     else:
-        indent = "    "  # MAX default: 4 spaces
+        output = maxjson.dumps_max(patch_dict, detect_indent(text), spellings)
 
-    if original_text is not None and has_expanded_arrays(original_text):
-        output = json.dumps(patch_dict, indent=indent, ensure_ascii=False)
-    else:
-        output = dumps_max(patch_dict, indent)
-
-    if original_text is not None and original_text.endswith("\n"):
+    if text.endswith("\n"):
         output += "\n"
     return output
 
@@ -324,8 +378,11 @@ def save_patch_roundtrip(
 
     For round-trip saves (load -> edit -> save), pass the original file text
     so its indentation, JSON layout and trailing newline are kept
-    (``format_patch_text``; Q29 / B9): a MAX-saved file keeps MAX 9's inline
-    scalar arrays, a file in the framework's expanded layout keeps it, so a
+    (``format_patch_text``; Q29 / B9): a MAX 9.1+ file keeps MAX 9's inline
+    scalar arrays, a Max 5 - 9.0.x file keeps the legacy tab layout and its
+    CRLF line endings, a file in the framework's expanded layout keeps it,
+    and scalars keep the file's own spelling (261022-ud6 WR-03). A save
+    that would not change the file's content does not rewrite it, so a
     no-op save is byte-identical. New files (original_text omitted) are
     written in MAX 9 layout with 4-space indentation.
 
@@ -395,8 +452,15 @@ def save_patch_roundtrip(
     # The file's own layout, indent and trailing newline (Q29 / B9)
     output = format_patch_text(patch_dict, original_text)
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _write_and_sync(path, output)
+    # Line endings and the unchanged-file case (261022-ud6 WR-03): a file
+    # MAX saved with CRLF keeps CRLF, and a file whose content would not
+    # change is not rewritten at all, so a no-op save is byte-identical
+    # (mixed line endings included).
+    existing = _read_bytes_or_none(path)
+    newline = "\r\n" if existing is not None and b"\r\n" in existing else "\n"
+    if existing is None or not _unchanged_on_disk(existing, output, newline):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _write_and_sync(path, output, newline=newline)
 
     # Auto-commit to git to prevent work loss (path-scoped; warns on None)
     return _auto_commit_saved_file(path)
