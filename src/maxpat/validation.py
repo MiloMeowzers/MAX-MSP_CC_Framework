@@ -2164,6 +2164,21 @@ def _check_gen_param_message_syntax(
     return results
 
 
+_PROSE_MIN_WORDS = 5
+_PROSE_MARKS = (".", ",", ":", "(", "=", " -- ")
+
+
+def _is_prose(text: str) -> bool:
+    """True for a documentation sentence: at least five words and sentence
+    punctuation (IN-03). Such a comment talks ABOUT a ``#N`` argument
+    ("records buffer~ #1 sample-accurately.") rather than trying to
+    substitute one; short labels ("Bus #1", "Freq: #1 Hz") still count."""
+    return (
+        len(text.split()) >= _PROSE_MIN_WORDS
+        and any(mark in text for mark in _PROSE_MARKS)
+    )
+
+
 def _check_comment_hash_substitution(
     box_lookup: dict[str, dict],
     ctrl_adj: dict[str, list[str]],
@@ -2173,7 +2188,8 @@ def _check_comment_hash_substitution(
     A comment fed directly by a message box ``set ... #N`` is skipped (Q3,
     review §4.4 R3): that is the sanctioned loadbang -> message -> set chain,
     and the comment's stored text is just the pre-substitution placeholder.
-    Only direct feeders count (no ``prepend set`` chains).
+    Only direct feeders count (no ``prepend set`` chains). A documentation
+    sentence (:func:`_is_prose`) is skipped too (IN-03).
     """
     results: list[ValidationResult] = []
 
@@ -2192,7 +2208,7 @@ def _check_comment_hash_substitution(
         if box_id in set_fed:
             continue
         text = walk.box_text(box)
-        if _re.search(r'#\d+', text):
+        if _re.search(r'#\d+', text) and not _is_prose(text):
             results.append(ValidationResult(
                 "domain", "warning",
                 f"Comment boxes don't support #N substitution; use "
