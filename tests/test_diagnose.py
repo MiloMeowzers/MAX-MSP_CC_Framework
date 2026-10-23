@@ -502,3 +502,52 @@ class TestCaps:
         assert len(report.diagnoses) == 1
         report = diagnose_console("a" * 5000)
         assert report.diagnoses[0].matches == ()
+
+
+# ---------------------------------------------------------------------------
+# Fact-ranked "No such object" proposals (quick 261022-ud6 WP4, review WR-02)
+# ---------------------------------------------------------------------------
+
+
+class TestNoSuchObjectRanking:
+    """With a db, the tied `<objectname>: No such object` rows are ranked by
+    what the database says about the name; the proposal follows the cause."""
+
+    @pytest.mark.parametrize("line, cause_fragment, fix_fragment", [
+        ("newobj: osc~: No such object", "Pure Data", "pd-blocklist"),
+        ("lop~: No such object", "Pure Data", "pd-blocklist"),
+        ("inlet~: No such object", "`inlet~` or `outlet~`", "Use `inlet` / `outlet`"),
+        ("outlet~: No such object", "`inlet~` or `outlet~`", "Use `inlet` / `outlet`"),
+        ("bach.llll2list: No such object", "bach.llll2list", "bach.nth"),
+        ("bach.list2llll: No such object", "bach.llll2list", "bach.nth"),
+        ("expr~: No such object", "RNBO- or Gen-only", "lookup(name)"),
+        ("history: No such object", "RNBO- or Gen-only", "lookup(name)"),
+        ("fluid.buf2list: No such object", "package object", "Package Manager"),
+        ("frobnicate~: No such object", "abstraction or external", "abstractions"),
+    ])
+    def test_cause_follows_the_facts(self, db, line, cause_fragment, fix_fragment):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            diag = diagnose_console(line, db=db).diagnoses[0]
+        assert cause_fragment in diag.matches[0].entry.cause
+        assert diag.proposal is not None and fix_fragment in diag.proposal
+
+    def test_unresolved_tie_has_no_single_fix_proposal(self, db):
+        # cycle~ exists in MSP with no restriction: none of the six causes
+        # is established, so no one-fix proposal is made.
+        diag = diagnose_console("cycle~: No such object", db=db).diagnoses[0]
+        assert len(diag.matches) >= 6
+        assert diag.proposal is None
+
+    def test_without_db_order_is_unchanged(self, entries):
+        diag = diagnose_console("inlet~: No such object").diagnoses[0]
+        assert [m.entry.row for m in diag.matches] == [
+            m.entry.row for m in match_line("inlet~: No such object", entries)]
+        assert diag.proposal is not None
+
+    def test_ranking_keeps_every_match(self, db, entries):
+        diag = diagnose_console("osc~: No such object", db=db).diagnoses[0]
+        assert sorted(m.entry.row for m in diag.matches) == sorted(
+            m.entry.row for m in match_line("osc~: No such object", entries))

@@ -549,13 +549,85 @@ def _facts(db, names) -> tuple[str, ...]:
     return tuple(facts)
 
 
+# "<objectname>: No such object" rows tie on score; with a db the facts pick
+# the cause (review WR-02, quick 261022-ud6). Each key is a fragment of the
+# row's cause cell in troubleshooting.md.
+_NO_SUCH_PATTERN = "<objectname>: No such object"
+_CAUSE_PD = "Pure Data name"
+_CAUSE_PORT = "`inlet~` or `outlet~`"
+_CAUSE_BACH = "`bach.llll2list`"
+_CAUSE_RESTRICTED = "RNBO- or Gen-only"
+_CAUSE_PACKAGE = "package object"
+_CAUSE_ABSTRACTION = "abstraction or external"
+_MISSING_PORTS = frozenset({"inlet~", "outlet~"})
+_STALE_BACH = frozenset({"bach.llll2list", "bach.list2llll"})
+
+
+def _no_such_cause(db, name: str) -> "str | None":
+    """Cause fragment the database establishes for ``<name>: No such object``.
+
+    PD name -> PD row; inlet~/outlet~ -> port row; a stale bach name ->
+    bach row; an effective domain restriction (RNBO/Gen-only) -> that row;
+    a package object -> package row; a name the database does not know ->
+    abstraction/external row. A core Max object with no restriction
+    establishes nothing (None).
+    """
+    import warnings
+
+    try:
+        if name in _MISSING_PORTS:
+            return _CAUSE_PORT
+        if name in _STALE_BACH:
+            return _CAUSE_BACH
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            obj = db.lookup(name)
+        if obj is None:
+            return _CAUSE_PD if db.is_pd_object(name) else _CAUSE_ABSTRACTION
+        if db.get_effective_restrictions(name):
+            return _CAUSE_RESTRICTED
+        if obj.get("package") or obj.get("verified_installed") is False:
+            return _CAUSE_PACKAGE
+    except Exception:
+        return None
+    return None
+
+
+def _rank_no_such(matches: list, db, objects) -> "tuple[list, bool]":
+    """(matches, resolved) with the fact-selected "No such object" row first.
+
+    Applies only when the top-scoring matches are all
+    ``<objectname>: No such object`` rows of different entries (the tie
+    WR-02 is about). *resolved* is False when such a tie exists but the
+    facts establish no cause -- the caller then makes no single-fix
+    proposal. Other lines are returned unchanged with resolved True.
+    """
+    if not matches or db is None:
+        return matches, True
+    top = matches[0].score
+    tied = [m for m in matches if m.score == top]
+    if len(tied) < 2 or any(m.pattern != _NO_SUCH_PATTERN for m in tied):
+        return matches, True
+    cause = _no_such_cause(db, objects[0]) if objects else None
+    if cause is None:
+        return matches, False
+    pick = next((m for m in tied if cause in m.entry.cause), None)
+    if pick is None:
+        return matches, False
+    return [pick] + [m for m in matches if m is not pick], True
+
+
 def diagnose_console(text: str, project_dir=None, *, db=None,
                      entries=None) -> DiagnoseReport:
     """Diagnose pasted console *text* against troubleshooting.md.
 
     *project_dir* (``patches/<project>``) enables box locating; *db* (an
-    ObjectDatabase) adds object facts; *entries* defaults to
-    :func:`load_troubleshooting`. Read-only.
+    ObjectDatabase) adds object facts and ranks the six tied
+    ``<objectname>: No such object`` rows by them (PD name, inlet~/outlet~,
+    stale bach name, RNBO/Gen restriction, package object, unknown name ->
+    abstraction; review WR-02) -- when the facts establish none of them
+    (a core object with no restriction) no single-fix proposal is made.
+    *entries* defaults to :func:`load_troubleshooting`. Read-only.
     """
     if entries is None:
         entries = load_troubleshooting()
@@ -598,9 +670,12 @@ def diagnose_console(text: str, project_dir=None, *, db=None,
                                    identifiers=identifiers,
                                    gen_fallback=gen_mode, cache=cache)
         facts = _facts(db, objects) if (db is not None and not gen_mode) else ()
+        resolved = True
+        if db is not None and not gen_mode:
+            matches, resolved = _rank_no_such(matches, db, objects)
 
         proposal = None
-        if matches:
+        if matches and resolved:
             proposal = "/max-iterate "
             if project:
                 proposal += project + " "

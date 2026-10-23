@@ -22,7 +22,7 @@ Diagnose MAX console output the user pastes. Each line is matched against `.clau
    ```
    Omit `--project` when there is no project. Never interpolate pasted text into Python source, `python3 -c`, a heredoc or a shell string. For scripted use, read the text from that file and call `diagnose_console(text, project_dir, db=ObjectDatabase())`, then print `report.render()`.
 
-5. **Choosing between entries** -- several entries can share one wording (six `<objectname>: No such object` causes). Choose with the report's `fact:` lines and the database: `db.is_pd_object(name)`, `db.get_pd_equivalent(name)`, `db.lookup(name)` (and its `domain`), `db.get_effective_restrictions(name)`, the package's install state, and whether an abstraction file sits next to the patch.
+5. **Choosing between entries** -- several entries can share one wording (six `<objectname>: No such object` causes). Choose with the report's `fact:` lines and the database: `db.is_pd_object(name)`, `db.get_pd_equivalent(name)`, `db.lookup(name)` (and its `domain`), `db.get_effective_restrictions(name)`, the package's install state, and whether an abstraction file sits next to the patch. With the database the report already ranks the six rows by these facts (PD name, `inlet~`/`outlet~`, stale bach name, RNBO/Gen restriction, package object, unknown name -> abstraction) and its `propose:` line follows the top one. When the facts settle none of them (a core MAX object with no restriction) the line has no `propose:`; choose by hand.
 
 6. **gen~ compile lines** -- read the listed codebox lines (`lines a, b` in each `box:` line) and apply `.claude/skills/references/genexpr-rules.md`.
 
