@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Drive a running MAX 9.2 from Python through a resident bridge patch (Q34 spike).
 
-SPIKE STATUS: v0.1.0 and v0.2.0 were confirmed in MAX 9.2 through their
-checklists (patches/max-bridge/test-results/v0.1.0-bridge-checklist.md and
-v0.2.0-bridge-checklist.md; 2026-10-21, commit dc0cde91). v0.3.0 adds
-``check --dsp-on-load`` and the ``/max-verify --live`` wrapper
-tools/max_verify_live.py, pending
-patches/max-bridge/test-results/v0.3.0-verify-live-checklist.md.
+SPIKE STATUS: v0.1.0, v0.2.0 and v0.3.0 are all confirmed in MAX 9.2 through
+their checklists (patches/max-bridge/test-results/v0.1.0-bridge-checklist.md,
+v0.2.0-bridge-checklist.md and v0.3.0-verify-live-checklist.md; 2026-10-21,
+commits dc0cde91 and f935e550). v0.3.0 added ``check --dsp-on-load`` and the
+``/max-verify --live`` wrapper tools/max_verify_live.py.
 
 Protocol. The bridge patch (tools/max_bridge/max-bridge.maxpat)
 is a dumb UDP pass-through; this client owns all the sequencing:
