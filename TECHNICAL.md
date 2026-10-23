@@ -631,6 +631,10 @@ The `max-critic` agent orchestrates the generate-review-revise cycle:
 5. Loop continues until clean (no hard round limit)
 6. Escalates after 5 consecutive identical findings
 
+`review_patch(..., is_new=True)` is the build-loop call for a file that does not exist yet (the save gate reviews a file with no baseline that way, so an uninitialized control is a blocker there); edits keep the default `is_new=False`.
+
+**Quick fixes.** Some findings carry a machine-applicable `CriticResult.fix` (Q39): an ordered `t ...` for a reconverging fan-out, `@param $1` -> `param $1` for gen~, a `scale` / `clip` before an unsafe gain, `@out t` on a bach object. `src/maxpat/quickfix.py` applies them through one `edit_patch` session, and `/max-iterate --fix` previews the semantic diff and applies the selected fixes.
+
 ---
 
 ## DSP Pre-Flight Simulation
