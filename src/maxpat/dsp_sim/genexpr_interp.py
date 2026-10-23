@@ -129,8 +129,13 @@ Stateful built-ins keep one state cell per call site, created at build time.
 
 ``Codebox.lint`` holds build-time WARNs as (check, detail) pairs: ``tab_char``
 (a tab anywhere in the code; the project's safe-construct rules say spaces
-only) and ``output_typo`` (a local such as ``ou2`` or ``Out1`` that looks like
-a misspelled output and so never reaches an outlet). ``Codebox.advisories``
+only), ``output_typo`` (a never-read local such as ``ou2`` or ``Out1`` that
+looks like a misspelled output), and the genexpr-rules.md safe-construct
+checks (261022-ud6 IN-01): ``loop_bound_param`` (a for bound reading a Param,
+samplerate or vectorsize; the simulator folds it per corner but gen~ wants a
+CONSTANT bound), ``hoist_alias`` (a Param-only statement reading a bare local
+alias such as ``sr = samplerate;``) and ``implicit_channel`` (peek / poke
+without the channel argument). ``Codebox.advisories``
 holds build-time INFOs the same way: ``branch_state`` names each stateful call
 or write inside an if/else body (see the ``if / else`` row); it never changes a
 smoke verdict.
@@ -917,6 +922,187 @@ def _edit_distance(a: str, b: str) -> int:
 
 
 # ===========================================================================
+# Build-time lint helpers (261022-ud6 IN-01, IN-02)
+# ===========================================================================
+
+# Names gen~ treats as fixed for a compile: they make an expression Param-only
+# (hoistable) and make a loop bound runtime-variable.
+_COMPILE_CONSTANT_NAMES = frozenset({"samplerate", "vectorsize"})
+
+
+def _children(expr):
+    if isinstance(expr, Unary):
+        return (expr.a,)
+    if isinstance(expr, Bin):
+        return (expr.a, expr.b)
+    if isinstance(expr, Tern):
+        return (expr.c, expr.a, expr.b)
+    if isinstance(expr, (Call, Method)):
+        return tuple(expr.args)
+    return ()
+
+
+def _subexprs(expr):
+    """Yield ``expr`` and every expression nested in it."""
+    yield expr
+    for c in _children(expr):
+        yield from _subexprs(c)
+
+
+def _stmt_expr_pairs(body):
+    """(statement, expression) for every statement-level expression, recursing
+    into if/else and for bodies (for init / step included)."""
+    for s in _walk_stmts(body):
+        for e in _stmt_exprs(s):
+            yield s, e
+
+
+def _all_names_read(body) -> set:
+    """Every name any expression reads, plus compound-assignment targets."""
+    names: set = set()
+    for s, e in _stmt_expr_pairs(body):
+        names.update(n.name for n in _names_read(e))
+        if isinstance(s, Assign) and s.op != "=":
+            names.add(s.name)
+    return names
+
+
+def _loop_bound_lint(body, param_names: frozenset, code: str) -> list:
+    """IN-01 ``loop_bound_param``: a for bound that reads a Param, samplerate
+    or vectorsize. The simulator folds those per corner, but gen~ compiles a
+    Param as a runtime value, and genexpr-rules.md says CONSTANT bounds only
+    (the two codeboxes that used variable bounds failed to compile)."""
+    out: list = []
+    variable = param_names | _COMPILE_CONSTANT_NAMES
+    for s in _walk_stmts(body):
+        if not isinstance(s, For) or not isinstance(s.cond, Bin):
+            continue
+        counter = s.init.name
+        sides = [x for x in (s.cond.a, s.cond.b)
+                 if not (isinstance(x, Name) and x.name == counter)]
+        names = sorted({n.name for x in sides for n in _names_read(x)} & variable)
+        if names:
+            out.append((
+                "loop_bound_param",
+                f"line {_line_of(code, s.off)}: for loop bound reads "
+                + ", ".join(f"'{n}'" for n in names)
+                + "; the codebox safe-construct rules say CONSTANT bounds "
+                "(for (i = 0; i < 600; i += 1)) with a variable inner guard "
+                "(if (i < n) { ... }) (genexpr-rules.md)",
+            ))
+    return out
+
+
+def _param_only(expr, allowed: set) -> bool:
+    """True when ``expr`` reads only ``allowed`` names and calls only pure
+    built-ins: gen~ would treat it as Param-only and hoist it."""
+    if isinstance(expr, Num):
+        return True
+    if isinstance(expr, Name):
+        return expr.name in allowed
+    if isinstance(expr, Str) or isinstance(expr, Method):
+        return False
+    if isinstance(expr, Call) and expr.name not in _PURE:
+        return False
+    return all(_param_only(c, allowed) for c in _children(expr))
+
+
+def _hoist_alias_lint(body, param_names: frozenset, local_names: set, code: str) -> list:
+    """IN-01 ``hoist_alias``: a statement whose whole right-hand side (or if
+    condition) is Param-only and reads a local alias.
+
+    genexpr-rules.md "No local aliases in Param-only expressions": gen~ hoists
+    Param-only expressions out of the per-sample body, and a loop-local alias
+    such as ``sr = samplerate;`` or ``RING = 1344000;`` is not visible there
+    ("use of undeclared identifier"). An alias is a top-level local whose every
+    assignment is a bare samplerate / vectorsize / Param / constant name or a
+    number literal. Computed setup locals (``tanh_drive = tanh(drive);``) and
+    Param-only sub-expressions inside a per-sample statement are not flagged:
+    user-confirmed codeboxes use both and compile."""
+    top: dict = {}
+    nested: set = set()
+
+    def collect(stmts, at_top):
+        for s in stmts:
+            if isinstance(s, Assign):
+                if at_top:
+                    top.setdefault(s.name, []).append(s)
+                else:
+                    nested.add(s.name)
+            elif isinstance(s, If):
+                collect(s.then, False)
+                collect(s.els or (), False)
+            elif isinstance(s, For):
+                nested.update((s.init.name, s.step.name))
+                collect(s.body, False)
+
+    collect(body, True)
+    base = set(param_names) | set(GEN_CONSTANTS) | _COMPILE_CONSTANT_NAMES
+
+    def is_alias_rhs(a):
+        e = a.expr
+        return a.op == "=" and (isinstance(e, Num) or (isinstance(e, Name) and e.name in base))
+
+    aliases = {
+        n for n, assigns in top.items()
+        if n in local_names and n not in nested and all(is_alias_rhs(a) for a in assigns)
+    }
+    if not aliases:
+        return []
+    allowed = base | aliases
+    sites: list = []    # (line, sorted alias names)
+    for s, e in _stmt_expr_pairs(body):
+        if isinstance(s, Assign) and s.name in aliases:
+            continue
+        if isinstance(e, (Num, Name, Str)) or not _param_only(e, allowed):
+            continue
+        used = sorted({n.name for n in _names_read(e)} & aliases)
+        if used:
+            sites.append((_line_of(code, s.off), used))
+    if not sites:
+        return []
+    line, used = sites[0]
+    more = f" ({len(sites)} sites)" if len(sites) > 1 else ""
+    return [(
+        "hoist_alias",
+        f"line {line}: Param-only expression reads the local "
+        + ", ".join(f"'{n}'" for n in used)
+        + f"{more}, a bare alias of samplerate / a Param / a constant; "
+        "gen~ hoists such expressions out of the per-sample loop, where the alias "
+        "can be undeclared ('use of undeclared identifier'). Write samplerate and "
+        "the Param expression directly, or de-hoist with History one(1) "
+        "(genexpr-rules.md)",
+    )]
+
+
+def _implicit_channel_lint(body, decls, code: str) -> list:
+    """IN-01 ``implicit_channel``: peek(buf, i) / poke(buf, v, i) without the
+    explicit channel argument the codebox safe-construct rules require."""
+    sites: dict = {}    # construct -> [count, first line]
+    for s, e in _stmt_expr_pairs(body):
+        for x in _subexprs(e):
+            if isinstance(x, Call) and (
+                (x.name == "peek" and len(x.args) == 2)
+                or (x.name == "poke" and len(x.args) == 3)
+            ):
+                entry = sites.setdefault(f"{x.name}()", [0, _line_of(code, x.off)])
+                entry[0] += 1
+    if not sites:
+        return []
+    ordered = sorted(sites.items(), key=lambda kv: kv[1][1])
+    entries = ", ".join(
+        f"{c} (line {line})" if k == 1 else f"{c} x{k} (first at line {line})"
+        for c, (k, line) in ordered
+    )
+    return [(
+        "implicit_channel",
+        f"{entries} without an explicit channel argument; the codebox "
+        "safe-construct rules say peek(buf, idx, 0) / poke(buf, val, idx, 0) "
+        "(genexpr-rules.md)",
+    )]
+
+
+# ===========================================================================
 # Codebox
 # ===========================================================================
 
@@ -1061,14 +1247,24 @@ def parse_codebox(code: str) -> Codebox:
             f"line {_line_of(code, tab_at)}: tab character in the codebox; "
             "the codebox safe-construct rules say spaces only (genexpr-rules.md)",
         ))
+    # IN-02 (261022-ud6): only a local that is never read can be a typo for
+    # an output; a read local (cut1, oct2) reaches an outlet through its reader.
+    read_names = _all_names_read(body)
     for name in locals_:
         m = _OUT_LIKE.match(name)
-        if m and not _OUT_NAME.match(name) and _edit_distance(m.group(1).lower(), "out") <= 1:
+        if (m and not _OUT_NAME.match(name) and name not in read_names
+                and _edit_distance(m.group(1).lower(), "out") <= 1):
             lint.append((
                 "output_typo",
                 f"line {_line_of(code, first_off[name])}: local '{name}' looks like a "
-                "misspelled output (outputs are out1..outN); it never reaches an outlet",
+                "misspelled output (outputs are out1..outN) and is never read, so it "
+                "never reaches an outlet",
             ))
+    # IN-01 (261022-ud6): the genexpr-rules.md codebox safe-construct rules.
+    param_names = frozenset(p["name"] for p in params)
+    lint.extend(_loop_bound_lint(body, param_names, code))
+    lint.extend(_hoist_alias_lint(body, param_names, set(locals_), code))
+    lint.extend(_implicit_channel_lint(body, decls, code))
 
     # Build-time advisories (INFO findings in smoke; never move a verdict).
     advisories: list = _branch_state_advisory(body, code)
