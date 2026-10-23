@@ -4,8 +4,9 @@ Save gate (fix-plan Q7, review A3 / R1): save_patch_roundtrip and
 write_gendsp run validate_patch on a deepcopy plus review_patch, with one
 cached ObjectDatabase, before anything is written or committed. Blocking
 findings are compared with a baseline -- original_text, else the HEAD
-version of the path, else the file on disk -- and matched by rule template
-plus box ids (never by finding text), so only blockers the save introduces
+version of the path, else the file on disk -- and matched by structured
+rule + box ids + port + path (a normalised text template only for findings
+without them; never by raw finding text), so only blockers the save introduces
 raise PatchValidationError; with no baseline the file is new and every
 blocker refuses. Cords removed compared with HEAD (and original_text) emit
 one SaveGateWarning. A changed x-rank of a subpatcher or abstraction
@@ -340,8 +341,9 @@ def save_patch_roundtrip(
     before anything is written, validate_patch (on a deepcopy) and
     review_patch run on the new dict with one cached ObjectDatabase. Their
     blocking findings are compared with the baseline -- original_text, else
-    the HEAD version of the path, else the file on disk -- by rule template
-    plus box ids, never by finding text. Only findings the save introduces
+    the HEAD version of the path, else the file on disk -- by structured
+    rule + box ids (``_finding_key``), never by raw finding text. Only
+    findings the save introduces
     raise PatchValidationError; pre-existing ones save. A new file (no
     baseline) refuses every blocker, and is reviewed with ``is_new=True``
     so a Q24 uninitialized-state finding blocks it (on an edit it is a
@@ -561,9 +563,19 @@ _GATE_WS_RE = re.compile(r"\s+")
 
 
 def _finding_key(result) -> tuple:
-    """Hashable identity of a blocking finding: rule template + box ids + path.
+    """Hashable identity of a blocking finding: rule + box ids + path.
 
-    Finding text is never compared as-is. The key is
+    Finding text is never compared as-is.
+
+    Structured key (fix-plan Q7 / Q33; review 261022-ud6 validation IN-01):
+    when the result carries a non-empty ``rule`` and non-empty ``box_ids``
+    (every CriticResult has the fields; ValidationResult gets them from
+    WP1, read with getattr so either version works), the key is
+    ``(origin, ("rule", rule), sorted box ids + proposed_removal ids,
+    port, proposed_removal, path)``. A reworded message keeps its key.
+
+    Text-template fallback (no rule, or no box ids, which says too little
+    to tell two findings of one rule apart):
     ``(origin, template, ids, proposed_removal, path)``:
 
     - origin: ``("validate", layer, level)`` or ``("review", severity)``;
@@ -577,6 +589,9 @@ def _finding_key(result) -> tuple:
       labelled subpatchers apart: ``[p voice]`` obj-1 and ``[p voice]``
       obj-2 share a template and inner ids, so without it a blocker moved
       from one to the other would match the baseline.
+
+    Box ids stay stable across edits: replace_box keeps the old id
+    (WR-02), so a pre-existing blocker on a replaced box still matches.
     """
     if isinstance(result, ValidationResult):
         origin: tuple = ("validate", result.layer, result.level)
@@ -586,17 +601,25 @@ def _finding_key(result) -> tuple:
         origin = ("review", getattr(result, "severity", None))
         text = getattr(result, "finding", "") or ""
         removal = None
+    path = getattr(result, "path", "") or ""
 
-    ids = set(_GATE_ID_RE.findall(text))
+    removal_ids = set()
     if removal is not None and len(removal) >= 3:
-        ids.add(str(removal[0]))
-        ids.add(str(removal[2]))
+        removal_ids = {str(removal[0]), str(removal[2])}
+
+    rule = getattr(result, "rule", None)
+    box_ids = getattr(result, "box_ids", None)
+    if isinstance(rule, str) and rule and box_ids:
+        sids = tuple(sorted({str(i) for i in box_ids} | removal_ids))
+        return (origin, ("rule", rule), sids, getattr(result, "port", None), removal, path)
+
+    ids = set(_GATE_ID_RE.findall(text)) | removal_ids
 
     template = _GATE_ID_RE.sub("<id>", text)
     template = _GATE_QUOTED_RE.sub("<q>", template)
     template = _GATE_NUM_RE.sub("<n>", template)
     template = _GATE_WS_RE.sub(" ", template).strip()
-    return (origin, template, tuple(sorted(ids)), removal, getattr(result, "path", ""))
+    return (origin, template, tuple(sorted(ids)), removal, path)
 
 
 def _blocking_findings(
@@ -667,9 +690,11 @@ def _parse_patch_text(text: "str | None") -> "dict | None":
 def _iter_patchers(patcher_dict: dict, path: tuple = ()):
     """Yield ``(path, patcher_dict)`` for a patcher and every embedded one.
 
-    A path element is ``(box id, box text or maxclass)``, so a regenerated
-    patch whose ``obj-5`` is now a different subpatcher is not compared
-    port-for-port. Inner ids collide with outer ids, hence the path.
+    A path element is ``(box id, maxclass)`` (review 261022-ud6 WR-01):
+    never the box text, so renaming ``p ctl`` -> ``p ctl x`` in the same
+    save neither bypasses the port x-rank check nor reports every inner
+    cord as removed. Inner ids collide with outer ids, hence the path.
+    Display labels come from :func:`_path_labels`.
     """
     if not isinstance(patcher_dict, dict):
         return
@@ -683,8 +708,33 @@ def _iter_patchers(patcher_dict: dict, path: tuple = ()):
             continue
         inner = box.get("patcher")
         if isinstance(inner, dict):
-            elem = (str(box.get("id", "")), str(box.get("text") or box.get("maxclass") or ""))
+            elem = (str(box.get("id", "")), str(box.get("maxclass") or ""))
             yield from _iter_patchers(inner, path + (elem,))
+
+
+def _path_labels(d: "dict | None") -> dict:
+    """Map patcher path -> display label ``text (id) > text (id)`` for *d*.
+
+    The top level is ``top``; a box without text shows its maxclass.
+    """
+    labels: dict = {(): "top"}
+
+    def walk(patcher_dict, path, label):
+        boxes = patcher_dict.get("boxes") if isinstance(patcher_dict, dict) else None
+        for entry in boxes if isinstance(boxes, list) else []:
+            box = entry.get("box") if isinstance(entry, dict) else None
+            if not isinstance(box, dict) or not isinstance(box.get("patcher"), dict):
+                continue
+            box_id = str(box.get("id", ""))
+            elem = (box_id, str(box.get("maxclass") or ""))
+            text = str(box.get("text") or box.get("maxclass") or "")
+            here = f"{text} ({box_id})"
+            sub = path + (elem,)
+            labels[sub] = here if not label else f"{label} > {here}"
+            walk(box["patcher"], sub, labels[sub])
+
+    walk(_top_patcher(d), (), "")
+    return labels
 
 
 def _top_patcher(d: "dict | None") -> "dict | None":
@@ -761,11 +811,17 @@ def _port_ranks(d: "dict | None") -> dict:
     return ranks
 
 
-def _path_label(path: tuple) -> str:
-    """``top`` for the top level, else ``text (id) > text (id)``."""
+def _path_label(path: tuple, labels: "dict | None" = None) -> str:
+    """``top`` for the top level, else ``text (id) > text (id)``.
+
+    *labels* (from :func:`_path_labels`) gives the box texts; a path it
+    lacks falls back to ``maxclass (id)`` elements.
+    """
     if not path:
         return "top"
-    return " > ".join(f"{text} ({box_id})" for box_id, text in path)
+    if labels and path in labels:
+        return labels[path]
+    return " > ".join(f"{maxclass} ({box_id})" for box_id, maxclass in path)
 
 
 def _gate_report(
@@ -810,6 +866,7 @@ def _gate_report(
         # and its new rank differs from its rank in every reference.
         new_ranks = _port_ranks(new_dict)
         ref_ranks = [_port_ranks(r) for r in ref_dicts]
+        labels = _path_labels(new_dict)
         for key in sorted(new_ranks):
             if not all(key in rr for rr in ref_ranks):
                 continue
@@ -817,7 +874,8 @@ def _gate_report(
             if all(rr[key] != new_rank for rr in ref_ranks):
                 path, kind, box_id = key
                 port_changes.append(
-                    f"{_path_label(path)}: {kind} {box_id} rank {ref_ranks[0][key]} -> {new_rank}"
+                    f"{_path_label(path, labels)}: {kind} {box_id} rank "
+                    f"{ref_ranks[0][key]} -> {new_rank}"
                 )
 
     return GateReport(new_blockers, removed_cords, port_changes)
@@ -878,6 +936,10 @@ def _run_save_gate(
         else:
             against = ref_labels[0]
         new_ids = _box_ids(patch_dict)
+        labels: dict = {}
+        for _, ref in refs:
+            labels.update(_path_labels(ref))
+        labels.update(_path_labels(patch_dict))
         n = len(report.removed_cords)
         cord_lines = [f"{path}: {n} cord(s) removed compared with {against}:"]
         for cpath, src, outlet, dst, inlet in report.removed_cords[:10]:
@@ -885,7 +947,9 @@ def _run_save_gate(
             mark = ""
             if src not in ids_here or dst not in ids_here:
                 mark = " (endpoint box deleted)"
-            cord_lines.append(f"  {_path_label(cpath)}/{src}:{outlet} -> {dst}:{inlet}{mark}")
+            cord_lines.append(
+                f"  {_path_label(cpath, labels)}/{src}:{outlet} -> {dst}:{inlet}{mark}"
+            )
         if n > 10:
             cord_lines.append(f"  ... and {n - 10} more")
         warnings.warn("\n".join(cord_lines), SaveGateWarning, stacklevel=3)

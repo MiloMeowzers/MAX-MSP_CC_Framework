@@ -166,3 +166,118 @@ class TestReplaceKeepsSize:
         result = p.replace_box(old, "saw~")
         assert result.box.patching_rect[:2] == [40.0, 50.0]
         assert result.box.patching_rect[2] != 300.0
+
+
+# ---------------------------------------------------------------------------
+# WR-01: the gate's patcher paths key on box id, not box text
+# ---------------------------------------------------------------------------
+
+
+def _sub_dict() -> dict:
+    """Top-level ``p ctl`` (inner inlets obj-1 x50 / obj-2 x130, outlet obj-3)."""
+    p = Patcher()
+    box, inner = p.add_subpatcher("ctl", inlets=2, outlets=1)
+    inner.add_connection(inner.get_inlets()[0], 0, inner.get_outlets()[0], 0)
+    n = p.add_box("number")
+    pr = p.add_box("print")
+    p.add_connection(n, 0, box, 0)
+    p.add_connection(box, 0, pr, 0)
+    return p.to_dict()
+
+
+def _ctl(d: dict) -> dict:
+    for e in d["patcher"]["boxes"]:
+        if (e["box"].get("text") or "").startswith("p ctl"):
+            return e["box"]
+    raise KeyError("p ctl")
+
+
+class TestGatePathsKeyOnId:
+    def test_inlet_swap_plus_rename_still_refused(self):
+        from src.maxpat.hooks import _gate_report
+
+        base = _sub_dict()
+        new = copy.deepcopy(base)
+        ctl = _ctl(new)
+        inner = {e["box"]["id"]: e["box"] for e in ctl["patcher"]["boxes"]}
+        a, b = inner["obj-1"]["patching_rect"], inner["obj-2"]["patching_rect"]
+        a[0], b[0] = b[0], a[0]
+        ctl["text"] = "p ctl x"
+
+        report = _gate_report(new, base, [base])
+        assert report.port_changes, report
+
+    def test_rename_alone_reports_no_removed_cords(self):
+        from src.maxpat.hooks import _gate_report
+
+        base = _sub_dict()
+        new = copy.deepcopy(base)
+        _ctl(new)["text"] = "p ctl renamed"
+
+        report = _gate_report(new, base, [base])
+        assert report.removed_cords == []
+        assert report.port_changes == []
+
+    def test_labels_still_name_the_subpatcher(self):
+        from src.maxpat.hooks import _gate_report, _path_labels
+
+        base = _sub_dict()
+        new = copy.deepcopy(base)
+        _ctl(new)["patcher"]["lines"] = []
+        report = _gate_report(new, base, [base])
+        (cpath, *_rest), = report.removed_cords
+        assert "p ctl" in _path_labels(new)[cpath]
+
+
+# ---------------------------------------------------------------------------
+# Q7 / Q33 (validation IN-01): the gate keys on structured rule + box ids
+# ---------------------------------------------------------------------------
+
+
+class TestStructuredFindingKey:
+    def test_reworded_critic_finding_with_same_rule_matches(self):
+        from src.maxpat.critics import CriticResult
+        from src.maxpat.hooks import _finding_key
+
+        a = CriticResult("blocker", "Fan-out without trigger on 'x' (obj-3)", "s",
+                         rule="fan_out_without_trigger", box_ids=("obj-3",), port=0)
+        b = CriticResult("blocker", "Outlet 0 of obj-3 fans out with no trigger", "t",
+                         rule="fan_out_without_trigger", box_ids=("obj-3",), port=0)
+        assert _finding_key(a) == _finding_key(b)
+
+    def test_rule_box_ids_port_and_path_distinguish(self):
+        from src.maxpat.critics import CriticResult
+        from src.maxpat.hooks import _finding_key
+
+        base = dict(rule="fan_out_without_trigger", box_ids=("obj-3",), port=0)
+        a = CriticResult("blocker", "same", "s", **base)
+        for change in ({"rule": "gain_staging"}, {"box_ids": ("obj-4",)}, {"port": 1}):
+            kw = {**base, **change}
+            assert _finding_key(a) != _finding_key(CriticResult("blocker", "same", "s", **kw))
+        assert _finding_key(a) != _finding_key(
+            CriticResult("blocker", "same", "s", "obj-9", **base))
+
+    def test_rule_without_box_ids_keeps_text_template(self):
+        from src.maxpat.critics import CriticResult
+        from src.maxpat.hooks import _finding_key
+
+        a = CriticResult("blocker", "Patch has no output stage", "s", rule="r")
+        b = CriticResult("blocker", "Something else entirely", "s", rule="r")
+        assert _finding_key(a) != _finding_key(b)
+
+    def test_validation_result_with_structured_ids(self):
+        """WP1 adds ``rule`` / ``box_ids`` to ValidationResult; the key uses them
+        when present (a subclass stands in for the new slots here)."""
+        from src.maxpat.hooks import _finding_key
+        from src.maxpat.validation import ValidationResult
+
+        class VR(ValidationResult):
+            pass
+
+        a = VR("objects", "error", "Unknown object 'foo' (obj-2)")
+        a.rule, a.box_ids = "unknown_object", ("obj-2",)
+        b = VR("objects", "error", "No such object: foo [obj-2]")
+        b.rule, b.box_ids = "unknown_object", ("obj-2",)
+        assert _finding_key(a) == _finding_key(b)
+        c = ValidationResult("objects", "error", "Unknown object 'foo' (obj-2)")
+        assert _finding_key(c) != _finding_key(a)
