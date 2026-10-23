@@ -1068,8 +1068,14 @@ class BuildersMixin:
         the pass-through and feeds plugout~ inlets 0 AND 1 (a mono source
         on both channels, the Q15 stereo form); ``((L, o), (R, o))`` feeds
         L -> 0 and R -> 1. ``midi_source=(box, outlet)`` (midi_effect)
-        replaces midiin -> midiout. Sources are validated before any box is
-        created.
+        replaces midiin -> midiout. With a source, an audio_effect /
+        midi_effect reuses the chain's existing plugin~ / midiin (build the
+        chain from it first; none -> ValueError) rather than adding a second,
+        unwired one. Sources, and dial varnames against the patcher's
+        existing varnames, are validated before any box is created. With
+        ``presentation=True`` the dial grid starts right of any existing
+        presentation UI and ``devicewidth`` only grows; Push banks cover
+        every parameter already in the patcher plus the new ones.
 
         Each param dict ``{name, min, max, default, unit?, type?, steps?,
         short_name?, varname?, param_connect?, modmode?}`` becomes one
@@ -1232,9 +1238,16 @@ class BuildersMixin:
         ]
         # Validate before the first box exists, so a bad spec leaves the
         # patcher untouched (add_m4l_device validates again; pure).
-        from src.maxpat.m4l_device import resolve_param_specs
+        from src.maxpat.m4l_device import check_varname_collisions, resolve_param_specs
 
         resolve_param_specs(specs)
+        # gen~ is created next with gen_varname; a param of the same name
+        # would duplicate it and make param_connect ambiguous (review WR-02).
+        if gen_varname in {name for name, _mn, _mx in params}:
+            raise ValueError(
+                f"param name {gen_varname!r} equals gen_varname; pass a distinct gen_varname"
+            )
+        check_varname_collisions(self, [gen_varname] + [s["varname"] for s in specs])
 
         # Default empty-but-compilable body so gen~ has Params declared.
         if gen_code is None:

@@ -665,6 +665,55 @@ def _presentation_cols(n: int) -> int:
     return -(-n // _GRID_MAX_ROWS)
 
 
+def existing_varnames(patcher) -> set:
+    """Scripting names (``varname``) already used by top-level boxes of *patcher*."""
+    return {
+        v for v in (b.extra_attrs.get("varname") for b in patcher.boxes)
+        if isinstance(v, str) and v
+    }
+
+
+def check_varname_collisions(patcher, varnames, *, label: str = "param") -> None:
+    """Raise ValueError if any of *varnames* is already a box varname in *patcher*.
+
+    ``param_connect`` resolves its target by varname, so a duplicate makes
+    the binding ambiguous (review WR-02).
+    """
+    taken = existing_varnames(patcher)
+    clash = sorted(v for v in varnames if v in taken)
+    if clash:
+        raise ValueError(
+            f"{label} varname(s) {clash} already used by a box in this patcher; "
+            f"pass a distinct varname"
+        )
+
+
+def _existing_param_longnames(patcher) -> list:
+    """Longnames of live.* parameters already in *patcher* (recursive, box order)."""
+    from src.maxpat.m4l_polish import _collect_live_controls
+
+    names = []
+    for box in _collect_live_controls(patcher.to_dict()["patcher"]["boxes"]):
+        valueof = (box.get("saved_attribute_attributes") or {}).get("valueof") or {}
+        name = valueof.get("parameter_longname")
+        if isinstance(name, str) and name and name not in names:
+            names.append(name)
+    return names
+
+
+def _presentation_extent(patcher) -> "tuple[float, bool]":
+    """(right edge of existing presentation boxes, any present)."""
+    right, found = 0.0, False
+    for b in patcher.boxes:
+        if not b.presentation:
+            continue
+        rect = b.presentation_rect
+        if isinstance(rect, (list, tuple)) and len(rect) == 4:
+            right = max(right, float(rect[0]) + float(rect[2]))
+            found = True
+    return right, found
+
+
 def build_m4l_device(
     patcher,
     kind: str,
@@ -712,13 +761,38 @@ def build_m4l_device(
         raise ValueError("audio_source is not valid for a midi_effect (it has no plugout~)")
     if midi is not None and kind != "midi_effect":
         raise ValueError("midi_source is only valid for a midi_effect (midiout)")
+    check_varname_collisions(patcher, [s["varname"] for s in specs])
+
+    # With a source, the caller's chain already holds the device input
+    # (plugin~ / midiin): reuse it instead of adding a second, unwired one
+    # (review WR-01). The source must exist before the build, so the chain
+    # cannot start from a box this call would create.
+    existing_in = None
+    if kind == "audio_effect" and audio is not None:
+        existing_in = next((b for b in patcher.boxes if b.name == "plugin~"), None)
+        if existing_in is None:
+            raise ValueError(
+                "audio_source on an audio_effect needs the chain's plugin~ in the "
+                "patcher first (build it from patcher.add_box('plugin~')), or omit "
+                "audio_source for the plugin~ -> plugout~ pass-through"
+            )
+    elif kind == "midi_effect" and midi is not None:
+        existing_in = next((b for b in patcher.boxes if b.name == "midiin"), None)
+        if existing_in is None:
+            raise ValueError(
+                "midi_source on a midi_effect needs the chain's midiin in the "
+                "patcher first (build it from patcher.add_box('midiin')), or omit "
+                "midi_source for the midiin -> midiout pass-through"
+            )
 
     dev = M4LDevice(kind=kind)
 
     # 1. Input box, 2. output box (Live template objects, bare forms).
     if kind == "audio_effect":
-        dev.plugin = patcher.add_box("plugin~", x=200.0, y=340.0)
-    elif kind == "midi_effect" or midi_in:
+        dev.plugin = existing_in or patcher.add_box("plugin~", x=200.0, y=340.0)
+    elif kind == "midi_effect":
+        dev.midiin = existing_in or patcher.add_box("midiin", x=200.0, y=340.0)
+    elif midi_in:
         dev.midiin = patcher.add_box("midiin", x=200.0, y=340.0)
     if kind == "midi_effect":
         dev.midiout = patcher.add_box("midiout", x=200.0, y=400.0)
@@ -792,7 +866,12 @@ def build_m4l_device(
 
         parameters = patcher.props.setdefault("parameters", {})
         if _banks_replaceable(parameters.get("parameterbanks")):
-            parameters["parameterbanks"] = plan_push_banks([s["name"] for s in specs])
+            # Every device parameter, not only this call's (review WR-04):
+            # once written the banks are no longer placeholders, so polish
+            # would never add the earlier ones.
+            new_names = [s["name"] for s in specs]
+            earlier = [n for n in _existing_param_longnames(patcher) if n not in new_names]
+            parameters["parameterbanks"] = plan_push_banks(earlier + new_names)
         else:
             warnings.warn(
                 "patcher.parameters.parameterbanks already holds user-defined banks "
@@ -807,19 +886,31 @@ def build_m4l_device(
             )
 
     # Presentation grid inside Live's 169 px device height (Rule #9).
+    # Existing presentation UI is kept: the grid starts right of it and
+    # devicewidth only grows; openrect/latency are set only when absent
+    # (review WR-03).
     if presentation and dev.dials:
+        # Measured before the dials join presentation.
+        right, has_ui = _presentation_extent(patcher)
+        x0 = right + _GRID_MARGIN if has_ui else _GRID_MARGIN
         ncols = _presentation_cols(len(dev.dials))
         for i, d in enumerate(dev.dials):
             row, col = divmod(i, ncols)
             patcher.add_to_presentation(d, [
-                _GRID_MARGIN + _GRID_DX * col,
+                x0 + _GRID_DX * col,
                 _GRID_MARGIN + _GRID_DY * row,
                 _DIAL_W,
                 _DIAL_H,
             ])
         patcher.props["openinpresentation"] = 1
-        patcher.props["devicewidth"] = _GRID_MARGIN + _GRID_DX * ncols
-        patcher.props["openrect"] = [0.0, 0.0, 0.0, DEVICE_HEIGHT]
-        patcher.props["latency"] = 0
+        width = x0 + _GRID_DX * ncols
+        current = patcher.props.get("devicewidth")
+        if isinstance(current, (int, float)) and current > width:
+            width = current
+        patcher.props["devicewidth"] = width
+        if patcher.props.get("openrect") is None:
+            patcher.props["openrect"] = [0.0, 0.0, 0.0, DEVICE_HEIGHT]
+        if patcher.props.get("latency") is None:
+            patcher.props["latency"] = 0
 
     return dev

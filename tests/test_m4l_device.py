@@ -541,20 +541,101 @@ def test_instrument_stereo_source_pair():
 
 def test_audio_effect_with_source_has_no_passthrough():
     p = Patcher()
+    pin = p.add_box("plugin~", x=400.0, y=150.0)
     osc = p.add_box("cycle~", ["220"], x=400.0, y=200.0)
-    p.add_m4l_device("audio_effect", audio_source=(osc, 0))
+    p.add_connection(pin, 0, osc, 0)
+    dev = p.add_m4l_device("audio_effect", audio_source=(osc, 0))
     cords = _cords(p)
+    assert dev.plugin is pin
+    assert [b.name for b in p.boxes].count("plugin~") == 1
     assert not [c for c in cords if c[0] == "plugin~" and c[2] == "plugout~"]
     assert ("cycle~", 0, "plugout~", 0) in cords and ("cycle~", 0, "plugout~", 1) in cords
 
 
 def test_midi_effect_with_source():
     p = Patcher()
+    mi = p.add_box("midiin", x=400.0, y=150.0)
     mk = p.add_box("makenote", ["100", "500"], x=400.0, y=200.0)
-    p.add_m4l_device("midi_effect", midi_source=(mk, 0))
+    dev = p.add_m4l_device("midi_effect", midi_source=(mk, 0))
     cords = _cords(p)
+    assert dev.midiin is mi
+    assert [b.name for b in p.boxes].count("midiin") == 1
     assert ("midiin", 0, "midiout", 0) not in cords
     assert ("makenote", 0, "midiout", 0) in cords
+
+
+def test_source_without_device_input_raises_before_building():
+    """WR-01: a source chain with no plugin~/midiin would leave a dangling input."""
+    for kind, key, name, args in (
+        ("audio_effect", "audio_source", "cycle~", ["220"]),
+        ("midi_effect", "midi_source", "makenote", ["100", "500"]),
+    ):
+        p = Patcher()
+        src = p.add_box(name, args, x=400.0, y=200.0)
+        before = len(p.boxes)
+        with pytest.raises(ValueError, match="first"):
+            p.add_m4l_device(kind, **{key: (src, 0)})
+        assert len(p.boxes) == before
+
+
+def test_midi_source_output_passes_midi_passthrough():
+    """WR-01: the builder's own output no longer trips its own critic."""
+    from src.maxpat.critics.m4l_critic import review_m4l
+
+    p = Patcher()
+    mi = p.add_box("midiin", x=400.0, y=150.0)
+    mk = p.add_box("makenote", ["100", "500"], x=400.0, y=200.0)
+    p.add_connection(mi, 0, mk, 0)
+    p.add_m4l_device("midi_effect", midi_source=(mk, 0))
+    rules = {r.rule for r in review_m4l(p.to_dict(), "midi_effect")}
+    assert "midi_passthrough" not in rules
+
+
+def test_varname_collision_raises_before_building():
+    """WR-02: a dial varname equal to an existing box varname is refused."""
+    p = Patcher()
+    gen = p.add_box("cycle~", ["220"], x=400.0, y=200.0)
+    gen.extra_attrs["varname"] = "synth"
+    before = len(p.boxes)
+    with pytest.raises(ValueError, match="varname"):
+        p.add_m4l_device("instrument", [{"name": "synth", "min": 0, "max": 1, "default": 0.5}])
+    assert len(p.boxes) == before
+
+
+def test_gen_synth_param_named_like_gen_varname_raises():
+    """WR-02: add_m4l_gen_synth refuses a param equal to gen_varname, before gen~ exists."""
+    p = Patcher()
+    with pytest.raises(ValueError, match="gen_varname"):
+        p.add_m4l_gen_synth([("synth", 0.0, 1.0)])
+    assert p.boxes == []
+
+
+def test_presentation_grid_keeps_existing_ui():
+    """WR-03: dials go right of existing presentation UI; devicewidth only grows."""
+    p = Patcher()
+    old = p.add_box("live.dial", x=10.0, y=10.0)
+    p.add_to_presentation(old, [8.0, 8.0, 120.0, 48.0])
+    p.props["devicewidth"] = 400.0
+    p.props["openrect"] = [0.0, 0.0, 300.0, 169.0]
+    dev = p.add_m4l_device("audio_effect", [{"name": "Mix", "min": 0, "max": 1, "default": 0.5}])
+    rect = dev.dials[0].presentation_rect
+    assert rect[0] >= 128.0
+    assert p.props["devicewidth"] == 400.0
+    assert p.props["openrect"] == [0.0, 0.0, 300.0, 169.0]
+
+
+def test_banks_include_existing_parameters():
+    """WR-04: planned banks cover parameters already in the patcher."""
+    p = Patcher()
+    p.add_m4l_device("audio_effect", [{"name": "Cutoff Freq", "min": 20, "max": 20000, "default": 1000}],
+                     banks=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", BoxMovedWarning)  # second skeleton's I/O boxes
+        p.add_m4l_device("instrument", [{"name": "Out Gain", "min": -70, "max": 6, "default": 0}],
+                         midi_in=False)
+    banked = {n for bank in p.props["parameters"]["parameterbanks"].values()
+              for n in bank["parameters"] if n != "-"}
+    assert banked == {"Cutoff Freq", "Out Gain"}
 
 
 def test_bad_sources_raise_before_building():
