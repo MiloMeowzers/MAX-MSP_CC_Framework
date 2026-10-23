@@ -590,11 +590,16 @@ class TestGainBothInlets:
         assert "reaches '*~' (obj-9) inlet 0 " in ug[0].finding
 
     def test_line_into_inlet_0_with_unit_arg(self, db):
+        """``line~ -> *~ 1.`` (inlet 1 empty) is arithmetic, not a gain stage
+        (quick 261022-ud6 CR-01); it is judged where it reaches a real gain."""
         boxes = [_msg("obj-2", "100 500"), _line_tilde(), _mul(text="*~ 1.")]
         lines = [_line("obj-2", 0, "obj-8", 0), _line("obj-8", 0, "obj-9", 0)]
+        assert _ug(_dsp(_patch(boxes, lines), db)) == []
+        boxes += [_mul("obj-10", "*~"), _osc()]
+        lines += [_line("obj-9", 0, "obj-10", 1), _line("obj-7", 0, "obj-10", 0)]
         ug = _ug(_dsp(_patch(boxes, lines), db))
         assert len(ug) == 1
-        assert "inlet 0 via line~" in ug[0].finding
+        assert "reaches '*~' (obj-10) inlet 1 via line~" in ug[0].finding
 
     def test_line_into_inlet_0_scaled_by_arg_safe(self, db):
         boxes = [_msg("obj-2", "100"), _line_tilde(), _mul(text="*~ 0.01")]

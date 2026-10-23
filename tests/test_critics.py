@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from src.maxpat.critics.base import CriticResult
-from src.maxpat.critics.dsp_critic import review_dsp, _is_normalizer, _GAIN_NAMES
+from src.maxpat.critics.dsp_critic import review_dsp, _GAIN_NAMES
 from src.maxpat.critics.structure_critic import review_structure
 from src.maxpat.critics.rnbo_critic import review_rnbo
 from src.maxpat.critics.ext_critic import review_external
@@ -1477,27 +1477,27 @@ class TestDSPCriticGainSafety:
         assert len(blockers) >= 1, f"Expected blocker for number->*~ inlet 1, got: {results}"
 
 
-    # --- Task 1: expr/vexpr normalizer + MC gain objects ---
+    # --- Task 1: expr/vexpr + MC gain objects ---
 
-    def test_expr_normalizer_with_division(self):
-        """expr containing '/ 127.' is a normalizer."""
-        box = {"maxclass": "newobj", "text": "expr $f1 / 127."}
-        assert _is_normalizer(box) is True
-
-    def test_expr_normalizer_rejected_without_pattern(self):
-        """expr with '$i1 + $i2' (no division/scaling) is NOT a normalizer."""
-        box = {"maxclass": "newobj", "text": "expr $i1 + $i2"}
-        assert _is_normalizer(box) is False
-
-    def test_vexpr_normalizer_with_scale_pattern(self):
-        """vexpr with '/ 255.' is a normalizer."""
-        box = {"maxclass": "newobj", "text": "vexpr $f1 / 255."}
-        assert _is_normalizer(box) is True
-
-    def test_vexpr_not_normalizer_generic_multiply(self):
-        """vexpr with '$f1 * $f2' (variable multiply) is NOT a normalizer."""
-        box = {"maxclass": "newobj", "text": "vexpr $f1 * $f2"}
-        assert _is_normalizer(box) is False
+    def test_expr_and_vexpr_stop_the_trace(self):
+        """An expr / vexpr has an unknown output range: the Q26 trace stops
+        there with no finding, whatever the expression (the former
+        _is_normalizer pattern test was dead code -- quick 261022-ud6 IN-03)."""
+        for text in ("expr $f1 / 127.", "expr $i1 + $i2", "vexpr $f1 * $f2"):
+            boxes = [
+                {"id": "obj-1", "maxclass": "newobj", "text": "ctlin",
+                 "numinlets": 1, "numoutlets": 3, "outlettype": ["", "", ""]},
+                {"id": "obj-2", "maxclass": "newobj", "text": text,
+                 "numinlets": 2, "numoutlets": 1, "outlettype": [""]},
+                {"id": "obj-3", "maxclass": "newobj", "text": "*~",
+                 "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"]},
+            ]
+            lines = [
+                {"source": ["obj-1", 0], "destination": ["obj-2", 0]},
+                {"source": ["obj-2", 0], "destination": ["obj-3", 1]},
+            ]
+            results = review_dsp(_make_patch(boxes, lines))
+            assert not [r for r in results if "unsafe gain" in r.finding.lower()], text
 
     def test_mc_multiply_in_gain_names(self):
         """mc.*~ is in _GAIN_NAMES."""
@@ -1695,8 +1695,10 @@ class TestDSPCriticGainSafety:
         assert len(blockers) == 0, f"Expected no blocker for normalized MIDI through line~, got: {results}"
 
     def test_line_tilde_to_inlet_0_is_traced(self):
-        """message '100 500' -> line~ -> *~ 1. inlet 0 (inlet 1 empty): one
-        blocker naming inlet 0 -- both *~ inlets are traced (Q26 / E6)."""
+        """message '100 500' -> line~ -> *~ inlet 0 with cycle~ on inlet 1: one
+        blocker naming inlet 0 -- both *~ inlets are traced (Q26 / E6). With
+        inlet 1 empty the box is arithmetic (``*~ 1.`` scales a ramp), not a
+        gain stage, and is not judged (quick 261022-ud6 CR-01)."""
         boxes = [
             {
                 "id": "obj-1",
@@ -1729,6 +1731,16 @@ class TestDSPCriticGainSafety:
         ]
         patch = _make_patch(boxes, lines)
         results = review_dsp(patch)
+        blockers = [r for r in results if r.severity == "blocker" and "unsafe gain" in r.finding.lower()]
+        assert blockers == [], f"*~ 1. with no audio operand is arithmetic, got: {results}"
+
+        boxes.append({
+            "id": "obj-4", "maxclass": "newobj", "text": "cycle~ 440",
+            "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"],
+        })
+        boxes[2]["text"] = "*~"
+        lines.append({"source": ["obj-4", 0], "destination": ["obj-3", 1]})
+        results = review_dsp(_make_patch(boxes, lines))
         blockers = [r for r in results if r.severity == "blocker" and "unsafe gain" in r.finding.lower()]
         assert len(blockers) == 1, f"Expected one unsafe gain blocker for line~ to inlet 0, got: {results}"
         assert "reaches '*~' (obj-3) inlet 0 via line~" in blockers[0].finding
