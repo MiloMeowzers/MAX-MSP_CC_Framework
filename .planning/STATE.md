@@ -62,7 +62,7 @@ v5.0-specific roadmap decisions:
 
 ### Pending Todos
 
-- v6.0.0 release (261022-ud6): full suite green on 3.10, then tag `v6.0.0` (user confirms the push); link the npm trusted publisher on npmjs.com before the tag run.
+- ~~v6.0.0 release~~ DONE 2026-10-23: tag v6.0.0, GitHub release + npm create-max-framework@6.0.0 via trusted publishing (OIDC). NPM_TOKEN secret can now be deleted.
 - MAX / Live confirmation items listed in the 261022-ud6 wp*-SUMMARY.md files (theme fills, legacy-layout writer on a Max 8 file, gen~ -> mc.gen~ replace, M4L Q15/Q40 Live check, RNBO builder shape).
 
 ### Blockers/Concerns
@@ -141,7 +141,7 @@ None.
 | 261022-mis | Implement Q38 in .planning/reviews/2026-10-11-fix-plan.md — idiom allowlist, objectfile aliases, version-aware I/O | 2026-10-23 | 549400aa | Verified | [261022-mis-implement-q38-in-planning-reviews-2026-1](./quick/261022-mis-implement-q38-in-planning-reviews-2026-1/) |
 | 261022-o2q | Implement Q39 in .planning/reviews/2026-10-11-fix-plan.md — critic quick-fix payloads and /max-iterate --fix | 2026-10-23 | a38c65db | Needs Review | [261022-o2q-implement-q39-in-planning-reviews-2026-1](./quick/261022-o2q-implement-q39-in-planning-reviews-2026-1/) |
 | 261022-pqu | Implement Q40 in .planning/reviews/2026-10-11-fix-plan.md — M4L device builder and .amxd export | 2026-10-23 | c0396f5f | Needs Review | [261022-pqu-implement-q40-in-planning-reviews-2026-1](./quick/261022-pqu-implement-q40-in-planning-reviews-2026-1/) |
-| 261022-ud6 | Review Q1-Q40 for regressions and fix every finding (WP1-WP6 parallel, WP7a handoffs, WP7b Q23, WP8 docs + v6.0.0 CHANGELOG) | 2026-10-23 | 2a2c24a5 (code) + WP8 docs | Needs Review | [261022-ud6-review-q1-q40-improvements-for-regressio](./quick/261022-ud6-review-q1-q40-improvements-for-regressio/) |
+| 261022-ud6 | Review Q1-Q40 for regressions and fix every finding (WP1-WP6 parallel, WP7a handoffs, WP7b Q23, WP8 docs + v6.0.0 CHANGELOG) | 2026-10-23 | 2a2c24a5 (code) + WP8 docs | Released v6.0.0 | [261022-ud6-review-q1-q40-improvements-for-regressio](./quick/261022-ud6-review-q1-q40-improvements-for-regressio/) |
 
 ## Deferred Items
 
