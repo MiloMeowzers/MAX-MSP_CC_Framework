@@ -7,7 +7,7 @@ Shared reference for all agents when generating patches with bundled package obj
 Covers all packages in `.claude/max-objects/packages/`:
 
 - **Bundled** (ship with Max 9): ableton-dsp, BEAP, jit.mo, Jitter Geometry, Jitter Tools, maxforlive-elements, Mira, RNBO Guitar, VIDDLL, Vizzie.
-- **Community** (separate install via Package Manager or manual): ABL Effect Modules, abclib, Bach, Cage, catart-mubu, CNMAT, cv.jit, Dada, EARS, ease, FlowSwing, FluCoMa, grainflow, IRCAM Spat, ml-lib, ml.star, nn_tilde, Odot, Rhythmic Time Toolkit.
+- **Community** (separate install via Package Manager or manual): ABL Effect Modules, abclib, Bach, Cage, catart-mubu, CNMAT, cv.jit, Dada, EARS, ease, FlowSwing, FluCoMa, grainflow, IRCAM Spat, ml-lib, ml.star, nn_tilde, Odot, Rhythmic Time Toolkit, Vision (Cycling '74, Max 9.2+).
 
 For per-package install state and object counts, see `package_info.json` (`installed`, `extracted`, `object_count` fields).
 
