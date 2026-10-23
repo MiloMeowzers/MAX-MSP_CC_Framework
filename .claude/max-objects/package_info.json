@@ -317,5 +317,16 @@
     "object_count": 18,
     "extracted": true,
     "installed": false
+  },
+  "Vision": {
+    "name": "Vision",
+    "tier": "community",
+    "prefix": "jit.vis.",
+    "version": "1.0.2",
+    "install_method": "package_manager",
+    "description": "The package provides cross platform support for hands/body/face/object tracking, image segmentation, and depth estimation tools, all with a simple, common UI and output behavior.",
+    "object_count": 22,
+    "extracted": true,
+    "installed": true
   }
 }

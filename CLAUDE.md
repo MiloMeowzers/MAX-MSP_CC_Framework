@@ -231,6 +231,7 @@ All patches target MAX 9 -- do not ask users to choose a version.
 - Check `min_version` field before using objects: MAX 9 objects (`array.*`, `string.*`, `abl.*`) need MAX 9+; MC objects (`mc.*`) need MAX 8.1+.
 - The 12 Max 9.2 objects (`min_version: 9.2`) and the 9.2 messages/attributes (NOT version-tagged in the DB) are listed in `.claude/skills/references/max-9.2-changes.md`. A patch meant to open on an older 9.x build must avoid both.
 - `validate_patch(patch, target_version="9.0")` warns (layer `version`) when a box needs a newer Max or uses a port an older build lacks; use it for collaborators on older 9.x builds.
+- Vision package objects (`jit.vis.*`, Cycling '74 Vision 1.0.2) need Max 9.2+ and are unverified until confirmed in MAX.
 
 ## Bpatcher and Abstraction Arguments (`#N` Substitution)
 
