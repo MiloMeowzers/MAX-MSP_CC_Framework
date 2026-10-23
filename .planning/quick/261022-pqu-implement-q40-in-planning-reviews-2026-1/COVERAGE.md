@@ -1,0 +1,1 @@
+No external API integration: Q40 adds a local Python builder, an .amxd file codec and critic checks inside src.maxpat (stdlib only, no network service, SDK or remote API); the detector matched the word "api" in the plan's internal Patcher API wording.
