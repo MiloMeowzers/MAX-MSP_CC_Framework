@@ -28,6 +28,12 @@ not detect:
     pattr / pattrstorage restore (D-02) or slaved gain~ input. A warning on
     an edit, a blocker for a new patch (``is_new``; the save gate sets it
     for a file with no baseline).
+  - Q23 vocabulary (fix-plan Q23; review §4.4 R7 / R10): int truncation
+    (warning; a float source into arg-less ``+ - * /`` / ``ftom`` or an
+    integer-range ``scale``, D7), MC bare list (note; a bare list into an
+    ``mc.*`` wrapper, D9) -- both in max scopes -- and unmatched send /
+    receive / value / buffer names (warning; once per review over the
+    whole tree, closed trees only, D6).
 
 Every scope of the shared :class:`src.maxpat.graph.PatchGraph` is reviewed
 on its own boxes and cords (Q20); nested findings carry
@@ -105,6 +111,11 @@ def review_structure(
          load (parameter initial value, loadmess / loadbang path, pattr /
          pattrstorage restore -- D-02 -- or a slaved gain~ input). A
          warning, or a blocker when *is_new*. Not run in rnbo scopes.
+      8. Int truncation (warning; Q23 D7) and MC bare list (note; Q23 D9),
+         max scopes only.
+      9. Unmatched names (warning; Q23 D6): once, after the per-scope
+         loop, over every max scope of a closed tree; each finding is
+         tagged with its own scope.
 
     Gen scopes run only check 6. Top-level results come first, nested
     scopes follow in pre-order, tagged with their path.
@@ -140,8 +151,14 @@ def review_structure(
             found.extend(_check_dollar_arity(scope, dbh))
             found.extend(trigger_order)
             found.extend(_check_uninitialized_state(graph, scope, dbh, is_new, ctx))
+            if scope.scope != "rnbo":
+                # Q23 (D7, D9): RNBO math is float and has no MC wrappers
+                found.extend(_check_int_truncation(scope, dbh))
+                found.extend(_check_mc_bare_list(scope, dbh))
         found.extend(_check_redundant_connections(scope.edges))
         results.extend(tag_results(found, scope.path))
+    # Q23 (D6): one pass over the whole tree, each finding tagged in its scope
+    results.extend(_check_unmatched_names(graph, dbh))
     return results
 
 
@@ -1508,5 +1525,401 @@ def _check_uninitialized_state(graph, scope, dbh, is_new, ctx) -> list[CriticRes
             severity, finding, _UNINIT_SUGGESTION,
             rule="uninitialized_state",
             box_ids=finding_ids(box_id, dsp[1] if dsp is not None else None),
+        ))
+    return results
+
+
+# ===========================================================================
+# Q23 vocabulary checks (fix-plan Q23; review §4.4 R7 / R10; quick 261022-ud6
+# WP7b, review-docs-completion CR-01). Graph-shaped, so they live in the
+# critic (planner decision D1); none is a blocker.
+# ===========================================================================
+
+
+def _db_exists(dbh, name) -> bool:
+    """Guarded ``exists``: False on any error or a non-str name."""
+    if not isinstance(name, str) or not name:
+        return False
+    try:
+        return bool(dbh.get().exists(name))
+    except Exception:
+        return False
+
+
+def _db_messages(dbh, name) -> list:
+    """Guarded ``messages``: ``[]`` on any error or an unknown name."""
+    if not isinstance(name, str) or not name:
+        return []
+    try:
+        out = dbh.get().messages(name)
+    except Exception:
+        return []
+    return out if isinstance(out, list) else []
+
+
+def _positional_args(box) -> list:
+    """newobj argument tokens up to the first ``@`` attribute."""
+    out: list = []
+    for token in walk.box_args(box):
+        if token.startswith("@"):
+            break
+        out.append(token)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Unmatched send / receive / value / buffer names (D6)
+# ---------------------------------------------------------------------------
+
+_SEND_NAMES = frozenset({"s", "send"})
+_RECEIVE_NAMES = frozenset({"r", "receive"})
+_SEND_SIG_NAMES = frozenset({"send~", "mc.send~"})
+_RECEIVE_SIG_NAMES = frozenset({"receive~", "mc.receive~"})
+_VALUE_NAMES = {"v": "value", "value": "value", "pv": "pv"}
+_BUFFER_DEFINERS = frozenset({"buffer~", "jit.buffer~"})
+_POLYBUFFER_NAMES = frozenset({"polybuffer~"})
+# Buffer users: name -> positional index of the buffer~ name
+_BUFFER_USERS = {
+    "play~": 0, "groove~": 0, "index~": 0, "peek~": 0, "wave~": 0,
+    "record~": 0, "poke~": 0, "buffir~": 0, "lookup~": 0, "info~": 0,
+    "2d.wave~": 0, "mc.play~": 0, "mc.groove~": 0, "mcs.play~": 0,
+    "mcs.groove~": 0, "mc.record~": 0, "cycle~": 1,
+}
+# Receivers MAX itself binds: a ``; max ...`` message is never unmatched
+_SYSTEM_RECEIVERS = frozenset({"max", "dsp", "jitter"})
+# Boxes that send or receive by computed names (scripts, forward)
+_OPEN_TREE_NAMES = frozenset({
+    "js", "jsui", "v8", "v8ui", "v8.codebox", "node.script", "node.codebox",
+    "forward", "pattrforward",
+})
+_ABSTRACTION_PORT_NAMES = frozenset({"in", "out", "in~", "out~", "thispoly~"})
+_FILE_CONTAINER_NAMES = frozenset({"poly~", "mc.poly~", "mcs.poly~", "pfft~"})
+_NAME_ARG_REQUIRED = (
+    _SEND_NAMES | _RECEIVE_NAMES | _SEND_SIG_NAMES | _RECEIVE_SIG_NAMES
+)
+
+_UNMATCHED_SUGGESTION = (
+    "Check the name for a typo (names are case-sensitive). If the other end "
+    "lives in another patch, an abstraction or a script, ignore this warning."
+)
+
+
+def _usable_name(token) -> bool:
+    """A literal file-local name: not ``#N``-substituted, not ``$``-built,
+    not a Max for Live ``---`` device-scoped name (shared by every file of
+    the device; bundle FilterTaps/bdband2), not a number (``send 15`` is a
+    "bad arguments" box -- max-bridge fx-badargs fixture)."""
+    return (isinstance(token, str) and bool(token) and "#" not in token
+            and not token.startswith(("$", "---")) and not _is_number(token))
+
+
+def _tree_is_open(graph, scopes) -> bool:
+    """D6: True when names may be matched outside this file (skip the check)."""
+    for box in graph.top.boxes.values():
+        maxclass = walk.box_maxclass(box)
+        if maxclass in ("inlet", "outlet"):
+            return True
+        if maxclass == "newobj" and walk.box_name(box) in _ABSTRACTION_PORT_NAMES:
+            return True
+    for scope in scopes:
+        for box in scope.boxes.values():
+            maxclass = walk.box_maxclass(box)
+            name = walk.box_name(box)
+            if maxclass == "bpatcher" and walk.inner_patcher(box) is None:
+                return True
+            if name in _OPEN_TREE_NAMES:
+                return True
+            if maxclass != "newobj":
+                continue
+            if name in _FILE_CONTAINER_NAMES and walk.inner_patcher(box) is None:
+                return True
+            if name in _NAME_ARG_REQUIRED and not _positional_args(box):
+                return True
+    return False
+
+
+def _check_unmatched_names(graph, dbh) -> list[CriticResult]:
+    """Warn on send / receive / value / buffer names with no other end (D6).
+
+    Q23 / R7 (review §4.1 class 7). Runs once per review over every max /
+    poly / bpatcher scope (gen and rnbo boxes are ignored) and only on a
+    CLOSED tree (:func:`_tree_is_open`): the top scope has no inlet /
+    outlet / ``in`` / ``out`` / ``thispoly~`` (it is not an abstraction or
+    voice), no bpatcher or poly~ / pfft~ loads a file, no script or
+    ``forward`` exists, every send / receive has a name and the DB knows
+    every newobj name (checked last, only when a named box was collected).
+    ``#N`` / ``$`` names are ignored; ``; max`` / ``; dsp`` / ``; jitter``
+    are never unmatched; a ``;`` target also matches any buffer~ /
+    polybuffer~ / value name (objects MAX binds to their names). Buffers
+    are checked one way (a user with no definer); an unused buffer~ is
+    normal.
+    """
+    scopes = [s for s in graph.scopes if s.scope not in ("gen", "rnbo")]
+    if not scopes or _tree_is_open(graph, scopes):
+        return []
+
+    sends: list = []      # (scope, box_id, box, name, kind) kind: ctl/sig/remote
+    receives: list = []   # (scope, box_id, box, name, kind)
+    values: list = []     # (scope, box_id, box, name, flavour)
+    users: list = []      # (scope, box_id, box, name)
+    defined: set = set()
+    poly_prefixes: set = set()
+    newobj_names: set = set()
+    for scope in scopes:
+        for box_id, box in scope.boxes.items():
+            for target in walk.message_remote_targets(box):
+                if _usable_name(target):
+                    sends.append((scope, box_id, box, target, "remote"))
+            if walk.box_maxclass(box) != "newobj":
+                continue
+            name = walk.box_name(box)
+            if not name:
+                continue
+            newobj_names.add(name)
+            args = _positional_args(box)
+            first = args[0] if args else None
+            if name in _SEND_NAMES and _usable_name(first):
+                sends.append((scope, box_id, box, first, "ctl"))
+            elif name in _RECEIVE_NAMES and _usable_name(first):
+                receives.append((scope, box_id, box, first, "ctl"))
+            elif name in _SEND_SIG_NAMES and _usable_name(first):
+                sends.append((scope, box_id, box, first, "sig"))
+            elif name in _RECEIVE_SIG_NAMES and _usable_name(first):
+                receives.append((scope, box_id, box, first, "sig"))
+            elif name in _VALUE_NAMES and _usable_name(first):
+                values.append((scope, box_id, box, first, _VALUE_NAMES[name]))
+            elif name in _BUFFER_DEFINERS and _usable_name(first):
+                defined.add(first)
+            elif name in _POLYBUFFER_NAMES and _usable_name(first):
+                defined.add(first)
+                poly_prefixes.add(first + ".")
+            elif name in _BUFFER_USERS:
+                index = _BUFFER_USERS[name]
+                token = args[index] if len(args) > index else None
+                if _usable_name(token) and not _is_number(token):
+                    users.append((scope, box_id, box, token))
+
+    if not (sends or receives or values or users):
+        return []
+    # Unknown newobj names are abstractions or externals: open tree (D6)
+    if any(not _db_exists(dbh, n) for n in sorted(newobj_names)):
+        return []
+
+    ctl_rx = {n for _, _, _, n, k in receives if k == "ctl"}
+    sig_rx = {n for _, _, _, n, k in receives if k == "sig"}
+    ctl_tx = {n for _, _, _, n, k in sends if k in ("ctl", "remote")}
+    sig_tx = {n for _, _, _, n, k in sends if k == "sig"}
+    value_names = {n for _, _, _, n, _ in values}
+    value_counts: dict = defaultdict(int)
+    for _, _, _, n, flavour in values:
+        value_counts[(flavour, n)] += 1
+
+    per_scope: dict = defaultdict(list)
+
+    def add(scope, finding, box_id):
+        per_scope[scope.path].append(CriticResult(
+            "warning", finding, _UNMATCHED_SUGGESTION,
+            rule="unmatched_names", box_ids=finding_ids(box_id),
+        ))
+
+    for scope, box_id, box, name, kind in sends:
+        text = walk.box_text(box)
+        if kind in ("ctl", "sig"):
+            if name not in (sig_rx if kind == "sig" else ctl_rx):
+                add(scope, f"Unmatched send: '{text}' ({box_id}) -- nothing in "
+                           f"this patch tree receives '{name}'", box_id)
+        elif (name not in ctl_rx and name not in _SYSTEM_RECEIVERS
+              and name not in defined and name not in value_names):
+            add(scope, f"Unmatched send: message '{text}' ({box_id}) targets "
+                       f"';{name}' -- nothing in this patch tree receives "
+                       f"'{name}'", box_id)
+    for scope, box_id, box, name, kind in receives:
+        if name not in (sig_tx if kind == "sig" else ctl_tx):
+            add(scope, f"Unmatched receive: '{walk.box_text(box)}' ({box_id}) -- "
+                       f"nothing in this patch tree sends to '{name}'", box_id)
+    for scope, box_id, box, name, flavour in values:
+        if value_counts[(flavour, name)] == 1:
+            add(scope, f"Unmatched value: '{walk.box_text(box)}' ({box_id}) is "
+                       f"the only {flavour} named '{name}' in this patch tree", box_id)
+    for scope, box_id, box, name in users:
+        if name in defined or any(name.startswith(p) for p in poly_prefixes):
+            continue
+        add(scope, f"Unmatched buffer: '{walk.box_text(box)}' ({box_id}) reads "
+                   f"buffer~ '{name}', but no buffer~, polybuffer~ or jit.buffer~ "
+                   f"named '{name}' is in this patch tree", box_id)
+
+    results: list[CriticResult] = []
+    for scope in scopes:
+        found = per_scope.get(scope.path)
+        if found:
+            results.extend(tag_results(found, scope.path))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Int truncation (D7)
+# ---------------------------------------------------------------------------
+
+_INT_MATH_NAMES = frozenset({"+", "-", "*", "/"})
+_FLOAT_ARG_MATH_NAMES = frozenset({"+", "-", "*", "/", "!-", "!/", "%", "pow"})
+_LIVE_NUMERIC_UI = frozenset({"live.dial", "live.numbox", "live.slider"})
+_INT_LITERAL_RE = re.compile(r"[+-]?\d+")
+
+
+def _live_parameter_type(box):
+    saa = box.get("saved_attribute_attributes")
+    valueof = saa.get("valueof") if isinstance(saa, dict) else None
+    return valueof.get("parameter_type") if isinstance(valueof, dict) else None
+
+
+def _is_float_source(box, outlet, dbh) -> bool:
+    """D7: True when *box* outlet *outlet* emits floats.
+
+    A UI box's saved outlettype is never trusted (MAX saves ``float`` for
+    every dial whatever ``floatoutput`` says).
+    """
+    maxclass = walk.box_maxclass(box)
+    if maxclass == "flonum":
+        return outlet == 0
+    if maxclass in ("dial", "slider"):
+        return outlet == 0 and box.get("floatoutput") == 1
+    if maxclass in _LIVE_NUMERIC_UI:
+        return outlet == 0 and _live_parameter_type(box) not in (1, 2)
+    if maxclass != "newobj":
+        return False
+    name = walk.box_name(box)
+    if name in _TRIGGER_NAMES:
+        letters = _trigger_letters(box)
+        return 0 <= outlet < len(letters) and letters[outlet] == "f"
+    if name in ("f", "float"):
+        return outlet == 0
+    if name in _FLOAT_ARG_MATH_NAMES:
+        if outlet == 0 and any("." in a for a in _positional_args(box)):
+            return True
+    saved = box.get("outlettype")
+    if isinstance(saved, list) and 0 <= outlet < len(saved) and saved[outlet] == "float":
+        return True
+    obj = dbh.lookup(name)
+    if obj is not None and not obj.get("variable_io"):
+        entry = _db_entry(obj.get("outlets"), outlet)
+        if isinstance(entry, dict) and entry.get("type") == "float":
+            return True
+    return False
+
+
+def _int_mode_kind(box) -> "str | None":
+    """D7: the kind of int-mode destination *box* is, or None.
+
+    ``"math"`` for arg-less ``+ - * /`` (any inlet), ``"ftom"`` for arg-less
+    ``ftom`` (inlet 0), ``"scale"`` for ``scale`` with two integer input
+    range arguments (inlet 0).
+    """
+    if walk.box_maxclass(box) != "newobj":
+        return None
+    name = walk.box_name(box)
+    args = _positional_args(box)
+    if name in _INT_MATH_NAMES and not args:
+        return "math"
+    if name == "ftom" and not args:
+        return "ftom"
+    if (name == "scale" and len(args) >= 2
+            and _INT_LITERAL_RE.fullmatch(args[0]) and _INT_LITERAL_RE.fullmatch(args[1])):
+        return "scale"
+    return None
+
+
+def _check_int_truncation(scope, dbh) -> list[CriticResult]:
+    """Warn on a float source feeding an int-mode box (D7; review §4.1 class 13).
+
+    Arg-less ``+ - * /`` and ``ftom`` and integer-range ``scale`` truncate
+    floats (TCI ``f -> + 0.0025 -> -``; 0f1becf, 503f92f). Max scopes only.
+    """
+    results: list[CriticResult] = []
+    for edge in scope.edges:
+        dst = scope.boxes.get(edge.dst)
+        src = scope.boxes.get(edge.src)
+        if not dst or not src or edge.signal:
+            continue
+        kind = _int_mode_kind(dst)
+        if kind is None or (kind != "math" and edge.inlet != 0):
+            continue
+        if not _is_float_source(src, edge.outlet, dbh):
+            continue
+        name = walk.box_name(dst)
+        if kind == "math":
+            suggestion = f"Give it a float argument (e.g. '{name} 0.')."
+        elif kind == "ftom":
+            suggestion = "Use 'ftom 0.' for float output."
+        else:
+            suggestion = "Use float input-range arguments (e.g. 'scale 0. 127. 0. 1.')."
+        results.append(CriticResult(
+            "warning",
+            f"Int truncation: '{walk.box_text(dst)}' ({edge.dst}) runs in int mode "
+            f"but inlet {edge.inlet} is fed by float source '{_box_label(src)}' "
+            f"({edge.src}) outlet {edge.outlet} -- the fractional part is dropped",
+            suggestion,
+            rule="int_truncation", box_ids=finding_ids(edge.dst, edge.src),
+            port=edge.inlet,
+        ))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# MC bare list (D9)
+# ---------------------------------------------------------------------------
+
+# A list into these MC objects is a ramp for every channel, by design
+_MC_LIST_RAMPS = frozenset({"mc.line~", "mc.curve~"})
+_DOLLAR_ARG_RE = re.compile(r"\$[1-9]")
+
+
+def _is_list_atom(token) -> bool:
+    return isinstance(token, str) and (
+        _is_number(token) or bool(_DOLLAR_ARG_RE.fullmatch(token)))
+
+
+def _sends_bare_list(box, outlet) -> bool:
+    """D9: a message with a 2+ token numeric segment, or a numeric pack/pak."""
+    if walk.box_maxclass(box) == "message":
+        return any(len(seg) >= 2 and _is_list_atom(seg[0])
+                   for seg in walk.message_segments(box))
+    if walk.box_maxclass(box) == "newobj" and outlet == 0:
+        if walk.box_name(box) in ("pack", "pak"):
+            args = _positional_args(box)
+            return not args or _is_number(args[0])
+    return False
+
+
+def _check_mc_bare_list(scope, dbh) -> list[CriticResult]:
+    """Note a bare list into an MC wrapper (D9; review §4.1 class 6).
+
+    Every channel of an ``mc.*`` wrapper receives the whole list (memory:
+    ji-harmonizer v0.0.2 ``440 550 660 -> mc.cycle~``); ``applyvalues``
+    distributes it. A wrapper is an ``mc.*`` newobj whose ``db.messages``
+    include ``applyvalues`` (groups.json, Q14), except mc.line~ /
+    mc.curve~ (a list there is a ramp for every channel).
+    """
+    results: list[CriticResult] = []
+    for edge in scope.edges:
+        dst = scope.boxes.get(edge.dst)
+        src = scope.boxes.get(edge.src)
+        if not dst or not src or edge.signal or walk.box_maxclass(dst) != "newobj":
+            continue
+        name = walk.box_name(dst)
+        if not name.startswith("mc.") or name in _MC_LIST_RAMPS:
+            continue
+        if not _sends_bare_list(src, edge.outlet):
+            continue
+        if "applyvalues" not in _db_messages(dbh, name):
+            continue
+        results.append(CriticResult(
+            "note",
+            f"MC bare list: '{_box_label(src)}' ({edge.src}) sends a bare list to "
+            f"MC wrapper '{name}' ({edge.dst}) inlet {edge.inlet} -- every channel "
+            f"receives the whole list; it is not distributed one value per channel",
+            "Prefix it with applyvalues (value k -> channel k), replicatevalues or "
+            "setvalue <chan> (e.g. 'prepend applyvalues').",
+            rule="mc_bare_list", box_ids=finding_ids(edge.src, edge.dst),
+            port=edge.inlet,
         ))
     return results
