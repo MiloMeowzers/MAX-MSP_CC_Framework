@@ -113,7 +113,12 @@ def review_patch(
             Q24 uninitialized-state findings (a UI value holder reaching
             DSP with nothing setting it at load) are blockers. False
             (default, an edit) keeps them warnings. The save gate passes
-            True for a file with no baseline; no other result changes.
+            True for a file with no baseline; no other result changes. A
+            generation loop that will save a new file (``/max-build``) must
+            pass True too, or it approves a warning the gate then refuses
+            (quick 261022-ud6 CR-04). The default stays False so reviews of
+            existing files (``/max-iterate``, ``/max-verify``, the
+            calibration tests) keep pre-existing findings non-blocking.
 
     One shared :class:`src.maxpat.graph.PatchGraph` is built per call and
     passed to the critics (S1, Q20).

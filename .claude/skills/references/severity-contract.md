@@ -7,8 +7,8 @@
 
 | | Validator | Critics |
 |---|---|---|
-| Entry point | `validate_patch(patch, db=None, allowed_packages=None, *, scope=None, target_version=None)` | `review_patch(patch_dict, code_context=None, ext_code=None, ext_archetype="message", *, db=None)` |
-| Result type | `ValidationResult` with `layer`, `level`, `message`, `proposed_removal` (plus the legacy `auto_fixed` flag) | `CriticResult` with `severity`, `finding`, `suggestion` |
+| Entry point | `validate_patch(patch, db=None, allowed_packages=None, *, scope=None, target_version=None)` | `review_patch(patch_dict, code_context=None, ext_code=None, ext_archetype="message", *, db=None, is_new=False)` |
+| Result type | `ValidationResult` with `layer`, `level`, `message`, `proposed_removal` (plus the legacy `auto_fixed` flag) | `CriticResult` with `severity`, `finding`, `suggestion` (plus `rule`, `box_ids`, `port`, `path` and an optional quick-fix `fix`) |
 | Question it answers | Is the patch mechanically valid? (JSON shape, objects exist, cords in range, domain rules, embedded GenExpr) | Is it well designed? (gain staging, fan-out, layout, contrast, device rules) |
 | Levels | `error`, `warning`, `info` | `blocker`, `warning`, `note` |
 
@@ -18,7 +18,9 @@ Layer 3 skips type/role checks (the `Unverified outlet types` warning, role-tier
 
 `target_version="9.0"` (opt-in, Q38) adds a `version` layer in max scopes only (nested max-scope patchers included): a `warning` for a box whose `min_version` is newer than the target, and for a cord on a port the target build lacks according to `version_io.json`. It never emits an error, so it never blocks `has_blocking_errors` or a save. An unparsable target raises ValueError.
 
-`review_patch` always runs the DSP, structure and layout critics. It adds the RNBO critic when an `rnbo~` box is present, the M4L critic when `plugin~`, `plugout~` or `live.thisdevice` is present, the package critic when package objects are present, and the external critic when `ext_code` is passed.
+`review_patch` always runs the DSP, structure and layout critics. It adds the RNBO critic when an `rnbo~` box is present, the M4L critic when `plugin~`, `plugout~` or `live.thisdevice` is present, the package critic when package objects are present, and the external critic when `ext_code` is passed. A patch whose only M4L marker is `live.thisdevice` (no `plugin~`, `plugout~`, `midiin` or `midiout`) is a helper abstraction: the M4L critic runs its per-scope checks and parameter-name uniqueness on it, never the device completeness or device quality checks. Every critic reviews every scope (top level, `p`, bpatcher, poly~, gen~, rnbo~ patchers); a nested finding carries `path` (the box-id chain, `obj-1/obj-2`) and a `[p synth] ` prefix on its `finding`.
+
+**`is_new`** changes exactly one critic result: the structure critic's uninitialized-state finding (Q24: a UI value holder that reaches DSP with nothing setting it at load -- no parameter initial value, loadmess / loadbang path, pattr restore or slaved gain~ input) is a `blocker` with `is_new=True` and a `warning` with `is_new=False` (the default). Pass `is_new=True` whenever the reviewed patch will be saved as a new file -- `/max-build`'s critic loop, and any flow that creates a file -- because the save gate reviews a file with no baseline with `is_new=True` (section 5). Reviewing a new file with the default would approve a warning that the gate then refuses. Keep the default for edits of an existing file (`/max-iterate`, `/max-verify`): a pre-existing uninitialized control then stays a warning, and the gate only refuses one the edit introduces.
 
 ## 2. Validator levels
 
@@ -68,6 +70,7 @@ if has_blocking_errors(results, is_new=True):
 | `blocker` | Revision request to the generator, with `finding` and `suggestion` | The generator fixes it |
 | `warning` | Reported to the user in the review summary (finding plus suggestion) | None |
 | `note` | Reported to the user in the review summary (finding plus suggestion) | None |
+| uninitialized-state (`rule == "uninitialized_state"`) | A `blocker` (revision request) with `is_new=True`, a `warning` (report only) with `is_new=False` | The generator initializes the control at load when it is a blocker |
 
 Warnings and notes are never written into the output: no `comment` boxes in the patch, no comments in GenExpr or JavaScript. Committed user patches would collect dozens of comment boxes that need deleting by hand, and none of the user-confirmed patches carry them. The summary is where the user reads them and decides.
 
@@ -79,13 +82,13 @@ The soft-limit "accept" option in the critic loop is the user's explicit confirm
 
 1. **Stale check first** (`save_patch_roundtrip` only). When `original_text` is given and the file on disk no longer equals it, `StaleFileError` is raised before the gate runs. Re-read with `read_patch(path)` and re-apply the edit.
 2. **Blocking set.** `validate_patch` and `review_patch` run on deepcopies with one cached database. Blocking findings are every validator `error` (proposed removals included; a legacy `auto_fixed` error without a proposal excluded) plus every critic `blocker`. Warnings, info and notes never block. The `.gendsp` and `.genjit` suffixes validate in gen scope, `.rnbopat` in rnbo scope.
-3. **Baseline.** `original_text`, else the file at `HEAD` in git, else the file on disk. With none, the file is new and every blocking finding refuses.
-4. **Matching.** A finding's key is its rule template (box ids, quoted names and numbers masked) plus its box ids. Keys are counted as a multiset: a finding blocks only when the new patch has more of that key than the baseline. Pre-existing findings save, so load-edit-save cycles on user patches that already hold third-party objects are not refused.
+3. **Baseline.** `original_text`, else the file at `HEAD` in git, else the file on disk. With none, the file is new: `review_patch` runs with `is_new=True` (an uninitialized control reaching DSP is then a blocker -- section 1) and every blocking finding refuses. A file with a baseline is reviewed with `is_new=False`.
+4. **Matching.** A finding's key is its rule template (box ids, quoted names and numbers masked) plus its box ids and its scope `path` (`""` at the top level). Keys are counted as a multiset: a finding blocks only when the new patch has more of that key than the baseline. Pre-existing findings save, so load-edit-save cycles on user patches that already hold third-party objects are not refused.
 5. **Port x-rank.** A subpatcher or abstraction `inlet`/`outlet` that exists in both versions and changes x-rank refuses the save, because parent cords address ports by x-rank. A port appended rightmost is fine.
 6. **Removed cords.** Cords in the reference (HEAD and `original_text`) that are missing from the new patch emit one `SaveGateWarning` listing them. It never refuses. Confirm the removal was intended.
 7. **Refusal.** `PatchValidationError` with `.findings` (the new `ValidationResult` / `CriticResult` objects), `.port_changes` and `.path`. Nothing was written.
 8. **`force=True`.** Saves anyway and emits a `SaveGateWarning` listing what was bypassed. Use it only with the user's confirmation.
-9. **Scope of the walk.** Blocking findings come from the top-level patcher (plus Layer 5's codeboxes in top-level `gen~` boxes, and the M4L critic's duplicate-parameter check, which walks subpatchers). The removed-cord and port x-rank checks walk every embedded patcher.
+9. **Scope of the walk.** Blocking findings come from every scope, not just the top level: the validator runs its layers on every embedded patcher (Q19) and every critic reviews every scope (Q20), so a blocker inside `[p sub]`, a bpatcher, a poly~ or an rnbo~ patcher refuses a save that introduces it, exactly like a top-level one. A nested finding is tagged with its `path` (and a `[p sub] ` prefix), which is part of its gate key, so a nested blocker never matches a top-level baseline finding. The removed-cord and port x-rank checks also walk every embedded patcher.
 
 `write_js(code, path)` has no gate. It writes and auto-commits first, then returns the code-validation results. An `error` there (for example `outlet() index 3 out of bounds`) is reported, never blocking. Read the returned list and fix it.
 
@@ -98,6 +101,7 @@ The soft-limit "accept" option in the critic loop is the user's explicit confirm
 | Validator `warning` (incl. `Unknown object`) | Fix when it breaks a rule (Rule #1) | Saved | Saved |
 | Validator `info` | None | Saved | Saved |
 | Critic `blocker` | Revision request | Refused | Refused if the edit introduced it |
+| Critic uninitialized-state | Revision request when reviewed with `is_new=True` (a new file), else report | Refused (blocker on a new file) | Saved (a warning on an edit) |
 | Critic `warning` / `note` | Report in the summary | Saved | Saved |
 | Port x-rank change | Restore the order | n/a | Refused |
 | Removed cord | Confirm it was intended | n/a | Saved with `SaveGateWarning` |

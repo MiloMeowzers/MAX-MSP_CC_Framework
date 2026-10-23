@@ -30,7 +30,7 @@ Generate MAX/MSP patches, Gen~ code, JavaScript, or other artifacts by routing t
    Each specialist creates a `Patcher` instance, builds the patch structure using `add_box()` and `add_connection()`, then applies styling, layout, and validation via `_apply_auto_styling(patcher)`, `apply_layout(patcher)`, `validate_patch(patcher.to_dict())`.
 
 5. **Critic loop** -- run the max-critic skill on generated output:
-   - Invoke `review_patch(patch_dict, code_context)` from `src.maxpat.critics`
+   - Invoke `review_patch(patch_dict, code_context, is_new=True)` from `src.maxpat.critics` -- a build writes a new file, and the save gate (step 6) reviews a file with no baseline with `is_new=True`, so the loop must see the same blockers (a Q24 uninitialized control is a blocker on a new file, a warning on an edit). When a build overwrites an existing file in `generated/`, pass `is_new=False` instead.
    - If blockers found: request revisions from the generator
    - If clean or warnings-only: approve the output unchanged and list the warnings and notes in the summary (never write them into the patch or code)
    - Loop continues until clean (no hard round limit)

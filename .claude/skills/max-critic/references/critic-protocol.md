@@ -13,8 +13,10 @@ Accept `patch_dict` (and optionally `code_context` with genexpr/js/n4m code stri
 ```python
 from src.maxpat.critics import review_patch, CriticResult
 
-results = review_patch(patch_dict, code_context=code_context, ext_code=ext_code, ext_archetype=ext_archetype)
+results = review_patch(patch_dict, code_context=code_context, ext_code=ext_code, ext_archetype=ext_archetype, is_new=is_new)
 ```
+
+`is_new` must match the save that follows: `True` for a new file (`/max-build`, or any flow that creates a file), `False` (the default) for an edit of an existing one. The save gate reviews a file with no baseline with `is_new=True`, where a Q24 uninitialized-state finding is a blocker; reviewing it with `is_new=False` in the loop would approve a warning the gate then refuses.
 
 This invokes the DSP critic (`review_dsp`), structure critic (`review_structure`), and conditionally the RNBO critic (`review_rnbo`, when rnbo~ boxes detected) and external critic (`review_external`, when `ext_code` provided).
 
