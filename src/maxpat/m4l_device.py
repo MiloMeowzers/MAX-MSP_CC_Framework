@@ -673,6 +673,8 @@ def build_m4l_device(
     audio_source=None,
     midi_source=None,
     midi_in: bool = True,
+    init_chain: bool = True,
+    banks: bool = True,
     presentation: bool = True,
     modmode: "ModMode | int | str" = ModMode.NONE,
 ) -> M4LDevice:
@@ -680,7 +682,26 @@ def build_m4l_device(
 
     See ``Patcher.add_m4l_device`` for the full contract. Everything is
     validated before the first box is created. Box creation order is fixed
-    (I/O boxes, I/O cords, dials, ...) so add_m4l_gen_synth's ids hold.
+    -- I/O boxes, I/O cords, dials, then live.thisdevice / trigger and
+    live.banks -- so add_m4l_gen_synth's ids hold.
+
+    Init chain (``init_chain=True``): ``live.thisdevice`` outlet 0 bangs
+    when the device is opened and completely initialized, every time a
+    preset is loaded and when the device is saved (refpage
+    live.thisdevice.maxref.xml). Every dial WITHOUT ``param_connect`` is
+    banged so it re-outputs its restored value to the caller's DSP: one
+    unbound dial gets a direct cord, two or more get ``t b b ...`` fired
+    right to left. gen~-bound dials are served by ``param_connect`` and get
+    no cord. With no unbound dial, live.thisdevice stands alone (it still
+    marks the patch as a device for ``detect_m4l_device_type``).
+    [ASSUMED] that a banged live.dial re-outputs in Live -- part of the
+    Q40 Live check.
+
+    Banks (``banks=True`` and at least one param):
+    ``patcher.parameters.parameterbanks`` = ``m4l_polish.plan_push_banks``
+    of the longnames, unless user-defined banks are already there (kept,
+    with a UserWarning); one newobj ``live.banks`` (an existing one is
+    reused).
     """
     if kind not in KIND_CODES:
         raise ValueError(f"unknown device kind {kind!r}; expected one of {sorted(KIND_CODES)}")
@@ -748,6 +769,42 @@ def build_m4l_device(
             valueof["parameter_steps"] = spec["steps"]
         d.extra_attrs["saved_attribute_attributes"] = {"valueof": valueof}
         dev.dials.append(d)
+
+    # 5. live.thisdevice init chain, after the dials (ids of the legacy path hold).
+    if init_chain:
+        dev.thisdevice = patcher.add_box(
+            "live.thisdevice", x=50.0, y=20.0, skip_overlap_check=True,
+        )
+        unbound = [d for d, spec in zip(dev.dials, specs) if spec["param_connect"] is None]
+        if len(unbound) == 1:
+            patcher.add_connection(dev.thisdevice, 0, unbound[0], 0)
+        elif len(unbound) >= 2:
+            dev.init_trigger = patcher.add_box(
+                "t", ["b"] * len(unbound), x=50.0, y=60.0, skip_overlap_check=True,
+            )
+            patcher.add_connection(dev.thisdevice, 0, dev.init_trigger, 0)
+            for j, dial in enumerate(unbound):
+                patcher.add_connection(dev.init_trigger, j, dial, 0)
+
+    # 6. Push parameterbanks + live.banks.
+    if banks and dev.dials:
+        from src.maxpat.m4l_polish import _banks_replaceable, plan_push_banks
+
+        parameters = patcher.props.setdefault("parameters", {})
+        if _banks_replaceable(parameters.get("parameterbanks")):
+            parameters["parameterbanks"] = plan_push_banks([s["name"] for s in specs])
+        else:
+            warnings.warn(
+                "patcher.parameters.parameterbanks already holds user-defined banks "
+                "-- kept; the new parameters are not added to them",
+                UserWarning,
+                stacklevel=3,
+            )
+        dev.banks = next((b for b in patcher.boxes if b.name == "live.banks"), None)
+        if dev.banks is None:
+            dev.banks = patcher.add_box(
+                "live.banks", x=350.0, y=400.0, skip_overlap_check=True,
+            )
 
     # Presentation grid inside Live's 169 px device height (Rule #9).
     if presentation and dev.dials:

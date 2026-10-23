@@ -1044,6 +1044,8 @@ class BuildersMixin:
         audio_source: Any = None,
         midi_source: Any = None,
         midi_in: bool = True,
+        init_chain: bool = True,
+        banks: bool = True,
         presentation: bool = True,
         modmode: Any = None,
     ) -> Any:
@@ -1082,6 +1084,18 @@ class BuildersMixin:
         ("Amount", "Amount2"). ``param_connect`` binds a dial to a gen~
         Param (``"<gen varname>::<Param>"``).
 
+        With ``init_chain=True`` a ``live.thisdevice`` is added after the
+        dials; its outlet 0 (device initialized, preset loaded, device
+        saved) bangs every dial that has no ``param_connect`` -- directly
+        for one, through ``t b b ...`` for two or more -- so the caller's
+        DSP receives the restored values. gen~-bound dials get no cord.
+
+        With ``banks=True`` (and at least one param)
+        ``patcher.parameters.parameterbanks`` is planned by
+        ``m4l_polish.plan_push_banks`` (the planner polish uses), and one
+        newobj ``live.banks`` is added or reused. User-defined banks already
+        in the patcher are kept with a UserWarning.
+
         With ``presentation=True`` every dial goes into a presentation grid
         inside Live's 169 px device height and the patcher gets
         ``openinpresentation 1``, ``devicewidth``, ``openrect`` and
@@ -1093,6 +1107,8 @@ class BuildersMixin:
             audio_source: ``(Box, outlet)`` or a ``((Box, o), (Box, o))`` pair.
             midi_source: ``(Box, outlet)`` feeding midiout (midi_effect only).
             midi_in: Add a midiin to an instrument (Live's template has one).
+            init_chain: Add the live.thisdevice init chain.
+            banks: Write Push parameterbanks and a live.banks box.
             presentation: Lay the dials out in presentation (Rule #9).
             modmode: Default ``parameter_modmode`` for specs without one
                 (None = ``ModMode.NONE``, as kicksynth-m4l used).
@@ -1114,6 +1130,8 @@ class BuildersMixin:
             audio_source=audio_source,
             midi_source=midi_source,
             midi_in=midi_in,
+            init_chain=init_chain,
+            banks=banks,
             presentation=presentation,
             modmode=ModMode.NONE if modmode is None else modmode,
         )
@@ -1125,7 +1143,15 @@ class BuildersMixin:
         gen_varname: str = "synth",
         gen_code: str | None = None,
     ) -> tuple["Box", list["Box"], "Box"]:
-        """Build a Live-ready M4L gen synth skeleton.
+        """Build a Live-ready M4L gen synth skeleton (built on add_m4l_device).
+
+        Since Q40 (quick 261022-pqu) this is a variant of
+        :meth:`add_m4l_device`: it adds the gen~, then calls
+        ``add_m4l_device("instrument", ..., audio_source=(gen_obj, 0),
+        midi_in=False, init_chain=False, banks=False, presentation=False)``
+        with fully explicit param specs, so its output is byte-identical to
+        the pre-Q40 builder (golden test). EXPERIMENTAL in Live like
+        add_m4l_device (the combined Q15/Q40 Live check is pending).
 
         D-15 minimum-viable skeleton: ``gen~`` + ``live.dial`` row +
         ``plugout~``. Each ``live.dial`` is bound to a gen~ ``Param`` via:
@@ -1176,12 +1202,39 @@ class BuildersMixin:
             ``(gen_obj, [live_dial, ...], plugout_obj)``.
 
         Raises:
-            ValueError: If ``params`` is empty.
+            ValueError: If ``params`` is empty; and (since Q40, from
+                add_m4l_device's spec validation) for duplicate names,
+                ``min >= max`` or non-numeric bounds.
         """
         from src.maxpat.m4l_constants import ParamType, UnitStyle, ModMode
 
         if not params:
             raise ValueError("params must not be empty")
+
+        # Fully explicit specs: inference, short-name abbreviation and the
+        # ModMode default never run, so the serialized output is the
+        # pre-Q40 one (tests/test_m4l_gen_synth_golden.py). T-31-04: the
+        # binding string stays this single f-string.
+        specs = [
+            {
+                "name": name,
+                "min": mn,
+                "max": mx,
+                "default": (mn + mx) / 2.0,
+                "varname": name,
+                "short_name": name,
+                "type": ParamType.FLOAT,
+                "unit": UnitStyle.FLOAT,
+                "modmode": ModMode.ABSOLUTE,
+                "param_connect": f"{gen_varname}::{name}",
+            }
+            for name, mn, mx in params
+        ]
+        # Validate before the first box exists, so a bad spec leaves the
+        # patcher untouched (add_m4l_device validates again; pure).
+        from src.maxpat.m4l_device import resolve_param_specs
+
+        resolve_param_specs(specs)
 
         # Default empty-but-compilable body so gen~ has Params declared.
         if gen_code is None:
@@ -1198,51 +1251,19 @@ class BuildersMixin:
         )
         gen_obj.extra_attrs["varname"] = gen_varname
 
-        # plugout~ is NOT in UI_MAXCLASSES (newobj with text "plugout~").
-        # A bare plugout~ is the stereo pair (2 inlets); the old channel
-        # argument "1" is obsolete (review D3). add_box resolves the maxclass.
-        plugout = self.add_box("plugout~", x=200.0, y=400.0)
-        # Direct gen~ -> plugout~ wiring (D-15: NO gain~/live.gain~/ezdac~).
-        # The mono gen~ output feeds both L and R; a signal fan-out, which
-        # the hot/cold ordering rule exempts.
-        self.add_connection(gen_obj, 0, plugout, 0)
-        self.add_connection(gen_obj, 0, plugout, 1)
-
-        # live.dial row above gen~. live.dial is in UI_MAXCLASSES + DB.
-        dials: list[Box] = []
-        dial_x = 50.0
-        dial_y = 100.0
-        dial_spacing_x = 60.0
-        for i, (name, mn, mx) in enumerate(params):
-            d = self.add_box(
-                "live.dial",
-                x=dial_x + i * dial_spacing_x,
-                y=dial_y,
-                skip_overlap_check=True,
-            )
-            # Top-level box attributes -- Box.to_dict flattens extra_attrs
-            # last (patcher.py creation path), so these surface at the box
-            # dict's top level. Pitfall 4 mitigation: round-trip test
-            # asserts param_connect lands at top-level.
-            d.extra_attrs["varname"] = name
-            d.extra_attrs["param_connect"] = f"{gen_varname}::{name}"
-            d.extra_attrs["parameter_enable"] = 1
-            d.extra_attrs["saved_attribute_attributes"] = {
-                "valueof": {
-                    "parameter_initial": [(mn + mx) / 2.0],
-                    "parameter_initial_enable": 1,
-                    "parameter_longname": name,
-                    "parameter_shortname": name,
-                    "parameter_mmin": mn,
-                    "parameter_mmax": mx,
-                    "parameter_modmode": int(ModMode.ABSOLUTE),
-                    "parameter_type": int(ParamType.FLOAT),
-                    "parameter_unitstyle": int(UnitStyle.FLOAT),
-                },
-            }
-            dials.append(d)
-
-        return gen_obj, dials, plugout
+        # Bare plugout~ (stereo pair) with the mono gen~ outlet 0 on BOTH
+        # inlets (review D3); NO gain~/live.gain~/ezdac~ (D-15). The legacy
+        # skeleton has no midiin, init chain, banks or presentation.
+        dev = self.add_m4l_device(
+            "instrument",
+            specs,
+            audio_source=(gen_obj, 0),
+            midi_in=False,
+            init_chain=False,
+            banks=False,
+            presentation=False,
+        )
+        return gen_obj, dev.dials, dev.plugout
 
     def add_js(
         self,

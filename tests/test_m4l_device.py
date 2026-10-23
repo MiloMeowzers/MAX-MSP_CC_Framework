@@ -677,3 +677,213 @@ def test_tracer_instrument_export_roundtrip(tmp_path):
     f = parse_amxd(export_amxd(d, tmp_path / "inst.amxd", "instrument").read_bytes())
     assert f.code == b"iiii"
     assert decode_payload(f.payload) == d
+
+
+# ===========================================================================
+# Task 2: live.thisdevice init chain, Push banks, add_m4l_gen_synth delegation
+# ===========================================================================
+
+
+def _num(box_id: str) -> int:
+    return int(box_id.split("-")[1])
+
+
+def _from(p, box):
+    return [(l.source_outlet, l.dest_id, l.dest_inlet) for l in p.lines if l.source_id == box.id]
+
+
+def _mixed_params():
+    return [
+        _spec("freq", 20.0, 2000.0, 220.0, param_connect="synth::freq"),
+        _spec("Out Gain", -70.0, 0.0, -12.0),
+        _spec("Octave", -2, 2, 0),
+        _spec("Attack", 1.0, 500.0, 10.0),
+    ]
+
+
+def test_init_chain_all_bound():
+    p, dev = _build("instrument", [_spec("freq", 20.0, 2000.0, 220.0, param_connect="s::freq"),
+                                   _spec("amp", 0.0, 1.0, 0.5, param_connect="s::amp")])
+    assert dev.thisdevice is not None and dev.thisdevice.name == "live.thisdevice"
+    assert dev.init_trigger is None
+    assert "trigger" not in _names(p) and "t" not in _names(p)
+    assert _from(p, dev.thisdevice) == []
+
+
+def test_init_chain_one_unbound_cords_directly():
+    p, dev = _build("instrument", [_spec("freq", 20.0, 2000.0, 220.0, param_connect="s::freq"),
+                                   _spec("Out Gain", -70.0, 0.0, -12.0)])
+    assert dev.init_trigger is None
+    assert _from(p, dev.thisdevice) == [(0, dev.dials[1].id, 0)]
+
+
+def test_init_chain_trigger_bangs_unbound_dials_in_order():
+    p, dev = _build("instrument", _mixed_params())
+    t = dev.init_trigger
+    assert t is not None
+    assert p.to_dict()["patcher"]["boxes"][[b.id for b in p.boxes].index(t.id)]["box"]["text"] == "t b b b"
+    assert t.numoutlets == 3
+    assert _from(p, dev.thisdevice) == [(0, t.id, 0)]
+    unbound = dev.dials[1:]
+    assert sorted(_from(p, t)) == [(j, unbound[j].id, 0) for j in range(3)]
+    assert not [l for l in p.lines if l.dest_id == dev.dials[0].id]
+    last_dial = max(_num(x.id) for x in dev.dials)
+    assert _num(dev.thisdevice.id) > last_dial and _num(t.id) > last_dial
+
+
+def test_init_chain_false():
+    p, dev = _build("instrument", _mixed_params(), init_chain=False)
+    assert "live.thisdevice" not in _names(p)
+    assert dev.thisdevice is None and dev.init_trigger is None
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_detect_kind_and_export_kind_none(tmp_path, kind):
+    from src.maxpat.critics.m4l_critic import detect_m4l_device_type
+
+    p, _ = _build(kind)
+    d = p.to_dict()
+    assert detect_m4l_device_type(d) == kind
+    assert parse_amxd(export_amxd(d, tmp_path / "k.amxd").read_bytes()).code == KIND_CODES[kind]
+
+
+def _polish_patch(longnames):
+    boxes = []
+    for i, ln in enumerate(longnames):
+        boxes.append({"box": {
+            "id": "obj-%d" % (i + 1), "maxclass": "live.dial", "numinlets": 1, "numoutlets": 2,
+            "outlettype": ["", "float"], "patching_rect": [10.0 + 60 * i, 10.0, 44.0, 48.0],
+            "parameter_enable": 1, "varname": "v%d" % i,
+            "saved_attribute_attributes": {"valueof": {"parameter_longname": ln,
+                                                       "parameter_shortname": ln[:8]}},
+        }})
+    return {"patcher": {"boxes": boxes, "lines": []}}
+
+
+def test_plan_push_banks_matches_organize_push_banks():
+    from src.maxpat.m4l_polish import organize_push_banks, plan_push_banks
+
+    names = ["freq", "amp", "Attack", "Octave"]
+    patch = organize_push_banks(_polish_patch(names))
+    assert plan_push_banks(names) == patch["patcher"]["parameters"]["parameterbanks"]
+    assert plan_push_banks([]) == {}
+
+
+def test_plan_push_banks_chunks_and_pads():
+    from src.maxpat.m4l_polish import plan_push_banks
+
+    names = ["Filter %d" % i for i in range(10)]
+    banks = plan_push_banks(names)
+    assert [b["name"] for b in banks.values()] == ["Filter", "Filter 2"]
+    assert banks["1"]["parameters"] == ["Filter 8", "Filter 9"] + ["-"] * 6
+    assert banks["0"]["index"] == 0 and banks["1"]["index"] == 1
+
+
+def test_builder_writes_banks_and_one_live_banks():
+    from src.maxpat.m4l_polish import plan_push_banks
+
+    p, dev = _build("audio_effect", _mixed_params())
+    longnames = ["freq", "Out Gain", "Octave", "Attack"]
+    assert p.props["parameters"]["parameterbanks"] == plan_push_banks(longnames)
+    banks_boxes = [b for b in p.boxes if b.name == "live.banks"]
+    assert len(banks_boxes) == 1 and banks_boxes[0] is dev.banks
+    box = p.to_dict()["patcher"]["boxes"][[b.id for b in p.boxes].index(dev.banks.id)]["box"]
+    assert box["maxclass"] == "newobj" and box["text"] == "live.banks"
+
+
+def test_builder_keeps_user_banks_with_warning():
+    user = {"0": {"index": 0, "name": "Mine", "parameters": ["freq"] + ["-"] * 7}}
+    p = Patcher()
+    p.props["parameters"] = {"parameterbanks": json.loads(json.dumps(user))}
+    with pytest.warns(UserWarning, match="parameterbanks"):
+        p.add_m4l_device("audio_effect", _mixed_params())
+    assert p.props["parameters"]["parameterbanks"] == user
+
+
+def test_builder_replaces_placeholder_banks():
+    from src.maxpat.m4l_polish import plan_push_banks
+
+    p = Patcher()
+    p.props["parameters"] = {"parameterbanks": {"0": {"index": 0, "name": "", "parameters": ["-"] * 8}}}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        p.add_m4l_device("audio_effect", [_spec("freq", 20.0, 2000.0, 220.0)])
+    assert p.props["parameters"]["parameterbanks"] == plan_push_banks(["freq"])
+
+
+def test_builder_reuses_existing_live_banks():
+    p = Patcher()
+    existing = p.add_box("live.banks", x=600.0, y=20.0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        dev = p.add_m4l_device("audio_effect", _mixed_params())
+    assert dev.banks is existing
+    assert [b.name for b in p.boxes].count("live.banks") == 1
+
+
+@pytest.mark.parametrize("kw, params", [({"banks": False}, "mixed"), ({}, None)])
+def test_no_banks(kw, params):
+    p, dev = _build("audio_effect", _mixed_params() if params else None, **kw)
+    assert "parameters" not in p.props
+    assert "live.banks" not in _names(p)
+    assert dev.banks is None
+
+
+def test_polish_keeps_builder_output():
+    import copy
+
+    from src.maxpat.m4l_polish import polish_m4l_device
+
+    p, dev = _build("instrument", _mixed_params() + [
+        _spec("Filter Envelope Amount", 0.0, 1.0, 0.0),
+        _spec("Pitch Envelope Amount", 0.0, 1.0, 0.0),
+    ])
+    d = p.to_dict()
+    before = copy.deepcopy(d)
+    polish_m4l_device(d)
+    assert d["patcher"]["parameters"]["parameterbanks"] == before["patcher"]["parameters"]["parameterbanks"]
+
+    def dial_info(dd):
+        out = {}
+        for e in dd["patcher"]["boxes"]:
+            b = e["box"]
+            if b.get("maxclass") == "live.dial":
+                out[b["id"]] = (b["saved_attribute_attributes"]["valueof"]["parameter_shortname"],
+                                b.get("presentation_rect"))
+        return out
+
+    assert dial_info(d) == dial_info(before)
+    assert sum(1 for e in d["patcher"]["boxes"] if e["box"].get("text") == "live.banks") == 1
+    assert all(e["box"].get("annotation") for e in d["patcher"]["boxes"]
+               if e["box"].get("maxclass") == "live.dial")
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_review_mixed_params_clean(kind):
+    from src.maxpat.critics import review_patch
+
+    p, dev = _build(kind, _mixed_params())
+    results = review_patch(p.to_dict())
+    assert [r for r in results if r.severity == "blocker"] == []
+    assert not [r for r in results if r.rule == "fan_out_without_trigger"]
+    dial_ids = {d.id for d in dev.dials}
+    assert not [r for r in results if r.rule == "uninitialized_state"
+                and set(getattr(r, "box_ids", ()) or ()) & dial_ids]
+
+
+def test_gen_synth_delegates_to_add_m4l_device():
+    import inspect
+
+    src = inspect.getsource(Patcher.add_m4l_gen_synth)
+    assert "self.add_m4l_device(" in src
+    assert 'f"{gen_varname}::{name}"' in src
+
+
+def test_gen_synth_duplicate_name_now_raises():
+    p = Patcher()
+    with pytest.raises(ValueError):
+        p.add_m4l_gen_synth([("freq", 20.0, 2000.0), ("freq", 0.0, 1.0)])
+    assert p.boxes == [] and p.lines == []
+    with pytest.raises(ValueError):
+        p.add_m4l_gen_synth([("freq", 20.0, 20.0)])
+    assert p.boxes == []

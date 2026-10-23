@@ -596,14 +596,54 @@ def _classify_parameter(longname_or_varname: str) -> str:
     return best_group
 
 
+def plan_push_banks(longnames: list[str]) -> dict:
+    """Plan Push parameter banks for *longnames* (pure; no patch mutation).
+
+    Shared by :func:`organize_push_banks` (polish) and the Q40 device builder
+    (``m4l_device.build_m4l_device``), so both write the same banks:
+
+    - classify each name with :func:`_classify_parameter`;
+    - group in first-appearance order of the groups;
+    - chunk each group into banks of 8, padding the last with ``"-"``;
+    - name banks "Group", "Group 2", ...
+
+    Returns:
+        MAX's saved shape ``{"0": {"index": 0, "name": ..., "parameters":
+        [8 longnames / "-"]}, ...}``, or ``{}`` for no names.
+    """
+    groups: dict[str, list[str]] = {}
+    for longname in longnames:
+        group = _classify_parameter(longname)
+        groups.setdefault(group, []).append(longname)
+
+    # Build bank dicts: chunk each group into banks of 8
+    bank_dicts: list[dict] = []
+    for group_name, names in groups.items():
+        for chunk_idx in range(0, len(names), 8):
+            chunk = names[chunk_idx : chunk_idx + 8]
+            # Pad to 8
+            padded = chunk + ["-"] * (8 - len(chunk))
+            # Name: "Filter", "Filter 2", etc.
+            bank_num = chunk_idx // 8
+            name = group_name if bank_num == 0 else f"{group_name} {bank_num + 1}"
+            bank_dicts.append({"name": name, "parameters": padded})
+
+    return {
+        str(i): {"index": i, "name": bank["name"],
+                 "parameters": bank["parameters"]}
+        for i, bank in enumerate(bank_dicts)
+    }
+
+
 def organize_push_banks(patch_dict: dict) -> dict:
     """Organize parameters into semantic Push banks of 8.
 
     Mutates patch_dict in place. Returns the same dict.
 
     - Collects all live.* controls via _collect_live_controls
-    - Classifies each parameter into a semantic group
-    - Chunks each group into banks of 8, padding partial banks with "-"
+    - Classifies each parameter into a semantic group and chunks each group
+      into banks of 8, padding partial banks with "-" (plan_push_banks,
+      shared with the Q40 device builder)
     - Writes patcher.parameters.parameterbanks in MAX's saved shape,
       {"0": {"index": 0, "name": ..., "parameters": [8 longnames / "-"]}, ...},
       only when it is absent or all-placeholder (every slot "-", MAX's
@@ -620,37 +660,20 @@ def organize_push_banks(patch_dict: dict) -> dict:
     if not controls:
         return patch_dict
 
-    # Collect longnames and classify into groups
-    groups: dict[str, list[str]] = {}
+    # Collect longnames in box order
+    longnames: list[str] = []
     for box in controls:
         saa = box.get("saved_attribute_attributes", {})
         valueof = saa.get("valueof", {})
         longname = valueof.get("parameter_longname", "")
         if not longname:
             continue
-        group = _classify_parameter(longname)
-        groups.setdefault(group, []).append(longname)
+        longnames.append(longname)
 
-    if not groups:
+    if not longnames:
         return patch_dict
 
-    # Build bank dicts: chunk each group into banks of 8
-    bank_dicts: list[dict] = []
-    for group_name, longnames in groups.items():
-        for chunk_idx in range(0, len(longnames), 8):
-            chunk = longnames[chunk_idx : chunk_idx + 8]
-            # Pad to 8
-            padded = chunk + ["-"] * (8 - len(chunk))
-            # Name: "Filter", "Filter 2", etc.
-            bank_num = chunk_idx // 8
-            name = group_name if bank_num == 0 else f"{group_name} {bank_num + 1}"
-            bank_dicts.append({"name": name, "parameters": padded})
-
-    parameterbanks = {
-        str(i): {"index": i, "name": bank["name"],
-                 "parameters": bank["parameters"]}
-        for i, bank in enumerate(bank_dicts)
-    }
+    parameterbanks = plan_push_banks(longnames)
     parameters = patcher.setdefault("parameters", {})
     if _banks_replaceable(parameters.get("parameterbanks")):
         parameters["parameterbanks"] = parameterbanks
