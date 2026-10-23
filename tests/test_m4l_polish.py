@@ -1477,8 +1477,13 @@ def _comment(box_id: str, text: str) -> dict:
 
 
 def _buffer_users_patch() -> dict:
-    """buffer~ grains plus every handled buffer user (D2 repro, case 2)."""
-    return _make_patch_with_controls([
+    """buffer~ grains plus every handled buffer user (D2 repro, case 2).
+
+    The ``set grains, bang`` message cords into groove~: since quick
+    261022-ud6 WP4 (review IN-05) only a ``set`` that feeds a declarer,
+    buffer user or waveform~ is a rewritable position.
+    """
+    patch = _make_patch_with_controls([
         _nb("obj-1", "buffer~ grains"),
         _nb("obj-2", "play~ grains 2"),
         _nb("obj-3", "groove~ grains 2"),
@@ -1490,6 +1495,10 @@ def _buffer_users_patch() -> dict:
         {"id": "obj-9", "maxclass": "waveform~", "buffername": "grains",
          "numinlets": 5, "numoutlets": 6},
     ])
+    patch["patcher"]["lines"] = [
+        {"patchline": {"source": ["obj-8", 0], "destination": ["obj-3", 0]}},
+    ]
+    return patch
 
 
 # ===========================================================================

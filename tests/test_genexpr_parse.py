@@ -353,7 +353,17 @@ class TestReorderG1:
             "}\n"
             "out1 = myfn(x);\n"
         )
-        assert reorder_genexpr_declarations(code) == code
+        # Since quick 261022-ud6 WP4 (WR-03) a function defined after a
+        # statement moves to the top (functions before all statements); its
+        # body -- the History included -- moves with it, verbatim.
+        out = reorder_genexpr_declarations(code)
+        fn = "myfn(v) {\n  History h(0);\n  h = v;\n  return h;\n}\n"
+        assert out.startswith(fn)
+        assert out.count("History h(0);") == 1
+        assert out.index("x = in1;") < out.index("out1 = myfn(x);")
+        # Already in the documented order: byte-identical.
+        ordered = fn + "x = in1;\nout1 = myfn(x);\n"
+        assert reorder_genexpr_declarations(ordered) == ordered
 
     def test_statement_order_and_multiset_preserved(self):
         from src.maxpat.codegen import reorder_genexpr_declarations
@@ -473,7 +483,7 @@ class TestAddRnboNoneBounds:
             audio_ins=1, audio_outs=1,
         )
         (pbox,) = [b for b in inner.boxes if b.name == "param"]
-        assert "@initial 0.5" in pbox.text
+        assert pbox.text == "param g 0.5"  # positional initial (WP4, E8)
         assert "None" not in pbox.text
         assert "@min" not in pbox.text
         assert "@max" not in pbox.text
@@ -484,7 +494,7 @@ class TestAddRnboNoneBounds:
 
         _box, inner = add_rnbo(Patcher(), params=[{"name": "g"}], audio_ins=1, audio_outs=1)
         (pbox,) = [b for b in inner.boxes if b.name == "param"]
-        assert pbox.text == "param @name g @min 0.0 @max 1.0 @initial 0.0"
+        assert pbox.text == "param g 0.0 @min 0.0 @max 1.0"  # MAX's form (WP4, E8)
 
 
 # ---------------------------------------------------------------------------

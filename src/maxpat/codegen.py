@@ -21,7 +21,14 @@ import json
 import re
 
 from src.maxpat.defaults import DEFAULT_PATCHER_PROPS, FONT_NAME, FONT_SIZE, GEN_PATCHER_BGCOLOR
-from src.maxpat.genexpr_parse import io_counts, line_comment_starts, mask, statements
+from src.maxpat.genexpr_parse import (
+    function_defs,
+    io_counts,
+    is_function_header,
+    line_comment_starts,
+    mask,
+    statements,
+)
 
 
 def parse_genexpr_io(code: str) -> tuple[int, int]:
@@ -95,11 +102,18 @@ def _is_expression_stmt(st) -> bool:
 
 
 def reorder_genexpr_declarations(code: str) -> str:
-    """Reorder GenExpr code so all declarations precede expressions.
+    """Reorder GenExpr code to functions, then declarations, then statements.
 
     GenExpr requires Param, History, Delay, Buffer, and Data declarations
-    to appear before any expression or assignment. This works on whole
-    STATEMENTS from :mod:`src.maxpat.genexpr_parse` (Q22 / G1), not lines:
+    to appear before any expression or assignment, and function definitions
+    before all statements (Max user guide, "Defining GenExpr Functions");
+    every Gen codebox Cycling '74 ships -- gen.maxhelp included -- puts the
+    functions first, then the declarations. Declarations are therefore never
+    moved above a function definition (review WR-03, quick 261022-ud6), and
+    a function that follows a declaration or a statement moves to the top.
+    Statements inside a function body are neither expressions nor
+    declarations for this purpose. This works on whole STATEMENTS from
+    :mod:`src.maxpat.genexpr_parse` (Q22 / G1), not lines:
 
     * Only depth-0 declarations move; a declaration inside a brace block
       (a function body) is never touched.
@@ -109,11 +123,17 @@ def reorder_genexpr_declarations(code: str) -> str:
       piece, together with the whole-line ``//`` comments directly above it
       and a trailing comment on its last line.
 
-    Pieces are emitted grouped Param, History, Delay, Buffer/Data (stable
-    within each group), then one blank line, then the remaining code. Every
-    piece is sliced from the ORIGINAL text, so comments survive.
+    * A depth-0 function definition moves as one verbatim piece (header to
+      closing brace), with the whole-line ``//`` comments directly above it.
 
-    If no depth-0 declaration follows an expression statement, the input is
+    Pieces are emitted functions first (source order), a blank line when
+    both kinds exist, then declarations grouped Param, History, Delay,
+    Buffer/Data (stable within each group), then one blank line, then the
+    remaining code. Every piece is sliced from the ORIGINAL text, so
+    comments survive.
+
+    If no depth-0 declaration follows an expression statement and no
+    function definition follows a declaration or statement, the input is
     returned byte-identical.
 
     Args:
@@ -126,13 +146,29 @@ def reorder_genexpr_declarations(code: str) -> str:
         return code
 
     stmts = statements(code)
+    funcs = function_defs(code)
+    spans = [(f.start, f.end) for f in funcs]
+
+    def in_function(st) -> bool:
+        return any(a < st.start < b for a, b in spans)
+
     seen_expr = False
+    seen_decl = False
     needed = False
     for st in stmts:
+        if is_function_header(st):
+            if seen_expr or seen_decl:
+                needed = True
+                break
+            continue
+        if in_function(st):
+            continue
         if st.kind == "decl":
             if st.depth == 0 and seen_expr:
                 needed = True
                 break
+            if st.depth == 0:
+                seen_decl = True
         elif _is_expression_stmt(st):
             seen_expr = True
     if not needed:
@@ -156,13 +192,18 @@ def reorder_genexpr_declarations(code: str) -> str:
             k += 1
         return k in comment_starts
 
-    pieces: list[tuple[int, int, int]] = []  # (start, end, group)
+    # (start, end, group): functions are group -1, then the decl groups.
+    candidates: list[tuple[int, int, int]] = [(f.start, f.end, -1) for f in funcs]
     for st in stmts:
         if st.kind != "decl" or st.depth != 0:
             continue
         dtype = st.text.split(None, 1)[0]
-        group = _TYPE_ORDER.get(dtype, 3)
-        ps = st.start
+        candidates.append((st.start, st.end, _TYPE_ORDER.get(dtype, 3)))
+    candidates.sort()
+
+    pieces: list[tuple[int, int, int]] = []  # (start, end, group)
+    for start, end, group in candidates:
+        ps = start
         ls = line_start(ps)
         if not m[ls:ps].strip():
             ps = ls
@@ -174,7 +215,7 @@ def reorder_genexpr_declarations(code: str) -> str:
                 if pieces and prev_ls < pieces[-1][1]:
                     break
                 ps = prev_ls
-        pe = st.end
+        pe = end
         le = line_end(pe)
         if not m[pe:le].strip():
             pe = le + 1 if le < len(code) else le
@@ -210,16 +251,23 @@ def reorder_genexpr_declarations(code: str) -> str:
             break
         rest = rest[nl + 1:]
 
-    out: list[str] = []
-    for gid in (0, 1, 2, 3):
-        for ps, pe, g in pieces:
-            if g != gid:
-                continue
-            piece = code[ps:pe]
-            if not piece.endswith("\n"):
-                piece += "\n"
-            out.append(piece)
-    return "".join(out) + "\n" + rest
+    def emitted(gids) -> str:
+        out: list[str] = []
+        for gid in gids:
+            for ps, pe, g in pieces:
+                if g != gid:
+                    continue
+                piece = code[ps:pe]
+                if not piece.endswith("\n"):
+                    piece += "\n"
+                out.append(piece)
+        return "".join(out)
+
+    head = emitted((-1,))
+    decls = emitted((0, 1, 2, 3))
+    if head and decls:
+        head += "\n"
+    return head + decls + "\n" + rest
 
 
 def generate_gendsp(
@@ -290,7 +338,9 @@ def generate_gendsp(
             "maxclass": "codebox",
             "id": codebox_id,
             "code": code,
-            "numinlets": num_inputs,
+            # MAX gives a codebox with no inN one inlet (gen.maxhelp,
+            # gen~.maxhelp; review IN-02), like the gen~ parent (Q15).
+            "numinlets": max(1, num_inputs),
             "numoutlets": num_outputs,
             "outlettype": [""] * num_outputs,
             "patching_rect": [50.0, 80.0, 400.0, 200.0],
@@ -432,7 +482,7 @@ async function setDict_{suffix}(data) {{
         indented_body = "\n".join(f"    {line}" for line in body_lines)
 
         sections.append(f"""
-maxAPI.addHandler("{name}", ({args_str}) => {{
+maxAPI.addHandler({json.dumps(name)}, ({args_str}) => {{
 {indented_body}
 }});""".rstrip())
 

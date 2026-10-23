@@ -17,7 +17,7 @@ import re
 from typing import TYPE_CHECKING
 
 from src.maxpat.genexpr_parse import (
-    CONSTANTS as _GENEXPR_CONSTANTS,
+    BUILTIN_CONSTANTS as _GENEXPR_CONSTANTS,
     _find_assign,
     _for_parts,
     _paren_content,
@@ -25,8 +25,10 @@ from src.maxpat.genexpr_parse import (
     _strip_prefixes,
     assigned_names,
     declarations,
-    line_paren_depths,
+    function_defs,
+    is_function_header,
     mask,
+    param_items,
     split_args,
     statements,
 )
@@ -70,6 +72,8 @@ _CONTROL_WORDS = frozenset({"if", "else", "for", "while"})
 def validate_genexpr(
     code: str,
     db: "ObjectDatabase | None" = None,
+    *,
+    original: "str | None" = None,
 ) -> list[ValidationResult]:
     """Validate GenExpr DSP code.
 
@@ -95,7 +99,10 @@ def validate_genexpr(
     genexpr-rules.md), at the spec severities (D-06: the spec's "note" is
     the validator's ``info`` level):
 
-    10. Tab character anywhere in the RAW code, comments included (error)
+    10. Tab character anywhere in the RAW code, comments included: error
+        in generated or edited code; a tab line that was already in the
+        loaded codebox (*original*) is a warning (Q22 locked decision,
+        quick 261022-ud6)
     11. Assignment to a GenExpr built-in constant name such as ``pi`` or
         ``twopi`` -- the constant wins silently (error)
     12. A Param name assigned as a local ("can't assign to parameter")
@@ -125,6 +132,11 @@ def validate_genexpr(
     Args:
         code: GenExpr source code string.
         db: ObjectDatabase instance. Created if None.
+        original: The codebox code as it was loaded from disk, when *code*
+            is an edit of (or identical to) a codebox the user already has.
+            Tab lines present verbatim in *original* are reported as one
+            warning; tab lines the edit introduced stay an error. None (the
+            default) means generated code: every tab is an error.
 
     Returns:
         List of ValidationResult.
@@ -137,7 +149,6 @@ def validate_genexpr(
     # newlines as `code`, so line numbers are unchanged.
     masked = mask(code)
     raw_lines = code.split("\n")
-    paren_depths = line_paren_depths(code)
 
     # Check 1: Balanced braces
     open_count = masked.count("{")
@@ -148,40 +159,10 @@ def validate_genexpr(
             f"Unbalanced braces: {open_count} opening vs {close_count} closing",
         ))
 
-    # Check 2: Semicolons on statement lines
+    # Check 2: missing semicolons, on the Q22 statement parser (IN-01).
+    stmts = statements(code)
+    results.extend(_check_semicolons(stmts, raw_lines))
     lines = masked.split("\n")
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        # Continuation rule (Q22): a line inside a multi-line paren group
-        # (start or end inside an open paren) is not a statement line.
-        if i < len(paren_depths) and (paren_depths[i][0] > 0 or paren_depths[i][1] > 0):
-            continue
-
-        # Skip empty, comments, braces-only, preprocessor
-        if not stripped:
-            continue
-        if stripped.startswith("//"):
-            continue
-        if stripped in ("{", "}", "};", "){"):
-            continue
-        if stripped.startswith("#"):
-            continue
-
-        # Is this a statement line? (has assignment, function call, or declaration)
-        is_statement = (
-            "=" in stripped
-            or re.search(r"\w+\s*\(", stripped)
-            or stripped.startswith("Param ")
-            or stripped.startswith("History ")
-            or stripped.startswith("Buffer ")
-            or stripped.startswith("Data ")
-        )
-
-        if is_statement and not stripped.endswith(";") and not stripped.endswith("{") and not stripped.endswith("}"):
-            results.append(ValidationResult(
-                "code", "warning",
-                f"Line {i + 1}: possible missing semicolon: '{raw_lines[i].strip()}'",
-            ))
 
     # Check 3: in/out declarations
     in_matches = re.findall(r"\bin(\d+)\b", masked)
@@ -194,45 +175,20 @@ def validate_genexpr(
             f"Detected I/O: {max_in} input(s), {max_out} output(s)",
         ))
 
-    # Check 4: Param validation
-    param_pattern = re.compile(r"Param\s+(\w+)\s*\(([^)]*)\)")
-    for match in param_pattern.finditer(masked):
-        param_name = match.group(1)
-        param_args = match.group(2)
-
-        if "min" not in param_args or "max" not in param_args:
+    # Check 4: Param range kwargs, on the Q22 Param parser (IN-01): a call
+    # default such as `max(1, 2)` no longer cuts the argument list short.
+    for item in param_items(code):
+        if not item.has_args:
+            continue
+        if "min" not in item.kwargs or "max" not in item.kwargs:
             results.append(ValidationResult(
                 "code", "warning",
-                f"Param '{param_name}' missing min/max range specification "
-                f"(recommended: Param {param_name}(default, min=N, max=N))",
+                f"Param '{item.name}' missing min/max range specification "
+                f"(recommended: Param {item.name}(default, min=N, max=N))",
             ))
 
-    # Check 5: Declaration ordering -- all declarations must precede expressions
-    # _DECL_PREFIXES is module-level (hoisted Phase 29 for Check 9 reuse).
-    last_decl_line = -1
-    first_expr_line = -1
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        if not stripped or stripped.startswith("//") or stripped.startswith("#"):
-            continue
-        # Continuation rule (Q22): a line that starts inside an open paren
-        # continues the previous statement (multi-line Param args).
-        if i < len(paren_depths) and paren_depths[i][0] > 0:
-            continue
-        if any(stripped.startswith(p) for p in _DECL_PREFIXES):
-            last_decl_line = i
-            if first_expr_line >= 0:
-                results.append(ValidationResult(
-                    "code", "error",
-                    f"Line {i + 1}: declaration '{stripped.split('(')[0].strip()}' "
-                    f"appears after expression on line {first_expr_line + 1}. "
-                    f"All Param/Delay/History/Buffer/Data declarations must come "
-                    f"before any expressions in GenExpr.",
-                ))
-                break  # one error is enough to flag the issue
-        elif "=" in stripped or re.search(r"\w+\.\w+\(", stripped):
-            if first_expr_line < 0:
-                first_expr_line = i
+    # Check 5: declaration and function order, on statements (WR-03).
+    results.extend(_check_declaration_order(code, stmts))
 
     # Check 6: Operator validation against gen/objects.json
     if db is None:
@@ -408,9 +364,148 @@ def validate_genexpr(
 
     # Checks 10-16 (Q22 / R6) run after Check 9's loop, so its
     # first-error-and-stop `break` never skips them.
-    results.extend(_lint_genexpr(code, masked))
+    results.extend(_lint_genexpr(code, masked, original=original))
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# Checks 2 and 5 on the Q22 statement parser (quick 261022-ud6 WP4)
+# ---------------------------------------------------------------------------
+
+# A line that starts a new statement: an assignment (comma LHS allowed), a
+# declaration, or a control keyword.
+_NEW_STMT_START = re.compile(
+    r"^\s*(?:[A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*\s*(?:[-+*/%]?=)(?!=)"
+    r"|(?:Param|History|Delay|Buffer|Data|if|for|while|else|return)\b)"
+)
+# A line ending in one of these continues on the next line.
+_OPEN_LINE_END = frozenset("+-*/%=<>!&|?:,(^~")
+_STATEMENT_LIKE = re.compile(r"=|\w\s*\(|^\s*(?:Param|History|Delay|Buffer|Data)\b")
+_METHOD_CALL = re.compile(r"\w+\.\w+\(")
+
+
+def _semicolon_warning(raw_lines: list, line: int) -> ValidationResult:
+    text = raw_lines[line - 1].strip() if 0 < line <= len(raw_lines) else ""
+    return ValidationResult(
+        "code", "warning",
+        f"Line {line}: possible missing semicolon: '{text}'",
+    )
+
+
+def _check_semicolons(stmts: list, raw_lines: list) -> list:
+    """Check 2 on statements (review IN-01).
+
+    Warns at the last line of a statement that never ends with ``;`` (it
+    runs into a ``}`` or EOF), and inside a multi-line statement at a line
+    that looks complete (paren depth 0, no trailing operator or comma)
+    when the next non-blank line starts a new statement (an assignment, a
+    declaration or a control keyword). So an expression continued on the
+    next line with a leading operator (bassoon.gendsp 507/518), an Allman
+    function header (``f(x)`` then ``{``) and a brace-less two-line ``if``
+    are not flagged.
+    """
+    out: list = []
+    flagged: set = set()
+    for st in stmts:
+        if st.kind == "header":
+            continue
+        text = st.text
+        prefix_end = _strip_prefixes(text)
+        # Non-blank lines of the statement: (line number, end offset in
+        # text, stripped content, paren depth at its end).
+        rows = []
+        depth = 0
+        pos = 0
+        line = st.line
+        for piece in text.split("\n"):
+            for c in piece:
+                if c == "(":
+                    depth += 1
+                elif c == ")" and depth > 0:
+                    depth -= 1
+            if piece.strip():
+                rows.append((line, pos + len(piece), piece.strip(), depth))
+            pos += len(piece) + 1
+            line += 1
+        for (ln, end, content, d), nxt in zip(rows, rows[1:]):
+            if d > 0 or end <= prefix_end or content[-1] in _OPEN_LINE_END:
+                continue
+            if _NEW_STMT_START.match(nxt[2]) and ln not in flagged:
+                flagged.add(ln)
+                out.append(_semicolon_warning(raw_lines, ln))
+        if not st.terminated and rows and _STATEMENT_LIKE.search(text):
+            ln = rows[-1][0]
+            if ln not in flagged:
+                flagged.add(ln)
+                out.append(_semicolon_warning(raw_lines, ln))
+    return out
+
+
+def _check_declaration_order(code: str, stmts: list) -> list:
+    """Check 5 on statements (review WR-03).
+
+    Order in a codebox: function definitions, then Param / History / Delay
+    / Buffer / Data declarations, then statements (the Max user guide's
+    "functions must be declared before all statements", and the form of
+    every Gen codebox Cycling '74 ships, gen.maxhelp included). Statements
+    inside a function body are neither declarations nor expressions here.
+
+    - A declaration after a main-body expression (a statement with ``=``
+      or a ``.method(`` call): error, as before (one result).
+    - A function definition after a main-body expression: error (one).
+    - A function definition after a declaration only: warning (one) --
+      the documented and shipped order puts functions first; not verified
+      in MAX that the reverse fails.
+    """
+    out: list = []
+    spans = [(f.start, f.end) for f in function_defs(code)]
+
+    def in_function(st) -> bool:
+        return any(a < st.start < b for a, b in spans)
+
+    first_expr = None
+    first_decl = None
+    decl_error = func_error = func_warning = False
+    for st in stmts:
+        if is_function_header(st):
+            name = st.text.split("(", 1)[0].strip()
+            if first_expr is not None and not func_error:
+                func_error = True
+                out.append(ValidationResult(
+                    "code", "error",
+                    f"Line {st.line}: function '{name}' is defined after the "
+                    f"statement on line {first_expr.line} -- GenExpr functions must "
+                    f"be defined before all statements (Max user guide, \"Defining "
+                    f"GenExpr Functions\"); move it to the top of the codebox",
+                ))
+            elif first_expr is None and first_decl is not None and not func_warning:
+                func_warning = True
+                out.append(ValidationResult(
+                    "code", "warning",
+                    f"Line {st.line}: function '{name}' follows the declaration on "
+                    f"line {first_decl.line} -- the documented order (and every Gen "
+                    f"codebox Cycling '74 ships) is functions, then Param/History/"
+                    f"Delay/Buffer/Data, then statements; move the function to the top",
+                ))
+            continue
+        if in_function(st):
+            continue
+        if st.kind == "decl":
+            if first_decl is None:
+                first_decl = st
+            if first_expr is not None and not decl_error:
+                decl_error = True
+                out.append(ValidationResult(
+                    "code", "error",
+                    f"Line {st.line}: declaration '{st.text.strip().split('(')[0].strip()}' "
+                    f"appears after expression on line {first_expr.line}. "
+                    f"All Param/Delay/History/Buffer/Data declarations must come "
+                    f"before any expressions in GenExpr.",
+                ))
+        elif first_expr is None and ("=" in st.text or _METHOD_CALL.search(st.text)):
+            first_expr = st
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +586,37 @@ def _assignment_records(code: str, stmts: list) -> list:
     return records
 
 
-def _lint_genexpr(code: str, m: str) -> list[ValidationResult]:
+def _tab_lines(code: str, original: "str | None") -> tuple:
+    """(new tab line numbers, pre-existing tab line numbers).
+
+    A tab line is pre-existing when the same line text (tabs included) is
+    in *original*, counted as a multiset so a duplicated new line is new.
+    """
+    from collections import Counter
+
+    lines = code.split("\n")
+    tabbed = [(i + 1, ln) for i, ln in enumerate(lines) if "\t" in ln]
+    if not isinstance(original, str):
+        return [n for n, _ln in tabbed], []
+    pool = Counter(ln for ln in original.split("\n") if "\t" in ln)
+    new, old = [], []
+    for n, ln in tabbed:
+        if pool[ln] > 0:
+            pool[ln] -= 1
+            old.append(n)
+        else:
+            new.append(n)
+    return new, old
+
+
+def _shown(numbers: list) -> str:
+    shown = ", ".join(str(n) for n in numbers[:5])
+    if len(numbers) > 5:
+        shown += f" and {len(numbers) - 5} more"
+    return shown
+
+
+def _lint_genexpr(code: str, m: str, original: "str | None" = None) -> list[ValidationResult]:
     """Checks 10-16 (see validate_genexpr). Never raises."""
     out: list[ValidationResult] = []
     try:
@@ -521,17 +646,25 @@ def _lint_genexpr(code: str, m: str) -> list[ValidationResult]:
     has_feedback_state = has_delay or bool(history_names & set(assigned))
 
     # Check 10: tabs in the RAW code (a tab inside a comment still counts).
+    # Error for generated/edited lines; warning for lines already in the
+    # loaded codebox (Q22 locked decision).
     if "\t" in code:
-        tab_lines = [i + 1 for i, ln in enumerate(code.split("\n")) if "\t" in ln]
-        shown = ", ".join(str(n) for n in tab_lines[:5])
-        if len(tab_lines) > 5:
-            shown += f" and {len(tab_lines) - 5} more"
-        out.append(ValidationResult(
-            "code", "error",
-            f"Tab character in codebox code (line(s) {shown}) -- codeboxes must "
-            f"use spaces only; tabs are the prime suspect for MAX's generic "
-            f"'failed to compile genpatcher' error",
-        ))
+        new_tabs, old_tabs = _tab_lines(code, original)
+        if new_tabs:
+            out.append(ValidationResult(
+                "code", "error",
+                f"Tab character in codebox code (line(s) {_shown(new_tabs)}) -- "
+                f"codeboxes must use spaces only; tabs are the prime suspect for "
+                f"MAX's generic 'failed to compile genpatcher' error",
+            ))
+        if old_tabs:
+            out.append(ValidationResult(
+                "code", "warning",
+                f"Tab character already in the loaded codebox (line(s) "
+                f"{_shown(old_tabs)}) -- it compiles as it is; replace the tabs "
+                f"with spaces when you next edit this code (generated or edited "
+                f"lines with tabs are an error)",
+            ))
 
     # Check 11: assignment to a built-in constant (one result per name).
     for name in sorted((n for n in assigned if n in _GENEXPR_CONSTANTS),
@@ -685,6 +818,14 @@ _JS_IDENT_CHARS = frozenset(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_$"
 )
 _JS_BLANK_CHARS = frozenset(" \t\r\f\v")
+
+# `inlets` / `outlets` as the js object's own property: a bare identifier or
+# `this.inlets`, never part of a longer name (`numinlets`) or another
+# object's property (review IN-03, quick 261022-ud6).
+_JS_PORT_PREFIX = r"(?:(?<![\w$.])|(?<=\bthis\.))"
+_JS_INLETS_DECL = re.compile(_JS_PORT_PREFIX + r"inlets\s*=\s*(\d+)")
+_JS_OUTLETS_DECL = re.compile(_JS_PORT_PREFIX + r"outlets\s*=\s*(\d+)")
+_JS_INLETS_ASSIGN = re.compile(_JS_PORT_PREFIX + r"inlets\s*=(?!=)")
 
 
 def _js_mask(code: str) -> tuple[str, list]:
@@ -914,8 +1055,8 @@ def validate_js(code: str, *, engine: str | None = None) -> list[ValidationResul
         code = ""
     masked, template_lines = _js_mask(code)
 
-    # Check 1: inlets declaration
-    inlets_match = re.search(r"inlets\s*=\s*(\d+)", masked)
+    # Check 1: inlets declaration (`numinlets = 2` is not one; IN-03)
+    inlets_match = _JS_INLETS_DECL.search(masked)
     if not inlets_match:
         results.append(ValidationResult(
             "code", "error",
@@ -923,7 +1064,7 @@ def validate_js(code: str, *, engine: str | None = None) -> list[ValidationResul
         ))
 
     # Check 2: outlets declaration
-    outlets_match = re.search(r"outlets\s*=\s*(\d+)", masked)
+    outlets_match = _JS_OUTLETS_DECL.search(masked)
     if not outlets_match:
         results.append(ValidationResult(
             "code", "error",
@@ -1063,6 +1204,6 @@ def detect_js_type(code: str) -> str | None:
     for m in re.finditer(r"""require\s*\(\s*['"]max-api['"]\s*\)""", code):
         if masked[m.start():m.start() + len("require")] == "require":
             return "n4m"
-    if re.search(r"inlets\s*=", masked):
+    if _JS_INLETS_ASSIGN.search(masked):
         return "js"
     return None

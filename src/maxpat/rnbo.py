@@ -155,6 +155,13 @@ def add_rnbo(
     an inner RNBO patcher with in~/out~ for audio, param objects for
     parameters, inport/outport for messages, and user-specified objects.
 
+    The parent is MAX's shape (quick 261022-ud6 WP4, review WR-05 / E8):
+    newobj ``rnbo~`` with ``max(1, audio_ins)`` inlets, ``audio_outs + 1``
+    outlets (signal per out~, then ``list``), inletInfo/outletInfo, and an
+    inner patcher with ``classnamespace "rnbo"``. Params are written
+    ``param <name> <initial> @min <min> @max <max>``. EXPERIMENTAL -- the
+    builder's output has not been opened in MAX.
+
     Args:
         patcher: Patcher instance to add the rnbo~ box to.
         objects: Optional list of object dicts to add inside the RNBO patcher.
@@ -198,6 +205,8 @@ def add_rnbo(
 
     # Create inner RNBO patcher
     inner = PatcherClass(db=patcher.db, is_subpatcher=True, domain_context="rnbo")
+    # Every MAX-saved RNBO patcher has classnamespace "rnbo" (E8).
+    inner.props["classnamespace"] = "rnbo"
     inner.props["bgcolor"] = list(RNBO_PATCHER_BGCOLOR)
     inner.props["rect"] = [100.0, 100.0, 700.0, 500.0]
 
@@ -227,15 +236,18 @@ def add_rnbo(
         param_default = param.get("default", 0.0)
         param_min = param.get("min", 0.0)
         param_max = param.get("max", 1.0)
+        # MAX's form (rnbo_param.maxref.xml; RNBO help patches): positional
+        # name and initial value, then @min / @max. `@initial` is not a param
+        # option and `@name` is not how MAX writes it (review WR-05 / E8).
         # A None value (an absent or non-literal GenExpr bound, Q22 / G4)
-        # omits that attribute so RNBO's own default applies.
-        param_text = f"param @name {param_name}"
+        # omits that part so RNBO's own default applies.
+        param_text = f"param {param_name}"
+        if param_default is not None:
+            param_text += f" {param_default}"
         if param_min is not None:
             param_text += f" @min {param_min}"
         if param_max is not None:
             param_text += f" @max {param_max}"
-        if param_default is not None:
-            param_text += f" @initial {param_default}"
 
         param_box = Box.structural(
             "newobj", param_text, 2, 2, ["", ""],
@@ -289,20 +301,33 @@ def add_rnbo(
         inner.boxes.append(user_box)
 
     # Create the parent rnbo~ box via Box.structural (structural container)
+    # in MAX's shape (review WR-05 / E8; golden
+    # tests/fixtures/expected/rnbo_box_shapes.json from the Max 9.2 RNBO
+    # help patches): a newobj with text "rnbo~"; one inlet per in~ (inlet 0
+    # also takes messages; at least one); one outlet per out~ plus the
+    # trailing "list" message outlet; inletInfo/outletInfo listing the
+    # signal ports. EXPERIMENTAL: not yet opened in MAX.
     w, h = calculate_box_size("rnbo~", "newobj")
 
     parent_box = Box.structural(
-        "rnbo~", "rnbo~",
-        audio_ins + 1,   # audio inputs + 1 message inlet
-        audio_outs + 1,  # audio outputs + 1 message outlet
-        ["signal"] * audio_outs + [""],
+        "newobj", "rnbo~",
+        max(1, audio_ins),
+        audio_outs + 1,
+        ["signal"] * audio_outs + ["list"],
         [x, y, w, h],
         box_id=box_id,
         inner=inner,
+        inletInfo={"IOInfo": [_io_info("in", i) for i in range(audio_ins)]},
+        outletInfo={"IOInfo": [_io_info("out", i) for i in range(audio_outs)]},
     )
 
     patcher.boxes.append(parent_box)
     return (parent_box, inner)
+
+
+def _io_info(kind: str, i: int) -> dict:
+    """One rnbo~ inletInfo/outletInfo entry for signal port *i* (0-based)."""
+    return {"type": "signal", "index": i + 1, "tag": kind + str(i + 1), "comment": ""}
 
 
 def _derive_outlet_types(obj_data: dict) -> list[str]:

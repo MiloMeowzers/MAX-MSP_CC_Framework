@@ -32,10 +32,20 @@ from dataclasses import dataclass
 
 DECL_TYPES = ("Param", "History", "Delay", "Buffer", "Data")
 
+# Q22's 13 lower-case constant names (dsp_sim.genexpr_interp asserts this
+# exact set against its value table).
 CONSTANTS = frozenset({
     "e", "pi", "twopi", "halfpi", "invpi", "ln2", "ln10", "log10e", "log2e",
     "sqrt2", "sqrt1_2", "degtorad", "radtodeg",
 })
+
+# Every GenExpr built-in constant name: CONSTANTS, phi (Gen refpage
+# gen_common_phi.maxref.xml) and the upper-case aliases the Max 9 Gen
+# operator guide lists (gen_common_operators.json: PI, TWOPI, ..., PHI, E).
+# Assigning to any of them has no effect -- the constant wins silently
+# (review WR-04, quick 261022-ud6). validate_genexpr Checks 11 and 14 use it.
+BUILTIN_CONSTANTS = (CONSTANTS | {"phi"}) | frozenset(
+    n.upper() for n in CONSTANTS | {"phi"})
 
 _DECL_RE = re.compile(r"(Param|History|Delay|Buffer|Data)\s")
 _IDENT_RE = re.compile(r"\s*([A-Za-z_]\w*)")
@@ -391,6 +401,111 @@ def parse_params(code) -> list:
                         default = _literal(arg)
             out.append({"name": name, "default": default, "min": mn, "max": mx})
     return out
+
+
+@dataclass(frozen=True)
+class ParamItem:
+    """One Param name of a declaration: its kwarg keys in order (``min``,
+    ``max``, ...), whether it has an argument list, and its statement."""
+
+    name: str
+    kwargs: tuple
+    has_args: bool
+    stmt: Stmt
+
+
+def param_items(code) -> list:
+    """:class:`ParamItem` for every Param name (comma lists included).
+
+    Kwarg keys come from the top-level comma items of the argument list
+    (``name =`` at item start), so a call default such as
+    ``Param g(max(1, 2), min=0, max=10)`` keeps both of its ranges
+    (review IN-01).
+    """
+    out: list = []
+    for st in statements(code):
+        if st.kind != "decl":
+            continue
+        dtype, items = _decl_items(st)
+        if dtype != "Param":
+            continue
+        for name, args in items:
+            keys = []
+            if args is not None:
+                for arg in split_args(args):
+                    km = _KWARG_RE.match(arg)
+                    if km:
+                        keys.append(km.group(1))
+            out.append(ParamItem(name=name, kwargs=tuple(keys),
+                                 has_args=args is not None, stmt=st))
+    return out
+
+
+_FUNC_HEADER_RE = re.compile(r"\s*([A-Za-z_]\w*)\s*\(([^()]*)\)\s*", re.S)
+
+
+@dataclass(frozen=True)
+class FuncDef:
+    """A depth-0 GenExpr function definition.
+
+    start/end: span in the ORIGINAL text from the name to just past the
+    closing ``}`` (EOF when it never closes). line: 1-based line of the
+    name. header: the header :class:`Stmt` (ends with the ``{``).
+    """
+
+    name: str
+    start: int
+    end: int
+    line: int
+    header: Stmt
+
+
+def is_function_header(st) -> bool:
+    """True for a depth-0 header ``name(args) {`` that is not if/for/while/else."""
+    if not isinstance(st, Stmt) or st.kind != "header" or st.depth != 0:
+        return False
+    text = st.text.rstrip()
+    if text.endswith("{"):
+        text = text[:-1]
+    m = _FUNC_HEADER_RE.fullmatch(text)
+    return bool(m) and m.group(1) not in _BLOCK_KEYWORDS
+
+
+def _block_end(m: str, open_pos: int) -> int:
+    depth = 0
+    for i in range(open_pos, len(m)):
+        c = m[i]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return len(m)
+
+
+def function_defs(code) -> list:
+    """:class:`FuncDef` for every depth-0 function definition, in order.
+
+    A header is ``name(args)`` + ``{`` (K&R or Allman, comments allowed in
+    between) whose name is not ``if`` / ``for`` / ``while`` / ``else``.
+    The Max user guide ("Defining GenExpr Functions") requires functions
+    before all statements; every Gen codebox Cycling '74 ships puts them
+    first, then declarations, then statements.
+    """
+    code = _str(code)
+    try:
+        m = _scan(code)[0]
+        out: list = []
+        for st in statements(code):
+            if not is_function_header(st):
+                continue
+            name = _FUNC_HEADER_RE.match(st.text).group(1)
+            out.append(FuncDef(name=name, start=st.start, end=_block_end(m, st.end - 1),
+                               line=st.line, header=st))
+        return out
+    except Exception:  # pragma: no cover - defensive, never raise
+        return []
 
 
 def _strip_prefixes(text: str) -> int:

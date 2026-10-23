@@ -1,0 +1,247 @@
+{
+  "_comment": [
+    "rnbo~ box shapes copied from MAX-saved rnbo~ boxes in the Max 9.2 bundle",
+    "(C74/packages/RNBO/help; quick 261022-ud6 WP4, review WR-05 / E8).",
+    "Only boxes whose RNBO patcher holds in~/out~ (plus param/inport/outport)",
+    "and no other port objects (in, out, midiin, ...) and no @dumpoutlet.",
+    "Rule over 616 of 620 such bundle boxes: numinlets = max(1, #in~),",
+    "numoutlets = #out~ + 1, outlettype = signal x #out~ + 'list';",
+    "inner classnamespace 'rnbo'. inletInfo/outletInfo tags and comments",
+    "vary by RNBO version and are not compared."
+  ],
+  "shapes": {
+    "0x0": {
+      "source": "packages/RNBO/help/rnbo_PI_OVER_2~.maxhelp",
+      "box_id": "obj-1",
+      "in~": 0,
+      "out~": 0,
+      "maxclass": "newobj",
+      "text": "rnbo~ @title basic",
+      "numinlets": 1,
+      "numoutlets": 1,
+      "outlettype": [
+        "list"
+      ],
+      "inletInfo": {
+        "IOInfo": []
+      },
+      "outletInfo": {
+        "IOInfo": []
+      },
+      "inner_classnamespace": "rnbo"
+    },
+    "0x1": {
+      "source": "packages/RNBO/help/rnbo_bufferop~.maxhelp",
+      "box_id": "obj-1",
+      "in~": 0,
+      "out~": 1,
+      "maxclass": "newobj",
+      "text": "rnbo~ @title basic",
+      "numinlets": 1,
+      "numoutlets": 2,
+      "outlettype": [
+        "signal",
+        "list"
+      ],
+      "inletInfo": {
+        "IOInfo": []
+      },
+      "outletInfo": {
+        "IOInfo": [
+          {
+            "type": "signal",
+            "index": 1,
+            "tag": "",
+            "comment": ""
+          }
+        ]
+      },
+      "inner_classnamespace": "rnbo"
+    },
+    "0x2": {
+      "source": "packages/RNBO/help/rnbo_allpass~.maxhelp",
+      "box_id": "obj-1",
+      "in~": 0,
+      "out~": 2,
+      "maxclass": "newobj",
+      "text": "rnbo~ @title basic",
+      "numinlets": 1,
+      "numoutlets": 3,
+      "outlettype": [
+        "signal",
+        "signal",
+        "list"
+      ],
+      "inletInfo": {
+        "IOInfo": []
+      },
+      "outletInfo": {
+        "IOInfo": [
+          {
+            "type": "signal",
+            "index": 1,
+            "tag": "",
+            "comment": ""
+          },
+          {
+            "type": "signal",
+            "index": 2,
+            "tag": "",
+            "comment": ""
+          }
+        ]
+      },
+      "inner_classnamespace": "rnbo"
+    },
+    "0x3": {
+      "source": "packages/RNBO/help/rnbo_out~.maxhelp",
+      "box_id": "obj-1",
+      "in~": 0,
+      "out~": 3,
+      "maxclass": "newobj",
+      "text": "rnbo~ @title basic",
+      "numinlets": 1,
+      "numoutlets": 4,
+      "outlettype": [
+        "signal",
+        "signal",
+        "signal",
+        "list"
+      ],
+      "inletInfo": {
+        "IOInfo": []
+      },
+      "outletInfo": {
+        "IOInfo": [
+          {
+            "type": "signal",
+            "index": 1,
+            "tag": "",
+            "comment": ""
+          },
+          {
+            "type": "signal",
+            "index": 2,
+            "tag": "",
+            "comment": ""
+          },
+          {
+            "type": "signal",
+            "index": 3,
+            "tag": "",
+            "comment": ""
+          }
+        ]
+      },
+      "inner_classnamespace": "rnbo"
+    },
+    "1x0": {
+      "source": "packages/RNBO/help/rnbo_snapshot~.maxhelp",
+      "box_id": "obj-1",
+      "in~": 1,
+      "out~": 0,
+      "maxclass": "newobj",
+      "text": "rnbo~ @title basic",
+      "numinlets": 1,
+      "numoutlets": 1,
+      "outlettype": [
+        "list"
+      ],
+      "inletInfo": {
+        "IOInfo": [
+          {
+            "type": "signal",
+            "index": 1,
+            "tag": "",
+            "comment": ""
+          }
+        ]
+      },
+      "outletInfo": {
+        "IOInfo": []
+      },
+      "inner_classnamespace": "rnbo"
+    },
+    "1x2": {
+      "source": "packages/RNBO/help/rnbo_scope~.maxhelp",
+      "box_id": "obj-1",
+      "in~": 1,
+      "out~": 2,
+      "maxclass": "newobj",
+      "text": "rnbo~ @title basic",
+      "numinlets": 1,
+      "numoutlets": 3,
+      "outlettype": [
+        "signal",
+        "signal",
+        "list"
+      ],
+      "inletInfo": {
+        "IOInfo": [
+          {
+            "type": "signal",
+            "index": 1,
+            "tag": "in1",
+            "comment": ""
+          }
+        ]
+      },
+      "outletInfo": {
+        "IOInfo": [
+          {
+            "type": "signal",
+            "index": 1,
+            "tag": "out1",
+            "comment": ""
+          },
+          {
+            "type": "signal",
+            "index": 2,
+            "tag": "out2",
+            "comment": ""
+          }
+        ]
+      },
+      "inner_classnamespace": "rnbo"
+    },
+    "3x0": {
+      "source": "packages/RNBO/help/rnbo_in~.maxhelp",
+      "box_id": "obj-1",
+      "in~": 3,
+      "out~": 0,
+      "maxclass": "newobj",
+      "text": "rnbo~ @title basic",
+      "numinlets": 3,
+      "numoutlets": 1,
+      "outlettype": [
+        "list"
+      ],
+      "inletInfo": {
+        "IOInfo": [
+          {
+            "type": "signal",
+            "index": 1,
+            "tag": "",
+            "comment": ""
+          },
+          {
+            "type": "signal",
+            "index": 2,
+            "tag": "",
+            "comment": ""
+          },
+          {
+            "type": "signal",
+            "index": 3,
+            "tag": "",
+            "comment": ""
+          }
+        ]
+      },
+      "outletInfo": {
+        "IOInfo": []
+      },
+      "inner_classnamespace": "rnbo"
+    }
+  }
+}

@@ -14,7 +14,10 @@ Provides:
 - Parameter resolution: :func:`name_tokens`, :func:`infer_type_unit`,
   :func:`unique_shortnames`, :func:`resolve_param_specs`.
 - The three-kind device skeleton behind ``Patcher.add_m4l_device``:
-  :class:`M4LDevice`, :func:`build_m4l_device`.
+  :class:`M4LDevice`, :func:`build_m4l_device` (reuses existing device I/O,
+  never doubles it; quick 261022-ud6 BL-01).
+- Duplicated device I/O detection: :func:`find_duplicate_device_io` and the
+  critic hook :func:`duplicate_device_io_results`.
 
 Evidence (RESEARCH for 261022-pqu):
 - Byte format: an .amxd is a chunk stream ``[tag][uint32 LE length][payload]``
@@ -79,6 +82,9 @@ __all__ = [
     "resolve_param_specs",
     "M4LDevice",
     "build_m4l_device",
+    "DEVICE_SINGLETON_NAMES",
+    "find_duplicate_device_io",
+    "duplicate_device_io_results",
 ]
 
 # ---------------------------------------------------------------------------
@@ -211,8 +217,14 @@ def build_amxd(kind_or_code: "str | bytes", payload: bytes, meta: "int | None" =
     ``build_amxd(f.code, f.payload, f.meta)`` reproduces a parsed file byte
     for byte. With ``meta=0`` the first 32 bytes equal
     ``struct.pack(AMXD_HEADER_FORMAT, ...)``.
+
+    Raises:
+        ValueError: unknown kind, or *meta* not None and not an int in
+            ``0 <= meta < 2**32`` (the chunk is a uint32; a bool is refused).
     """
     code = _code_for(kind_or_code)
+    if meta is not None and (not _is_int(meta) or not 0 <= meta < 2 ** 32):
+        raise ValueError(f"meta must be None or an int in [0, 2**32), got {meta!r}")
     payload = bytes(payload)
     out = struct.pack(AMXD_CHUNK_HEADER, AMXD_MAGIC, len(code)) + code
     if meta is not None:
@@ -309,15 +321,27 @@ def export_amxd(
     if out.suffix.lower() != ".amxd":
         raise ValueError(f"out_path must end in .amxd, got {str(out)!r}")
 
-    if kind is None:
-        from src.maxpat.critics.m4l_critic import detect_m4l_device_type
+    from src.maxpat.critics.m4l_critic import detect_m4l_device_type
 
-        kind = detect_m4l_device_type(patch)
+    detected = detect_m4l_device_type(patch)
+    if kind is None:
+        kind = detected
         if kind is None:
             raise ValueError(
                 "cannot detect the device kind (no plugin~, plugout~ or "
                 "live.thisdevice); pass kind= explicitly"
             )
+    elif kind in KIND_CODES and detected in KIND_CODES and detected != kind:
+        # Q40 review IN-01: an explicit kind is honoured, but a patch whose
+        # contents say otherwise (plugin~ exported as an instrument) gets a
+        # warning -- detection is a heuristic, so it never refuses.
+        warnings.warn(
+            f"export_amxd: kind {kind!r} disagrees with the patch contents, which "
+            f"look like an {detected!r} device (detect_m4l_device_type); Live "
+            f"loads the .amxd as {kind!r}",
+            UserWarning,
+            stacklevel=2,
+        )
     code = _code_for(kind)
 
     patcher = patch.get("patcher") if isinstance(patch, dict) else None
@@ -428,20 +452,20 @@ def infer_type_unit(name: str, mn: float, mx: float, default: float) -> tuple[Pa
     return ptype, unit
 
 
-def unique_shortnames(longnames: list[str], explicit: list) -> list[str]:
+def unique_shortnames(longnames: list[str], explicit: list, *, reserved=()) -> list[str]:
     """Short names: explicit ones verbatim, auto ones abbreviated and de-duplicated.
 
     An auto name is ``m4l_polish._abbreviate_shortname(name, 8)``; when that
-    is already taken (by an explicit name or an earlier auto name) it is
-    trimmed and suffixed 2, 3, ... within 8 characters ("Amount",
-    "Amount2"). Explicit names are never altered and never reused by an auto
-    name.
+    is already taken (by an explicit name, an earlier auto name or one of
+    *reserved* -- the short names already in the patcher) it is trimmed and
+    suffixed 2, 3, ... within 8 characters ("Amount", "Amount2"). Explicit
+    names are never altered and never reused by an auto name.
     """
     from src.maxpat.m4l_polish import _abbreviate_shortname
 
     if len(longnames) != len(explicit):
         raise ValueError("longnames and explicit must have the same length")
-    taken = {s for s in explicit if s}
+    taken = {s for s in explicit if s} | {s for s in reserved if s}
     out: list[str] = []
     for longname, given in zip(longnames, explicit):
         if given:
@@ -503,15 +527,33 @@ def _derive_varname(name: str) -> str:
     return re.sub(r"\W+", "_", name).strip("_").lower() or "param"
 
 
-def resolve_param_specs(params: list, *, modmode: "ModMode | int | str" = ModMode.NONE) -> list[dict]:
+def _integral(value) -> bool:
+    return _is_int(value) or (isinstance(value, float) and value.is_integer())
+
+
+def resolve_param_specs(
+    params: list,
+    *,
+    modmode: "ModMode | int | str" = ModMode.NONE,
+    existing_longnames=(),
+    existing_shortnames=(),
+) -> list[dict]:
     """Validate parameter spec dicts and resolve inferred metadata.
 
     Each spec: required ``name``, ``min``, ``max``, ``default``; optional
     ``unit``, ``type``, ``steps``, ``short_name``, ``varname``,
     ``param_connect``, ``modmode``. Explicit keys always win over inference
     (:func:`infer_type_unit`); short names come from
-    :func:`unique_shortnames`; ``varname`` defaults to the name when it is a
-    valid identifier, else its lowercased ``\\W+`` -> ``_`` form.
+    :func:`unique_shortnames` (auto names avoid *existing_shortnames*);
+    ``varname`` defaults to the name when it is a valid identifier, else its
+    lowercased ``\\W+`` -> ``_`` form.
+
+    *existing_longnames* / *existing_shortnames* are the parameter names
+    already in the target patcher (``build_m4l_device`` passes them): a spec
+    name equal to an existing longname, or an explicit short name equal to
+    an existing short name, is refused (review WR-01) -- it would give a
+    blocking ``parameter_uniqueness`` finding or two parameters with one
+    label.
 
     Returns:
         One dict per spec with keys name, min, max, default (as given),
@@ -520,9 +562,14 @@ def resolve_param_specs(params: list, *, modmode: "ModMode | int | str" = ModMod
 
     Raises:
         ValueError: non-dict spec, unknown or missing keys, empty name,
-            duplicate names or varnames, non-numeric or bool bounds,
-            min >= max, default outside [min, max], steps < 2, an Enum/Blob
-            type or a Custom unit.
+            duplicate names, varnames or explicit short names, a name or
+            explicit short name already used in the patcher, non-numeric or
+            bool bounds, min >= max, default outside [min, max], steps < 2,
+            an Enum/Blob type or a Custom unit.
+
+    Warns (UserWarning; explicit keys still win, Q40 review IN-02): an
+    explicit Int type with a non-integral min/max/default or a span over
+    255 (Live's Int type holds 256 values).
     """
     default_mod = _coerce_member(modmode, ModMode, "modmode", {}, ())
     resolved: list[dict] = []
@@ -560,6 +607,25 @@ def resolve_param_specs(params: list, *, modmode: "ModMode | int | str" = ModMod
             _coerce_member(spec["modmode"], ModMode, "modmode", {}, ())
             if spec.get("modmode") is not None else default_mod
         )
+        # Explicit keys win, but an explicit Int type that Live cannot hold
+        # is reported now rather than only by the critics (Q40 review IN-02).
+        if spec.get("type") is not None and ptype == ParamType.INT:
+            if not (_integral(mn) and _integral(mx) and _integral(default)):
+                warnings.warn(
+                    f"param {name!r}: explicit type Int with non-integral "
+                    f"min/max/default {mn!r}/{mx!r}/{default!r} -- Live rounds them; "
+                    f"use type Float",
+                    UserWarning,
+                    stacklevel=3,
+                )
+            elif mx - mn > _INT_TYPE_MAX_SPAN:
+                warnings.warn(
+                    f"param {name!r}: explicit type Int holds 256 values but the "
+                    f"range spans {mn!r}..{mx!r} -- Live clips it; use type Float "
+                    f"with unit Int",
+                    UserWarning,
+                    stacklevel=3,
+                )
 
         steps = spec.get("steps")
         if steps is not None and (not _is_int(steps) or steps < 2):
@@ -591,14 +657,32 @@ def resolve_param_specs(params: list, *, modmode: "ModMode | int | str" = ModMod
             "param_connect": connect,
         })
 
-    for key, label in (("name", "name"), ("varname", "varname")):
+    for key, label in (("name", "name"), ("varname", "varname"), ("short_name", "short name")):
         seen: set = set()
         for r in resolved:
+            if r[key] is None:
+                continue
             if r[key] in seen:
                 raise ValueError(f"duplicate parameter {label} {r[key]!r}")
             seen.add(r[key])
 
-    shorts = unique_shortnames([r["name"] for r in resolved], [r["short_name"] for r in resolved])
+    taken_long = set(existing_longnames)
+    clash = [r["name"] for r in resolved if r["name"] in taken_long]
+    if clash:
+        raise ValueError(
+            f"parameter name(s) {clash} already used by a parameter in this patcher "
+            f"(parameter_longname must be unique in a device); pick another name"
+        )
+    taken_short = set(existing_shortnames)
+    clash = [r["short_name"] for r in resolved if r["short_name"] in taken_short]
+    if clash:
+        raise ValueError(
+            f"explicit short name(s) {clash} already used by a parameter in this "
+            f"patcher; pick another short_name"
+        )
+
+    shorts = unique_shortnames([r["name"] for r in resolved], [r["short_name"] for r in resolved],
+                               reserved=taken_short)
     for r, short in zip(resolved, shorts):
         r["short_name"] = short
     return resolved
@@ -688,17 +772,30 @@ def check_varname_collisions(patcher, varnames, *, label: str = "param") -> None
         )
 
 
-def _existing_param_longnames(patcher) -> list:
-    """Longnames of live.* parameters already in *patcher* (recursive, box order)."""
+def _existing_param_valueofs(patcher) -> list:
+    """valueof dicts of live.* parameters already in *patcher* (recursive, box order)."""
     from src.maxpat.m4l_polish import _collect_live_controls
 
-    names = []
+    out = []
     for box in _collect_live_controls(patcher.to_dict()["patcher"]["boxes"]):
         valueof = (box.get("saved_attribute_attributes") or {}).get("valueof") or {}
-        name = valueof.get("parameter_longname")
+        if isinstance(valueof, dict):
+            out.append(valueof)
+    return out
+
+
+def _existing_param_names(patcher, key: str) -> list:
+    names = []
+    for valueof in _existing_param_valueofs(patcher):
+        name = valueof.get(key)
         if isinstance(name, str) and name and name not in names:
             names.append(name)
     return names
+
+
+def _existing_param_longnames(patcher) -> list:
+    """Longnames of live.* parameters already in *patcher* (recursive, box order)."""
+    return _existing_param_names(patcher, "parameter_longname")
 
 
 def _presentation_extent(patcher) -> "tuple[float, bool]":
@@ -714,6 +811,153 @@ def _presentation_extent(patcher) -> "tuple[float, bool]":
     return right, found
 
 
+# ---------------------------------------------------------------------------
+# Device I/O: reuse and duplicate detection (review BL-01, quick 261022-ud6)
+# ---------------------------------------------------------------------------
+
+# Boxes a device has exactly one of; a second one doubles the audio path
+# (plugin~ / plugout~) or the init chain (live.thisdevice). The Q40 critic
+# hook reports them (duplicate_device_io_results).
+DEVICE_SINGLETON_NAMES = ("plugin~", "plugout~", "live.thisdevice")
+
+_KIND_IO = {
+    "audio_effect": ("plugin~", "plugout~"),
+    "instrument": ("midiin", "plugout~"),
+    "midi_effect": ("midiin", "midiout"),
+}
+_TRIGGER_NAMES = ("t", "trigger")
+
+
+def _dict_box_name(box: dict) -> "str | None":
+    maxclass = box.get("maxclass")
+    if maxclass == "newobj":
+        text = box.get("text")
+        if isinstance(text, str) and text.split():
+            return text.split()[0]
+        return None
+    return maxclass if isinstance(maxclass, str) else None
+
+
+def find_duplicate_device_io(patch_dict) -> dict:
+    """``{name: [box ids]}`` for each of :data:`DEVICE_SINGLETON_NAMES` that
+    appears more than once in the TOP scope of *patch_dict*.
+
+    A device needs one ``plugin~``, one ``plugout~`` and one
+    ``live.thisdevice``: two ``plugin~ -> plugout~`` pass-throughs double the
+    dry signal (+6 dB) and two ``live.thisdevice`` init chains bang every
+    dial twice (review BL-01). Pure and read-only; junk input gives ``{}``.
+    """
+    patcher = patch_dict.get("patcher") if isinstance(patch_dict, dict) else None
+    boxes = patcher.get("boxes") if isinstance(patcher, dict) else None
+    if not isinstance(boxes, list):
+        return {}
+    found: dict = {}
+    for entry in boxes:
+        box = entry.get("box") if isinstance(entry, dict) else None
+        if not isinstance(box, dict):
+            continue
+        name = _dict_box_name(box)
+        if name in DEVICE_SINGLETON_NAMES:
+            found.setdefault(name, []).append(str(box.get("id", "?")))
+    return {name: ids for name, ids in found.items() if len(ids) > 1}
+
+
+def duplicate_device_io_results(patch_dict) -> list:
+    """:func:`find_duplicate_device_io` as warning ``CriticResult`` s.
+
+    Critic hook for ``m4l_critic.review_m4l`` (rule ``duplicate_device_io``,
+    severity warning, top scope only).
+    """
+    from src.maxpat.critics.base import CriticResult, finding_ids
+
+    results = []
+    for name, ids in find_duplicate_device_io(patch_dict).items():
+        results.append(CriticResult(
+            "warning",
+            f"Device has {len(ids)} {name} boxes ({', '.join(ids)}) -- "
+            + ("two pass-throughs double the signal into Live"
+               if name in ("plugin~", "plugout~")
+               else "every dial is initialized twice"),
+            f"Keep one {name} and rewire its cords; add_m4l_device reuses an "
+            f"existing one",
+            rule="duplicate_device_io",
+            box_ids=finding_ids(*ids),
+        ))
+    return results
+
+
+def _single(patcher, name: str):
+    """The one top-level *name* box, None when absent; ValueError when several."""
+    found = [b for b in patcher.boxes if b.name == name]
+    if len(found) > 1:
+        raise ValueError(
+            f"the patcher already has {len(found)} {name} boxes "
+            f"({', '.join(b.id for b in found)}); a device needs exactly one -- "
+            f"remove the duplicate before calling add_m4l_device"
+        )
+    return found[0] if found else None
+
+
+def _feeds(patcher, box, inlet: int) -> list:
+    """(source id, outlet) of every cord into *box* inlet *inlet*."""
+    return [(l.source_id, l.source_outlet) for l in patcher.lines
+            if l.dest_id == box.id and l.dest_inlet == inlet]
+
+
+def _check_free_inlets(patcher, out_box, plan: list, label: str) -> None:
+    """Refuse a source cord into an inlet another source already feeds."""
+    if out_box is None:
+        return
+    for inlet, (box, outlet) in plan:
+        feeds = _feeds(patcher, out_box, inlet)
+        if feeds and feeds != [(box.id, outlet)]:
+            others = ", ".join(f"{sid}[{so}]" for sid, so in feeds)
+            raise ValueError(
+                f"{label}: {out_box.name} ({out_box.id}) inlet {inlet} is already fed "
+                f"by {others}; a second source would sum two paths into Live -- "
+                f"rewire the existing chain or omit the source"
+            )
+
+
+def _is_bang_trigger(box) -> bool:
+    return box.name in _TRIGGER_NAMES and bool(box.args) and all(
+        str(a) in ("b", "bang") for a in box.args)
+
+
+def _rect(box) -> list:
+    from src.maxpat.sizing import rendered_rect
+
+    r = rendered_rect(box)
+    return list(r) if r is not None else list(box.patching_rect)
+
+
+def _rects_touch(a: list, b: list, pad: float = 5.0) -> bool:
+    half = pad / 2.0
+    return not (a[0] + a[2] + half <= b[0] - half or b[0] + b[2] + half <= a[0] - half
+                or a[1] + a[3] + half <= b[1] - half or b[1] + b[3] + half <= a[1] - half)
+
+
+def _clear_of_existing(patcher, before: set) -> None:
+    """Move this call's new boxes right of the existing ones on an overlap (IN-06).
+
+    The builder places its boxes at fixed coordinates; when any of them
+    overlaps a box that was in the patcher before the call, all new boxes
+    shift right together (their relative layout kept) to 30 px past the
+    existing boxes' right edge. No overlap -> nothing moves.
+    """
+    new = [b for b in patcher.boxes if id(b) not in before]
+    old = [b for b in patcher.boxes if id(b) in before]
+    if not new or not old:
+        return
+    old_rects = [_rect(b) for b in old]
+    if not any(_rects_touch(_rect(n), r) for n in new for r in old_rects):
+        return
+    right = max(r[0] + r[2] for r in old_rects)
+    dx = right + 30.0 - min(float(b.patching_rect[0]) for b in new)
+    for b in new:
+        b.patching_rect[0] = float(b.patching_rect[0]) + dx
+
+
 def build_m4l_device(
     patcher,
     kind: str,
@@ -726,6 +970,7 @@ def build_m4l_device(
     banks: bool = True,
     presentation: bool = True,
     modmode: "ModMode | int | str" = ModMode.NONE,
+    info_text: "bool | None" = None,
 ) -> M4LDevice:
     """Build the device skeleton into *patcher*. EXPERIMENTAL (Live check pending).
 
@@ -733,6 +978,27 @@ def build_m4l_device(
     validated before the first box is created. Box creation order is fixed
     -- I/O boxes, I/O cords, dials, then live.thisdevice / trigger and
     live.banks -- so add_m4l_gen_synth's ids hold.
+
+    Existing device content is reused, never doubled (review BL-01):
+
+    - The kind's I/O boxes (``plugin~`` / ``plugout~``, ``midiin`` /
+      ``midiout``; an instrument's ``midiin`` when ``midi_in``) and
+      ``live.thisdevice`` are looked up by name in the top scope. One that
+      exists is reused; two or more of one name -> ValueError (ambiguous).
+    - The pass-through (``plugin~`` 0->0 / 1->1, ``midiin -> midiout``) is
+      added only into output inlets that nothing feeds yet, so a user chain
+      ``plugin~ -> fx -> plugout~`` never gets a dry path beside it.
+    - A source cord into an output inlet that another source already feeds
+      -> ValueError; the same cord again is a no-op.
+    - A reused ``live.thisdevice`` keeps a single cord from outlet 0: with
+      no cord the new unbound dials are wired as for a fresh device; one
+      cord into an all-bang ``t b ...`` extends that trigger
+      (``replace_box_safe``, existing cords kept) with one outlet per new
+      dial; any other cord(s) move onto a new ``t b ...`` (existing
+      destinations on the left outlets, the new dials on the right).
+    - Param names equal to an existing ``parameter_longname``, and explicit
+      short names equal to an existing short name, are refused (review
+      WR-01); auto short names avoid the existing ones.
 
     Init chain (``init_chain=True``): ``live.thisdevice`` outlet 0 bangs
     when the device is opened and completely initialized, every time a
@@ -751,10 +1017,25 @@ def build_m4l_device(
     of the longnames, unless user-defined banks are already there (kept,
     with a UserWarning); one newobj ``live.banks`` (an existing one is
     reused).
+
+    Info text (``info_text``; None follows ``presentation``): every new dial
+    gets ``annotation`` / ``annotation_name`` exactly as
+    ``m4l_polish.populate_info_text`` writes them (review IN-06). The bare
+    skeleton (``presentation=False``, as add_m4l_gen_synth builds it) has
+    none, so its golden output holds.
+
+    Layout: when a new box overlaps a box that was in the patcher before
+    the call, all new boxes move right of the existing ones together
+    (review IN-06).
     """
     if kind not in KIND_CODES:
         raise ValueError(f"unknown device kind {kind!r}; expected one of {sorted(KIND_CODES)}")
-    specs = resolve_param_specs(list(params or []), modmode=modmode)
+    specs = resolve_param_specs(
+        list(params or []),
+        modmode=modmode,
+        existing_longnames=_existing_param_longnames(patcher),
+        existing_shortnames=_existing_param_names(patcher, "parameter_shortname"),
+    )
     audio = _normalize_source(patcher, audio_source, "audio_source", allow_pair=True)
     midi = _normalize_source(patcher, midi_source, "midi_source", allow_pair=False)
     if audio is not None and kind == "midi_effect":
@@ -763,63 +1044,75 @@ def build_m4l_device(
         raise ValueError("midi_source is only valid for a midi_effect (midiout)")
     check_varname_collisions(patcher, [s["varname"] for s in specs])
 
+    # Existing device I/O (BL-01): reuse each, refuse ambiguity.
+    in_name, out_name = _KIND_IO[kind]
+    wants_in = kind != "instrument" or midi_in
+    existing_in = _single(patcher, in_name) if wants_in else None
+    existing_out = _single(patcher, out_name)
+    existing_dev = _single(patcher, "live.thisdevice") if init_chain else None
+
     # With a source, the caller's chain already holds the device input
     # (plugin~ / midiin): reuse it instead of adding a second, unwired one
     # (review WR-01). The source must exist before the build, so the chain
     # cannot start from a box this call would create.
-    existing_in = None
-    if kind == "audio_effect" and audio is not None:
-        existing_in = next((b for b in patcher.boxes if b.name == "plugin~"), None)
-        if existing_in is None:
-            raise ValueError(
-                "audio_source on an audio_effect needs the chain's plugin~ in the "
-                "patcher first (build it from patcher.add_box('plugin~')), or omit "
-                "audio_source for the plugin~ -> plugout~ pass-through"
-            )
-    elif kind == "midi_effect" and midi is not None:
-        existing_in = next((b for b in patcher.boxes if b.name == "midiin"), None)
-        if existing_in is None:
-            raise ValueError(
-                "midi_source on a midi_effect needs the chain's midiin in the "
-                "patcher first (build it from patcher.add_box('midiin')), or omit "
-                "midi_source for the midiin -> midiout pass-through"
-            )
+    if kind == "audio_effect" and audio is not None and existing_in is None:
+        raise ValueError(
+            "audio_source on an audio_effect needs the chain's plugin~ in the "
+            "patcher first (build it from patcher.add_box('plugin~')), or omit "
+            "audio_source for the plugin~ -> plugout~ pass-through"
+        )
+    if kind == "midi_effect" and midi is not None and existing_in is None:
+        raise ValueError(
+            "midi_source on a midi_effect needs the chain's midiin in the "
+            "patcher first (build it from patcher.add_box('midiin')), or omit "
+            "midi_source for the midiin -> midiout pass-through"
+        )
 
+    # Source cords planned as (output inlet, (box, outlet)).
+    if midi is not None:
+        source_plan = [(0, midi[0])]
+    elif audio is not None:
+        source_plan = ([(0, audio[0]), (1, audio[0])] if len(audio) == 1
+                       else [(0, audio[0]), (1, audio[1])])
+    else:
+        source_plan = []
+    _check_free_inlets(patcher, existing_out, source_plan,
+                       "midi_source" if midi is not None else "audio_source")
+
+    before = {id(b) for b in patcher.boxes}
     dev = M4LDevice(kind=kind)
 
     # 1. Input box, 2. output box (Live template objects, bare forms).
-    if kind == "audio_effect":
-        dev.plugin = existing_in or patcher.add_box("plugin~", x=200.0, y=340.0)
-    elif kind == "midi_effect":
-        dev.midiin = existing_in or patcher.add_box("midiin", x=200.0, y=340.0)
-    elif midi_in:
-        dev.midiin = patcher.add_box("midiin", x=200.0, y=340.0)
-    if kind == "midi_effect":
-        dev.midiout = patcher.add_box("midiout", x=200.0, y=400.0)
+    if wants_in:
+        box = existing_in or patcher.add_box(in_name, x=200.0, y=340.0)
+        if in_name == "plugin~":
+            dev.plugin = box
+        else:
+            dev.midiin = box
+    out_box = existing_out or patcher.add_box(out_name, x=200.0, y=400.0)
+    if out_name == "plugout~":
+        dev.plugout = out_box
     else:
-        dev.plugout = patcher.add_box("plugout~", x=200.0, y=400.0)
+        dev.midiout = out_box
 
-    # 3. I/O cords, inlet 0 before inlet 1.
-    if kind == "midi_effect":
-        if midi is not None:
-            box, outlet = midi[0]
-            patcher.add_connection(box, outlet, dev.midiout, 0)
-        else:
-            patcher.add_connection(dev.midiin, 0, dev.midiout, 0)
-    elif audio is not None:
-        if len(audio) == 1:
-            box, outlet = audio[0]
-            patcher.add_connection(box, outlet, dev.plugout, 0)
-            patcher.add_connection(box, outlet, dev.plugout, 1)
-        else:
-            (lbox, lout), (rbox, rout) = audio
-            patcher.add_connection(lbox, lout, dev.plugout, 0)
-            patcher.add_connection(rbox, rout, dev.plugout, 1)
+    # 3. I/O cords, inlet 0 before inlet 1. The pass-through goes only into
+    # inlets nothing feeds yet (a reused output keeps its chain; BL-01).
+    if source_plan:
+        for inlet, (box, outlet) in source_plan:
+            patcher.add_connection(box, outlet, out_box, inlet)
     elif kind == "audio_effect":
-        patcher.add_connection(dev.plugin, 0, dev.plugout, 0)
-        patcher.add_connection(dev.plugin, 1, dev.plugout, 1)
+        for k in (0, 1):
+            if not _feeds(patcher, out_box, k):
+                patcher.add_connection(dev.plugin, k, out_box, k)
+    elif kind == "midi_effect":
+        if not _feeds(patcher, out_box, 0):
+            patcher.add_connection(dev.midiin, 0, out_box, 0)
 
     # 4. Parameter dials.
+    if info_text is None:
+        info_text = presentation
+    if info_text:
+        from src.maxpat.m4l_polish import _make_generic_info_text
     for i, spec in enumerate(specs):
         d = patcher.add_box(
             "live.dial", x=50.0 + i * 60.0, y=100.0, skip_overlap_check=True,
@@ -842,23 +1135,25 @@ def build_m4l_device(
         if spec["steps"] is not None:
             valueof["parameter_steps"] = spec["steps"]
         d.extra_attrs["saved_attribute_attributes"] = {"valueof": valueof}
+        if info_text:
+            d.extra_attrs["annotation"] = _make_generic_info_text(spec["name"], valueof)
+            d.extra_attrs["annotation_name"] = spec["name"]
         dev.dials.append(d)
 
     # 5. live.thisdevice init chain, after the dials (ids of the legacy path hold).
     if init_chain:
-        dev.thisdevice = patcher.add_box(
-            "live.thisdevice", x=50.0, y=20.0, skip_overlap_check=True,
-        )
         unbound = [d for d, spec in zip(dev.dials, specs) if spec["param_connect"] is None]
-        if len(unbound) == 1:
-            patcher.add_connection(dev.thisdevice, 0, unbound[0], 0)
-        elif len(unbound) >= 2:
-            dev.init_trigger = patcher.add_box(
-                "t", ["b"] * len(unbound), x=50.0, y=60.0, skip_overlap_check=True,
+        if existing_dev is None:
+            dev.thisdevice = patcher.add_box(
+                "live.thisdevice", x=50.0, y=20.0, skip_overlap_check=True,
             )
-            patcher.add_connection(dev.thisdevice, 0, dev.init_trigger, 0)
-            for j, dial in enumerate(unbound):
-                patcher.add_connection(dev.init_trigger, j, dial, 0)
+            current = []
+        else:
+            dev.thisdevice = existing_dev
+            current = [l for l in patcher.lines
+                       if l.source_id == existing_dev.id and l.source_outlet == 0]
+        if unbound:
+            _wire_init_chain(patcher, dev, unbound, current)
 
     # 6. Push parameterbanks + live.banks.
     if banks and dev.dials:
@@ -884,6 +1179,8 @@ def build_m4l_device(
             dev.banks = patcher.add_box(
                 "live.banks", x=350.0, y=400.0, skip_overlap_check=True,
             )
+
+    _clear_of_existing(patcher, before)
 
     # Presentation grid inside Live's 169 px device height (Rule #9).
     # Existing presentation UI is kept: the grid starts right of it and
@@ -914,3 +1211,52 @@ def build_m4l_device(
             patcher.props["latency"] = 0
 
     return dev
+
+
+def _wire_init_chain(patcher, dev: M4LDevice, unbound: list, current: list) -> None:
+    """Bang *unbound* dials from ``dev.thisdevice`` outlet 0, never fanning out.
+
+    *current* holds the cords already leaving outlet 0 (a reused
+    live.thisdevice; BL-01).
+    """
+    td = dev.thisdevice
+    tx, ty = float(td.patching_rect[0]), float(td.patching_rect[1])
+    if not current:
+        if len(unbound) == 1:
+            patcher.add_connection(td, 0, unbound[0], 0)
+            return
+        dev.init_trigger = patcher.add_box(
+            "t", ["b"] * len(unbound), x=tx, y=ty + 40.0, skip_overlap_check=True,
+        )
+        patcher.add_connection(td, 0, dev.init_trigger, 0)
+        for j, dial in enumerate(unbound):
+            patcher.add_connection(dev.init_trigger, j, dial, 0)
+        return
+
+    by_id = {b.id: b for b in patcher.boxes}
+    if len(current) == 1 and current[0].dest_inlet == 0:
+        dest = by_id.get(current[0].dest_id)
+        if dest is not None and _is_bang_trigger(dest):
+            k = dest.numoutlets
+            result = patcher.replace_box_safe(dest, "t", args=["b"] * (k + len(unbound)))
+            trig = result.box
+            for j, dial in enumerate(unbound):
+                patcher.add_connection(trig, k + j, dial, 0)
+            dev.init_trigger = trig
+            return
+
+    # Move the existing destinations onto a new all-bang trigger (left
+    # outlets, fired last), the new dials on its right outlets.
+    targets = [(by_id[l.dest_id], l.dest_inlet) for l in current if l.dest_id in by_id]
+    for l in current:
+        patcher.lines.remove(l)
+    trig = patcher.add_box(
+        "t", ["b"] * (len(targets) + len(unbound)), x=tx, y=ty + 40.0,
+        skip_overlap_check=True,
+    )
+    patcher.add_connection(td, 0, trig, 0)
+    for j, (box, inlet) in enumerate(targets):
+        patcher.add_connection(trig, j, box, inlet)
+    for j, dial in enumerate(unbound):
+        patcher.add_connection(trig, len(targets) + j, dial, 0)
+    dev.init_trigger = trig
