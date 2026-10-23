@@ -172,6 +172,7 @@ __all__ = [
     "Program",
     "Unsupported",
     "parse_codebox",
+    "value_dependencies",
 ]
 
 
@@ -922,6 +923,101 @@ def _edit_distance(a: str, b: str) -> int:
 
 
 # ===========================================================================
+# Value dataflow (261022-ud6 CR-01: smoke port inference)
+# ===========================================================================
+
+# Operators whose result is a 0/1 flag, not the operands' value.
+_FLAG_OPS = frozenset({"<", ">", "<=", ">=", "==", "!=", "&&", "||"})
+# Calls whose result does not carry an argument's value: generators read a
+# rate (phasor, cycle, triangle phase), noise reads nothing, conversions of
+# a time / a size are not audio.
+_NO_VALUE_CALLS = frozenset({
+    "phasor", "cycle", "noise", "triangle", "dim", "channels", "mstosamps",
+    "sampstoms", "poke",
+})
+
+
+def value_dependencies(cb: "Codebox") -> dict:
+    """{outN: {inK, ...}} -- which inlets reach each outlet as a value.
+
+    A taint pass over every assignment (if/else and for bodies included,
+    iterated to a fixed point so History feedback converges). A value flows
+    through arithmetic and pure functions, the ``?:`` branches, ``latch``'s
+    input, ``selector``'s inputs, ``dcblock``, and through a Buffer / Data /
+    Delay that ``poke`` / ``.write()`` filled and ``peek`` / ``.read()``
+    reads. It does not flow through index, channel, rate or time arguments,
+    comparisons and logic (0/1 flags), ``?:`` / if conditions, or
+    generators (phasor, cycle, noise, triangle). The smoke port inference
+    uses it to decide whether a downstream gen~ inlet passes audio on.
+    """
+    taint: dict = {f"in{k}": {k} for k in range(1, cb.n_in + 1)}
+
+    def srcs(e) -> set:
+        if isinstance(e, Name):
+            return taint.get(e.name, set())
+        if isinstance(e, Unary):
+            return srcs(e.a)
+        if isinstance(e, Bin):
+            return set() if e.op in _FLAG_OPS else srcs(e.a) | srcs(e.b)
+        if isinstance(e, Tern):
+            return srcs(e.a) | srcs(e.b)
+        if isinstance(e, Method):
+            return set(taint.get(e.obj, set())) if e.method == "read" else set()
+        if isinstance(e, Call):
+            if e.name == "peek":
+                a0 = e.args[0] if e.args else None
+                return set(taint.get(a0.name, set())) if isinstance(a0, Name) else set()
+            if e.name in _NO_VALUE_CALLS:
+                return set()
+            if e.name == "latch":
+                return srcs(e.args[0]) if e.args else set()
+            if e.name == "selector":
+                out: set = set()
+                for a in e.args[1:]:
+                    out |= srcs(a)
+                return out
+            out = set()
+            for a in e.args:
+                out |= srcs(a)
+            return out
+        return set()
+
+    def side_effects(e) -> bool:
+        changed = False
+        for x in _subexprs(e):
+            target, val = None, None
+            if isinstance(x, Call) and x.name == "poke" and len(x.args) >= 2 \
+                    and isinstance(x.args[0], Name):
+                target, val = x.args[0].name, x.args[1]
+            elif isinstance(x, Method) and x.method == "write" and x.args:
+                target, val = x.obj, x.args[0]
+            if target is not None:
+                add = srcs(val) - taint.get(target, set())
+                if add:
+                    taint.setdefault(target, set()).update(add)
+                    changed = True
+        return changed
+
+    stmts = list(_walk_stmts(cb.body))
+    for _ in range(64):     # fixed point; bounded (each pass only grows sets)
+        changed = False
+        for s in stmts:
+            if isinstance(s, (Assign, ExprStmt)):
+                changed |= side_effects(s.expr)
+            if isinstance(s, Assign):
+                add = srcs(s.expr)
+                if s.op != "=":
+                    add = add | taint.get(s.name, set())
+                add = add - taint.get(s.name, set())
+                if add:
+                    taint.setdefault(s.name, set()).update(add)
+                    changed = True
+        if not changed:
+            break
+    return {k: set(taint.get(f"out{k}", set())) for k in range(1, cb.n_out + 1)}
+
+
+# ===========================================================================
 # Build-time lint helpers (261022-ud6 IN-01, IN-02)
 # ===========================================================================
 
@@ -1130,14 +1226,19 @@ class Codebox:
         samplerate: float = 44100.0,
         seed: int = 1,
         buffers: dict | None = None,
+        buffer_scale: float = 1.0,
     ) -> "Program":
         """Compile this codebox for one Param corner.
 
         ``params`` overrides Param values by name (a name that is not a
-        declared Param raises ValueError). Raises Unsupported for anything the
+        declared Param raises ValueError). ``buffer_scale`` multiplies the
+        offline Buffer backing (the smoke self-sustain rerun scales it with
+        the stimulus, 261022-ud6). Raises Unsupported for anything the
         interpreter cannot run.
         """
-        return _Builder(self, params or {}, float(samplerate), seed, buffers or {}).program()
+        return _Builder(
+            self, params or {}, float(samplerate), seed, buffers or {}, float(buffer_scale)
+        ).program()
 
 
 def _clamp_param(value, p: dict) -> float:
@@ -1717,12 +1818,14 @@ def _mk_seq(stmts: tuple):
 
 
 class _Builder:
-    def __init__(self, cb: Codebox, params: dict, samplerate: float, seed, buffers: dict):
+    def __init__(self, cb: Codebox, params: dict, samplerate: float, seed, buffers: dict,
+                 buffer_scale: float = 1.0):
         self.cb = cb
         self.code = cb.code
         self.samplerate = samplerate
         self.seed = seed
         self.buffers = buffers
+        self.buffer_scale = buffer_scale
         pvals = {p["name"]: float(p["default"]) for p in cb.params}
         by_name = {p["name"]: p for p in cb.params}
         for k, v in params.items():
@@ -1847,7 +1950,8 @@ class _Builder:
             raise ValueError(f"buffers[{bufname!r}] needs frames >= 1 and channels >= 1")
         self._reserve(frames * chans, d)
         n = np.arange(frames, dtype=float)
-        wave = (_BUFFER_AMP * np.sin(2.0 * np.pi * _BUFFER_HZ * n / self.samplerate)).tolist()
+        amp = _BUFFER_AMP * self.buffer_scale
+        wave = (amp * np.sin(2.0 * np.pi * _BUFFER_HZ * n / self.samplerate)).tolist()
         self.bufs[d.name] = ([list(wave) for _ in range(chans)], frames, chans)
 
     # -- expressions ----------------------------------------------------------

@@ -388,7 +388,7 @@ _DSP_SIM = _REPO / "src" / "maxpat" / "dsp_sim"
 def test_no_string_evaluation_in_smoke_modules():
     import ast
 
-    for name in ("genexpr_interp.py", "smoke.py", "cli.py"):
+    for name in ("genexpr_interp.py", "smoke.py", "cli.py", "host_graph.py"):
         tree = ast.parse((_DSP_SIM / name).read_text())
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
