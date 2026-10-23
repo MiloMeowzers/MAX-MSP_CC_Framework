@@ -320,11 +320,16 @@ class TestFanOutCommittedPatches:
         fans = _fan_for(res, "obj-14", 0)
         assert [r.severity for r in fans] == ["warning"]
 
-    def test_slot_buffer_bang_reconverges_on_waveform(self):
+    def test_slot_buffer_bang_does_not_reach_waveform_hot_and_cold(self):
+        """``buffer~`` obj-1 outlet 1 feeds ``set #1`` -> waveform~ inlet 0 and
+        ``setbuffer #1`` -> js obj-32, whose outputs enter the expr obj-150 only
+        at its cold inlets 1/2 (the expr outputs when snapshot~ hits inlet 0).
+        The bang never reaches waveform~ inlets 2/3, so the fan-out is a
+        warning (quick 261022-ud6 CR-02; the Q3 allowlist entry was a false
+        positive)."""
         res = review_structure(_load("patches/rhythmic-sampler/generated/slot.maxpat"))
         fans = _fan_for(res, "obj-1", 1)
-        assert [r.severity for r in fans] == ["blocker"]
-        assert "'waveform~' (obj-4)" in fans[0].finding
+        assert [r.severity for r in fans] == ["warning"]
 
     def test_calibration_shapes_are_warnings(self):
         cases = [

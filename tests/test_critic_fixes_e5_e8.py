@@ -225,13 +225,29 @@ class TestHotColdSharedAncestor:
         ]
         lines = [_line("obj-2", 0, "obj-3", 0), _line("obj-2", 0, "obj-3", 1)]
         results = _structure(_patch(boxes, lines), db)
-        hc = _hc(results)
-        assert [r.finding for r in hc] == [
-            "Hot/cold inlet ordering issue: 'pack' (obj-3) gets hot inlet 0 and "
-            "cold inlet(s) 1 from one event at 'button' (obj-2) outlet 0, which fans "
-            "out to both in undefined order -- 'pack' may output with a stale cold value"
-        ]
+        # One defect, one finding (quick 261022-ud6 IN-02): the fan-out check
+        # owns a single outlet feeding both sides; hot/cold no longer repeats it.
+        assert _hc(results) == []
         assert [r.severity for r in results if r.finding.startswith("Fan-out without trigger")] == ["blocker"]
+
+    def test_same_outlet_through_a_hop_still_warns(self, db):
+        """The fan-out check does not own a fan-out it never sees: button ->
+        t b (one cord) whose single outlet feeds both pack inlets is still a
+        fan-out at the trigger -- reported there; the hot/cold check names the
+        divergence box only when no fan-out finding covers it."""
+        boxes = [
+            _box("obj-2", "button", 1, 1, maxclass="button", outlettype=["bang"]),
+            _box("obj-3", "pack 0 0", 2, 1, outlettype=["list"]),
+            _box("obj-5", "unpack 0 0", 1, 2, outlettype=["int", "int"]),
+        ]
+        lines = [
+            _line("obj-2", 0, "obj-5", 0),
+            _line("obj-5", 0, "obj-3", 0), _line("obj-5", 0, "obj-3", 1),
+        ]
+        results = _structure(_patch(boxes, lines), db)
+        assert _hc(results) == []
+        fans = [r for r in results if r.finding.startswith("Fan-out without trigger")]
+        assert [r.severity for r in fans] == ["blocker"] and fans[0].box_ids[0] == "obj-5"
 
     @pytest.mark.parametrize("target", [
         _container("obj-4", "p x", _inner([

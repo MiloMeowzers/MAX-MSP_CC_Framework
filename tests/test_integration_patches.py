@@ -302,14 +302,13 @@ def test_allowlist_key_includes_path() -> None:
 
     patch_rel = "patches/rhythmic-sampler/generated/slot.maxpat"
     finding = (
-        "Fan-out without trigger: 'buffer~' (obj-1) outlet 1 connected to 2 "
-        "destinations ('message' (obj-27), 'message' (obj-28)) -- paths "
-        "reconverge on 'waveform~' (obj-4) at different inlets, so execution "
-        "order changes the result"
+        "Unsafe gain source: 'dial' (obj-54) reaches '*~' (obj-9) inlet 1 via "
+        "line~ with values up to 1.21 (range 0 to 1.21) -- gain inputs must "
+        "stay within 0.0-1.0"
     )
     fields = {
-        "rule": "fan_out_without_trigger",
-        "box_ids": ("obj-1", "obj-27", "obj-28", "obj-4"),
+        "rule": "unsafe_gain_sources",
+        "box_ids": ("obj-54", "obj-9"),
         "port": 1,
     }
     nested = CriticResult("blocker", "[p x] " + finding, "s", path="obj-9", **fields)

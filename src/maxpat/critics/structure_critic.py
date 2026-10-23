@@ -2,8 +2,9 @@
 
 Catches structural issues that the mechanical validation pipeline does
 not detect:
-  - Fan-out without trigger (ordering ambiguity): blocker when branches
-    reconverge on one box at different inlets, otherwise warning (Q3 / E1).
+  - Fan-out without trigger (ordering ambiguity): blocker when one branch
+    reaches a box's hot inlet 0 and another a DB-cold inlet of it (Q3 / E1;
+    hot/cold-aware since quick 261022-ud6 CR-02), otherwise warning.
     The blocker carries an ``insert_trigger`` quick-fix payload
     (``CriticResult.fix``, Q39) ordering cold-inlet branches first.
   - Hot/cold inlet ordering (Q26 / E5): one upstream event reaching a box's
@@ -87,7 +88,8 @@ def review_structure(
 
     Checks, per scope of the shared graph:
       1. Fan-out without trigger (2+ non-display destinations from one
-         control outlet; blocker only on reconvergence -- Q3 / E1)
+         control outlet; blocker only when branches reach one box's hot
+         inlet 0 and a cold inlet -- Q3 / E1, CR-02)
       2. Hot/cold inlet ordering (warning; Q26 / E5, PD-1..PD-3): one
          upstream event updates a cold inlet at or after the hot inlet 0
          fires. Targets a trigger reaches at inlet 0 and a cold inlet
@@ -132,7 +134,7 @@ def review_structure(
         found: list[CriticResult] = []
         if scope.context != "gen":
             trigger_order = _check_trigger_order(scope, dbh)
-            found.extend(_check_fan_out_without_trigger(scope.boxes, scope.edges))
+            found.extend(_check_fan_out_without_trigger(scope.boxes, scope.edges, dbh))
             found.extend(_check_hot_cold_ordering(scope, dbh, _q21_targets(scope, dbh)))
             found.extend(_check_trigger_types(scope))
             found.extend(_check_dollar_arity(scope, dbh))
@@ -166,22 +168,6 @@ class _LazyDB:
         except Exception:
             return None
         return obj if isinstance(obj, dict) else None
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _is_trigger_object(box: dict) -> bool:
-    """Check if a box is a trigger/t object."""
-    name = walk.box_name(box)
-    return name in _TRIGGER_NAMES
-
-
-def _is_signal_object(box: dict) -> bool:
-    """Check if a box is a signal-rate (~) object."""
-    name = walk.box_name(box)
-    return name.endswith("~")
 
 
 # ---------------------------------------------------------------------------
@@ -251,16 +237,48 @@ def _is_jitter_setter_hop(src_box, dst_box) -> bool:
     return walk.box_name(dst_box).startswith("jit.") and _is_setter_message(src_box)
 
 
+def _enters_hot(box, inlet, dbh) -> bool:
+    """True when an event entering *box* at *inlet* makes it output (CR-02).
+
+    Inlet 0 is hot; an inlet > 0 is hot unless the DB marks it cold
+    (:func:`_inlet_is_cold`). ``_ALL_HOT_NAMES`` boxes route every inlet to
+    their own inner path, so every inlet counts as hot. Without a DB handle
+    every inlet counts as hot (the pre-261022-ud6 behaviour).
+    """
+    if dbh is None or box is None:
+        return True
+    if walk.box_name(box) in _ALL_HOT_NAMES:
+        return True
+    return not (isinstance(inlet, int) and _inlet_is_cold(box, inlet, dbh))
+
+
+def _is_cold_hit(box, inlet, dbh) -> bool:
+    """True for an inlet > 0 that stores a value without output (CR-02).
+
+    With a DB handle: a DB-cold inlet. Without one: any inlet > 0 (the
+    pre-261022-ud6 behaviour).
+    """
+    if not isinstance(inlet, int) or inlet <= 0:
+        return False
+    if dbh is None:
+        return True
+    return _inlet_is_cold(box, inlet, dbh)
+
+
 def _branch_hits(
     src_id: str,
     branches: list[tuple[str, int]],
     ctrl_adj: dict[str, list[tuple[str, int]]],
     box_lookup: dict[str, dict],
+    dbh=None,
 ) -> list[dict[str, set[int]]]:
     """One ``box id -> inlets reached`` map per branch (Q3; factored out for Q39).
 
     Each branch ``(dst_id, inlet)`` is walked breadth-first over control
-    cords, recording every inlet reached on every box. A Jitter setter hop
+    cords, recording every inlet reached on every box. A box is expanded
+    only once a branch enters it at a hot inlet (:func:`_enters_hot`,
+    quick 261022-ud6 CR-02): an event stored at a cold inlet emits nothing,
+    so the walk records the hit and stops there. A Jitter setter hop
     (:func:`_is_jitter_setter_hop`), including the first hop from the
     fan-out source, records the hit at the jit.* box but does not expand
     past it (Q20).
@@ -270,57 +288,52 @@ def _branch_hits(
     for dst_id, dst_inlet in branches:
         hits: dict[str, set[int]] = defaultdict(set)
         hits[dst_id].add(dst_inlet)
-        seen = {dst_id}
+        seen: set = set()
         queue = deque()
-        if not _is_jitter_setter_hop(src_box, box_lookup.get(dst_id)):
+        dst_box = box_lookup.get(dst_id)
+        if not _is_jitter_setter_hop(src_box, dst_box) and _enters_hot(dst_box, dst_inlet, dbh):
+            seen.add(dst_id)
             queue.append(dst_id)
         while queue:
             node = queue.popleft()
             node_box = box_lookup.get(node)
             for nxt, nxt_inlet in ctrl_adj.get(node, ()):
                 hits[nxt].add(nxt_inlet)
-                if _is_jitter_setter_hop(node_box, box_lookup.get(nxt)):
+                nxt_box = box_lookup.get(nxt)
+                if _is_jitter_setter_hop(node_box, nxt_box):
                     continue
-                if nxt not in seen and nxt != src_id:
-                    seen.add(nxt)
-                    queue.append(nxt)
+                if nxt in seen or nxt == src_id:
+                    continue
+                if not _enters_hot(nxt_box, nxt_inlet, dbh):
+                    continue
+                seen.add(nxt)
+                queue.append(nxt)
         hit_maps.append(hits)
     return hit_maps
 
 
-def _meeting_boxes(hit_maps: list[dict[str, set[int]]], box_lookup: dict[str, dict]) -> set:
-    """Every box (outside ``_ALL_HOT_NAMES``) two branches reach at different inlets."""
+def _meeting_boxes(
+    hit_maps: list[dict[str, set[int]]], box_lookup: dict[str, dict], dbh=None,
+) -> set:
+    """Every box (outside ``_ALL_HOT_NAMES``) where one branch reaches the
+    hot inlet 0 and a different branch a cold inlet (quick 261022-ud6 CR-02:
+    :func:`_is_cold_hit`). Two cold updates, or two hot ones, cannot leave
+    a stale value behind, so they are not a meeting."""
     meeting: set[str] = set()
     for k in range(len(hit_maps)):
-        for l in range(k + 1, len(hit_maps)):
+        for l in range(len(hit_maps)):
+            if k == l:
+                continue
             hits_k, hits_l = hit_maps[k], hit_maps[l]
             for box_id in hits_k.keys() & hits_l.keys():
+                if box_id in meeting or 0 not in hits_k[box_id]:
+                    continue
                 box = box_lookup.get(box_id)
                 if box is not None and walk.box_name(box) in _ALL_HOT_NAMES:
                     continue
-                if any(a != b for a in hits_k[box_id] for b in hits_l[box_id]):
+                if any(_is_cold_hit(box, i, dbh) for i in hits_l[box_id]):
                     meeting.add(box_id)
     return meeting
-
-
-def _paths_reconverge(
-    src_id: str,
-    branches: list[tuple[str, int]],
-    ctrl_adj: dict[str, list[tuple[str, int]]],
-    box_lookup: dict[str, dict],
-    hit_maps: list | None = None,
-) -> str | None:
-    """Return the id of a box where two branches meet at different inlets.
-
-    Two branches reconverge when some box outside ``_ALL_HOT_NAMES`` is
-    reached by both at different inlets (the stale-cold-value hazard; hit
-    maps from :func:`_branch_hits`). Returns the first such box in sorted id
-    order, or None. Pass *hit_maps* when they are already computed.
-    """
-    if hit_maps is None:
-        hit_maps = _branch_hits(src_id, branches, ctrl_adj, box_lookup)
-    meeting = _meeting_boxes(hit_maps, box_lookup)
-    return min(meeting) if meeting else None
 
 
 # Source outlettype -> trigger letter for the Q39 insert_trigger payload
@@ -335,15 +348,18 @@ def _fan_out_trigger_fix(
     hit_maps: list[dict[str, set[int]]],
     meetings: set,
     box_lookup: dict[str, dict],
+    dbh=None,
 ):
     """insert_trigger payload for a reconverging fan-out, or None (Q39).
 
     Letter from the source outlettype (bang -> b, int -> i, float -> f,
     list or "" -> l); any other type, a missing entry or a duplicate branch
-    cord gives None. Order: at every meeting box, a branch reaching it at an
-    inlet > 0 fires before a different branch reaching it at inlet 0 (cold
-    before hot). A stable topological sort keeps ties in cord order; a
-    cycle (conflicting constraints) gives None.
+    cord gives None. Order: at every meeting box, a branch reaching it at a
+    cold inlet (:func:`_is_cold_hit`, CR-02) fires before a different branch
+    reaching it at inlet 0 (cold before hot). A stable topological sort
+    keeps ties in cord order; a cycle (conflicting constraints) gives None.
+    :func:`src.maxpat.critics.fixes.trigger_fix` puts the first-fired branch
+    on the highest outlet (trigger outlets fire right to left).
     """
     from src.maxpat.critics.fixes import trigger_fix
 
@@ -360,7 +376,8 @@ def _fan_out_trigger_fix(
     n = len(branches)
     before: dict[int, set[int]] = {i: set() for i in range(n)}  # j in before[i]: j fires before i
     for m in meetings:
-        cold = [c for c in range(n) if any(x > 0 for x in hit_maps[c].get(m, ()))]
+        m_box = box_lookup.get(m)
+        cold = [c for c in range(n) if any(_is_cold_hit(m_box, x, dbh) for x in hit_maps[c].get(m, ()))]
         hot = [h for h in range(n) if 0 in hit_maps[h].get(m, ())]
         for c in cold:
             for h in hot:
@@ -384,9 +401,38 @@ def _fan_out_trigger_fix(
     return trigger_fix(src_id, src_outlet, walk.box_name(src_box), letter, ordered)
 
 
+def _fan_out_branches(box_lookup, src_id, src_outlet, dests, has_outgoing) -> list:
+    """The branches of one source outlet the fan-out check counts, or [].
+
+    [] for a signal outlet (Rule #3), a ``preset`` membership outlet, or
+    fewer than 2 destinations once display-only sinks (``_DISPLAY_SINK_NAMES``
+    with no outgoing cord) are dropped. Shared with the hot/cold check,
+    which leaves these outlets to the fan-out check (IN-02).
+    """
+    if len(dests) < 2:
+        return []
+    src_box = box_lookup.get(src_id)
+    if not src_box or _outlet_is_signal(src_box, src_outlet):
+        return []
+    if walk.box_name(src_box) == "preset" and src_outlet in _PRESET_MEMBERSHIP_OUTLETS:
+        return []
+    branches = []
+    for dst_id, dst_inlet in dests:
+        dst_box = box_lookup.get(dst_id)
+        if (
+            dst_box is not None
+            and walk.box_name(dst_box) in _DISPLAY_SINK_NAMES
+            and dst_id not in has_outgoing
+        ):
+            continue
+        branches.append((dst_id, dst_inlet))
+    return branches if len(branches) >= 2 else []
+
+
 def _check_fan_out_without_trigger(
     box_lookup: dict[str, dict],
     edges: list,
+    dbh=None,
 ) -> list[CriticResult]:
     """Detect control outlets connected to 2+ destinations without trigger.
 
@@ -406,9 +452,13 @@ def _check_fan_out_without_trigger(
     Trigger sources are checked like any other box: a trigger outlet that
     itself feeds 2+ destinations has undefined order between those cords.
 
-    Severity: BLOCKER only when two branches reconverge on one box at
-    different inlets (outside ``_ALL_HOT_NAMES``) -- then execution order
-    changes the result. Otherwise WARNING. (History: promoted to an
+    Severity: BLOCKER only when two branches reconverge on one box (outside
+    ``_ALL_HOT_NAMES``) with one branch at the hot inlet 0 and another at a
+    DB-cold inlet -- then execution order changes the result. A branch that
+    enters a box at a cold inlet stops there (the box emits nothing), and two
+    cold updates cannot leave a stale value (quick 261022-ud6 CR-02; *dbh*
+    supplies the inlet flags, None treats every inlet > 0 as cold and every
+    inlet as expanding). Otherwise WARNING. (History: promoted to an
     unconditional blocker by 260427-hox §P0-1; narrowed by Q3 because most
     of those blockers were false positives.)
 
@@ -431,36 +481,11 @@ def _check_fan_out_without_trigger(
             ctrl_adj[edge.src].append((edge.dst, edge.inlet))
 
     for (src_id, src_outlet), dests in fan_out.items():
-        if len(dests) < 2:
+        branches = _fan_out_branches(box_lookup, src_id, src_outlet, dests, has_outgoing)
+        if not branches:
             continue
-
-        src_box = box_lookup.get(src_id)
-        if not src_box:
-            continue
-
-        # Signal outlets: all signal inlets are hot per Rule #3
-        if _outlet_is_signal(src_box, src_outlet):
-            continue
-
+        src_box = box_lookup[src_id]
         src_name = walk.box_name(src_box)
-
-        # preset include/exclude/capture membership cords
-        if src_name == "preset" and src_outlet in _PRESET_MEMBERSHIP_OUTLETS:
-            continue
-
-        # Drop display-only sinks (no outgoing cord of their own)
-        branches = []
-        for dst_id, dst_inlet in dests:
-            dst_box = box_lookup.get(dst_id)
-            if (
-                dst_box is not None
-                and walk.box_name(dst_box) in _DISPLAY_SINK_NAMES
-                and dst_id not in has_outgoing
-            ):
-                continue
-            branches.append((dst_id, dst_inlet))
-        if len(branches) < 2:
-            continue
 
         dst_names = []
         for dst_id, _inlet in branches:
@@ -475,8 +500,9 @@ def _check_fan_out_without_trigger(
             f"{src_outlet} connected to {len(branches)} destinations "
             f"({', '.join(dst_names)}) --"
         )
-        hit_maps = _branch_hits(src_id, branches, ctrl_adj, box_lookup)
-        meet_id = _paths_reconverge(src_id, branches, ctrl_adj, box_lookup, hit_maps)
+        hit_maps = _branch_hits(src_id, branches, ctrl_adj, box_lookup, dbh)
+        meetings = _meeting_boxes(hit_maps, box_lookup, dbh)
+        meet_id = min(meetings) if meetings else None
         fix = None
         if meet_id is not None:
             meet_box = box_lookup.get(meet_id)
@@ -488,7 +514,7 @@ def _check_fan_out_without_trigger(
             )
             fix = _fan_out_trigger_fix(
                 src_box, src_id, src_outlet, branches, hit_maps,
-                _meeting_boxes(hit_maps, box_lookup), box_lookup,
+                meetings, box_lookup, dbh,
             )
         else:
             severity = "warning"
@@ -620,7 +646,9 @@ def _check_hot_cold_ordering(scope, dbh, q21_targets=frozenset()) -> list[Critic
       C non-empty, H or B non-empty and min(C) <= min(H | B): a cold update
       at a lower outlet arrives after the last hot firing, and an equal
       outlet is a fan-out in undefined order (PD-3). B-only shapes are not
-      hazards: each B wave sets its own cold inlets first.
+      hazards: each B wave sets its own cold inlets first. An equal outlet
+      the fan-out check already reports (:func:`_fan_out_owns`) is skipped,
+      so one defect gives one finding (IN-02, quick 261022-ud6).
     * One warning per target, from the first hazardous ancestor.
     """
     results: list[CriticResult] = []
@@ -675,6 +703,11 @@ def _check_hot_cold_ordering(scope, dbh, q21_targets=frozenset()) -> list[Critic
             h = min(h_out | b_out)
             if c > h:
                 continue
+            if c == h and _fan_out_owns(scope, anc, c):
+                # IN-02 (quick 261022-ud6): one outlet feeding both sides is a
+                # fan-out; the fan-out check reports it (blocker when the
+                # branches meet hot and cold), so it is not reported twice.
+                continue
             name = walk.box_name(dst_box)
             cold_desc = ", ".join(
                 str(i) for i in sorted(cold_up_by_inlet) if anc in cold_up_by_inlet[i]
@@ -701,6 +734,15 @@ def _check_hot_cold_ordering(scope, dbh, q21_targets=frozenset()) -> list[Critic
             ))
             break
     return results
+
+
+def _fan_out_owns(scope, src_id, outlet) -> bool:
+    """True when the fan-out check reports (*src_id*, *outlet*) (IN-02)."""
+    dests = [
+        (e.dst, e.inlet) for e in scope.out_edges.get(src_id, ()) if e.outlet == outlet
+    ]
+    has_outgoing = {b for b in scope.boxes if scope.out_edges.get(b)}
+    return bool(_fan_out_branches(scope.boxes, src_id, outlet, dests, has_outgoing))
 
 
 def _q21_targets(scope, dbh) -> set:
@@ -782,15 +824,20 @@ def _db_entry(entries, index: int):
 def _outlet_atoms(box, outlet, dbh) -> "int | None":
     """Atom count *box* outlet *outlet* emits, or None when unknown.
 
-    Precedence (Q21, planner decision 6):
+    Precedence (Q21, planner decision 6; reordered by quick 261022-ud6
+    WR-01 -- what MAX saved beats the extracted DB):
       a. a trigger/t outlet takes its type letter (:func:`_trigger_letters`);
          an outlet past the argument count is unknown;
-      b. otherwise, for a DB object that is not ``variable_io``, the DB
-         outlet: ``type`` bang or ``signal_role`` trigger = 0; ``type``
-         int/float/symbol or ``signal_role`` float = 1;
-      c. otherwise the box's MAX-saved ``outlettype`` at that index:
-         ``bang`` = 0, ``int`` / ``float`` = 1.
-    Anything else is unknown.
+      b. otherwise the box's MAX-saved ``outlettype`` at that index:
+         ``bang`` = 0, ``int`` / ``float`` = 1; any other non-empty entry
+         (``list``, ``signal``, ...) is unknown;
+      c. only when that entry is missing or ``""``, for a DB object that is
+         not ``variable_io``, the DB outlet ``type``: ``bang`` = 0,
+         ``int`` / ``float`` / ``symbol`` = 1 -- unless its
+         ``signal_role`` says ``list`` (the DB type disagrees with itself:
+         zplane~'s coordinate-pair outlets), which is unknown.
+    ``signal_role`` is a validator concept, never an atom count. Anything
+    else is unknown.
     """
     if not isinstance(box, dict) or not isinstance(outlet, int) or isinstance(outlet, bool):
         return None
@@ -803,17 +850,6 @@ def _outlet_atoms(box, outlet, dbh) -> "int | None":
             return None
         return _trigger_letter_atoms(letters[outlet])
 
-    obj = dbh.lookup(name)
-    if obj is not None and not obj.get("variable_io"):
-        entry = _db_entry(obj.get("outlets"), outlet)
-        if entry is not None:
-            otype = entry.get("type")
-            role = entry.get("signal_role")
-            if otype == "bang" or role == "trigger":
-                return 0
-            if otype in ("int", "float", "symbol") or role == "float":
-                return 1
-
     outlettype = box.get("outlettype")
     if isinstance(outlettype, list) and outlet < len(outlettype):
         saved = outlettype[outlet]
@@ -821,6 +857,20 @@ def _outlet_atoms(box, outlet, dbh) -> "int | None":
             return 0
         if saved in ("int", "float"):
             return 1
+        if isinstance(saved, str) and saved:
+            return None
+
+    obj = dbh.lookup(name)
+    if obj is not None and not obj.get("variable_io"):
+        entry = _db_entry(obj.get("outlets"), outlet)
+        if entry is not None:
+            if entry.get("signal_role") == "list":
+                return None
+            otype = entry.get("type")
+            if otype == "bang":
+                return 0
+            if otype in ("int", "float", "symbol"):
+                return 1
     return None
 
 
@@ -1418,6 +1468,13 @@ def _check_uninitialized_state(graph, scope, dbh, is_new, ctx) -> list[CriticRes
     """
     if scope.scope == "rnbo":
         return []
+    # Design note (quick 261022-ud6 IN-05, locked D-01 -- behaviour kept): a
+    # transport toggle -> metro -> message -> line~ is reported although the
+    # toggle and the metro both start off at load, so the state already
+    # agrees. With the build loop now passing is_new=True (CR-04), every new
+    # patch with a play toggle needs a redundant `loadmess 0`. A possible
+    # refinement, pending a user decision: stop the reach walk at a clock
+    # (metro, tempo, qmetro) when the holder is a toggle.
     severity = "blocker" if is_new else "warning"
     results: list[CriticResult] = []
     for box_id, box in scope.boxes.items():
