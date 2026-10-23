@@ -338,7 +338,9 @@ def generate_gendsp(
             "maxclass": "codebox",
             "id": codebox_id,
             "code": code,
-            "numinlets": num_inputs,
+            # MAX gives a codebox with no inN one inlet (gen.maxhelp,
+            # gen~.maxhelp; review IN-02), like the gen~ parent (Q15).
+            "numinlets": max(1, num_inputs),
             "numoutlets": num_outputs,
             "outlettype": [""] * num_outputs,
             "patching_rect": [50.0, 80.0, 400.0, 200.0],
@@ -480,7 +482,7 @@ async function setDict_{suffix}(data) {{
         indented_body = "\n".join(f"    {line}" for line in body_lines)
 
         sections.append(f"""
-maxAPI.addHandler("{name}", ({args_str}) => {{
+maxAPI.addHandler({json.dumps(name)}, ({args_str}) => {{
 {indented_body}
 }});""".rstrip())
 

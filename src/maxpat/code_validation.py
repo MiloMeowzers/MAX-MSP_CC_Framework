@@ -819,6 +819,14 @@ _JS_IDENT_CHARS = frozenset(
 )
 _JS_BLANK_CHARS = frozenset(" \t\r\f\v")
 
+# `inlets` / `outlets` as the js object's own property: a bare identifier or
+# `this.inlets`, never part of a longer name (`numinlets`) or another
+# object's property (review IN-03, quick 261022-ud6).
+_JS_PORT_PREFIX = r"(?:(?<![\w$.])|(?<=\bthis\.))"
+_JS_INLETS_DECL = re.compile(_JS_PORT_PREFIX + r"inlets\s*=\s*(\d+)")
+_JS_OUTLETS_DECL = re.compile(_JS_PORT_PREFIX + r"outlets\s*=\s*(\d+)")
+_JS_INLETS_ASSIGN = re.compile(_JS_PORT_PREFIX + r"inlets\s*=(?!=)")
+
 
 def _js_mask(code: str) -> tuple[str, list]:
     """Blank JS comments, string contents, template-literal bodies and
@@ -1047,8 +1055,8 @@ def validate_js(code: str, *, engine: str | None = None) -> list[ValidationResul
         code = ""
     masked, template_lines = _js_mask(code)
 
-    # Check 1: inlets declaration
-    inlets_match = re.search(r"inlets\s*=\s*(\d+)", masked)
+    # Check 1: inlets declaration (`numinlets = 2` is not one; IN-03)
+    inlets_match = _JS_INLETS_DECL.search(masked)
     if not inlets_match:
         results.append(ValidationResult(
             "code", "error",
@@ -1056,7 +1064,7 @@ def validate_js(code: str, *, engine: str | None = None) -> list[ValidationResul
         ))
 
     # Check 2: outlets declaration
-    outlets_match = re.search(r"outlets\s*=\s*(\d+)", masked)
+    outlets_match = _JS_OUTLETS_DECL.search(masked)
     if not outlets_match:
         results.append(ValidationResult(
             "code", "error",
@@ -1196,6 +1204,6 @@ def detect_js_type(code: str) -> str | None:
     for m in re.finditer(r"""require\s*\(\s*['"]max-api['"]\s*\)""", code):
         if masked[m.start():m.start() + len("require")] == "require":
             return "n4m"
-    if re.search(r"inlets\s*=", masked):
+    if _JS_INLETS_ASSIGN.search(masked):
         return "js"
     return None
