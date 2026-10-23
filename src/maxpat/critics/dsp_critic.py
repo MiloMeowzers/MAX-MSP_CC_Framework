@@ -17,7 +17,15 @@ not detect:
   - Unsafe gain sources (Q26 / E6, PD-4): a bounds-propagating backward
     trace into both inlets of every ``*~`` / ``mc.*~`` that reads comma
     segments, line~ target/time pairs, ``* k`` / ``/ k`` / scale / zmap /
-    clip and each source's own range, and stops at unknown boxes
+    clip and each source's own range, and stops at unknown boxes. The
+    blocker carries an ``insert_gain_normalizer`` quick-fix payload (Q39:
+    ``scale <lo> <hi> 0. 1.`` for a bounded source, ``clip 0. 1.`` for a
+    constant) when exactly one traced cord leaves the source and every op
+    chain keeps a 0-1 input safe
+  - gen~ ``@param $1`` messages (Q39): a message box matching
+    ``@name $N`` cabled into gen~ -- the same condition as validation.py
+    Layer 4's warning, reported here too (like gain staging) so it can carry
+    a ``rewrite_gen_param`` quick-fix payload
 
 The former control-rate-to-signal-rate check was removed by Q3 / E2 (quick
 261012-di7): it was ~100% noise (399 corpus hits, including the mandated
@@ -42,6 +50,7 @@ from collections import deque
 
 from src.maxpat import dsp_roles, gain_staging, walk
 from src.maxpat.critics.base import CriticResult, finding_ids, tag_results
+from src.maxpat.critics.fixes import gain_normalizer_fix, gen_param_fix, max_float
 from src.maxpat.codegen import parse_genexpr_io
 from src.maxpat.graph import SIGNAL_OUTLET_TYPES, PatchGraph
 from src.maxpat.io_resolvers import split_box_text
@@ -94,6 +103,9 @@ def review_dsp(
       3. Unsafe gain sources: a value range above 1.0 reaching either
          inlet of a ``*~`` / ``mc.*~`` (Q26 / E6, PD-4; see
          _check_unsafe_gain_sources)
+      4. gen~ ``@param $1`` message syntax (warning, Q39): mirrors the
+         validation.py Layer 4 warning, as gain staging does, and carries a
+         ``rewrite_gen_param`` fix
 
     Args:
         patch_dict: A .maxpat-format dict.
@@ -123,6 +135,7 @@ def review_dsp(
         found.extend(_check_gen_io_match(scope.boxes, ctx))
         found.extend(_check_gain_staging(scope.boxes, scope.edges, gain_names, terminal_names))
         found.extend(_check_unsafe_gain_sources(scope.boxes, scope.edges))
+        found.extend(_check_gen_param_message_syntax(scope.boxes, scope.edges))
         results.extend(tag_results(found, scope.path))
     return results
 
@@ -379,6 +392,49 @@ def _parse_line_tilde_targets(text: str) -> list[float]:
 
 
 # ---------------------------------------------------------------------------
+# Q39: gen~ @param message syntax (parity with validation.py Layer 4)
+# ---------------------------------------------------------------------------
+
+_GEN_AT_PARAM_RE = re.compile(r"@\w+\s+\$")
+
+
+def _check_gen_param_message_syntax(box_lookup: dict[str, dict], edges: list) -> list[CriticResult]:
+    """Flag a ``@param $1`` message cabled into gen~ (should be ``param $1``).
+
+    The condition is validation.py's ``_check_gen_param_message_syntax``:
+    a ``message`` box whose text matches ``@\\w+\\s+\\$`` with a control cord
+    into a box named ``gen~``; one warning per message box (the first gen~
+    cord in edge order). Carries a ``rewrite_gen_param`` fix (Q39).
+    """
+    results: list[CriticResult] = []
+    done: set = set()
+    for edge in edges:
+        if edge.signal or edge.src in done:
+            continue
+        box = box_lookup.get(edge.src)
+        if walk.box_maxclass(box) != "message":
+            continue
+        text = walk.box_text(box)
+        if not _GEN_AT_PARAM_RE.search(text):
+            continue
+        dst = box_lookup.get(edge.dst)
+        if not dst or walk.box_name(dst) != "gen~":
+            continue
+        done.add(edge.src)
+        fix = gen_param_fix(edge.src, text)
+        results.append(CriticResult(
+            "warning",
+            f"gen~ param message '{text}' ({edge.src}) into 'gen~' ({edge.dst}) uses "
+            f"'@name' -- gen~ params take plain name messages",
+            f"Send 'param_name $1' with no '@' prefix (here '{fix.ops[0].text}')",
+            rule="gen_param_message_syntax",
+            box_ids=finding_ids(edge.src, edge.dst),
+            fix=fix,
+        ))
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Q26 / E6 (PD-4): bounds-propagating unsafe-gain trace
 # ---------------------------------------------------------------------------
 
@@ -628,28 +684,53 @@ def _check_unsafe_gain_sources(
                 if k is not None:
                     base_ops = (("mul", k),)
             seeds = []
+            seed_via = []  # the consumer cord (dst, inlet) of each seed (Q39)
             for edge in ctrl_in.get((gain_id, inlet), ()):
                 seeds.append((edge.src, edge.outlet, base_ops, False, False))
+                seed_via.append((edge.dst, edge.inlet))
             for sig_edge in sig_in.get((gain_id, inlet), ()):
                 line_box = box_lookup.get(sig_edge.src)
                 if line_box is None or walk.box_name(line_box) != "line~":
                     continue
                 for edge in ctrl_in.get((sig_edge.src, 0), ()):
                     seeds.append((edge.src, edge.outlet, base_ops, True, True))
+                    seed_via.append((edge.dst, edge.inlet))
             if seeds:
                 results.extend(_trace_gain_inlet(
-                    box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds,
+                    box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds, seed_via,
                 ))
     return results
 
 
-def _trace_gain_inlet(box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds) -> list:
-    """The PD-4 backward BFS for one (gain box, inlet); see the caller."""
+def _trace_gain_inlet(box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds, seed_via=None) -> list:
+    """The PD-4 backward BFS for one (gain box, inlet); see the caller.
+
+    *seed_via* gives each seed's consumer cord ``(dst, inlet)`` (Q39). Every
+    enqueued state records the consumer cords it was reached through, and
+    every :func:`reach` records the source's path cords, op chains, kind and
+    into_line flag; :func:`_gain_fix` builds the quick-fix payload from them.
+    """
     # source id -> [lo, hi, via, order]
     unsafe: dict = {}
     seen: set = set()
     queue = deque((state, 0) for state in seeds)
     states = 0
+    via: dict = {}  # state -> {(consumer dst, inlet)} (Q39)
+    for i, state in enumerate(seeds):
+        if seed_via is not None and i < len(seed_via):
+            via.setdefault(state, set()).add(seed_via[i])
+    # source id -> {"states": {state}, "ops": {ops}, "kind", "into_line"} (Q39);
+    # the path cords are read from ``via`` after the walk, when it is complete
+    info: dict = {}
+
+    def note(state, kind):
+        src_id, _outlet, ops, into_line, _crossed = state
+        entry = info.setdefault(src_id, {"states": set(), "ops": set(), "kind": kind, "into_line": False})
+        entry["states"].add(state)
+        entry["ops"].add(ops)
+        entry["into_line"] = entry["into_line"] or bool(into_line)
+        if entry["kind"] != kind:
+            entry["kind"] = None
 
     def reach(src_id, interval, ops, crossed):
         value = _apply_ops(interval, ops)
@@ -669,15 +750,20 @@ def _trace_gain_inlet(box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds) -> 
     def feeders(box_id, inlets, ops, into_line, crossed, hops):
         for i in inlets:
             for edge in ctrl_in.get((box_id, i), ()):
-                queue.append(((edge.src, edge.outlet, ops, into_line, crossed), hops + 1))
+                nxt = (edge.src, edge.outlet, ops, into_line, crossed)
+                via.setdefault(nxt, set()).add((edge.dst, edge.inlet))
+                queue.append((nxt, hops + 1))
 
+    truncated = False  # a bounded walk gives no fix (Q39)
     while queue:
         state, hops = queue.popleft()
         if state in seen or hops > _TRACE_HOP_LIMIT:
+            truncated = truncated or state not in seen
             continue
         seen.add(state)
         states += 1
         if states > _TRACE_STATE_CAP:
+            truncated = True
             break
         box_id, outlet, ops, into_line, crossed = state
         box = box_lookup.get(box_id)
@@ -700,6 +786,7 @@ def _trace_gain_inlet(box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds) -> 
                     elif _DOLLAR_ATOM_RE.match(atom):
                         follow = True
             if numbers:
+                note(state, "const")
                 reach(box_id, (min(numbers), max(numbers)), ops, crossed)
             if follow:
                 feeders(box_id, (0,), ops, False, crossed, hops)
@@ -707,6 +794,7 @@ def _trace_gain_inlet(box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds) -> 
 
         bounds = _bounded_source(box)
         if bounds is not None:
+            note(state, "bounded")
             reach(box_id, bounds, ops, crossed)
             continue
 
@@ -723,6 +811,7 @@ def _trace_gain_inlet(box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds) -> 
             if kind is None:
                 continue
             if kind[0] == "const":
+                note(state, "const")
                 reach(box_id, (kind[1], kind[1]), ops, crossed)
                 continue
             feeders(box_id, (0,), ops, False, crossed, hops)
@@ -732,6 +821,7 @@ def _trace_gain_inlet(box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds) -> 
             args = walk.box_args(box)
             value = _num(args[0]) if args else None
             if value is not None:
+                note(state, "const")
                 reach(box_id, (value, value), ops, crossed)
             feeders(box_id, (0, 1), ops, False, crossed, hops)
             continue
@@ -739,17 +829,64 @@ def _trace_gain_inlet(box_lookup, ctrl_in, gain_id, gain_name, inlet, seeds) -> 
 
     results = []
     for src_id, (lo, hi, crossed, _order) in sorted(unsafe.items(), key=lambda kv: kv[1][3]):
-        label = _gain_source_label(box_lookup.get(src_id))
-        via = " via line~" if crossed else ""
+        src_box = box_lookup.get(src_id)
+        label = _gain_source_label(src_box)
+        via_text = " via line~" if crossed else ""
         peak = max(abs(lo), abs(hi))
         results.append(CriticResult(
             "blocker",
             f"Unsafe gain source: {label} ({src_id}) reaches '{gain_name}' "
-            f"({gain_id}) inlet {inlet}{via} with values up to {peak:g} "
+            f"({gain_id}) inlet {inlet}{via_text} with values up to {peak:g} "
             f"(range {lo:g} to {hi:g}) -- gain inputs must stay within 0.0-1.0",
             _UNSAFE_GAIN_SUGGESTION,
             rule="unsafe_gain_sources",
             box_ids=finding_ids(src_id, gain_id),
             port=inlet,
+            fix=None if truncated else _gain_fix(box_lookup, src_id, src_box, info.get(src_id), via),
         ))
     return results
+
+
+def _gain_fix(box_lookup, src_id, src_box, entry, via):
+    """insert_gain_normalizer for one unsafe source, or None (Q39).
+
+    Requires exactly one distinct traced cord out of the source and every
+    recorded op chain keeping [0.0, 1.0] within [-1.0, 1.0]. A bounded
+    source (:func:`_bounded_source`, its own bounds, lo < hi) gets
+    ``scale <lo> <hi> 0. 1.``; a constant source (message numbers, trigger
+    constant, f / int argument) gets ``clip 0. 1.``, except a message that
+    feeds line~ directly (its odd atoms are ramp times).
+    """
+    if not entry or not isinstance(src_box, dict):
+        return None
+    cords = {
+        (state[1], dst, dst_inlet)
+        for state in entry["states"]
+        for dst, dst_inlet in via.get(state, ())
+    }
+    if len(cords) != 1:
+        return None
+    for ops in entry["ops"]:
+        value = _apply_ops((0.0, 1.0), ops)
+        if value is None or value[0] < -1.0 or value[1] > 1.0:
+            return None
+    kind = entry["kind"]
+    if kind == "bounded":
+        bounds = _bounded_source(src_box)
+        if bounds is None or not bounds[0] < bounds[1]:
+            return None
+        text = f"scale {max_float(bounds[0])} {max_float(bounds[1])} 0. 1."
+    elif kind == "const":
+        if walk.box_maxclass(src_box) == "message" and entry["into_line"]:
+            return None
+        text = "clip 0. 1."
+    else:
+        return None
+    ((outlet, dst_id, dst_inlet),) = tuple(cords)
+    if not isinstance(outlet, int) or not isinstance(dst_inlet, int):
+        return None
+    dst_box = box_lookup.get(dst_id)
+    return gain_normalizer_fix(
+        src_id, outlet, walk.box_name(src_box),
+        dst_id, dst_inlet, walk.box_name(dst_box) if dst_box else dst_id, text,
+    )

@@ -5,6 +5,11 @@ misses:
   - BEAP: missing output termination, missing VCA gain staging
   - Bach: llll/list type mismatches (non-bach, non-command source feeding an
     llll inlet) -- note severity (Q3 / E4)
+  - Bach: ``@out`` mode (the fix-plan Q23 table row "bach.* outlet ->
+    non-bach consumer without ``@out t``", carried out by Q39 so its quick
+    fix has a finding to ride on) -- a bach box whose ``@out`` is missing or
+    not all ``t`` cords a non-bang outlet into a non-bach, non-forwarder
+    consumer; warning with a ``set_bach_out`` payload
   - Community: unextracted community package usage warnings
 
 Every non-gen scope of the shared :class:`src.maxpat.graph.PatchGraph` is
@@ -21,6 +26,7 @@ from collections import deque
 
 from src.maxpat import walk
 from src.maxpat.critics.base import CriticResult, finding_ids, tag_results
+from src.maxpat.critics.fixes import bach_out_fix
 from src.maxpat.db_lookup import ObjectDatabase
 from src.maxpat.graph import PatchGraph
 
@@ -127,6 +133,7 @@ def review_packages(
 
         if "Bach" in packages_used:
             found.extend(_check_bach_llll_types(box_lookup, scope.edges, db))
+            found.extend(_check_bach_out_mode(box_lookup, scope.edges, db))
 
         # Community extraction check (lightweight, always runs)
         found.extend(_check_community_extracted(box_lookup, db, warned_packages))
@@ -401,6 +408,105 @@ def _check_bach_llll_types(
                 port=dst_inlet,
             ))
 
+    return results
+
+
+# Consumers that pass a bach llll on unchanged (to another patcher level, a
+# send/receive pair, a voice) or ignore its content (button) -- Q39 / Q23
+_BACH_OUT_FORWARDERS = frozenset({
+    "outlet", "send", "s", "forward", "p", "patcher", "bpatcher", "poly~",
+    "mc.poly~", "button",
+})
+
+
+def _bach_out_value(box: dict) -> "str | None":
+    """A bach box's ``@out`` value, or None when unset.
+
+    An object box reads the token after ``@out`` in its arguments; a UI bach
+    box (``bach.roll``, maxclass ``bach.roll``) reads its saved ``out``
+    attribute (physics-composition obj-67 saves ``"out": "nnnnnnn"``).
+    """
+    if walk.box_maxclass(box) != "newobj":
+        value = box.get("out")
+        return value if isinstance(value, str) and value else None
+    args = walk.box_args(box)
+    for i, token in enumerate(args):
+        if token == "@out":
+            nxt = args[i + 1] if i + 1 < len(args) else None
+            return nxt if nxt is not None and not nxt.startswith("@") else None
+    return None
+
+
+def _outlet_is_bang(entry: dict, outlet) -> bool:
+    for o in entry.get("outlets", []) or []:
+        if isinstance(o, dict) and o.get("id") == outlet:
+            digest = o.get("digest")
+            return isinstance(digest, str) and "bang" in digest.lower()
+    return False
+
+
+def _check_bach_out_mode(
+    box_lookup: dict[str, dict],
+    edges: list,
+    db: ObjectDatabase,
+) -> list[CriticResult]:
+    """Flag a bach box sending native lllls to plain MAX objects (Q39 / Q23 row).
+
+    Every bach object's ``@out`` defaults to ``n`` (native), which plain MAX
+    objects reject with "wrong message or type" (CLAUDE.md bach section). A
+    source is a Bach-package box whose ``@out`` value is missing or not all
+    ``t``; an offending cord leaves an outlet whose DB digest has no "bang"
+    and enters a consumer that is neither a Bach-package object nor in
+    ``_BACH_OUT_FORWARDERS``. One warning per bach box (consumers in edge
+    order), port = the first offending outlet, with a ``set_bach_out`` fix
+    for an object box (a UI bach box saves ``out`` as an attribute, which no
+    Q39 fix op sets, so it gets the warning without a fix).
+    """
+    offenders: dict = {}  # bach id -> [first outlet, [consumer ids]]
+    for edge in edges:
+        src_box = box_lookup.get(edge.src)
+        dst_box = box_lookup.get(edge.dst)
+        if not src_box or not dst_box:
+            continue
+        src_entry = db.lookup(_get_object_name(src_box))
+        if not src_entry or src_entry.get("package") != "Bach":
+            continue
+        value = _bach_out_value(src_box)
+        if value is not None and set(value) == {"t"}:
+            continue
+        if _outlet_is_bang(src_entry, edge.outlet):
+            continue
+        dst_name = _get_object_name(dst_box)
+        if not dst_name or dst_name in _BACH_OUT_FORWARDERS:
+            continue
+        dst_entry = db.lookup(dst_name)
+        if dst_entry and dst_entry.get("package") == "Bach":
+            continue
+        slot = offenders.setdefault(edge.src, [edge.outlet, []])
+        if edge.dst not in slot[1]:
+            slot[1].append(edge.dst)
+
+    results: list[CriticResult] = []
+    for bach_id, (outlet, consumers) in offenders.items():
+        box = box_lookup[bach_id]
+        name = _get_object_name(box)
+        names = ", ".join(
+            f"'{_get_object_name(box_lookup[c])}' ({c})" for c in consumers
+        )
+        mode = _bach_out_value(box)
+        mode_text = f"'@out {mode}'" if mode is not None else "the default '@out n'"
+        results.append(CriticResult(
+            "warning",
+            f"Bach native llll output: '{name}' ({bach_id}) outlet {outlet} feeds "
+            f"non-bach {names} with {mode_text} -- a native llll is rejected by "
+            f"non-bach objects ('wrong message or type')",
+            "Set '@out t' (one 't' per llll outlet) on a bach object feeding "
+            "plain MAX objects, so flat lists arrive as regular MAX lists",
+            rule="bach_out_mode",
+            box_ids=finding_ids(bach_id, *consumers),
+            port=outlet,
+            fix=bach_out_fix(bach_id, walk.box_text(box)) if walk.box_maxclass(box) == "newobj" else None,
+        ))
     return results
 
 

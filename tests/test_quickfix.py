@@ -597,3 +597,300 @@ def test_quickfix_module_never_saves():
             assert node.attr not in banned, node.attr
         if isinstance(node, ast.alias):
             assert node.name not in banned, node.name
+
+
+# ---------------------------------------------------------------------------
+# Task 2: gen~ @param rewrite
+# ---------------------------------------------------------------------------
+
+
+def _gen_param_patcher(text: str, to_gen: bool = True) -> Patcher:
+    p = Patcher()
+    fl = p.add_box("flonum")             # obj-1
+    msg = p.add_message(text)            # obj-2
+    dst = p.add_box("gen~") if to_gen else p.add_box("print")  # obj-3
+    p.add_connection(fl, 0, msg, 0)
+    p.add_connection(msg, 0, dst, 0)
+    return p
+
+
+def _gen_param_validation_ids(d: dict) -> set:
+    out = set()
+    for v in validate_patch(copy.deepcopy(d)):
+        if "plain name messages" in v.message:
+            out.add(v.message.rsplit("(", 1)[1].rstrip(")"))
+    return out
+
+
+def test_gen_param_warning_and_fix():
+    d = _gen_param_patcher("@depth $1").to_dict()
+    found = _by_rule(_review(d), "gen_param_message_syntax")
+    assert len(found) == 1
+    r = found[0]
+    assert r.severity == "warning"
+    assert r.box_ids == ("obj-2", "obj-3")
+    assert r.fix is not None and r.fix.kind == "rewrite_gen_param"
+    check_fix_contract(r.fix)
+    (op,) = r.fix.ops
+    assert op.op == "set_text" and op.box == "obj-2"
+    assert (op.old_text, op.text) == ("@depth $1", "depth $1")
+
+
+def test_gen_param_multi_segment():
+    d = _gen_param_patcher("@a $1, @b $2").to_dict()
+    (r,) = _by_rule(_review(d), "gen_param_message_syntax")
+    assert r.fix.ops[0].text == "a $1, b $2"
+
+
+def test_gen_param_not_cabled_to_gen_no_finding():
+    d = _gen_param_patcher("@depth $1", to_gen=False).to_dict()
+    assert not _by_rule(_review(d), "gen_param_message_syntax")
+
+
+@pytest.mark.parametrize("text,to_gen", [
+    ("@depth $1", True), ("@a $1, @b $2", True), ("depth $1", True),
+    ("@depth $1", False), ("@depth 3", True),
+])
+def test_gen_param_parity_with_validation(text, to_gen):
+    d = _gen_param_patcher(text, to_gen).to_dict()
+    critic = {r.box_ids[0] for r in _by_rule(_review(d), "gen_param_message_syntax")}
+    assert critic == _gen_param_validation_ids(d)
+
+
+def test_gen_param_apply_clears_both():
+    p = _gen_param_patcher("@depth $1")
+    (r,) = _by_rule(_review(p.to_dict()), "gen_param_message_syntax")
+    apply_fix(p, r)
+    msg = next(b for b in p.boxes if b.id == "obj-2")
+    assert msg.text == "depth $1"
+    d = p.to_dict()
+    assert not _by_rule(_review(d), "gen_param_message_syntax")
+    assert _gen_param_validation_ids(d) == set()
+
+
+# ---------------------------------------------------------------------------
+# Task 2: unsafe gain -> scale / clip
+# ---------------------------------------------------------------------------
+
+
+def _gain_patcher(build) -> Patcher:
+    """cycle~ (obj-1) -> *~ (obj-2) inlet 0, *~ -> dac~ (obj-3) 0/1; build(p, gain) adds the source."""
+    p = Patcher()
+    osc = p.add_box("cycle~", ["440"])
+    gain = p.add_box("*~")
+    dac = p.add_box("dac~")
+    p.add_connection(osc, 0, gain, 0)
+    p.add_connection(gain, 0, dac, 0)
+    p.add_connection(gain, 0, dac, 1)
+    build(p, gain)
+    return p
+
+
+def _gain_finding(d: dict):
+    found = _by_rule(_review(d), "unsafe_gain_sources")
+    assert len(found) == 1, found
+    return found[0]
+
+
+def _assert_gain_fix_applies(p: Patcher, r) -> None:
+    apply_fix(p, r)
+    assert not _by_rule(_review(p.to_dict()), "unsafe_gain_sources")
+    assert _errors(p.to_dict()) == []
+
+
+def test_gain_slider_scale_fix():
+    def build(p, gain):
+        s = p.add_box("slider")  # obj-4
+        p.add_connection(s, 0, gain, 1)
+    p = _gain_patcher(build)
+    r = _gain_finding(p.to_dict())
+    assert r.severity == "blocker" and r.box_ids == ("obj-4", "obj-2") and r.port == 1
+    fx = r.fix
+    assert fx is not None and fx.kind == "insert_gain_normalizer"
+    check_fix_contract(fx)
+    (add,) = _ops(fx, "add_box")
+    assert add.text == "scale 0. 127. 0. 1." and add.near == "obj-4"
+    assert [(o.src, o.outlet, o.dst, o.inlet) for o in _ops(fx, "remove_cord")] == [("obj-4", 0, "obj-2", 1)]
+    assert {(o.src, o.outlet, o.dst, o.inlet) for o in _ops(fx, "add_cord")} == {
+        ("obj-4", 0, add.box, 0), (add.box, 0, "obj-2", 1),
+    }
+    _assert_gain_fix_applies(p, r)
+    assert any(b.text == "scale 0. 127. 0. 1." for b in p.boxes)
+
+
+def test_gain_live_dial_bounds():
+    def build(p, gain):
+        dl = p.add_box("live.dial")  # obj-4
+        p.add_connection(dl, 0, gain, 1)
+    d = _gain_patcher(build).to_dict()
+    for e in d["patcher"]["boxes"]:
+        if e["box"]["id"] == "obj-4":
+            e["box"]["saved_attribute_attributes"] = {
+                "valueof": {"parameter_mmin": -12, "parameter_mmax": 12},
+            }
+    r = _gain_finding(d)
+    assert _ops(r.fix, "add_box")[0].text == "scale -12. 12. 0. 1."
+    _assert_gain_fix_applies(Patcher.from_dict(d), r)
+
+
+def test_gain_via_line_tilde():
+    def build(p, gain):
+        s = p.add_box("slider")   # obj-4
+        ln = p.add_box("line~")   # obj-5
+        p.add_connection(s, 0, ln, 0)
+        p.add_connection(ln, 0, gain, 1)
+    p = _gain_patcher(build)
+    r = _gain_finding(p.to_dict())
+    fx = r.fix
+    assert fx is not None
+    assert [(o.src, o.dst, o.inlet) for o in _ops(fx, "remove_cord")] == [("obj-4", "obj-5", 0)]
+    assert _ops(fx, "add_box")[0].text == "scale 0. 127. 0. 1."
+    _assert_gain_fix_applies(p, r)
+
+
+def test_gain_constant_clip():
+    def build(p, gain):
+        m = p.add_message("127")  # obj-4
+        f = p.add_box("f")        # obj-5
+        p.add_connection(m, 0, f, 0)
+        p.add_connection(f, 0, gain, 1)
+    p = _gain_patcher(build)
+    r = _gain_finding(p.to_dict())
+    fx = r.fix
+    assert fx is not None
+    assert _ops(fx, "add_box")[0].text == "clip 0. 1."
+    assert [(o.src, o.dst, o.inlet) for o in _ops(fx, "remove_cord")] == [("obj-4", "obj-5", 0)]
+    _assert_gain_fix_applies(p, r)
+
+
+def test_gain_no_fix_message_into_line():
+    def build(p, gain):
+        m = p.add_message("0, 127 500")
+        ln = p.add_box("line~")
+        p.add_connection(m, 0, ln, 0)
+        p.add_connection(ln, 0, gain, 1)
+    r = _gain_finding(_gain_patcher(build).to_dict())
+    assert r.severity == "blocker" and r.fix is None
+
+
+def test_gain_no_fix_two_path_cords():
+    def build(p, gain):
+        s = p.add_box("slider")
+        f = p.add_box("f")
+        p.add_connection(s, 0, gain, 1)
+        p.add_connection(s, 0, f, 0)
+        p.add_connection(f, 0, gain, 1)
+    found = _by_rule(_review(_gain_patcher(build).to_dict()), "unsafe_gain_sources")
+    assert found and all(r.fix is None for r in found)
+
+
+def test_gain_no_fix_ops_push_past_one():
+    def build(p, gain):
+        s = p.add_box("slider")
+        m = p.add_box("*", ["200"])
+        p.add_connection(s, 0, m, 0)
+        p.add_connection(m, 0, gain, 1)
+    r = _gain_finding(_gain_patcher(build).to_dict())
+    assert r.fix is None
+
+
+# ---------------------------------------------------------------------------
+# Task 2: bach @out t
+# ---------------------------------------------------------------------------
+
+
+def _bach_patcher(text_args, consumers=("expr",), outlet=0, bach_name="bach.nth") -> Patcher:
+    p = Patcher()
+    b = p.add_box(bach_name, list(text_args))  # obj-1
+    for c in consumers:
+        if c == "p":
+            box, _inner = p.add_subpatcher("x", inlets=1, outlets=0)
+        elif c == "expr":
+            box = p.add_box("expr", ["$i1", "+", "1"])
+        else:
+            box = p.add_box(c)
+        p.add_connection(b, outlet, box, 0)
+    return p
+
+
+def _bach_findings(p: Patcher) -> list:
+    return _by_rule(_review(p.to_dict()), "bach_out_mode")
+
+
+def test_bach_out_warning_and_fix():
+    p = _bach_patcher(["1"])
+    (r,) = _bach_findings(p)
+    assert r.severity == "warning"
+    assert r.box_ids[0] == "obj-1" and r.box_ids == ("obj-1", "obj-2") and r.port == 0
+    assert r.fix is not None and r.fix.kind == "set_bach_out"
+    check_fix_contract(r.fix)
+    (op,) = r.fix.ops
+    assert (op.box, op.old_text, op.text) == ("obj-1", "bach.nth 1", "bach.nth 1 @out t")
+
+
+@pytest.mark.parametrize("args,expected", [
+    (["1", "@out", "n"], "bach.nth 1 @out t"),
+    (["1", "@out", "tn"], "bach.nth 1 @out tt"),
+])
+def test_bach_out_replaces_existing_value(args, expected):
+    (r,) = _bach_findings(_bach_patcher(args))
+    assert r.fix.ops[0].text == expected
+
+
+def test_bach_out_t_no_finding():
+    assert not _bach_findings(_bach_patcher(["1", "@out", "t"]))
+
+
+def test_bach_out_one_finding_per_box():
+    p = _bach_patcher(["1"], consumers=("expr", "print"))
+    (r,) = _bach_findings(p)
+    assert r.box_ids == ("obj-1", "obj-2", "obj-3")
+
+
+@pytest.mark.parametrize("consumer", ["bach.flat", "outlet", "send", "p"])
+def test_bach_out_exempt_consumers(consumer):
+    if consumer == "outlet":
+        outer = Patcher()
+        _box, inner = outer.add_subpatcher("x", inlets=0, outlets=1)
+        b = inner.add_box("bach.nth", ["1"])
+        inner.add_connection(b, 0, inner.get_outlets()[0], 0)
+        assert not _by_rule(_review(outer.to_dict()), "bach_out_mode")
+        return
+    assert not _bach_findings(_bach_patcher(["1"], consumers=(consumer,)))
+
+
+def test_bach_roll_bang_outlet_exempt():
+    assert not _bach_findings(_bach_patcher([], consumers=("print",), outlet=7, bach_name="bach.roll"))
+    (r,) = _bach_findings(_bach_patcher([], consumers=("print",), outlet=0, bach_name="bach.roll"))
+    # bach.roll is a UI box: its @out is the saved "out" attribute, which no
+    # Q39 fix op sets, so the warning carries no fix.
+    assert r.box_ids == ("obj-1", "obj-2") and r.port == 0
+    assert r.fix is None
+
+
+def test_bach_ui_out_attribute_read():
+    p = _bach_patcher([], consumers=("print",), outlet=0, bach_name="bach.roll")
+    d = p.to_dict()
+    d["patcher"]["boxes"][0]["box"]["out"] = "ttttttt"
+    assert not _by_rule(_review(d), "bach_out_mode")
+    d["patcher"]["boxes"][0]["box"]["out"] = "nnnnnnn"
+    assert _by_rule(_review(d), "bach_out_mode")
+
+
+def test_bach_out_apply_keeps_io_and_cords():
+    p = _bach_patcher(["1"], consumers=("expr", "print"))
+    b = next(x for x in p.boxes if x.id == "obj-1")
+    io = (b.numinlets, b.numoutlets)
+    cords = _cord_set(p)
+    (r,) = _bach_findings(p)
+    apply_fix(p, r)
+    assert b.text == "bach.nth 1 @out t"
+    assert (b.numinlets, b.numoutlets) == io
+    assert _cord_set(p) == cords
+    assert not _bach_findings(p)
+
+
+def test_bach_out_guard_rejects_non_bach_box():
+    p = _bach_patcher(["1"])
+    bad = Fix("set_bach_out", "d", (FixOp("set_text", box="obj-2", text="expr $i1 + 2", old_text="expr $i1 + 1"),))
+    _guard(p, CriticResult("warning", "f", "s", rule="x", fix=bad))

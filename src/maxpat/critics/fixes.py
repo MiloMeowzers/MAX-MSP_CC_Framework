@@ -30,6 +30,7 @@ output passes it. This module imports no Patcher.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 FIX_KINDS = ("insert_trigger", "rewrite_gen_param", "insert_gain_normalizer", "set_bach_out")
@@ -232,6 +233,80 @@ def trigger_fix(src_id: str, src_outlet: int, src_label: str, letter: str, order
     return Fix("insert_trigger", description, tuple(ops))
 
 
+_GEN_PARAM_RE = re.compile(r"(?<!\S)@(\w+)(?=\s+\$)")
+
+
+def gen_param_fix(msg_id: str, old_text: str) -> Fix:
+    """rewrite_gen_param: drop the ``@`` before each selector followed by a
+    ``$`` argument (``@depth $1`` -> ``depth $1``)."""
+    new_text = _GEN_PARAM_RE.sub(r"\1", old_text)
+    return Fix(
+        "rewrite_gen_param",
+        f"rewrite message ({msg_id}) '{old_text}' -> '{new_text}' "
+        f"(gen~ params take plain name messages)",
+        (FixOp("set_text", box=msg_id, text=new_text, old_text=old_text),),
+    )
+
+
+def max_float(v) -> str:
+    """A MAX float atom: integer-valued -> ``127.`` / ``-12.``, else the
+    shortest fixed-point repr with no exponent."""
+    v = float(v)
+    if v == int(v):
+        return f"{int(v)}."
+    s = repr(v)
+    if "e" in s or "E" in s:
+        s = f"{v:.12f}".rstrip("0")
+        if s.endswith("."):
+            s += "0"
+    return s
+
+
+def gain_normalizer_fix(
+    src_id: str,
+    src_outlet: int,
+    src_label: str,
+    dst_id: str,
+    dst_inlet: int,
+    dst_label: str,
+    text: str,
+) -> Fix:
+    """insert_gain_normalizer: route ``src:outlet -> dst:inlet`` through a new
+    ``scale <lo> <hi> 0. 1.`` or ``clip 0. 1.`` box placed below the source."""
+    ops = (
+        FixOp("add_box", box=_NEW, text=text, near=src_id),
+        FixOp("remove_cord", src=src_id, outlet=src_outlet, dst=dst_id, inlet=dst_inlet),
+        FixOp("add_cord", src=src_id, outlet=src_outlet, dst=_NEW, inlet=0),
+        FixOp("add_cord", src=_NEW, outlet=0, dst=dst_id, inlet=dst_inlet),
+    )
+    return Fix(
+        "insert_gain_normalizer",
+        f"insert '{text}' between '{src_label}' ({src_id}) outlet {src_outlet} and "
+        f"'{dst_label}' ({dst_id}) inlet {dst_inlet}",
+        ops,
+    )
+
+
+def bach_out_fix(box_id: str, old_text: str) -> Fix:
+    """set_bach_out: append `` @out t``, or replace the token after ``@out``
+    with ``t`` repeated to that token's length (``@out tn`` -> ``@out tt``)."""
+    tokens = old_text.split()
+    if "@out" not in tokens:
+        tokens += ["@out", "t"]
+    else:
+        i = tokens.index("@out") + 1
+        if i < len(tokens) and not tokens[i].startswith("@"):
+            tokens[i] = "t" * len(tokens[i])
+        else:
+            tokens.insert(i, "t")
+    new_text = " ".join(tokens)
+    return Fix(
+        "set_bach_out",
+        f"set '{old_text}' ({box_id}) to '{new_text}' so non-bach objects get plain MAX lists",
+        (FixOp("set_text", box=box_id, text=new_text, old_text=old_text),),
+    )
+
+
 __all__ = [
     "FIX_KINDS",
     "FIX_OPS",
@@ -242,4 +317,8 @@ __all__ = [
     "check_fix_contract",
     "is_new_ref",
     "trigger_fix",
+    "gen_param_fix",
+    "gain_normalizer_fix",
+    "bach_out_fix",
+    "max_float",
 ]
