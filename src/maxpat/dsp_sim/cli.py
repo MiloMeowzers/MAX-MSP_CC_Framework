@@ -10,6 +10,9 @@ Per D-09: exit codes mirror verdict priority --
   2 = mode_competition
   3 = no_oscillation
   4 = runaway
+  64 = usage error, nothing ran (EX_USAGE; argparse errors, malformed
+       --sweep/--params/--mirror, TopologyError such as an undeclared
+       --param; 261022-ud6 WR-05)
 
 Usage:
   python -m src.maxpat.dsp_sim \\
@@ -67,6 +70,20 @@ _EXIT_CODE: dict[str, int] = {
     RUNAWAY: 4,
 }
 
+# 261022-ud6 WR-05: nothing ran (an argparse usage error, a malformed
+# --sweep / --params / --mirror, or a TopologyError such as an undeclared
+# --param). BSD sysexits EX_USAGE, so it can never be read as a verdict
+# (argparse's own default, 2, is mode_competition here).
+EXIT_USAGE = 64
+
+
+class _UsageParser(argparse.ArgumentParser):
+    """ArgumentParser whose usage errors exit EXIT_USAGE instead of 2."""
+
+    def error(self, message):  # noqa: D401 - argparse hook
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_USAGE, f"{self.prog}: error: {message}\n")
+
 # Sparkline characters (Claude's Discretion: Unicode block chars per CONTEXT.md)
 _SPARK_CHARS = "▁▂▃▄▅▆▇█"
 
@@ -78,13 +95,14 @@ _SPARK_CHARS = "▁▂▃▄▅▆▇█"
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level argparse parser (no subcommands per D-08)."""
-    parser = argparse.ArgumentParser(
+    parser = _UsageParser(
         prog="python -m src.maxpat.dsp_sim",
         description=(
             "Run a numpy waveguide-stability sweep against a topology or "
             "custom mirror. Exit codes per D-09 priority: "
             "0=pass, 1=phase_drift, 2=mode_competition, "
-            "3=no_oscillation, 4=runaway. "
+            "3=no_oscillation, 4=runaway; 64=usage error, nothing ran "
+            "(bad arguments or an undeclared --param). "
             "Subcommand: `smoke PATH` runs the GenExpr codebox smoke test; "
             "see `smoke --help`."
         ),
@@ -179,7 +197,7 @@ def _parse_sweep(s: str) -> tuple[float, float, int]:
         return (float(parts[0]), float(parts[1]), int(parts[2]))
     except ValueError:
         print(f"error: --sweep must be 'lo,hi,n' (got {s!r})", file=sys.stderr)
-        raise SystemExit(2)
+        raise SystemExit(EXIT_USAGE)
 
 
 def _parse_params(s: str) -> dict[str, float]:
@@ -195,7 +213,7 @@ def _parse_params(s: str) -> dict[str, float]:
                 f"error: --params token {pair!r} missing '='",
                 file=sys.stderr,
             )
-            raise SystemExit(2)
+            raise SystemExit(EXIT_USAGE)
         k, v = pair.split("=", 1)
         try:
             out[k.strip()] = float(v.strip())
@@ -205,7 +223,7 @@ def _parse_params(s: str) -> dict[str, float]:
                 f"{v.strip()!r}",
                 file=sys.stderr,
             )
-            raise SystemExit(2)
+            raise SystemExit(EXIT_USAGE)
     return out
 
 
@@ -222,7 +240,7 @@ def _load_mirror(spec: str) -> Callable:
             f"(got {spec!r})",
             file=sys.stderr,
         )
-        raise SystemExit(2)
+        raise SystemExit(EXIT_USAGE)
     module_path, factory_name = spec.rsplit(":", 1)
     try:
         mod = importlib.import_module(module_path)
@@ -231,18 +249,18 @@ def _load_mirror(spec: str) -> Callable:
             f"error: cannot import {module_path!r}: {exc}",
             file=sys.stderr,
         )
-        raise SystemExit(2)
+        raise SystemExit(EXIT_USAGE)
     if not hasattr(mod, factory_name):
         print(
             f"error: module {module_path!r} has no attribute "
             f"{factory_name!r}",
             file=sys.stderr,
         )
-        raise SystemExit(2)
+        raise SystemExit(EXIT_USAGE)
     factory = getattr(mod, factory_name)
     if not callable(factory):
         print(f"error: {spec!r} is not callable", file=sys.stderr)
-        raise SystemExit(2)
+        raise SystemExit(EXIT_USAGE)
     return factory
 
 
@@ -353,7 +371,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     except TopologyError as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return 2
+        return EXIT_USAGE
 
     _print_report(report)
     return _EXIT_CODE.get(report.verdict, 1)

@@ -129,8 +129,13 @@ Stateful built-ins keep one state cell per call site, created at build time.
 
 ``Codebox.lint`` holds build-time WARNs as (check, detail) pairs: ``tab_char``
 (a tab anywhere in the code; the project's safe-construct rules say spaces
-only) and ``output_typo`` (a local such as ``ou2`` or ``Out1`` that looks like
-a misspelled output and so never reaches an outlet). ``Codebox.advisories``
+only), ``output_typo`` (a never-read local such as ``ou2`` or ``Out1`` that
+looks like a misspelled output), and the genexpr-rules.md safe-construct
+checks (261022-ud6 IN-01): ``loop_bound_param`` (a for bound reading a Param,
+samplerate or vectorsize; the simulator folds it per corner but gen~ wants a
+CONSTANT bound), ``hoist_alias`` (a Param-only statement reading a bare local
+alias such as ``sr = samplerate;``) and ``implicit_channel`` (peek / poke
+without the channel argument). ``Codebox.advisories``
 holds build-time INFOs the same way: ``branch_state`` names each stateful call
 or write inside an if/else body (see the ``if / else`` row); it never changes a
 smoke verdict.
@@ -167,6 +172,7 @@ __all__ = [
     "Program",
     "Unsupported",
     "parse_codebox",
+    "value_dependencies",
 ]
 
 
@@ -917,6 +923,282 @@ def _edit_distance(a: str, b: str) -> int:
 
 
 # ===========================================================================
+# Value dataflow (261022-ud6 CR-01: smoke port inference)
+# ===========================================================================
+
+# Operators whose result is a 0/1 flag, not the operands' value.
+_FLAG_OPS = frozenset({"<", ">", "<=", ">=", "==", "!=", "&&", "||"})
+# Calls whose result does not carry an argument's value: generators read a
+# rate (phasor, cycle, triangle phase), noise reads nothing, conversions of
+# a time / a size are not audio.
+_NO_VALUE_CALLS = frozenset({
+    "phasor", "cycle", "noise", "triangle", "dim", "channels", "mstosamps",
+    "sampstoms", "poke",
+})
+
+
+def value_dependencies(cb: "Codebox") -> dict:
+    """{outN: {inK, ...}} -- which inlets reach each outlet as a value.
+
+    A taint pass over every assignment (if/else and for bodies included,
+    iterated to a fixed point so History feedback converges). A value flows
+    through arithmetic and pure functions, the ``?:`` branches, ``latch``'s
+    input, ``selector``'s inputs, ``dcblock``, and through a Buffer / Data /
+    Delay that ``poke`` / ``.write()`` filled and ``peek`` / ``.read()``
+    reads. It does not flow through index, channel, rate or time arguments,
+    comparisons and logic (0/1 flags), ``?:`` / if conditions, or
+    generators (phasor, cycle, noise, triangle). The smoke port inference
+    uses it to decide whether a downstream gen~ inlet passes audio on.
+    """
+    taint: dict = {f"in{k}": {k} for k in range(1, cb.n_in + 1)}
+
+    def srcs(e) -> set:
+        if isinstance(e, Name):
+            return taint.get(e.name, set())
+        if isinstance(e, Unary):
+            return srcs(e.a)
+        if isinstance(e, Bin):
+            return set() if e.op in _FLAG_OPS else srcs(e.a) | srcs(e.b)
+        if isinstance(e, Tern):
+            return srcs(e.a) | srcs(e.b)
+        if isinstance(e, Method):
+            return set(taint.get(e.obj, set())) if e.method == "read" else set()
+        if isinstance(e, Call):
+            if e.name == "peek":
+                a0 = e.args[0] if e.args else None
+                return set(taint.get(a0.name, set())) if isinstance(a0, Name) else set()
+            if e.name in _NO_VALUE_CALLS:
+                return set()
+            if e.name == "latch":
+                return srcs(e.args[0]) if e.args else set()
+            if e.name == "selector":
+                out: set = set()
+                for a in e.args[1:]:
+                    out |= srcs(a)
+                return out
+            out = set()
+            for a in e.args:
+                out |= srcs(a)
+            return out
+        return set()
+
+    def side_effects(e) -> bool:
+        changed = False
+        for x in _subexprs(e):
+            target, val = None, None
+            if isinstance(x, Call) and x.name == "poke" and len(x.args) >= 2 \
+                    and isinstance(x.args[0], Name):
+                target, val = x.args[0].name, x.args[1]
+            elif isinstance(x, Method) and x.method == "write" and x.args:
+                target, val = x.obj, x.args[0]
+            if target is not None:
+                add = srcs(val) - taint.get(target, set())
+                if add:
+                    taint.setdefault(target, set()).update(add)
+                    changed = True
+        return changed
+
+    stmts = list(_walk_stmts(cb.body))
+    for _ in range(64):     # fixed point; bounded (each pass only grows sets)
+        changed = False
+        for s in stmts:
+            if isinstance(s, (Assign, ExprStmt)):
+                changed |= side_effects(s.expr)
+            if isinstance(s, Assign):
+                add = srcs(s.expr)
+                if s.op != "=":
+                    add = add | taint.get(s.name, set())
+                add = add - taint.get(s.name, set())
+                if add:
+                    taint.setdefault(s.name, set()).update(add)
+                    changed = True
+        if not changed:
+            break
+    return {k: set(taint.get(f"out{k}", set())) for k in range(1, cb.n_out + 1)}
+
+
+# ===========================================================================
+# Build-time lint helpers (261022-ud6 IN-01, IN-02)
+# ===========================================================================
+
+# Names gen~ treats as fixed for a compile: they make an expression Param-only
+# (hoistable) and make a loop bound runtime-variable.
+_COMPILE_CONSTANT_NAMES = frozenset({"samplerate", "vectorsize"})
+
+
+def _children(expr):
+    if isinstance(expr, Unary):
+        return (expr.a,)
+    if isinstance(expr, Bin):
+        return (expr.a, expr.b)
+    if isinstance(expr, Tern):
+        return (expr.c, expr.a, expr.b)
+    if isinstance(expr, (Call, Method)):
+        return tuple(expr.args)
+    return ()
+
+
+def _subexprs(expr):
+    """Yield ``expr`` and every expression nested in it."""
+    yield expr
+    for c in _children(expr):
+        yield from _subexprs(c)
+
+
+def _stmt_expr_pairs(body):
+    """(statement, expression) for every statement-level expression, recursing
+    into if/else and for bodies (for init / step included)."""
+    for s in _walk_stmts(body):
+        for e in _stmt_exprs(s):
+            yield s, e
+
+
+def _all_names_read(body) -> set:
+    """Every name any expression reads, plus compound-assignment targets."""
+    names: set = set()
+    for s, e in _stmt_expr_pairs(body):
+        names.update(n.name for n in _names_read(e))
+        if isinstance(s, Assign) and s.op != "=":
+            names.add(s.name)
+    return names
+
+
+def _loop_bound_lint(body, param_names: frozenset, code: str) -> list:
+    """IN-01 ``loop_bound_param``: a for bound that reads a Param, samplerate
+    or vectorsize. The simulator folds those per corner, but gen~ compiles a
+    Param as a runtime value, and genexpr-rules.md says CONSTANT bounds only
+    (the two codeboxes that used variable bounds failed to compile)."""
+    out: list = []
+    variable = param_names | _COMPILE_CONSTANT_NAMES
+    for s in _walk_stmts(body):
+        if not isinstance(s, For) or not isinstance(s.cond, Bin):
+            continue
+        counter = s.init.name
+        sides = [x for x in (s.cond.a, s.cond.b)
+                 if not (isinstance(x, Name) and x.name == counter)]
+        names = sorted({n.name for x in sides for n in _names_read(x)} & variable)
+        if names:
+            out.append((
+                "loop_bound_param",
+                f"line {_line_of(code, s.off)}: for loop bound reads "
+                + ", ".join(f"'{n}'" for n in names)
+                + "; the codebox safe-construct rules say CONSTANT bounds "
+                "(for (i = 0; i < 600; i += 1)) with a variable inner guard "
+                "(if (i < n) { ... }) (genexpr-rules.md)",
+            ))
+    return out
+
+
+def _param_only(expr, allowed: set) -> bool:
+    """True when ``expr`` reads only ``allowed`` names and calls only pure
+    built-ins: gen~ would treat it as Param-only and hoist it."""
+    if isinstance(expr, Num):
+        return True
+    if isinstance(expr, Name):
+        return expr.name in allowed
+    if isinstance(expr, Str) or isinstance(expr, Method):
+        return False
+    if isinstance(expr, Call) and expr.name not in _PURE:
+        return False
+    return all(_param_only(c, allowed) for c in _children(expr))
+
+
+def _hoist_alias_lint(body, param_names: frozenset, local_names: set, code: str) -> list:
+    """IN-01 ``hoist_alias``: a statement whose whole right-hand side (or if
+    condition) is Param-only and reads a local alias.
+
+    genexpr-rules.md "No local aliases in Param-only expressions": gen~ hoists
+    Param-only expressions out of the per-sample body, and a loop-local alias
+    such as ``sr = samplerate;`` or ``RING = 1344000;`` is not visible there
+    ("use of undeclared identifier"). An alias is a top-level local whose every
+    assignment is a bare samplerate / vectorsize / Param / constant name or a
+    number literal. Computed setup locals (``tanh_drive = tanh(drive);``) and
+    Param-only sub-expressions inside a per-sample statement are not flagged:
+    user-confirmed codeboxes use both and compile."""
+    top: dict = {}
+    nested: set = set()
+
+    def collect(stmts, at_top):
+        for s in stmts:
+            if isinstance(s, Assign):
+                if at_top:
+                    top.setdefault(s.name, []).append(s)
+                else:
+                    nested.add(s.name)
+            elif isinstance(s, If):
+                collect(s.then, False)
+                collect(s.els or (), False)
+            elif isinstance(s, For):
+                nested.update((s.init.name, s.step.name))
+                collect(s.body, False)
+
+    collect(body, True)
+    base = set(param_names) | set(GEN_CONSTANTS) | _COMPILE_CONSTANT_NAMES
+
+    def is_alias_rhs(a):
+        e = a.expr
+        return a.op == "=" and (isinstance(e, Num) or (isinstance(e, Name) and e.name in base))
+
+    aliases = {
+        n for n, assigns in top.items()
+        if n in local_names and n not in nested and all(is_alias_rhs(a) for a in assigns)
+    }
+    if not aliases:
+        return []
+    allowed = base | aliases
+    sites: list = []    # (line, sorted alias names)
+    for s, e in _stmt_expr_pairs(body):
+        if isinstance(s, Assign) and s.name in aliases:
+            continue
+        if isinstance(e, (Num, Name, Str)) or not _param_only(e, allowed):
+            continue
+        used = sorted({n.name for n in _names_read(e)} & aliases)
+        if used:
+            sites.append((_line_of(code, s.off), used))
+    if not sites:
+        return []
+    line, used = sites[0]
+    more = f" ({len(sites)} sites)" if len(sites) > 1 else ""
+    return [(
+        "hoist_alias",
+        f"line {line}: Param-only expression reads the local "
+        + ", ".join(f"'{n}'" for n in used)
+        + f"{more}, a bare alias of samplerate / a Param / a constant; "
+        "gen~ hoists such expressions out of the per-sample loop, where the alias "
+        "can be undeclared ('use of undeclared identifier'). Write samplerate and "
+        "the Param expression directly, or de-hoist with History one(1) "
+        "(genexpr-rules.md)",
+    )]
+
+
+def _implicit_channel_lint(body, decls, code: str) -> list:
+    """IN-01 ``implicit_channel``: peek(buf, i) / poke(buf, v, i) without the
+    explicit channel argument the codebox safe-construct rules require."""
+    sites: dict = {}    # construct -> [count, first line]
+    for s, e in _stmt_expr_pairs(body):
+        for x in _subexprs(e):
+            if isinstance(x, Call) and (
+                (x.name == "peek" and len(x.args) == 2)
+                or (x.name == "poke" and len(x.args) == 3)
+            ):
+                entry = sites.setdefault(f"{x.name}()", [0, _line_of(code, x.off)])
+                entry[0] += 1
+    if not sites:
+        return []
+    ordered = sorted(sites.items(), key=lambda kv: kv[1][1])
+    entries = ", ".join(
+        f"{c} (line {line})" if k == 1 else f"{c} x{k} (first at line {line})"
+        for c, (k, line) in ordered
+    )
+    return [(
+        "implicit_channel",
+        f"{entries} without an explicit channel argument; the codebox "
+        "safe-construct rules say peek(buf, idx, 0) / poke(buf, val, idx, 0) "
+        "(genexpr-rules.md)",
+    )]
+
+
+# ===========================================================================
 # Codebox
 # ===========================================================================
 
@@ -944,14 +1226,19 @@ class Codebox:
         samplerate: float = 44100.0,
         seed: int = 1,
         buffers: dict | None = None,
+        buffer_scale: float = 1.0,
     ) -> "Program":
         """Compile this codebox for one Param corner.
 
         ``params`` overrides Param values by name (a name that is not a
-        declared Param raises ValueError). Raises Unsupported for anything the
+        declared Param raises ValueError). ``buffer_scale`` multiplies the
+        offline Buffer backing (the smoke self-sustain rerun scales it with
+        the stimulus, 261022-ud6). Raises Unsupported for anything the
         interpreter cannot run.
         """
-        return _Builder(self, params or {}, float(samplerate), seed, buffers or {}).program()
+        return _Builder(
+            self, params or {}, float(samplerate), seed, buffers or {}, float(buffer_scale)
+        ).program()
 
 
 def _clamp_param(value, p: dict) -> float:
@@ -1061,14 +1348,24 @@ def parse_codebox(code: str) -> Codebox:
             f"line {_line_of(code, tab_at)}: tab character in the codebox; "
             "the codebox safe-construct rules say spaces only (genexpr-rules.md)",
         ))
+    # IN-02 (261022-ud6): only a local that is never read can be a typo for
+    # an output; a read local (cut1, oct2) reaches an outlet through its reader.
+    read_names = _all_names_read(body)
     for name in locals_:
         m = _OUT_LIKE.match(name)
-        if m and not _OUT_NAME.match(name) and _edit_distance(m.group(1).lower(), "out") <= 1:
+        if (m and not _OUT_NAME.match(name) and name not in read_names
+                and _edit_distance(m.group(1).lower(), "out") <= 1):
             lint.append((
                 "output_typo",
                 f"line {_line_of(code, first_off[name])}: local '{name}' looks like a "
-                "misspelled output (outputs are out1..outN); it never reaches an outlet",
+                "misspelled output (outputs are out1..outN) and is never read, so it "
+                "never reaches an outlet",
             ))
+    # IN-01 (261022-ud6): the genexpr-rules.md codebox safe-construct rules.
+    param_names = frozenset(p["name"] for p in params)
+    lint.extend(_loop_bound_lint(body, param_names, code))
+    lint.extend(_hoist_alias_lint(body, param_names, set(locals_), code))
+    lint.extend(_implicit_channel_lint(body, decls, code))
 
     # Build-time advisories (INFO findings in smoke; never move a verdict).
     advisories: list = _branch_state_advisory(body, code)
@@ -1115,8 +1412,9 @@ def _exp(x):
 
 
 def _exp2(x):
+    # 261022-ud6 WR-04: math.exp2 is Python 3.11+; the declared target is 3.10.
     try:
-        return math.exp2(x)
+        return 2.0 ** x
     except OverflowError:
         return _INF
 
@@ -1520,12 +1818,14 @@ def _mk_seq(stmts: tuple):
 
 
 class _Builder:
-    def __init__(self, cb: Codebox, params: dict, samplerate: float, seed, buffers: dict):
+    def __init__(self, cb: Codebox, params: dict, samplerate: float, seed, buffers: dict,
+                 buffer_scale: float = 1.0):
         self.cb = cb
         self.code = cb.code
         self.samplerate = samplerate
         self.seed = seed
         self.buffers = buffers
+        self.buffer_scale = buffer_scale
         pvals = {p["name"]: float(p["default"]) for p in cb.params}
         by_name = {p["name"]: p for p in cb.params}
         for k, v in params.items():
@@ -1650,7 +1950,8 @@ class _Builder:
             raise ValueError(f"buffers[{bufname!r}] needs frames >= 1 and channels >= 1")
         self._reserve(frames * chans, d)
         n = np.arange(frames, dtype=float)
-        wave = (_BUFFER_AMP * np.sin(2.0 * np.pi * _BUFFER_HZ * n / self.samplerate)).tolist()
+        amp = _BUFFER_AMP * self.buffer_scale
+        wave = (amp * np.sin(2.0 * np.pi * _BUFFER_HZ * n / self.samplerate)).tolist()
         self.bufs[d.name] = ([list(wave) for _ in range(chans)], frames, chans)
 
     # -- expressions ----------------------------------------------------------

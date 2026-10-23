@@ -100,6 +100,86 @@ class TestMeasureFundamental:
         assert abs(1200.0 * math.log2(measured / 58.27)) < 1.0
 
 
+# ===========================================================================
+# 261022-ud6 WR-02: bright waveforms across the whole 40 Hz - 4 kHz window
+# ===========================================================================
+
+
+def _bright(kind: str, freq: float, phi: float, n: int = _N) -> np.ndarray:
+    """Naive square or a 0/1 pulse of the given duty ("p05", "p10", "p25")."""
+    t = np.arange(n) / _SR
+    p = np.mod(freq * t + phi / (2 * np.pi), 1.0)
+    if kind == "square":
+        return (p < 0.5).astype(np.float64)
+    if kind == "saw":
+        return 2.0 * p - 1.0
+    duty = {"p05": 0.05, "p10": 0.10, "p25": 0.25}[kind]
+    return (p < duty).astype(np.float64)
+
+
+def _cents(measured: float, freq: float) -> float:
+    return 1200.0 * math.log2(measured / freq) if measured > 0.0 else float("inf")
+
+
+# Saw, square and 25% pulse: the whole window. 5% / 10% pulses: up to the
+# frequency where the high part is 2 samples wide (duty * SR / f >= 2); a
+# narrower naive pulse is ambiguous at the sample level (its sampled shape
+# only repeats every few periods), which the README documents.
+_WR02_GRID = (
+    [("saw", f) for f in np.geomspace(50.0, 4000.0, 40)]
+    + [("square", f) for f in np.geomspace(50.0, 4000.0, 40)]
+    + [("p25", f) for f in np.geomspace(50.0, 4000.0, 40)]
+    + [("p10", f) for f in np.geomspace(50.0, 0.10 * _SR / 2.0, 40)]
+    + [("p05", f) for f in np.geomspace(50.0, 0.05 * _SR / 2.0, 40)]
+)
+
+
+class TestWr02BrightWaveforms:
+    """WR-02: corner-shaped NACF peaks sampled off their apex no longer read an octave low."""
+
+    @pytest.mark.parametrize("phase", (0.0, 1.9))
+    @pytest.mark.parametrize(
+        "kind,freq", _WR02_GRID, ids=[f"{k}-{f:.1f}" for k, f in _WR02_GRID]
+    )
+    def test_grid_within_one_cent(self, kind, freq, phase):
+        measured = measure_fundamental(_bright(kind, freq, phase), _SR)
+        err = _cents(measured, freq)
+        assert abs(err) < 1.0, f"{kind} {freq:.2f} Hz: read {measured:.3f} Hz ({err:+.2f} c)"
+
+    @pytest.mark.parametrize(
+        "kind,freq",
+        [("p05", 434.5), ("p05", 457.0), ("p10", 856.5), ("saw", 1603.0),
+         ("saw", 1604.0), ("square", 2262.0), ("saw", 3206.0), ("p25", 3600.0)],
+    )
+    def test_review_repros(self, kind, freq):
+        """The review's failing points (each read an octave or more low before)."""
+        measured = measure_fundamental(_bright(kind, freq, 0.0), _SR)
+        assert abs(_cents(measured, freq)) < 1.0, measured
+
+    @pytest.mark.parametrize("freq", (220.0, 1000.0, 1764.0, 3520.0))
+    def test_strong_second_harmonic_is_not_read_an_octave_up(self, freq):
+        """Control: a weak fundamental (0.3) under a strong 2nd harmonic still reads f."""
+        t = np.arange(_N) / _SR
+        buf = 0.3 * np.sin(2 * np.pi * freq * t) + np.sin(4 * np.pi * freq * t)
+        assert abs(_cents(measure_fundamental(buf, _SR), freq)) < 1.0
+
+    def test_runner_5_percent_pulse_is_not_mode_competition(self):
+        """The review's public-API repro: a 457 Hz 5% pulse mirror passes."""
+        from src.maxpat.dsp_sim import run_simulation
+
+        def mirror(sample_rate, params):
+            def render(n, p):
+                t = np.arange(n) / sample_rate
+                return ((p["freq"] * t) % 1.0 < p["duty"]).astype(float)
+            return render
+
+        report = run_simulation(
+            mirror=mirror, params={"freq": 457.0, "duty": 0.05},
+            sweep_param="duty", sweep=(0.05, 0.05, 2),
+        )
+        assert report.verdict == "pass", report.reason
+
+
 class TestMeasureFundamentalNullInputs:
     """Q25 / H1: inputs with no period return exactly 0.0, never a bogus pitch."""
 

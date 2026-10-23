@@ -129,6 +129,86 @@ _FMIN_HZ = 40.0
 _FMAX_HZ = 4000.0
 _CLARITY = 0.5
 _PEAK_FRACTION = 0.9
+# WR-02 (261022-ud6): sub-multiple test. A candidate period P/k is taken when
+# every peak near j*P/k (j = 1..k-1) is a local maximum whose corner apex is
+# at least this fraction of the corner apex at P.
+_SUBMULTIPLE_FRACTION = 0.95
+_SUBMULTIPLE_MAX = 8
+
+
+def _corner_apex(y: np.ndarray, k: int) -> float:
+    """Apex height of the NACF peak at local maximum k, modelled as a corner.
+
+    Harmonic-rich waves (naive saw, square, pulse) have corner-shaped NACF
+    peaks. Sampled half a lag off its apex, such a peak reads well below its
+    true height, so its raw (or parabolic) height says nothing about how
+    periodic the signal is there. Two lines, one through the two samples
+    rising to the peak and one through the two falling from it, meet at the
+    corner apex; that intersection is exact for a corner and slightly
+    over-reads a smooth peak. Returns y[k] when the line fit does not apply.
+    """
+    if k < 2 or k > y.size - 3:
+        return float(y[k])
+    if y[k + 1] >= y[k - 1]:
+        a0, a1, b0, b1 = k - 1, k, k + 1, k + 2
+    else:
+        a0, a1, b0, b1 = k - 2, k - 1, k, k + 1
+    sa = float(y[a1] - y[a0])
+    sb = float(y[b1] - y[b0])
+    if not (sa > 0.0 and sb < 0.0):
+        return float(y[k])
+    x = (float(y[b0]) - float(y[a1]) + sa * a1 - sb * b0) / (sa - sb)
+    x = min(max(x, float(a1)), float(b0))
+    return float(y[a1]) + sa * (x - a1)
+
+
+def _local_max_near(y: np.ndarray, centre: float):
+    """The index of the largest sample within one lag of ``centre``, or None
+    when it is not a local maximum (or falls off the array)."""
+    lo = max(1, int(math.floor(centre)) - 1)
+    hi = min(y.size - 2, int(math.ceil(centre)) + 1)
+    if hi < lo:
+        return None
+    k = lo + int(np.argmax(y[lo:hi + 1]))
+    if y[k] >= y[k - 1] and y[k] >= y[k + 1]:
+        return k
+    return None
+
+
+def _shortest_submultiple(y: np.ndarray, period: float, start: int) -> float:
+    """WR-02: the shortest true period dividing ``period``.
+
+    The first-strong-peak rule can still land on 2T, 3T, ... when the peak at
+    T is a corner sampled off its apex (a 5% pulse at 434.5 Hz read 217.2 Hz,
+    a saw at 1604 Hz read 802 Hz). P/k is accepted when every peak near
+    j*P/k (j = 1..k-1) is a local maximum whose corner apex is at least
+    _SUBMULTIPLE_FRACTION of the apex at P. The bar is stricter than the 0.9
+    first-peak rule, so a genuinely weak sub-period (a weak fundamental under
+    a strong 2nd harmonic) is not read an octave up.
+    """
+    kp = _local_max_near(y, period)
+    if kp is None:
+        return period
+    ref = _corner_apex(y, kp)
+    if not ref > 0.0:
+        return period
+    best = period
+    for k in range(2, _SUBMULTIPLE_MAX + 1):
+        cand = period / k
+        if cand < start:
+            break
+        ok = True
+        for j in range(1, k):
+            kj = _local_max_near(y, j * cand)
+            if kj is None or _corner_apex(y, kj) < _SUBMULTIPLE_FRACTION * ref:
+                ok = False
+                break
+        if ok:
+            best = cand
+    if best == period:
+        return period
+    kb = _local_max_near(y, best)
+    return _parabolic(y, kb) if kb is not None else best
 
 
 def _parabolic(y: np.ndarray, k: int) -> float:
@@ -162,6 +242,11 @@ def measure_fundamental(buf: np.ndarray, sample_rate: float) -> float:
          strong peak (not the global maximum) is what stops sub-octave
          errors; starting after the zero crossing is what stops the zero-lag
          lobe being read as a 4 kHz pitch.
+      4b. Sub-multiple test (261022-ud6 WR-02): a corner-shaped peak sampled
+         half a lag off its apex can fall below 0.9 * M while a later
+         multiple lands on an integer lag, so step 4 can still pick 2T, 3T,
+         ... The shortest P/k (k <= 8) whose peaks at every j*P/k have a
+         corner apex (two-line fit) >= 0.95 x the apex at P is taken.
       5. Multi-period refinement: re-locate the NACF peak near 2T, 4T, 8T, ...
          and divide by the multiple. Harmonic-rich waves (naive saw, pulse,
          square) have corner-shaped NACF peaks, so a single parabolic fit is
@@ -172,7 +257,11 @@ def measure_fundamental(buf: np.ndarray, sample_rate: float) -> float:
     58.27 Hz sine read 4009.09 Hz and 220 / 440 Hz saws read 109.99 Hz.
 
     Inspection window: [40 Hz, 4 kHz] (50 Hz, the lowest tested pitch, has
-    margin). Returns 0.0 when no clear period is found (silence, DC, noise,
+    margin). Sines, naive saws, squares and 25% pulses read within 1 cent
+    across the window; 5% / 10% pulses do while the high part is at least 2
+    samples wide (duty * sample_rate / f >= 2). A narrower naive pulse is
+    ambiguous at the sample level: its sampled shape only repeats every few
+    periods. Returns 0.0 when no clear period is found (silence, DC, noise,
     non-finite input, or a result outside the window); never a negative or
     non-finite value.
 
@@ -214,6 +303,12 @@ def measure_fundamental(buf: np.ndarray, sample_rate: float) -> float:
     while k + 1 <= half and nacf[k + 1] > nacf[k]:
         k += 1
     period = _parabolic(nacf, k)
+    if not (math.isfinite(period) and period > 0.0):
+        return 0.0
+    # WR-02: test the sub-multiples before refining. Refinement re-locates
+    # peaks within period/4 of m*period, so it must start from the true
+    # period or it can lock onto a neighbouring multiple.
+    period = _shortest_submultiple(nacf, period, start)
     if not (math.isfinite(period) and period > 0.0):
         return 0.0
 
