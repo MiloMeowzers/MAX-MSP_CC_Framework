@@ -2367,6 +2367,10 @@ _SELECTOR_SKIP_NAMES = frozenset({
     "jit.pix", "jit.gl.pix", "js", "jsui", "v8", "v8ui", "v8.codebox",
     "node.script", "node.codebox",
 })
+# bach-based packages take lllls and data symbols at inlet 0 (a leading
+# ``[1`` or ``select`` is data, not a selector): never judged. Max-bundle
+# triage gave 857 bach / dada hits, none a real "doesn't understand".
+_SELECTOR_SKIP_PREFIXES = ("bach.", "cage.", "dada.", "ears.")
 
 # jbox.maxref.xml "Common Box Attributes": every box accepts these as messages
 _JBOX_COMMON_ATTRIBUTES = frozenset({
@@ -2482,7 +2486,8 @@ def _accepted_selectors(name: str, db: ObjectDatabase) -> "set | None":
         if db.lookup(name) is None:
             return None
         messages = db.messages(name) or []
-        if not messages or "anything" in messages:
+        names = {m.get("name") if isinstance(m, dict) else m for m in messages}
+        if not messages or "anything" in names:
             return None
         accepted = set(db.selectors(name) or ())
     except Exception:
@@ -2508,7 +2513,8 @@ def _check_message_selectors(
     planner decision D4. Only a cord from a message box's outlet 0 into the
     destination's inlet 0. Skipped destinations: structural boxes, boxes
     with an embedded patcher, containers / scripts / gen hosts
-    (:data:`_SELECTOR_SKIP_NAMES`), names not in the DB, and an empty DB
+    (:data:`_SELECTOR_SKIP_NAMES`), bach-based package objects
+    (:data:`_SELECTOR_SKIP_PREFIXES`), names not in the DB, and an empty DB
     message list or one with ``anything``. Skipped selectors: numbers,
     ``$`` / ``#`` / ``@`` / quoted tokens and ``set``. Accepted:
     ``db.selectors``, the jbox common box attributes and ``get<accepted>``.
@@ -2533,7 +2539,7 @@ def _check_message_selectors(
         name = walk.object_name(dst)
         if not name or walk.inner_patcher(dst) is not None:
             continue
-        if name in _SELECTOR_SKIP_NAMES:
+        if name in _SELECTOR_SKIP_NAMES or name.startswith(_SELECTOR_SKIP_PREFIXES):
             continue
         segments = walk.message_segments(src)
         if not segments:

@@ -402,6 +402,15 @@ class TestMessageSelector:
         assert _sel(db, _sel_patch("foo", "", dst_maxclass="outlet")) == []
         assert _sel(db, _sel_patch("foo", "gen~")) == []
 
+    @pytest.mark.parametrize("text, dst", [
+        ("[1 2] [3 4]", "bach.iter"), ("[slotinfo [1 [type function]]]", "bach.roll"),
+        ("select all", "bach.score"), ("random", "dada.machines"), ("Hello", "bach.print"),
+    ])
+    def test_bach_family_destinations_skipped(self, db, text, dst):
+        """lllls and data symbols are not selectors for bach-based objects
+        (Max-bundle triage: 857 bach/dada hits, none a real 'doesn't understand')."""
+        assert _sel(db, _sel_patch(text, dst)) == []
+
     def test_cold_inlet_of_cycle_not_checked(self, db):
         assert _sel(db, _sel_patch("foo", "cycle~ 440", inlet=1)) == []
 
