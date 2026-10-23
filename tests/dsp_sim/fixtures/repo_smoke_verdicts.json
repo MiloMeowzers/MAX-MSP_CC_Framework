@@ -1,5 +1,5 @@
 {
- "_comment": "Pinned smoke verdicts for every committed gen~ codebox (261022-ud6 CR-01). Keys are '<path> :: <label>'. Update a verdict only together with the check change that moves it, and say why in the commit. Known non-pass entries: fx-genfail.maxpat is a deliberate max-bridge failure fixture (assignment to a Param); swing-generator.gendsp is a phasor-domain pattern with no host, so bipolar noise at swing=min peaks at 5 (its pattern test feeds --input 1=phasor:2).",
+ "_comment": "Pinned smoke verdicts for every committed gen~ codebox (261022-ud6 CR-01). Keys are '<path> :: <label>'. Update a verdict only together with the check change that moves it, and say why in the commit. Known non-pass entries: fx-genfail.maxpat is a deliberate max-bridge failure fixture (assignment to a Param). swing-generator.gendsp passes since 261022-ud6 WP7a: its codebox carries '// smoke: in1=phasor:2 control out1', the phasor drive its pattern test uses (bipolar noise at swing=min used to peak at 5).",
  "default_corner_0.05s": {
   ".planning/quick/261022-pqu-implement-q40-in-planning-reviews-2026-1/q40-live-check.maxpat :: q40-live-check.maxpat > gen~ > codebox 1": "pass",
   "patches/FDNVerb/generated/FDNVerb.maxpat :: FDNVerb.maxpat > gen~ FDNverb > FDNverb.gendsp > codebox 1": "pass",
@@ -209,7 +209,7 @@
   "patterns/gen/smoothing/one-pole-smooth.gendsp :: one-pole-smooth.gendsp > codebox 1": "pass",
   "patterns/gen/timing/master-clock.gendsp :: master-clock.gendsp > codebox 1": "pass",
   "patterns/gen/timing/subdivider.gendsp :: subdivider.gendsp > codebox 1": "pass",
-  "patterns/gen/timing/swing-generator.gendsp :: swing-generator.gendsp > codebox 1": "fail",
+  "patterns/gen/timing/swing-generator.gendsp :: swing-generator.gendsp > codebox 1": "pass",
   "tests/fixtures/expected/simple.gendsp :: simple.gendsp > codebox 1": "pass"
  }
 }
