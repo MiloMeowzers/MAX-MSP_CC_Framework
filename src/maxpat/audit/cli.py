@@ -47,7 +47,7 @@ def _run_merge(args: argparse.Namespace) -> int:
     """
     from src.maxpat.audit.merger import OverrideMerger
 
-    from src.maxpat.audit.merger import OverridesChangedError
+    from src.maxpat.audit.merger import OverridesChangedError, OverridesLoadError
 
     proposed_path = args.output_dir / "proposed-overrides.json"
     overrides_path = (
@@ -119,6 +119,10 @@ def _run_merge(args: argparse.Namespace) -> int:
     print(f"\nMerge summary:")
     print(f"  Total entries in merged overrides: {len(obj_names)}")
     print(f"  Conflicts skipped: {len(conflicts)}")
+    skipped = merger.skipped
+    print(f"  Proposals not merged (no base entry / alias duplicate): {len(skipped)}")
+    for name, reason in sorted(skipped.items()):
+        print(f"    {name}: {reason}")
     print(f"  variable_io_rules proposals pending review: {len(pending_rules)}")
     print(f"  Domain groups: {len(domain_headers)}")
     for header_key in domain_headers:
@@ -137,7 +141,7 @@ def _run_merge(args: argparse.Namespace) -> int:
     if not args.dry_run:
         try:
             written = merger.write(merged)
-        except OverridesChangedError as exc:
+        except (OverridesChangedError, OverridesLoadError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
         if written:

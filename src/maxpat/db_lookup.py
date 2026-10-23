@@ -288,6 +288,9 @@ class ObjectDatabase:
         else:
             db_root = Path(db_root)
 
+        # The directory this database was loaded from (the audit merger's
+        # rehearsal load mirrors it; CR-02).
+        self.db_root: Path = db_root
         self._objects: dict[str, dict] = {}
         self._aliases: dict[str, str] = {}
         self._variable_io_rules: dict[str, dict] = {}
