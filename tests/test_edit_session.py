@@ -455,22 +455,26 @@ def test_contrast_touched_only(tmp_path):
     assert "textcolor" not in base_boxes["obj-85"]
     assert "textcolor" not in base_boxes["obj-92"]
 
+    # Locked decision B11 (261022-ud6 WR-07): only boxes the edit ADDED with
+    # an explicit textcolor are recoloured; comments without a textcolor
+    # (MAX renders them in the theme text colour) never get one, and moved
+    # or presentation-changed boxes keep their colours.
     s = edit_patch(P)
     with s as p:
         c = p.add_comment("touched", 2000, 2000)
+        e = p.add_comment("explicit", 2000, 2100)
+        e.extra_attrs["textcolor"] = [0.3, 0.3, 0.3, 1.0]
         b92 = _box_by_id(p, "obj-92")
         p.modify_box(b92, position=[b92.patching_rect[0] + 10, b92.patching_rect[1]])
         p.add_to_presentation(_box_by_id(p, "obj-85"), [10, 10, 120, 20])
-        new_id = c.id
+        new_id, explicit_id = c.id, e.id
 
     assert s.saved is True
     after = _top_boxes(json.loads(P.read_text()))
-    touched = {new_id, "obj-92", "obj-85"}
-    for box_id in touched:
-        assert "textcolor" in after[box_id], box_id
+    for box_id in (new_id, "obj-92", "obj-85"):
+        assert "textcolor" not in after[box_id], box_id
+    assert after[explicit_id]["textcolor"] != [0.3, 0.3, 0.3, 1.0]
     for box_id, box in base_boxes.items():
-        if box_id in touched:
-            continue
         assert ("textcolor" in after[box_id]) == ("textcolor" in box), box_id
         assert after[box_id].get("textcolor") == box.get("textcolor"), box_id
 

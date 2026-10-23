@@ -46,6 +46,15 @@ _BOX_HANDLED_KEYS = frozenset({
     "saved_object_attributes",
 })
 
+# Non-newobj maxclasses whose text is a "text" attribute: modify_box(args=...)
+# sets it without a maxclass prefix and keeps the box size (261022-ud6 WR-05).
+TEXT_UI_MAXCLASSES = frozenset({"textbutton", "live.text", "live.comment", "textedit"})
+
+# Keys modify_box(extra_attrs=...) refuses: they define the object (WR-06).
+_MODIFY_STRUCTURAL_KEYS = frozenset({
+    "id", "maxclass", "numinlets", "numoutlets", "outlettype", "patcher",
+})
+
 # Patchline keys from_dict maps onto model fields.
 _LINE_HANDLED_KEYS = frozenset({
     "source", "destination", "order", "hidden", "midpoints", "color",
@@ -237,6 +246,10 @@ _IDENTITY_ALWAYS = (
     "hint", "annotation",
 )
 _PARAMETER_KEYS = ("parameter_enable", "parameter_mappable")
+
+# Content families whose embedded patcher replace_box may move between names
+# (review 261022-ud6 CR-01); any other name maps to itself.
+_EMBED_FAMILIES = {"gen~": "gen~", "mc.gen~": "gen~"}
 
 
 class Box:
@@ -488,8 +501,16 @@ class Box:
                         else:
                             d[fld] = cur
 
-            # Overlay mutable fields that Python code may have changed
-            d["patching_rect"] = self.patching_rect
+            # Overlay mutable fields that Python code may have changed. A
+            # file box without patching_rect keeps having none until the
+            # rect changes (review 261022-ud6 IN-01).
+            loaded_rect = getattr(self, "_loaded_rect", None)
+            if not (
+                "patching_rect" not in self._raw
+                and loaded_rect is not None
+                and tuple(self.patching_rect) == loaded_rect
+            ):
+                d["patching_rect"] = self.patching_rect
             d["numinlets"] = self.numinlets
             d["numoutlets"] = self.numoutlets
             if self.text is not None:
@@ -1012,10 +1033,17 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
 
         Changes args, position, color, or extra_attrs.
 
-        ``args`` rules (Q6 / B2 / B3):
+        ``args`` rules (Q6 / B2 / B3; review 261022-ud6 WR-05):
 
         - message/comment boxes: text becomes ``" ".join(args)`` with no
           maxclass prefix; I/O is unchanged.
+        - other text-bearing UI boxes (``TEXT_UI_MAXCLASSES``: textbutton,
+          live.text, live.comment, textedit): text becomes
+          ``" ".join(args)``; I/O and size are unchanged (their size is
+          fixed or user-set).
+        - any other non-newobj maxclass (toggle, umenu, live.dial,
+          bpatcher, inlet, ...): ValueError before anything changes --
+          set its attributes with ``extra_attrs``.
         - content-defined boxes (see ``_io_is_content_defined``: embedded
           patchers, bpatchers, ``CONTENT_DEFINED_NAMES``, names not in the
           DB, and DB objects not marked ``variable_io``): text becomes
@@ -1034,6 +1062,14 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         ``fontname`` / ``fontsize`` / ``presentation`` /
         ``presentation_rect`` are synced onto the box fields.
 
+        Model-field keys in ``extra_attrs`` (WR-06) set the model field, so
+        what layout reads is what is saved: ``patching_rect`` (the box's
+        rect, in place), ``text`` (message, comment and
+        ``TEXT_UI_MAXCLASSES`` boxes only; a newobj's text is its object --
+        use ``args=``) and ``saved_object_attributes``. Keys that define the
+        object (``id``, ``maxclass``, ``numinlets``, ``numoutlets``,
+        ``outlettype``, ``patcher``) raise ValueError.
+
         Args:
             box: The box to modify (must be in this patcher).
             args: New arguments (rules above).
@@ -1045,18 +1081,23 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
             EditResult with the modified box and any orphaned connections.
 
         Raises:
-            ValueError: If box is not in this patcher.
+            ValueError: If box is not in this patcher, if ``args`` is given
+                for a UI maxclass that carries no text, or if
+                ``extra_attrs`` holds a structural key or ``text`` for a
+                box that cannot take it. All are raised before anything
+                changes.
         """
         if box not in self.boxes:
             raise ValueError(
                 f"Box {box.id} not found in this patcher"
             )
+        self._check_modify_request(box, args, extra_attrs)
 
         orphaned: list[dict] = []
 
         if args is not None:
             new_args = list(args)
-            if box.maxclass in ("message", "comment"):
+            if box.maxclass in ("message", "comment") or box.maxclass in TEXT_UI_MAXCLASSES:
                 new_text = " ".join(new_args).strip()
                 recompute = False
             else:
@@ -1078,10 +1119,15 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                         box.name, new_args
                     )
 
-                # Recalculate box size
-                w, h = calculate_box_size(box.text, box.maxclass)
-                box.patching_rect[2] = w
-                box.patching_rect[3] = h
+                # Recalculate box size (text-sized classes only; a text UI
+                # box keeps its fixed or user-set size, WR-05)
+                if box.maxclass not in TEXT_UI_MAXCLASSES:
+                    w, h = calculate_box_size(box.text, box.maxclass)
+                    box.patching_rect[2] = w
+                    box.patching_rect[3] = h
+                elif box._raw is None:
+                    # The creation path writes text-UI text from extra_attrs
+                    box.extra_attrs["text"] = box.text
 
                 # Orphan connections to removed outlets/inlets
                 surviving = []
@@ -1133,6 +1179,24 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                 box.fontname = extra_attrs["fontname"]
             if "fontsize" in extra_attrs:
                 box.fontsize = extra_attrs["fontsize"]
+            # Model fields layout and serialization read (WR-06); never
+            # parked in extra_attrs, where they would shadow the field.
+            extra_attrs = dict(extra_attrs)
+            if "patching_rect" in extra_attrs:
+                box.patching_rect[:] = [float(v) for v in extra_attrs.pop("patching_rect")]
+                if box._raw is not None:
+                    box._raw["patching_rect"] = box.patching_rect
+            if "text" in extra_attrs:
+                box.text = str(extra_attrs.pop("text"))
+                box.args = []
+                if box._raw is not None:
+                    box._raw["text"] = box.text
+                elif box.maxclass in TEXT_UI_MAXCLASSES:
+                    box.extra_attrs["text"] = box.text
+            if "saved_object_attributes" in extra_attrs:
+                box._saved_object_attributes = copy.deepcopy(
+                    extra_attrs.pop("saved_object_attributes")
+                )
             box.extra_attrs.update(extra_attrs)
             if box._raw is not None:
                 # The extra_attrs diff skips model-field keys; keep their
@@ -1143,6 +1207,36 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                         box._raw[k] = v
 
         return EditResult(box=box, orphaned=orphaned)
+
+    @staticmethod
+    def _check_modify_request(box: Box, args, extra_attrs) -> None:
+        """Raise ValueError for a modify_box request it cannot honour (WR-05 /
+        WR-06). Runs before modify_box changes anything."""
+        text_ok = box.maxclass in ("message", "comment") or box.maxclass in TEXT_UI_MAXCLASSES
+        if args is not None and box.maxclass != "newobj" and not text_ok:
+            raise ValueError(
+                f"modify_box(args=...) does not apply to a {box.maxclass!r} box "
+                f"({box.id}): it has no object text. Set its attributes with "
+                f"extra_attrs={{...}} instead."
+            )
+        if not extra_attrs:
+            return
+        bad = [k for k in extra_attrs if k in _MODIFY_STRUCTURAL_KEYS]
+        if bad:
+            raise ValueError(
+                f"modify_box(extra_attrs=...) cannot set {', '.join(sorted(bad))} on "
+                f"{box.id}: these define the object. Use replace_box_safe for a "
+                f"different object, args= for arguments, or the inner patcher API."
+            )
+        if "text" in extra_attrs and not text_ok:
+            raise ValueError(
+                f"modify_box(extra_attrs={{'text': ...}}) on {box.id} "
+                f"({box.maxclass!r}): a newobj's text is its object -- use "
+                f"args=[...] (or replace_box_safe) instead."
+                if box.maxclass == "newobj" else
+                f"modify_box(extra_attrs={{'text': ...}}): a {box.maxclass!r} box "
+                f"({box.id}) has no text."
+            )
 
     def replace_box(
         self,
@@ -1165,8 +1259,22 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         ignoreclick, hint, annotation), colour attributes valid on the new
         object, and the parameter blocks (parameter_enable /
         parameter_mappable, ``saved_attribute_attributes.valueof``) when the
-        new object is parameter-capable. Fonts, size, arguments, I/O and
-        other class settings are not carried.
+        new object is parameter-capable. It also keeps the old box ``id``
+        (review 261022-ud6 WR-02), so cords, ``session.diff`` and the save
+        gate's baseline match keep pointing at it, and its size when the
+        maxclass is unchanged and either a fixed-size UI class (not newobj,
+        message or comment) or the text is unchanged (IN-02). Fonts,
+        arguments and other class settings are not carried; I/O comes from
+        the DB.
+
+        Embedded patchers (CR-01): a box carrying one (gen~ code, a ``p``
+        subpatcher) is replaced only by a name of the same content family
+        -- the same name, or ``gen~`` <-> ``mc.gen~``. The embedded patcher
+        (its ``_parent_box`` back-reference repointed), its
+        ``saved_object_attributes``, the I/O counts and the outlettype move
+        to the new box (``signal`` <-> ``multichannelsignal`` follows the
+        mc.* side). Any other replacement raises ValueError before anything
+        changes, since the embedded code would otherwise be lost.
 
         Inside a ``p``/``patcher`` subpatcher or bpatcher, replacing a port
         box with a port of the same kind leaves the parent box's ports and
@@ -1190,18 +1298,21 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
                 ``p``/``patcher`` (use add_subpatcher) or a UI maxclass with
                 no DB entry (Rule #1; review C4/C5, Q13); or if new_name's
                 domain restriction excludes this patcher's domain_context
-                (Q12 / C3). All are raised before anything changes.
+                (Q12 / C3); or if old_box carries an embedded patcher and
+                new_name is not of its content family (CR-01). All are
+                raised before anything changes.
         """
         if old_box not in self.boxes:
             raise ValueError(
                 f"Box {old_box.id} not found in this patcher"
             )
 
-        # Buildability and domain checks before orphan capture and
-        # remove_box: a refused replacement must leave the patch untouched
-        # (Q12 / C3, Q13).
+        # Buildability, domain and embedded-content checks before orphan
+        # capture and remove_box: a refused replacement must leave the patch
+        # untouched (Q12 / C3, Q13, CR-01).
         self._require_buildable(new_name)
         self._require_domain_scope(new_name)
+        self._require_embedded_compatible(old_box, new_name)
 
         # Capture ALL connections to/from old box as orphaned dicts
         orphaned: list[dict] = []
@@ -1221,6 +1332,8 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         # Identity snapshot (Q29 / B4), taken before remove_box
         old_index = self.boxes.index(old_box)
         old_maxclass = old_box.maxclass
+        old_text = old_box.text
+        old_size = (old_box.patching_rect[2], old_box.patching_rect[3])
         identity = {
             "extra_attrs": copy.deepcopy(old_box.extra_attrs),
             "presentation": bool(old_box.presentation),
@@ -1244,8 +1357,19 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
 
             # Create replacement box at old position (skip overlap -- intentional placement)
             new_box = self.add_box(new_name, args=args, x=old_x, y=old_y, skip_overlap_check=True)
+            # Same id (WR-02): the old box is gone, so its id is free.
+            new_box.id = old_box.id
         finally:
             self._port_sync_suspended = prev_suspended
+
+        self._carry_embedded_content(old_box, new_box)
+
+        # Size (IN-02): a same-class fixed-size UI box, or unchanged text.
+        if new_box.maxclass == old_maxclass and (
+            old_maxclass not in ("newobj", "message", "comment")
+            or new_box.text == old_text
+        ):
+            new_box.patching_rect[2], new_box.patching_rect[3] = old_size
 
         new_kind = new_box.maxclass if new_box.maxclass in ("inlet", "outlet") else None
         parent_orphaned: list[dict] = []
@@ -1258,6 +1382,59 @@ class Patcher(GraphMixin, AnalysisMixin, BuildersMixin):
         self._carry_box_identity(old_box, new_box, old_index, old_maxclass, identity)
 
         return EditResult(box=new_box, orphaned=orphaned, parent_orphaned=parent_orphaned)
+
+    def _require_embedded_compatible(self, old_box: Box, new_name: str) -> None:
+        """Raise ValueError when replacing *old_box* by *new_name* would drop
+        its embedded patcher (review 261022-ud6 CR-01). Mutates nothing."""
+        if getattr(old_box, "_inner_patcher", None) is None:
+            return
+        aliases = self.db._aliases if self.db is not None else {}
+        old_name = aliases.get(old_box.name, old_box.name)
+        new_canon = aliases.get(new_name, new_name)
+        movable = (
+            old_box.maxclass == "newobj"
+            and old_name not in ("p", "patcher")
+            and _EMBED_FAMILIES.get(old_name, old_name)
+            == _EMBED_FAMILIES.get(new_canon, new_canon)
+        )
+        if not movable:
+            raise ValueError(
+                f"replace_box: box {old_box.id} ({old_box.text or old_box.maxclass!r}) "
+                f"carries an embedded patcher (its code or subpatcher content); "
+                f"replacing it with {new_name!r} would lose it. Only the same "
+                f"name, or gen~ <-> mc.gen~, keeps the embedded patcher. Edit "
+                f"the inner patcher (box._inner_patcher) or use "
+                f"modify_box(args=...) instead, or remove_box + add_box "
+                f"explicitly if the content may go."
+            )
+
+    @staticmethod
+    def _carry_embedded_content(old_box: Box, new_box: Box) -> None:
+        """Move an embedded patcher, its saved attributes and I/O (CR-01).
+
+        Runs only after _require_embedded_compatible passed.
+        """
+        inner = getattr(old_box, "_inner_patcher", None)
+        if inner is None:
+            return
+        new_box._inner_patcher = inner
+        inner._parent_box = new_box
+        old_box._inner_patcher = None
+        if old_box._saved_object_attributes is not None:
+            new_box._saved_object_attributes = copy.deepcopy(
+                old_box._saved_object_attributes
+            )
+        new_box.numinlets = old_box.numinlets
+        new_box.numoutlets = old_box.numoutlets
+        to_mc = new_box.name.startswith("mc.")
+        types = []
+        for t in old_box.outlettype or []:
+            if to_mc and t == "signal":
+                t = "multichannelsignal"
+            elif not to_mc and t == "multichannelsignal":
+                t = "signal"
+            types.append(t)
+        new_box.outlettype = types
 
     def _carry_box_identity(
         self,

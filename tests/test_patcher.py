@@ -1386,10 +1386,11 @@ class TestReplaceBox:
         old = p.add_box("cycle~", args=["440"])
         old_id = old.id
         result = p.replace_box(old, "saw~")
-        # Old box should not be in patcher
-        assert all(b.id != old_id for b in p.boxes)
-        # New box should be in patcher
+        # Old box object should not be in patcher
+        assert old not in p.boxes
+        # New box should be in patcher, under the old id (261022-ud6 WR-02)
         assert result.box in p.boxes
+        assert [b.id for b in p.boxes] == [old_id]
 
     def test_replace_removes_all_patchlines(self):
         """All patchlines to/from old box are removed."""

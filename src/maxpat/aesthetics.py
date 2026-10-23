@@ -291,6 +291,52 @@ _FILL_KEYS = ("bgfillcolor", "grad1", "bgcolor")
 # box of one of these with NO fill attribute renders on MAX_THEME_BOX_FILL.
 THEME_FILL_MAXCLASSES = frozenset({"newobj", "message", "umenu"})
 
+# Classes that draw their text straight onto whatever lies beneath them
+# (review 261022-ud6 WR-07). Every other text-bearing class paints its own
+# background (bach.roll's white staff, jit.cellblock, textedit, textbutton,
+# live.* displays, ...).
+TRANSPARENT_TEXT_MAXCLASSES = frozenset({"comment", "live.comment"})
+
+
+def paints_unknown_background(maxclass: str | None, attrs: dict) -> bool:
+    """True when a box paints its own background in a colour we cannot know.
+
+    That is a class outside TRANSPARENT_TEXT_MAXCLASSES and
+    THEME_FILL_MAXCLASSES with no visible fill attribute: e.g. a
+    ``bach.roll`` (white by default), whose explicit textcolor must not be
+    scored against the panel or canvas behind it (WR-07). Contrast passes
+    leave such boxes alone. A box with a visible fill attribute resolves to
+    that fill ("own") and returns False.
+    """
+    if maxclass in TRANSPARENT_TEXT_MAXCLASSES or maxclass in THEME_FILL_MAXCLASSES:
+        return False
+    own = resolve_fill_color(attrs) if isinstance(attrs, dict) else None
+    if own is not None and fill_is_visible(own):
+        return False
+    return maxclass is not None
+
+
+def gradient_stops(attrs: dict) -> list | None:
+    """Both stops of a gradient fill, or None (review 261022-ud6 WR-07).
+
+    Encodings: a ``bgfillcolor`` dict (plain or list-wrapped) with
+    ``type: "gradient"`` and valid ``color1`` / ``color2``; else a panel in
+    gradient ``mode: 1`` with valid ``grad1`` / ``grad2``. Text over a
+    gradient has to read on both ends.
+    """
+    if not isinstance(attrs, dict):
+        return None
+    fill = _unwrap_fill(attrs.get("bgfillcolor"))
+    if isinstance(fill, dict) and fill.get("type") == "gradient":
+        c1, c2 = fill.get("color1"), fill.get("color2")
+        if is_valid_color(c1) and is_valid_color(c2):
+            return [list(c1), list(c2)]
+    if attrs.get("mode") == 1:
+        g1, g2 = attrs.get("grad1"), attrs.get("grad2")
+        if is_valid_color(g1) and is_valid_color(g2):
+            return [list(g1), list(g2)]
+    return None
+
 
 class ResolvedBackground(NamedTuple):
     """A background color plus whether it was FOUND or ASSUMED.
@@ -304,6 +350,21 @@ class ResolvedBackground(NamedTuple):
 
     color: list[float]
     assumed: bool
+
+
+class _GradientBackground(ResolvedBackground):
+    """A ResolvedBackground (``color`` = first stop) that also carries
+    ``stops``, both gradient stops. Built only by
+    ``build_panel_layers(..., gradients=True)``; equal to the plain
+    ResolvedBackground of its first stop."""
+
+
+def _with_stops(color: list[float], assumed: bool, stops) -> ResolvedBackground:
+    if not stops:
+        return ResolvedBackground(list(color), assumed)
+    bg = _GradientBackground(list(color), assumed)
+    bg.stops = [list(s) for s in stops]
+    return bg
 
 
 def _unwrap_fill(value):
@@ -401,8 +462,13 @@ def resolve_patcher_background(props) -> list[float]:
     return list(MAX_THEME_CANVAS_BG)
 
 
-def build_panel_layers(entries) -> tuple[list, list]:
+def build_panel_layers(entries, *, gradients: bool = False) -> tuple[list, list]:
     """Z-ordered panel layers for contrast resolution (Q26 / E7, PD-6).
+
+    ``gradients`` (keyword-only; review 261022-ud6 WR-07): when True, a
+    gradient panel (:func:`gradient_stops`) carries both stops, and
+    :func:`resolve_effective_background` scores text against both. The
+    contrast passes set it; the default keeps the first-stop resolution.
 
     *entries* is an iterable of ``(attrs, patching_rect, presentation,
     presentation_rect)`` for every panel, in box-array order. Returns
@@ -429,7 +495,8 @@ def build_panel_layers(entries) -> tuple[list, list]:
         if found is not None:
             if not fill_is_visible(found):
                 continue
-            bg = ResolvedBackground(list(found), False)
+            stops = gradient_stops(attrs) if gradients else None
+            bg = _with_stops(found, False, stops)
         else:
             bg = ResolvedBackground(list(MAX_DEFAULT_PANEL_BG), True)
         layer = back if attrs.get("background") == 1 else front
@@ -465,7 +532,9 @@ def _bg_under_rect(
         if not _valid_rect(panel_rect):
             continue
         if _point_in_rect(cx, cy, panel_rect):
-            return ResolvedBackground(list(panel_bg.color), panel_bg.assumed)
+            return _with_stops(
+                panel_bg.color, panel_bg.assumed, getattr(panel_bg, "stops", None)
+            )
     return ResolvedBackground(list(fallback), False)
 
 
@@ -545,7 +614,12 @@ def resolve_effective_background(
     if primary is None:
         primary = ResolvedBackground(list(patcher_bg), False)
 
-    candidates = [list(primary.color)]
+    stops = getattr(primary, "stops", None)
+    if stops:
+        # Gradient panel (layers built with gradients=True): both stops.
+        candidates = [list(s) for s in stops]
+    else:
+        candidates = [list(primary.color)]
     if primary.assumed and list(patcher_bg) != list(primary.color):
         candidates.append(list(patcher_bg))
 
@@ -569,7 +643,9 @@ def _set_textcolor(box: Box, color: list[float]) -> None:
     box.extra_attrs["textcolor"] = list(color)
 
 
-def _apply_text_contrast(patcher: Patcher, *, only_ids=None) -> int:
+def _apply_text_contrast(
+    patcher: Patcher, *, only_ids=None, explicit_only: bool = False
+) -> int:
     """Shared engine behind ensure_text_contrast() and repair_text_contrast().
 
     Panel layers and the patcher background come from the same helpers the
@@ -578,19 +654,35 @@ def _apply_text_contrast(patcher: Patcher, *, only_ids=None) -> int:
     from :func:`choose_text_color`; only changed colors are written and
     counted. Returns the number of boxes whose textcolor changed.
 
+    Review 261022-ud6 WR-07:
+
+    - a box that paints its own background in an unknown colour
+      (:func:`paints_unknown_background`: bach.roll, jit.cellblock, a
+      textbutton without a fill, ...) is skipped -- its text sits on its
+      own surface, not on the panel behind it;
+    - over a gradient panel the text is scored against both stops
+      (:func:`gradient_stops`); when no candidate reads on both, an
+      explicit textcolor is kept rather than swapped for another colour
+      that also fails.
+
     ``only_ids`` (private, keyword-only; Q36 / D-03): when not None, only
     top-level boxes whose id is in it are considered; panel layers and the
-    patcher background still come from every panel. It exists for
-    ``edit_patch`` sessions, which set contrast on the boxes they added,
-    moved or put into presentation and never restyle the rest of an
-    approved patch. The public wrappers never pass it.
+    patcher background still come from every panel. ``explicit_only``
+    (private, keyword-only; locked decision B11): only boxes that already
+    carry a ``textcolor`` are considered -- a comment without one renders
+    in MAX's theme text colour and is never given one. ``edit_patch``
+    sessions pass both, with the ids of the boxes the edit added, so an
+    approved patch is never restyled. The public wrappers pass neither.
     """
     panels = [b for b in patcher.boxes if b.maxclass == "panel"]
     patcher_bg = resolve_patcher_background(patcher.props)
 
     patching_layers, presentation_layers = build_panel_layers(
-        (p.extra_attrs, p.patching_rect, p.presentation, p.presentation_rect)
-        for p in panels
+        (
+            (p.extra_attrs, p.patching_rect, p.presentation, p.presentation_rect)
+            for p in panels
+        ),
+        gradients=True,
     )
 
     changed = 0
@@ -599,7 +691,11 @@ def _apply_text_contrast(patcher: Patcher, *, only_ids=None) -> int:
             continue
         if box.maxclass == "panel":
             continue
+        if explicit_only and "textcolor" not in box.extra_attrs:
+            continue
         if not is_text_contrast_target(box.maxclass, box.extra_attrs):
+            continue
+        if paints_unknown_background(box.maxclass, box.extra_attrs):
             continue
 
         resolution = resolve_effective_background(
@@ -614,6 +710,16 @@ def _apply_text_contrast(patcher: Patcher, *, only_ids=None) -> int:
         )
         current = box.extra_attrs.get("textcolor")
         color, _kept = choose_text_color(current, resolution.candidates)
+        if (
+            len(resolution.candidates) > 1
+            and not resolution.assumed
+            and is_valid_color(current)
+            and min(contrast_ratio(color, bg) for bg in resolution.candidates)
+            < MIN_CONTRAST_RATIO
+        ):
+            # Gradient with no colour that reads on both stops: keep the
+            # explicit choice (indeterminate, WR-07).
+            continue
         if current == color:
             continue
         changed += 1

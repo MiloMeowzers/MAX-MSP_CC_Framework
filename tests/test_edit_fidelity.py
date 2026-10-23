@@ -325,7 +325,8 @@ class TestB8GendspRoundTrip:
         before = json.loads(path.read_text())
         cb_id = _codebox(before)["id"]
         out2 = _box_with_text(before, "out 2")
-        result = _quiet_write_gendsp("out1 = in1;\n", path)
+        # Ports shrink only for explicit counts (261022-ud6 WR-08)
+        result = _quiet_write_gendsp("out1 = in1;\n", path, num_inputs=1, num_outputs=1)
         after = json.loads(path.read_text())
 
         assert _box_with_text(after, "out 2") is None
@@ -362,7 +363,10 @@ class TestB8GendspRoundTrip:
         path.write_text(json.dumps(d, indent=2))
         cb_id = _codebox(d)["id"]
 
-        result = _quiet_write_gendsp("out1 = in1;\nout2 = in1;\n", path)
+        # Ports shrink only for explicit counts (261022-ud6 WR-08)
+        result = _quiet_write_gendsp(
+            "out1 = in1;\nout2 = in1;\n", path, num_inputs=1, num_outputs=2
+        )
         after = json.loads(path.read_text())
         assert _box_with_text(after, "in 2") is not None
         assert ((in2["id"], 0), (out2["id"], 0)) in _lines(after)

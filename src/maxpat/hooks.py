@@ -4,8 +4,9 @@ Save gate (fix-plan Q7, review A3 / R1): save_patch_roundtrip and
 write_gendsp run validate_patch on a deepcopy plus review_patch, with one
 cached ObjectDatabase, before anything is written or committed. Blocking
 findings are compared with a baseline -- original_text, else the HEAD
-version of the path, else the file on disk -- and matched by rule template
-plus box ids (never by finding text), so only blockers the save introduces
+version of the path, else the file on disk -- and matched by structured
+rule + box ids + port + path (a normalised text template only for findings
+without them; never by raw finding text), so only blockers the save introduces
 raise PatchValidationError; with no baseline the file is new and every
 blocker refuses. Cords removed compared with HEAD (and original_text) emit
 one SaveGateWarning. A changed x-rank of a subpatcher or abstraction
@@ -136,7 +137,7 @@ def _auto_commit_saved_file(path: Path) -> str | None:
     return commit_hash
 
 
-def _write_and_sync(path: Path, content: str) -> None:
+def _write_and_sync(path: Path, content: str, *, newline: str = "\n") -> None:
     """Write content atomically and fsync it, so Finder/MAX see the change (Q36).
 
     The one writer behind save_patch_roundtrip, write_gendsp and write_js:
@@ -148,8 +149,41 @@ def _write_and_sync(path: Path, content: str) -> None:
     is replaced. The bytes are ``content`` encoded as UTF-8, identical to
     the old text-mode write on POSIX. The file gets a new inode, so extended
     attributes on the old file are dropped.
+
+    ``newline`` (keyword-only, default ``"\\n"``): ``"\\r\\n"`` writes every
+    ``\\n`` of *content* as CRLF (a file MAX saved on Windows; WR-03).
     """
+    if newline != "\n":
+        content = content.replace("\r\n", "\n").replace("\n", newline)
     atomic_write_bytes(Path(path).resolve(), content.encode("utf-8"))
+
+
+def _read_bytes_or_none(path: Path) -> "bytes | None":
+    """The file's bytes, or None when it does not exist or cannot be read."""
+    try:
+        return Path(path).read_bytes()
+    except OSError:
+        return None
+
+
+def _unchanged_on_disk(existing: bytes, output: str, newline: str) -> bool:
+    """True when writing *output* would not change the file's content.
+
+    Byte-equal to what would be written, or equal after universal-newline
+    decoding (how read_patch reads it), so a file with mixed line endings is
+    left alone by a no-op save.
+    """
+    text = output.replace("\r\n", "\n")
+    if newline != "\n":
+        text = text.replace("\n", newline)
+    if existing == text.encode("utf-8"):
+        return True
+    try:
+        decoded = existing.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    norm = decoded.replace("\r\n", "\n").replace("\r", "\n")
+    return norm == output.replace("\r\n", "\n")
 
 
 def finalize_patch(
@@ -190,6 +224,10 @@ def finalize_patch(
     from src.maxpat import layout
 
     if is_new:
+        # Refuse before ANY change (review 261022-ud6 WR-04): auto-styling
+        # must not run on a patch apply_layout is about to refuse.
+        if not force_layout:
+            layout._check_layout_allowed(patcher)
         aesthetics.apply_auto_styling(patcher, contrast=False)
         layout.apply_layout(patcher, force=force_layout)
         aesthetics.ensure_text_contrast(patcher)
@@ -275,18 +313,30 @@ def detect_indent(file_text: str) -> str:
 def format_patch_text(patch_dict: dict, original_text: str | None = None) -> str:
     """Serialize a patch dict in the layout of the file it came from (Q29 / B9).
 
+    - no-op (review 261022-ud6 WR-03): when original_text parses to a dict
+      strictly identical to patch_dict (``maxjson.json_identical``: types,
+      key order, list order), original_text itself is returned, whatever
+      layout or tool wrote it.
+    - layout (``maxjson.detect_layout(original_text)``):
+      * ``legacy`` -- Max 5 to 9.0.x (tab indent, ``"key" : value``):
+        ``maxjson.dumps_legacy``;
+      * ``expanded`` -- the json.dumps layout the framework used to write:
+        ``maxjson.dumps_expanded`` (== json.dumps with the file's indent);
+      * ``max9`` and new files -- MAX 9.1+'s own layout
+        (``maxjson.dumps_max``: short scalar arrays inline).
+    - scalars keep the file's own spelling (``maxjson.RawSpellings``: e.g.
+      ``11.595186999999999``, ``"\\u003b"``); values the edit introduced
+      are spelled by json.dumps.
     - indent: ``detect_indent(original_text)`` when original_text is given,
-      else 4 spaces (MAX's default).
-    - layout: when original_text is given and uses expanded arrays (the
-      json.dumps layout the framework used to write; ``has_expanded_arrays``),
-      the text is ``json.dumps(patch_dict, indent=indent, ensure_ascii=False)``.
-      Otherwise -- MAX-saved files and new files -- it is MAX 9's own layout
-      (``maxjson.dumps_max``: short scalar arrays inline).
-    - a trailing newline is added only when original_text ends with one
-      (MAX writes none).
+      else 4 spaces (MAX's default); legacy is always tabs.
+    - a trailing newline only when original_text ends with one (MAX 9.1+
+      writes none; the legacy layout always ends with one).
+
+    Text uses ``\\n`` newlines; save_patch_roundtrip restores a file's CRLF
+    line endings when it writes.
 
     So a no-op save is byte-identical whichever tool wrote the file last,
-    and MAX's first re-save of a framework-made file shows only real changes.
+    and an edit of any MAX-saved file shows only its real changes.
 
     Args:
         patch_dict: The patch dict (output of Patcher.to_dict()).
@@ -295,19 +345,28 @@ def format_patch_text(patch_dict: dict, original_text: str | None = None) -> str
     Returns:
         The file text.
     """
-    from src.maxpat.maxjson import dumps_max, has_expanded_arrays
+    from src.maxpat import maxjson
 
-    if original_text is not None:
-        indent = detect_indent(original_text)
+    if original_text is None:
+        return maxjson.dumps_max(patch_dict, "    ")  # MAX default: 4 spaces
+
+    text = original_text.replace("\r\n", "\n")
+    try:
+        if maxjson.json_identical(json.loads(text), patch_dict):
+            return original_text
+    except ValueError:
+        pass
+
+    spellings = maxjson.RawSpellings(text)
+    layout = maxjson.detect_layout(text)
+    if layout == "legacy":
+        output = maxjson.dumps_legacy(patch_dict, spellings).rstrip("\n")
+    elif layout == "expanded":
+        output = maxjson.dumps_expanded(patch_dict, detect_indent(text), spellings)
     else:
-        indent = "    "  # MAX default: 4 spaces
+        output = maxjson.dumps_max(patch_dict, detect_indent(text), spellings)
 
-    if original_text is not None and has_expanded_arrays(original_text):
-        output = json.dumps(patch_dict, indent=indent, ensure_ascii=False)
-    else:
-        output = dumps_max(patch_dict, indent)
-
-    if original_text is not None and original_text.endswith("\n"):
+    if text.endswith("\n"):
         output += "\n"
     return output
 
@@ -323,8 +382,11 @@ def save_patch_roundtrip(
 
     For round-trip saves (load -> edit -> save), pass the original file text
     so its indentation, JSON layout and trailing newline are kept
-    (``format_patch_text``; Q29 / B9): a MAX-saved file keeps MAX 9's inline
-    scalar arrays, a file in the framework's expanded layout keeps it, so a
+    (``format_patch_text``; Q29 / B9): a MAX 9.1+ file keeps MAX 9's inline
+    scalar arrays, a Max 5 - 9.0.x file keeps the legacy tab layout and its
+    CRLF line endings, a file in the framework's expanded layout keeps it,
+    and scalars keep the file's own spelling (261022-ud6 WR-03). A save
+    that would not change the file's content does not rewrite it, so a
     no-op save is byte-identical. New files (original_text omitted) are
     written in MAX 9 layout with 4-space indentation.
 
@@ -340,8 +402,9 @@ def save_patch_roundtrip(
     before anything is written, validate_patch (on a deepcopy) and
     review_patch run on the new dict with one cached ObjectDatabase. Their
     blocking findings are compared with the baseline -- original_text, else
-    the HEAD version of the path, else the file on disk -- by rule template
-    plus box ids, never by finding text. Only findings the save introduces
+    the HEAD version of the path, else the file on disk -- by structured
+    rule + box ids (``_finding_key``), never by raw finding text. Only
+    findings the save introduces
     raise PatchValidationError; pre-existing ones save. A new file (no
     baseline) refuses every blocker, and is reviewed with ``is_new=True``
     so a Q24 uninitialized-state finding blocks it (on an edit it is a
@@ -393,8 +456,15 @@ def save_patch_roundtrip(
     # The file's own layout, indent and trailing newline (Q29 / B9)
     output = format_patch_text(patch_dict, original_text)
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _write_and_sync(path, output)
+    # Line endings and the unchanged-file case (261022-ud6 WR-03): a file
+    # MAX saved with CRLF keeps CRLF, and a file whose content would not
+    # change is not rewritten at all, so a no-op save is byte-identical
+    # (mixed line endings included).
+    existing = _read_bytes_or_none(path)
+    newline = "\r\n" if existing is not None and b"\r\n" in existing else "\n"
+    if existing is None or not _unchanged_on_disk(existing, output, newline):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _write_and_sync(path, output, newline=newline)
 
     # Auto-commit to git to prevent work loss (path-scoped; warns on None)
     return _auto_commit_saved_file(path)
@@ -561,9 +631,19 @@ _GATE_WS_RE = re.compile(r"\s+")
 
 
 def _finding_key(result) -> tuple:
-    """Hashable identity of a blocking finding: rule template + box ids + path.
+    """Hashable identity of a blocking finding: rule + box ids + path.
 
-    Finding text is never compared as-is. The key is
+    Finding text is never compared as-is.
+
+    Structured key (fix-plan Q7 / Q33; review 261022-ud6 validation IN-01):
+    when the result carries a non-empty ``rule`` and non-empty ``box_ids``
+    (every CriticResult has the fields; ValidationResult gets them from
+    WP1, read with getattr so either version works), the key is
+    ``(origin, ("rule", rule), sorted box ids + proposed_removal ids,
+    port, proposed_removal, path)``. A reworded message keeps its key.
+
+    Text-template fallback (no rule, or no box ids, which says too little
+    to tell two findings of one rule apart):
     ``(origin, template, ids, proposed_removal, path)``:
 
     - origin: ``("validate", layer, level)`` or ``("review", severity)``;
@@ -577,6 +657,9 @@ def _finding_key(result) -> tuple:
       labelled subpatchers apart: ``[p voice]`` obj-1 and ``[p voice]``
       obj-2 share a template and inner ids, so without it a blocker moved
       from one to the other would match the baseline.
+
+    Box ids stay stable across edits: replace_box keeps the old id
+    (WR-02), so a pre-existing blocker on a replaced box still matches.
     """
     if isinstance(result, ValidationResult):
         origin: tuple = ("validate", result.layer, result.level)
@@ -586,17 +669,25 @@ def _finding_key(result) -> tuple:
         origin = ("review", getattr(result, "severity", None))
         text = getattr(result, "finding", "") or ""
         removal = None
+    path = getattr(result, "path", "") or ""
 
-    ids = set(_GATE_ID_RE.findall(text))
+    removal_ids = set()
     if removal is not None and len(removal) >= 3:
-        ids.add(str(removal[0]))
-        ids.add(str(removal[2]))
+        removal_ids = {str(removal[0]), str(removal[2])}
+
+    rule = getattr(result, "rule", None)
+    box_ids = getattr(result, "box_ids", None)
+    if isinstance(rule, str) and rule and box_ids:
+        sids = tuple(sorted({str(i) for i in box_ids} | removal_ids))
+        return (origin, ("rule", rule), sids, getattr(result, "port", None), removal, path)
+
+    ids = set(_GATE_ID_RE.findall(text)) | removal_ids
 
     template = _GATE_ID_RE.sub("<id>", text)
     template = _GATE_QUOTED_RE.sub("<q>", template)
     template = _GATE_NUM_RE.sub("<n>", template)
     template = _GATE_WS_RE.sub(" ", template).strip()
-    return (origin, template, tuple(sorted(ids)), removal, getattr(result, "path", ""))
+    return (origin, template, tuple(sorted(ids)), removal, path)
 
 
 def _blocking_findings(
@@ -667,9 +758,11 @@ def _parse_patch_text(text: "str | None") -> "dict | None":
 def _iter_patchers(patcher_dict: dict, path: tuple = ()):
     """Yield ``(path, patcher_dict)`` for a patcher and every embedded one.
 
-    A path element is ``(box id, box text or maxclass)``, so a regenerated
-    patch whose ``obj-5`` is now a different subpatcher is not compared
-    port-for-port. Inner ids collide with outer ids, hence the path.
+    A path element is ``(box id, maxclass)`` (review 261022-ud6 WR-01):
+    never the box text, so renaming ``p ctl`` -> ``p ctl x`` in the same
+    save neither bypasses the port x-rank check nor reports every inner
+    cord as removed. Inner ids collide with outer ids, hence the path.
+    Display labels come from :func:`_path_labels`.
     """
     if not isinstance(patcher_dict, dict):
         return
@@ -683,8 +776,33 @@ def _iter_patchers(patcher_dict: dict, path: tuple = ()):
             continue
         inner = box.get("patcher")
         if isinstance(inner, dict):
-            elem = (str(box.get("id", "")), str(box.get("text") or box.get("maxclass") or ""))
+            elem = (str(box.get("id", "")), str(box.get("maxclass") or ""))
             yield from _iter_patchers(inner, path + (elem,))
+
+
+def _path_labels(d: "dict | None") -> dict:
+    """Map patcher path -> display label ``text (id) > text (id)`` for *d*.
+
+    The top level is ``top``; a box without text shows its maxclass.
+    """
+    labels: dict = {(): "top"}
+
+    def walk(patcher_dict, path, label):
+        boxes = patcher_dict.get("boxes") if isinstance(patcher_dict, dict) else None
+        for entry in boxes if isinstance(boxes, list) else []:
+            box = entry.get("box") if isinstance(entry, dict) else None
+            if not isinstance(box, dict) or not isinstance(box.get("patcher"), dict):
+                continue
+            box_id = str(box.get("id", ""))
+            elem = (box_id, str(box.get("maxclass") or ""))
+            text = str(box.get("text") or box.get("maxclass") or "")
+            here = f"{text} ({box_id})"
+            sub = path + (elem,)
+            labels[sub] = here if not label else f"{label} > {here}"
+            walk(box["patcher"], sub, labels[sub])
+
+    walk(_top_patcher(d), (), "")
+    return labels
 
 
 def _top_patcher(d: "dict | None") -> "dict | None":
@@ -761,11 +879,17 @@ def _port_ranks(d: "dict | None") -> dict:
     return ranks
 
 
-def _path_label(path: tuple) -> str:
-    """``top`` for the top level, else ``text (id) > text (id)``."""
+def _path_label(path: tuple, labels: "dict | None" = None) -> str:
+    """``top`` for the top level, else ``text (id) > text (id)``.
+
+    *labels* (from :func:`_path_labels`) gives the box texts; a path it
+    lacks falls back to ``maxclass (id)`` elements.
+    """
     if not path:
         return "top"
-    return " > ".join(f"{text} ({box_id})" for box_id, text in path)
+    if labels and path in labels:
+        return labels[path]
+    return " > ".join(f"{maxclass} ({box_id})" for box_id, maxclass in path)
 
 
 def _gate_report(
@@ -810,6 +934,7 @@ def _gate_report(
         # and its new rank differs from its rank in every reference.
         new_ranks = _port_ranks(new_dict)
         ref_ranks = [_port_ranks(r) for r in ref_dicts]
+        labels = _path_labels(new_dict)
         for key in sorted(new_ranks):
             if not all(key in rr for rr in ref_ranks):
                 continue
@@ -817,7 +942,8 @@ def _gate_report(
             if all(rr[key] != new_rank for rr in ref_ranks):
                 path, kind, box_id = key
                 port_changes.append(
-                    f"{_path_label(path)}: {kind} {box_id} rank {ref_ranks[0][key]} -> {new_rank}"
+                    f"{_path_label(path, labels)}: {kind} {box_id} rank "
+                    f"{ref_ranks[0][key]} -> {new_rank}"
                 )
 
     return GateReport(new_blockers, removed_cords, port_changes)
@@ -878,6 +1004,10 @@ def _run_save_gate(
         else:
             against = ref_labels[0]
         new_ids = _box_ids(patch_dict)
+        labels: dict = {}
+        for _, ref in refs:
+            labels.update(_path_labels(ref))
+        labels.update(_path_labels(patch_dict))
         n = len(report.removed_cords)
         cord_lines = [f"{path}: {n} cord(s) removed compared with {against}:"]
         for cpath, src, outlet, dst, inlet in report.removed_cords[:10]:
@@ -885,7 +1015,9 @@ def _run_save_gate(
             mark = ""
             if src not in ids_here or dst not in ids_here:
                 mark = " (endpoint box deleted)"
-            cord_lines.append(f"  {_path_label(cpath)}/{src}:{outlet} -> {dst}:{inlet}{mark}")
+            cord_lines.append(
+                f"  {_path_label(cpath, labels)}/{src}:{outlet} -> {dst}:{inlet}{mark}"
+            )
         if n > 10:
             cord_lines.append(f"  ... and {n - 10} more")
         warnings.warn("\n".join(cord_lines), SaveGateWarning, stacklevel=3)
@@ -933,6 +1065,28 @@ def _gen_port_index(box) -> "tuple[str, int] | None":
     return tokens[0], int(tokens[1])
 
 
+def _shift_right_off_overlap(patcher: "Patcher", box, step: float = 40.0) -> None:
+    """Move *box* right in *step* px until its rendered rect, padded by 5 px,
+    overlaps no other box (at most 200 steps). Never moves it up or down."""
+    from src.maxpat.sizing import rendered_rect
+
+    def rect(b):
+        r = rendered_rect(b)
+        return r if r is not None else b.patching_rect
+
+    others = [rect(b) for b in patcher.boxes if b is not box]
+    for _ in range(200):
+        x, y, w, h = rect(box)[:4]
+        hit = any(
+            x - 5 < o[0] + o[2] and o[0] < x + w + 5
+            and y - 5 < o[1] + o[3] and o[1] < y + h + 5
+            for o in others
+        )
+        if not hit:
+            return
+        box.patching_rect[0] += step
+
+
 def _edit_gendsp_in_place(
     patcher: "Patcher",
     path: Path,
@@ -957,30 +1111,45 @@ def _edit_gendsp_in_place(
         )
     cb = codeboxes[0]
 
-    if num_inputs is None or num_outputs is None:
-        det_in, det_out = parse_genexpr_io(code)
-        n_in = det_in if num_inputs is None else num_inputs
-        n_out = det_out if num_outputs is None else num_outputs
-    else:
-        n_in, n_out = num_inputs, num_outputs
+    # Auto-detected counts never shrink the file's ports (review 261022-ud6
+    # WR-08): code that stops reading in2 keeps ``in 2`` and the parent
+    # gen~'s inlet 1. Ports are removed only for explicit counts.
+    det_in, det_out = parse_genexpr_io(code)
+    existing_in = max(
+        [cb.numinlets or 0]
+        + [pl.dest_inlet + 1 for pl in patcher.lines if pl.dest_id == cb.id]
+    )
+    existing_out = max(
+        [cb.numoutlets or 0]
+        + [pl.source_outlet + 1 for pl in patcher.lines if pl.source_id == cb.id]
+    )
+    n_in = num_inputs if num_inputs is not None else max(det_in, existing_in)
+    n_out = num_outputs if num_outputs is not None else max(det_out, existing_out)
 
-    # Code and I/O counts (tracked fields; Q28 writes them back on save)
-    cb.extra_attrs["code"] = code
-    cb.numinlets = n_in
-    cb.numoutlets = n_out
-    cb.outlettype = [""] * n_out
+    # Code and I/O counts (tracked fields; Q28 writes them back on save).
+    # Only changed values are written, so unchanged code is a true no-op.
+    if cb.extra_attrs.get("code") != code:
+        cb.extra_attrs["code"] = code
+    if cb.numinlets != n_in:
+        cb.numinlets = n_in
+    if cb.numoutlets != n_out or len(cb.outlettype or []) != n_out:
+        types = list(cb.outlettype or [])[:n_out]
+        cb.outlettype = types + [""] * (n_out - len(types))
+        cb.numoutlets = n_out
 
     orphaned: list[dict] = []
     targets = {"in": n_in, "out": n_out}
+    explicit = {"in": num_inputs is not None, "out": num_outputs is not None}
 
-    # Surplus port boxes: remove only when they touch nothing but the codebox
+    # Surplus port boxes: remove only for an explicit count, and only when
+    # they touch nothing but the codebox
     ports: dict[str, dict[int, object]] = {"in": {}, "out": {}}
     for box in list(patcher.boxes):
         info = _gen_port_index(box)
         if info is None:
             continue
         kind, idx = info
-        if idx > targets[kind]:
+        if idx > targets[kind] and explicit[kind]:
             touching = [
                 pl for pl in patcher.lines
                 if pl.source_id == box.id or pl.dest_id == box.id
@@ -1007,8 +1176,11 @@ def _edit_gendsp_in_place(
                 continue
             x = next_x if next_x is not None else 50.0 + (k - 1) * 80.0
             box = patcher.add_box(kind, [str(k)], x, row_y, skip_overlap_check=True)
+            # Step right along the port row past any box it would cover
+            # (review 261022-ud6 IN-06).
+            _shift_right_off_overlap(patcher, box)
             if next_x is not None:
-                next_x += 80.0
+                next_x = box.patching_rect[0] + 80.0
             ports[kind][k] = box
             if kind == "in":
                 patcher.add_connection(box, 0, cb, k - 1)
@@ -1047,13 +1219,21 @@ def write_gendsp(
     the file first to regenerate it, or edit it with read_patch + the
     Patcher API + save_patch_roundtrip). Only these change:
 
-    - the codebox ``code``, numinlets, numoutlets and outlettype;
-    - missing ``in N`` / ``out N`` boxes are added, wired to the codebox;
-    - surplus ``in N`` / ``out N`` boxes (N above the new count) are removed
-      when every cord touching them goes to the codebox (or they have no
-      cords); a surplus port that also feeds the user's own gen graph is
-      kept;
-    - cords on codebox inlets/outlets the new code lacks are removed.
+    - the codebox ``code``, numinlets, numoutlets and outlettype, each only
+      when it changes (so the file's own code is a true no-op: nothing
+      written, nothing committed);
+    - port counts: an explicit ``num_inputs`` / ``num_outputs`` is used as
+      given; an auto-detected count never goes below the file's existing
+      count (the codebox's numinlets / numoutlets or its highest wired
+      port; review 261022-ud6 WR-08), so code that stops reading ``in2``
+      keeps ``in 2`` and the parent gen~'s inlet;
+    - missing ``in N`` / ``out N`` boxes are added, wired to the codebox,
+      on the port row, stepped right past any box they would cover (IN-06);
+    - with an explicit count only, surplus ``in N`` / ``out N`` boxes (N
+      above it) are removed when every cord touching them goes to the
+      codebox (or they have no cords); a surplus port that also feeds the
+      user's own gen graph is kept, and cords on codebox inlets/outlets
+      above the count are removed.
 
     Every other box, position, comment, cord and patcher property is kept.
     The result is saved through save_patch_roundtrip with the file's text

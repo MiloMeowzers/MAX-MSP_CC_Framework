@@ -40,8 +40,8 @@ Before any generation:
 - `Patcher.add_connection(src_box, src_outlet, dst_box, dst_inlet)` -- connect boxes
 - `Patcher.add_subpatcher(name, inlets=1, outlets=1, x=0.0, y=0.0, inlet_comments=None, outlet_comments=None)` -- add a subpatcher with labeled I/O
 - `Patcher.populate_assistance_comments()` -- auto-fill empty inlet/outlet comments from connection context
-- `finalize_patch(patcher, is_new=True)` -- single-call layout cleanup: styling, layout, comments, midpoints (new); midpoints + comments (edit)
-- `apply_layout(patcher, options=None)` -- row-based topological layout positioning (accepts LayoutOptions)
+- `finalize_patch(patcher, is_new=True, force_layout=False)` -- single-call layout cleanup: styling, layout, comments, midpoints (new); midpoints + comments (edit). With `is_new=True` it raises `LayoutRefusedError` (from `src.maxpat.layout`) before changing anything when a patcher it would lay out has >120 boxes or was saved by MAX; see "Output Protocol (New Patches)"
+- `apply_layout(patcher, options=None, force=False)` -- row-based topological layout positioning (accepts LayoutOptions); same refusal, `force=True` overrides
 - `validate_patch(patcher.to_dict(), db=patcher.db)` -- run four-layer validation pipeline
 - `save_patch_roundtrip(patcher.to_dict(), path)` -- write .maxpat to disk
 - `Patcher.add_comment(text, x, y)` -- add a comment box (for inline annotations, critic notes)
@@ -212,7 +212,10 @@ Structured workflow blueprints for generating working package patches. Each temp
 ## Output Protocol (New Patches)
 
 1. Create Patcher and build patch structure
-2. Finalize patch: `finalize_patch(patcher, is_new=True)` -- applies styling, layout, assistance comments, and midpoint generation for all patchers and subpatchers
+2. Finalize patch: `finalize_patch(patcher, is_new=True)` -- applies styling, layout, assistance comments, and midpoint generation for all patchers and subpatchers.
+   - **LayoutRefusedError** (`from src.maxpat.layout import LayoutRefusedError`, a `ValueError`): raised when the patcher, or any subpatcher the layout recurses into, has more than 120 boxes or was saved by MAX. Nothing has changed when it is raised (no styling, no moves).
+   - Large NEW build (every box made by this build): call `finalize_patch(patcher, is_new=True, force_layout=True)`.
+   - A build that embeds a MAX-saved patcher or edits a file from disk: never force. Use `finalize_patch(patcher, is_new=False)` (or `edit_patch(path)`), which never repositions existing boxes.
 3. Serialize and validate a copy: `patch_dict = patcher.to_dict()`, then `results = validate_patch(copy.deepcopy(patch_dict), db=patcher.db)`. Validation never mutates its input; the deepcopy is defense in depth.
 4. Proposed removals mean inspect, don't save. If `has_blocking_errors(results, is_new=True)` is True, or any result has `proposed_removal` set, do NOT save. Inspect each `(src_id, outlet, dst_id, inlet)`: a real wiring mistake -> fix the build and re-validate; a validator false positive -> keep the cord and report the checker gap. Call `apply_fixes(patch_dict, results)` only when removal is explicitly wanted, then re-validate.
 5. Return `(patch_dict, results)` tuple for critic review

@@ -18,7 +18,10 @@ non-structural key), ``presentation`` (the flag and presentation_rect),
 ``subpatcher_added`` / ``subpatcher_removed`` (only one side embeds a
 patcher). Per level: ``box_added`` / ``box_removed``, ``cord_added`` /
 ``cord_removed`` (``(src, outlet, dst, inlet)`` multiset),
-``cord_rerouted`` (midpoints differ), ``props`` (patcher-level keys) and
+``cord_rerouted`` (midpoints differ), ``cord_attrs`` (sorted patchline keys
+other than source / destination / midpoints whose presence or value
+differs: order, hidden, color, ...; review 261022-ud6 IN-03), ``props``
+(patcher-level keys) and
 ``zorder`` (the common boxes' order changed).
 
 Recursion (D-07): the diff descends into every box that embeds a patcher on
@@ -57,9 +60,14 @@ DIFF_KINDS: tuple = (
     "cord_added",
     "cord_removed",
     "cord_rerouted",
+    "cord_attrs",
     "props",
     "zorder",
 )
+
+# Patchline keys never reported as cord_attrs: identity and midpoints
+# (``cord_rerouted``).
+_CORD_STRUCTURAL_KEYS = frozenset({"source", "destination", "midpoints"})
 
 _LABEL_MAX = 40
 _TEXT_MAX = 60
@@ -216,6 +224,8 @@ def _render_entry(e: DiffEntry) -> str:
         return f"- cord {w}{e.label}"
     if kind == "cord_rerouted":
         return f"~ cord {w}{e.label} rerouted"
+    if kind == "cord_attrs":
+        return f"~ cord {w}{e.label} attrs {','.join(e.new or ())}"
     if kind == "props":
         return f"~ {w}patcher props {','.join(e.new or ())}"
     if kind == "zorder":
@@ -437,6 +447,9 @@ def _diff_level(path: tuple, where: str, old_p: dict, new_p: dict,
         omid, nmid = _midpoints(old_first[key]), _midpoints(pl)
         if omid != nmid:
             add("cord_rerouted", None, _cord_label(key), omid, nmid)
+        ckeys = _changed_keys(old_first[key], pl, _CORD_STRUCTURAL_KEYS)
+        if ckeys:
+            add("cord_attrs", None, _cord_label(key), None, ckeys)
 
     props = _changed_keys(old_p, new_p, frozenset({"boxes", "lines"}))
     if props:

@@ -1396,7 +1396,8 @@ class TestModifyPreservesRoundTrip:
         original = _load_project_patch("kicksynth/generated/kicksynth.maxpat")
         p = Patcher.from_dict(original)
 
-        target = p.boxes[0]
+        # args apply to object text; a UI box refuses them (261022-ud6 WR-05)
+        target = next(b for b in p.boxes if b.maxclass == "newobj")
         target_id = target.id
         other_boxes_before = [
             b.to_dict() for b in p.boxes if b.id != target_id
