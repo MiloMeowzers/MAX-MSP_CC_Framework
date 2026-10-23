@@ -831,7 +831,7 @@ Results are saved by `save_test_results(project_dir, test_name, ...)` to `test-r
 
 ## Test Suite
 
-The project includes 7,504 tests across 134 test files covering all modules (`python3 -m pytest --collect-only -q`; 6.0.0). Run with:
+The project includes 7,509 tests across 134 test files covering all modules (`python3 -m pytest --collect-only -q`; 6.0.0). Run with:
 
 ```bash
 python3 -m pytest tests/ -v

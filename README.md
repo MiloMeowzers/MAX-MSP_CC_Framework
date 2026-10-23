@@ -212,7 +212,7 @@ MAX-MSP_CC_Framework/
 │   └── commands/           # Slash command definitions
 ├── src/maxpat/             # Python editing, validation, and analysis engine (~40,800 LOC)
 ├── tools/                  # DB audit/sync tools, max-bridge client + bridge patch (tools/max_bridge/)
-├── tests/                  # Test suite (7,504 tests)
+├── tests/                  # Test suite (7,509 tests)
 ├── patches/                # Your projects live here
 │   ├── .active-project.json
 │   └── {project-name}/
