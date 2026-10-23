@@ -64,6 +64,7 @@ _INDEX_MODULES = (
     "src.maxpat.testing",
     "src.maxpat.m4l_polish",
     "src.maxpat.diagnose",
+    "src.maxpat.m4l_device",
 )
 
 

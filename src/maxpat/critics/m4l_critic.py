@@ -25,6 +25,18 @@ signal path to plugout~, ezdac~, parameter_enable, empty longname, missing
 info text) run on every non-gen scope of the shared
 :class:`src.maxpat.graph.PatchGraph`; nested findings carry
 ``CriticResult.path`` and a ``[p synth] `` prefix.
+
+Q40 device checks (quick 261022-pqu) -- EXPERIMENTAL, not yet confirmed in
+Live, so every one is a warning or a note and none blocks a save:
+  - per scope (tagged like the checks above): ``stereo_out`` (a bare
+    plugout~ fed on only one inlet), ``midi_passthrough`` (midi_effect only:
+    a midiin with no outgoing cord or a midiout with no incoming one),
+    ``shortname_length`` (note: shortname over 8 characters),
+    ``int_param_range`` (Int type spanning more than 256 values),
+    ``param_range`` (mmin >= mmax, or parameter_initial outside the range);
+  - device level (once, at the top): ``shortname_unique``, ``bank_refs``
+    (a parameterbanks slot naming no device parameter), ``device_height``
+    (a presentation box below Live's 169 px device height).
 """
 
 from __future__ import annotations
@@ -159,6 +171,16 @@ def review_m4l(
         results.extend(_check_missing_info_text(_scope_boxes(top)))
     results.extend(_check_missing_live_banks([b for s in scopes for b in _scope_boxes(s)]))
 
+    # Q40 (EXPERIMENTAL, non-blocking): per-scope checks on the top level,
+    # then the device-level ones.
+    if top_is_device:
+        results.extend(_q40_scope_checks(top, device_type))
+    results.extend(_check_shortname_unique(graph))
+    results.extend(_check_bank_refs(
+        top.patcher, {ln for ln, _ref, status in all_params if status == "ok"}
+    ))
+    results.extend(_check_device_height(top.patcher, _scope_boxes(top) if top_is_device else []))
+
     for scope in scopes:
         if scope is top:
             continue
@@ -168,6 +190,7 @@ def review_m4l(
         found.extend(_check_empty_longnames(scope))
         found.extend(_check_parameter_enable(boxes))
         found.extend(_check_missing_info_text(boxes))
+        found.extend(_q40_scope_checks(scope, device_type))
         results.extend(tag_results(found, scope.path))
 
     return results
@@ -502,3 +525,262 @@ def _check_missing_live_banks(
         )]
 
     return []
+
+
+# ---------------------------------------------------------------------------
+# Q40 device checks (quick 261022-pqu) -- EXPERIMENTAL, all non-blocking
+# ---------------------------------------------------------------------------
+
+# Live's device view is 169 px tall (Live 12 template openrect [0, 0, 0, 169]
+# and its "Device vertical limit" comment at y 170).
+_DEVICE_HEIGHT = 169.0
+# parameters.maxref.xml Short Name: about 5-7 characters fit; the builder
+# and polish abbreviate to 8.
+_SHORTNAME_MAX = 8
+# parameters.maxref.xml Type: the Int type holds 256 values.
+_INT_TYPE_MAX_SPAN = 255
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _valueof(box: dict):
+    """saved_attribute_attributes.valueof of a box, or None when malformed."""
+    saa = box.get("saved_attribute_attributes")
+    if not isinstance(saa, dict):
+        return None
+    valueof = saa.get("valueof")
+    return valueof if isinstance(valueof, dict) else None
+
+
+def _param_valueofs(boxes: list):
+    """(box_id, valueof) for parameter-capable live.* boxes with a valueof dict."""
+    for box in boxes:
+        if walk.box_maxclass(box) not in LIVE_PARAMETER_OBJECTS:
+            continue
+        valueof = _valueof(box)
+        if valueof is not None:
+            yield box.get("id", "?"), valueof
+
+
+def _q40_scope_checks(scope, device_type: str) -> list[CriticResult]:
+    """The Q40 per-scope checks for one scope, in a fixed order."""
+    boxes = _scope_boxes(scope)
+    found: list[CriticResult] = []
+    found.extend(_check_stereo_out(scope))
+    found.extend(_check_midi_passthrough(scope, device_type))
+    found.extend(_check_shortname_length(boxes))
+    found.extend(_check_int_param_range(boxes))
+    found.extend(_check_param_range(boxes))
+    return found
+
+
+def _check_stereo_out(scope) -> list[CriticResult]:
+    """A bare plugout~ that gets signal on only one of its two inlets.
+
+    A bare ``plugout~`` is the stereo pair; feeding one inlet leaves the
+    other channel silent (Q15 D3: a mono source feeds inlets 0 AND 1). A
+    plugout~ with channel arguments, or with no signal cord at all (Live's
+    instrument template), is not checked.
+    """
+    results: list[CriticResult] = []
+    for box in scope.box_list:
+        text = box.get("text")
+        if not (isinstance(text, str) and text.strip() == "plugout~"):
+            continue
+        box_id = box.get("id")
+        fed = {e.inlet for e in scope.edges if e.dst == box_id and e.signal and e.inlet in (0, 1)}
+        if len(fed) != 1:
+            continue
+        inlet = next(iter(fed))
+        results.append(CriticResult(
+            "warning",
+            f"plugout~ ({box_id}) receives signal on inlet {inlet} only -- the "
+            f"other channel is silent",
+            "Feed both plugout~ inlets: a mono source goes to inlet 0 AND "
+            "inlet 1; a stereo source sends L to 0 and R to 1",
+            rule="stereo_out",
+            box_ids=finding_ids(box_id),
+        ))
+    return results
+
+
+def _check_midi_passthrough(scope, device_type: str) -> list[CriticResult]:
+    """midi_effect only: a midiin with no outgoing cord, a midiout with no incoming one.
+
+    Live's MIDI Effect template wires midiin -> midiout; a MIDI effect that
+    cuts the path blocks the track's MIDI.
+    """
+    if device_type != "midi_effect":
+        return []
+    results: list[CriticResult] = []
+    sources = {e.src for e in scope.edges}
+    dests = {e.dst for e in scope.edges}
+    for box in scope.box_list:
+        name = walk.box_name(box)
+        box_id = box.get("id")
+        if name == "midiin" and box_id not in sources:
+            finding = (f"midiin ({box_id}) has no outgoing cord -- the MIDI "
+                       f"effect does not pass the track's MIDI on")
+        elif name == "midiout" and box_id not in dests:
+            finding = (f"midiout ({box_id}) has no incoming cord -- the MIDI "
+                       f"effect sends no MIDI to the track")
+        else:
+            continue
+        results.append(CriticResult(
+            "warning",
+            finding,
+            "Wire midiin through your processing (or directly) into midiout, "
+            "as Live's MIDI Effect template does",
+            rule="midi_passthrough",
+            box_ids=finding_ids(box_id),
+        ))
+    return results
+
+
+def _check_shortname_length(boxes: list) -> list[CriticResult]:
+    """Note: a parameter shortname longer than 8 characters (Push / device title)."""
+    results: list[CriticResult] = []
+    for box_id, valueof in _param_valueofs(boxes):
+        short = valueof.get("parameter_shortname")
+        if isinstance(short, str) and len(short) > _SHORTNAME_MAX:
+            results.append(CriticResult(
+                "note",
+                f"parameter_shortname '{short}' ({box_id}) is {len(short)} "
+                f"characters -- Live shows about 5-7",
+                f"Shorten parameter_shortname to {_SHORTNAME_MAX} characters "
+                f"or fewer",
+                rule="shortname_length",
+                box_ids=finding_ids(box_id),
+            ))
+    return results
+
+
+def _check_int_param_range(boxes: list) -> list[CriticResult]:
+    """An Int-type parameter whose range spans more than 256 values."""
+    results: list[CriticResult] = []
+    for box_id, valueof in _param_valueofs(boxes):
+        ptype = valueof.get("parameter_type")
+        mn = valueof.get("parameter_mmin")
+        mx = valueof.get("parameter_mmax")
+        if not (_is_number(ptype) and ptype == 1 and _is_number(mn) and _is_number(mx)):
+            continue
+        if mx - mn > _INT_TYPE_MAX_SPAN:
+            results.append(CriticResult(
+                "warning",
+                f"Int parameter ({box_id}) spans {mn}..{mx} -- Live's Int type "
+                f"holds 256 values, so the range is clipped",
+                "Set parameter_type to Float (0) and parameter_unitstyle to "
+                "Int (0) for wide integer ranges",
+                rule="int_param_range",
+                box_ids=finding_ids(box_id),
+            ))
+    return results
+
+
+def _check_param_range(boxes: list) -> list[CriticResult]:
+    """mmin >= mmax, or a parameter_initial outside [mmin, mmax]."""
+    results: list[CriticResult] = []
+    for box_id, valueof in _param_valueofs(boxes):
+        mn = valueof.get("parameter_mmin")
+        mx = valueof.get("parameter_mmax")
+        if not (_is_number(mn) and _is_number(mx)):
+            continue
+        if mn >= mx:
+            finding = f"Parameter ({box_id}) has mmin {mn} >= mmax {mx}"
+        else:
+            initial = valueof.get("parameter_initial")
+            first = initial[0] if isinstance(initial, list) and initial else None
+            if not _is_number(first) or mn <= first <= mx:
+                continue
+            finding = (f"Parameter ({box_id}) parameter_initial {first} is outside "
+                       f"its range {mn}..{mx}")
+        results.append(CriticResult(
+            "warning",
+            finding,
+            "Set parameter_mmin < parameter_mmax and an initial value inside "
+            "the range",
+            rule="param_range",
+            box_ids=finding_ids(box_id),
+        ))
+    return results
+
+
+def _check_shortname_unique(graph: PatchGraph) -> list[CriticResult]:
+    """Duplicate parameter_shortname across the device (every non-gen scope)."""
+    results: list[CriticResult] = []
+    seen: dict[str, str] = {}
+    for scope in _device_scopes(graph):
+        for box_id, valueof in _param_valueofs(_scope_boxes(scope)):
+            short = valueof.get("parameter_shortname")
+            if not isinstance(short, str) or not short.strip():
+                continue
+            ref = f"{scope.key}/{box_id}" if scope.key else box_id
+            if short in seen:
+                results.append(CriticResult(
+                    "warning",
+                    f"Duplicate parameter_shortname '{short}' in boxes "
+                    f"'{seen[short]}' and '{ref}' -- Live and Push show the "
+                    f"two parameters with the same label",
+                    f"Give one of the '{short}' parameters a distinct "
+                    f"parameter_shortname",
+                    rule="shortname_unique",
+                    box_ids=finding_ids(*seen[short].split("/"), *ref.split("/")),
+                ))
+            else:
+                seen[short] = ref
+    return results
+
+
+def _check_bank_refs(patcher: dict, longnames: set) -> list[CriticResult]:
+    """parameterbanks slots that name no parameter longname of the device."""
+    parameters = patcher.get("parameters") if isinstance(patcher, dict) else None
+    banks = parameters.get("parameterbanks") if isinstance(parameters, dict) else None
+    if not isinstance(banks, dict):
+        return []
+    missing: list[str] = []
+    for bank in banks.values():
+        slots = bank.get("parameters") if isinstance(bank, dict) else None
+        if not isinstance(slots, list):
+            continue
+        for slot in slots:
+            if isinstance(slot, str) and slot != "-" and slot not in longnames and slot not in missing:
+                missing.append(slot)
+    if not missing:
+        return []
+    names = ", ".join(f"'{m}'" for m in missing)
+    return [CriticResult(
+        "warning",
+        f"parameterbanks name parameters that are not in the device: {names}",
+        "Remove the stale slots (use \"-\") or rename them to existing "
+        "parameter_longname values",
+        rule="bank_refs",
+    )]
+
+
+def _check_device_height(patcher: dict, boxes: list) -> list[CriticResult]:
+    """Presentation boxes that end below Live's 169 px device height."""
+    if not isinstance(patcher, dict) or not patcher.get("openinpresentation"):
+        return []
+    over: list[str] = []
+    for box in boxes:
+        if not box.get("presentation"):
+            continue
+        rect = box.get("presentation_rect")
+        if not (isinstance(rect, list) and len(rect) == 4 and all(_is_number(v) for v in rect)):
+            continue
+        if rect[1] + rect[3] > _DEVICE_HEIGHT:
+            over.append(box.get("id", "?"))
+    if not over:
+        return []
+    ids = finding_ids(*over)
+    return [CriticResult(
+        "warning",
+        f"Presentation boxes end below Live's {int(_DEVICE_HEIGHT)} px device "
+        f"height and are clipped: {', '.join(ids) or '?'}",
+        f"Keep every presentation_rect bottom at or above y "
+        f"{int(_DEVICE_HEIGHT)}",
+        rule="device_height",
+        box_ids=ids,
+    )]

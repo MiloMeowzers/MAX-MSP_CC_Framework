@@ -208,7 +208,7 @@ Inside a subpatcher from `add_subpatcher()`, get inlet/outlet boxes by index wit
 
 **Experimental:** not yet confirmed in MAX or Live.
 
-> Codified (synth skeleton): `Patcher.add_m4l_gen_synth(params)` (Phase 31). The rules below still apply; the builder enforces them by construction.
+> Codified (EXPERIMENTAL, unconfirmed in Live; the combined Q15/Q40 Live check is pending): `Patcher.add_m4l_device(kind, params)` (Q40; kind `instrument` / `audio_effect` / `midi_effect`) builds the skeleton: Live-template wiring, the `live.thisdevice` init chain, `live.dial` params with unit/type inferred from range and name (explicit keys win), unique short names and Push `parameterbanks`. `Patcher.add_m4l_gen_synth(params)` (Phase 31) is built on it. Save the .maxpat (the source of truth), then `export_amxd(maxpat_path)` from `src.maxpat.m4l_device` writes the .amxd next to it. The rules below still apply.
 
 - **No `gain~` / `live.gain~` / `ezdac~` before `plugout~`.** Route the final stage directly to `plugout~`; Ableton's mixer handles volume, pan and mute (`gain~` defaults to 0, silence on load).
 - **`live.dial` / `live.slider` bind to gen~ Params via `param_connect`, not message-box patching:** `param_connect: "<gen~_varname>::<param_name>"`, `parameter_enable: 1` and the `saved_attribute_attributes.valueof` block (keys in the `add_m4l_gen_synth` docstring). The gen~ needs a stable `varname` matching the prefix; no patch cord -- `param_connect` IS the binding.

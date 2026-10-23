@@ -887,3 +887,298 @@ def test_gen_synth_duplicate_name_now_raises():
     with pytest.raises(ValueError):
         p.add_m4l_gen_synth([("freq", 20.0, 20.0)])
     assert p.boxes == []
+
+
+# ===========================================================================
+# Task 3: Q40 M4L critic rules (EXPERIMENTAL; all non-blocking)
+# ===========================================================================
+
+from src.maxpat.critics.m4l_critic import review_m4l  # noqa: E402
+
+Q40_RULES = (
+    "stereo_out", "midi_passthrough", "shortname_length", "int_param_range", "param_range",
+    "shortname_unique", "bank_refs", "device_height",
+)
+
+
+# --- dict helpers (copied from tests/test_critics_recursive.py, not imported) ---
+
+
+def _box(box_id, text, n_in=1, n_out=1, maxclass="newobj", outlettype=None, **extra):
+    box = {
+        "id": box_id,
+        "maxclass": maxclass,
+        "numinlets": n_in,
+        "numoutlets": n_out,
+        "outlettype": outlettype if outlettype is not None else [""] * n_out,
+        "patching_rect": [10.0, 10.0, 80.0, 22.0],
+    }
+    if text is not None:
+        box["text"] = text
+    box.update(extra)
+    return {"box": box}
+
+
+def _line(src, outlet, dst, inlet):
+    return {"patchline": {"source": [src, outlet], "destination": [dst, inlet]}}
+
+
+def _inner(boxes=None, lines=None, **keys):
+    d = {"boxes": boxes if boxes is not None else [], "lines": lines if lines is not None else []}
+    d.update(keys)
+    return d
+
+
+def _container(box_id, text, inner, n_in=1, n_out=1, maxclass="newobj", **extra):
+    entry = _box(box_id, text, n_in=n_in, n_out=n_out, maxclass=maxclass, **extra)
+    entry["box"]["patcher"] = inner
+    return entry
+
+
+def _patch(boxes=None, lines=None, **keys):
+    return {"patcher": _inner(boxes, lines, **keys)}
+
+
+def _plugout(box_id="obj-90", text="plugout~"):
+    return _box(box_id, text, 2, 2, outlettype=["signal", "signal"])
+
+
+def _osc(box_id="obj-80"):
+    return _box(box_id, "cycle~ 220", 2, 1, outlettype=["signal"])
+
+
+def _pdial(box_id, longname="Cutoff", **valueof):
+    v = {"parameter_longname": longname}
+    v.update(valueof)
+    return _box(box_id, None, 1, 2, maxclass="live.dial", outlettype=["", "float"],
+                parameter_enable=1, annotation="x", saved_attribute_attributes={"valueof": v})
+
+
+def _rules(results, rule):
+    return [r for r in results if r.rule == rule]
+
+
+def _m4l(d, kind="instrument"):
+    return review_m4l(d, device_type=kind)
+
+
+# --- stereo_out ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize("inlet", [0, 1])
+def test_stereo_out_one_inlet(inlet):
+    d = _patch([_osc(), _plugout()], [_line("obj-80", 0, "obj-90", inlet)])
+    hits = _rules(_m4l(d), "stereo_out")
+    assert len(hits) == 1
+    assert hits[0].severity == "warning"
+    assert hits[0].finding.startswith("plugout~ (obj-90)")
+    assert "inlet %d only" % inlet in hits[0].finding
+    assert hits[0].box_ids == ("obj-90",)
+
+
+def test_stereo_out_both_or_none_or_args():
+    both = _patch([_osc(), _plugout()], [_line("obj-80", 0, "obj-90", 0), _line("obj-80", 0, "obj-90", 1)])
+    assert not _rules(_m4l(both), "stereo_out")
+    unwired = _patch([_plugout()])
+    assert not _rules(_m4l(unwired), "stereo_out")
+    args = _patch([_osc(), _plugout(text="plugout~ 1")], [_line("obj-80", 0, "obj-90", 0)])
+    assert not _rules(_m4l(args), "stereo_out")
+
+
+# --- midi_passthrough -----------------------------------------------------------
+
+
+def _midiin(box_id="obj-70"):
+    return _box(box_id, "midiin", 1, 1, outlettype=["int"])
+
+
+def _midiout(box_id="obj-71"):
+    return _box(box_id, "midiout", 1, 0, outlettype=[])
+
+
+def test_midi_passthrough_cut():
+    d = _patch([_midiin(), _box("obj-72", "live.thisdevice", 1, 3, outlettype=["bang", "int", "int"])])
+    hits = _rules(_m4l(d, "midi_effect"), "midi_passthrough")
+    assert len(hits) == 1 and hits[0].severity == "warning" and "midiin (obj-70)" in hits[0].finding
+    d = _patch([_midiout()])
+    hits = _rules(_m4l(d, "midi_effect"), "midi_passthrough")
+    assert len(hits) == 1 and "midiout (obj-71)" in hits[0].finding
+
+
+def test_midi_passthrough_ok_and_instrument_ignored():
+    d = _patch([_midiin(), _midiout()], [_line("obj-70", 0, "obj-71", 0)])
+    assert not _rules(_m4l(d, "midi_effect"), "midi_passthrough")
+    lone = _patch([_midiin(), _plugout()])
+    assert not _rules(_m4l(lone, "instrument"), "midi_passthrough")
+
+
+# --- shortname_length / int_param_range / param_range ----------------------------
+
+
+def test_shortname_length():
+    hits = _rules(_m4l(_patch([_plugout(), _pdial("obj-3", parameter_shortname="Frequency")])),
+                  "shortname_length")
+    assert len(hits) == 1 and hits[0].severity == "note" and hits[0].box_ids == ("obj-3",)
+    assert not _rules(_m4l(_patch([_plugout(), _pdial("obj-3", parameter_shortname="Freqency")])),
+                      "shortname_length")
+    assert not _rules(_m4l(_patch([_plugout(), _pdial("obj-3")])), "shortname_length")
+
+
+def test_int_param_range():
+    def run(t, mx):
+        return _rules(_m4l(_patch([_plugout(), _pdial("obj-3", parameter_type=t, parameter_mmin=0,
+                                                      parameter_mmax=mx)])), "int_param_range")
+    hits = run(1, 1000)
+    assert len(hits) == 1 and hits[0].severity == "warning"
+    assert not run(1, 255)
+    assert not run(0, 1000)
+
+
+def test_param_range():
+    def run(**v):
+        return _rules(_m4l(_patch([_plugout(), _pdial("obj-3", **v)])), "param_range")
+    assert len(run(parameter_mmin=10, parameter_mmax=10)) == 1
+    hits = run(parameter_mmin=0, parameter_mmax=100, parameter_initial=[500])
+    assert len(hits) == 1 and hits[0].severity == "warning"
+    assert not run(parameter_mmin=0, parameter_mmax=100, parameter_initial=[50])
+    assert not run(parameter_mmin="0", parameter_mmax=100, parameter_initial=[500])
+    assert not run(parameter_mmax=100, parameter_initial=[500])
+    assert not run(parameter_mmin=0, parameter_mmax=100, parameter_initial=500)
+
+
+# --- device-level rules ------------------------------------------------------------
+
+
+def test_shortname_unique_top_and_nested():
+    d = _patch([
+        _plugout(),
+        _pdial("obj-3", "Filter Env Amount", parameter_shortname="Amount"),
+        _container("obj-1", "p synth", _inner([_pdial("obj-3", "Pitch Env Amount",
+                                                      parameter_shortname="Amount")])),
+    ])
+    hits = _rules(_m4l(d), "shortname_unique")
+    assert len(hits) == 1 and hits[0].severity == "warning" and hits[0].path == ""
+    assert "'obj-3' and 'obj-1/obj-3'" in hits[0].finding
+
+
+def test_shortname_unique_distinct():
+    d = _patch([_plugout(), _pdial("obj-3", "A", parameter_shortname="Amount"),
+                _pdial("obj-4", "B", parameter_shortname="Amount2")])
+    assert not _rules(_m4l(d), "shortname_unique")
+
+
+def _banks(*slots):
+    return {"parameterbanks": {"0": {"index": 0, "name": "Main",
+                                     "parameters": list(slots) + ["-"] * (8 - len(slots))}}}
+
+
+def test_bank_refs():
+    d = _patch([_plugout(), _pdial("obj-3", "Cutoff")], parameters=_banks("Cutoff", "Ghost"))
+    hits = _rules(_m4l(d), "bank_refs")
+    assert len(hits) == 1 and hits[0].severity == "warning" and "Ghost" in hits[0].finding
+    assert "Cutoff" not in hits[0].finding
+    ok = _patch([_plugout(), _pdial("obj-3", "Cutoff")], parameters=_banks("Cutoff"))
+    assert not _rules(_m4l(ok), "bank_refs")
+    for junk in ({"parameterbanks": 5}, {"parameterbanks": {"0": 3}},
+                 {"parameterbanks": {"0": {"parameters": "Ghost"}}}, 7):
+        assert not _rules(_m4l(_patch([_plugout(), _pdial("obj-3")], parameters=junk)), "bank_refs")
+
+
+def test_device_height():
+    def dev(openinp, y, h=48.0):
+        dial = _pdial("obj-3")
+        dial["box"]["presentation"] = 1
+        dial["box"]["presentation_rect"] = [8.0, y, 44.0, h]
+        return _patch([_plugout(), dial], openinpresentation=openinp)
+    hits = _rules(_m4l(dev(1, 150.0)), "device_height")
+    assert len(hits) == 1 and hits[0].severity == "warning" and hits[0].box_ids == ("obj-3",)
+    assert not _rules(_m4l(dev(1, 121.0)), "device_height")
+    assert not _rules(_m4l(dev(0, 150.0)), "device_height")
+
+
+# --- nested parity for the per-scope rules ------------------------------------------
+
+
+_PER_SCOPE = {
+    "stereo_out": ("instrument", lambda: ([_osc(), _plugout()], [_line("obj-80", 0, "obj-90", 0)])),
+    "midi_passthrough": ("midi_effect", lambda: ([_midiin()], [])),
+    "shortname_length": ("instrument",
+                         lambda: ([_pdial("obj-3", parameter_shortname="Frequency")], [])),
+    "int_param_range": ("instrument", lambda: ([_pdial("obj-3", parameter_type=1, parameter_mmin=0,
+                                                       parameter_mmax=1000)], [])),
+    "param_range": ("instrument", lambda: ([_pdial("obj-3", parameter_mmin=5, parameter_mmax=1)], [])),
+}
+
+
+@pytest.mark.parametrize("rule", sorted(_PER_SCOPE))
+def test_per_scope_rule_nested_parity(rule):
+    kind, content = _PER_SCOPE[rule]
+    boxes, lines = content()
+    marker = [_box("obj-99", "live.thisdevice", 1, 3, outlettype=["bang", "int", "int"])]
+    top = _rules(review_m4l(_patch(marker + boxes, lines), device_type=kind), rule)
+    assert top and all(r.path == "" for r in top)
+    boxes, lines = content()
+    nested_d = _patch(marker + [_container("obj-1", "p synth", _inner(boxes, lines))])
+    nested = [r for r in _rules(review_m4l(nested_d, device_type=kind), rule) if r.path == "obj-1"]
+    assert [(r.severity, r.finding, r.suggestion, r.path) for r in nested] == [
+        (r.severity, "[p synth] " + r.finding, r.suggestion, "obj-1") for r in top
+    ]
+
+
+# --- builder cleanliness and junk safety ---------------------------------------------
+
+
+def _nine_params():
+    return _mixed_params() + [
+        _spec("amp", 0.0, 1.0, 0.5, param_connect="synth::amp"),
+        _spec("Filter Envelope Amount", 0.0, 1.0, 0.0),
+        _spec("Pitch Envelope Amount", 0.0, 1.0, 0.0),
+        _spec("Delay Time", 0, 5000, 100),
+        _spec("transpose", -24, 24, 0),
+    ]
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize("params", ["none", "nine"])
+def test_builder_output_has_no_q40_findings(kind, params):
+    from src.maxpat.critics.m4l_critic import detect_m4l_device_type
+
+    p, _ = _build(kind, _nine_params() if params == "nine" else None)
+    d = p.to_dict()
+    results = review_m4l(d, device_type=detect_m4l_device_type(d))
+    assert not [r for r in results if r.rule in Q40_RULES], [r.finding for r in results]
+
+
+def test_gen_synth_output_has_no_q40_findings():
+    p = Patcher()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        p.add_m4l_gen_synth([("freq", 20.0, 2000.0), ("amp", 0.0, 1.0), ("cutoff", 20.0, 20000.0)])
+    results = review_m4l(p.to_dict(), device_type="instrument")
+    assert not [r for r in results if r.rule in Q40_RULES]
+
+
+def test_junk_never_raises():
+    junk = _inner(
+        [
+            "junk", None, {"box": "x"},
+            {"box": {"id": "obj-5", "maxclass": "live.dial", "parameter_enable": 1,
+                     "saved_attribute_attributes": {"valueof": 3}}},
+            {"box": {"id": "obj-6", "maxclass": "live.dial", "parameter_enable": 1,
+                     "saved_attribute_attributes": {"valueof": {
+                         "parameter_shortname": 7, "parameter_type": "1", "parameter_mmin": None,
+                         "parameter_mmax": [1], "parameter_initial": ["a"]}}}},
+            {"box": {"id": "obj-7", "maxclass": "newobj", "text": "plugout~", "numinlets": "2",
+                     "presentation": 1, "presentation_rect": ["a", 1, 2]}},
+            {"box": {"id": "obj-8", "maxclass": "newobj", "text": "midiin"}},
+        ],
+        ["junk", {"patchline": {"source": ["obj-8", 0], "destination": ["obj-7", "0"]}}],
+    )
+    d = _patch([_plugout(), _container("obj-1", "p junk", junk)],
+               parameters={"parameterbanks": {"0": {"parameters": [None, 3, "-"]}, "1": "x"}},
+               openinpresentation=1)
+    for kind in KINDS:
+        review_m4l(d, device_type=kind)
+    d2 = _patch(junk["boxes"], junk["lines"], parameters=[1], openinpresentation="yes")
+    for kind in KINDS:
+        review_m4l(d2, device_type=kind)
