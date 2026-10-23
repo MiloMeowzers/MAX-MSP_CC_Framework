@@ -847,3 +847,16 @@ Key test areas:
 - Object database schema and lookup, including v5.0 schema-hardening fields and audit accessors
 - RNBO database and validation
 - Write hooks and file operations
+
+---
+
+## Release
+
+`.github/workflows/release.yml` runs on full semver tags only (`vX.Y.Z`). The release job needs the test workflow (Python 3.10 and 3.12 plus a `vermin` 3.10-floor check), then:
+
+1. builds the archive with `scripts/build_release.sh` (`git archive` of the tag, governed by the anchored `.gitattributes` export-ignore rules: `.planning/`, `tests/`, `patches/`, `scripts/`, `installer/` and `.github/` never ship);
+2. extracts the tag's `CHANGELOG.md` section with `scripts/release_notes.sh` (a tag without a section fails here, before anything is published);
+3. stamps the installer version from the tag, runs `npm publish --dry-run`, then publishes `create-max-framework` with npm **trusted publishing** (OIDC, `npm publish --provenance --access public`; no `NPM_TOKEN` secret; Node 24 and npm >= 11.5.1). A re-run skips a version already on npm;
+4. creates the GitHub release with the archive and the changelog section as its body.
+
+The trusted publisher is linked on npmjs.com (`create-max-framework` -> Settings -> Trusted Publisher -> GitHub Actions, workflow `release.yml`, no environment).
