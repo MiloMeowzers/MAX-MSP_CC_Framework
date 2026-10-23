@@ -1,0 +1,1499 @@
+{
+  "jit.vis.bgsubtract": {
+    "name": "jit.vis.bgsubtract",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Separate people from the background",
+    "description": "Person segmentation. Produces a grayscale alpha matte that isolates people in the input image from the background, suitable for compositing, masking, or keying.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Image input",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Mask output"
+      },
+      {
+        "id": 1,
+        "type": "control",
+        "signal": false,
+        "digest": "dumpout"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "bang",
+      "clear",
+      "exportattrs",
+      "exportsummary",
+      "getattributes",
+      "getstate",
+      "importattrs",
+      "jit_matrix",
+      "outputmatrix",
+      "summary"
+    ],
+    "attributes": {
+      "async": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "engine": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "quality": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "outputmode": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "adapt": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "out_name": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.segment",
+      "jit.vis.depth",
+      "jit.vis.hands",
+      "jit.vis.body",
+      "jit.vis.face"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.body": {
+    "name": "jit.vis.body",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Track body pose (19 joints per person)",
+    "description": "Detects people in the input image and outputs 19 body-joint positions for each, up to 6 people. Joints are the COCO 17 keypoints at rows 0-16, in COCO's own order, plus an additional neck at 17 and root at 18. Coordinates are available as a matrix out the left outlet, as an optional dictionary out the middle outlet, and as an optional drawn overlay.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Image input",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Joint matrix"
+      },
+      {
+        "id": 1,
+        "type": "dict",
+        "signal": false,
+        "digest": "Pose dictionary"
+      },
+      {
+        "id": 2,
+        "type": "control",
+        "signal": false,
+        "digest": "dumpout"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "getskeleton",
+      "bang",
+      "clear",
+      "exportattrs",
+      "exportsummary",
+      "getattributes",
+      "getstate",
+      "importattrs",
+      "jit_matrix",
+      "outputmatrix",
+      "summary"
+    ],
+    "attributes": {
+      "count": {
+        "type": "int",
+        "get": true,
+        "set": false
+      },
+      "mirrored": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "async": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "debugdraw": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "drawto": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "engine": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "minconfidence": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "outputdict": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "pose3d": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "smooth": {
+        "type": "float",
+        "get": true,
+        "set": true
+      },
+      "outputmode": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "adapt": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "out_name": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.hands",
+      "jit.vis.holistic",
+      "jit.vis.face",
+      "jit.vis.facemesh",
+      "jit.vis.objectdetect",
+      "jit.vis.posemap"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.depth": {
+    "name": "jit.vis.depth",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Estimate depth from an image",
+    "description": "Monocular depth estimation. Runs a depth model on the input image and outputs a per-pixel depth map as a 1-plane float32 matrix.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Image input",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Depth output"
+      },
+      {
+        "id": 1,
+        "type": "control",
+        "signal": false,
+        "digest": "dumpout"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "read",
+      "bang",
+      "clear",
+      "exportattrs",
+      "exportsummary",
+      "getattributes",
+      "getstate",
+      "importattrs",
+      "jit_matrix",
+      "outputmatrix",
+      "summary"
+    ],
+    "attributes": {
+      "async": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "engine": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "model": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "resolution": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "outputmode": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "adapt": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "out_name": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.bgsubtract",
+      "jit.vis.segment",
+      "jit.vis.hands",
+      "jit.vis.body",
+      "jit.vis.face"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.face": {
+    "name": "jit.vis.face",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Track face landmarks (12 regions per face)",
+    "description": "Detects faces in the input image and outputs 12 landmark-region positions for each face (up to 4 faces): eyes, pupils, eyebrows, nose, lips, face contour, and median line. Coordinates are available as a matrix out the left outlet, as an optional dictionary out the middle outlet, and as an optional drawn overlay.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Image input",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Landmark matrix"
+      },
+      {
+        "id": 1,
+        "type": "dict",
+        "signal": false,
+        "digest": "Pose dictionary"
+      },
+      {
+        "id": 2,
+        "type": "control",
+        "signal": false,
+        "digest": "dumpout"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "getskeleton",
+      "bang",
+      "clear",
+      "exportattrs",
+      "exportsummary",
+      "getattributes",
+      "getstate",
+      "importattrs",
+      "jit_matrix",
+      "outputmatrix",
+      "summary"
+    ],
+    "attributes": {
+      "count": {
+        "type": "int",
+        "get": true,
+        "set": false
+      },
+      "mirrored": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "async": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "debugdraw": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "drawto": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "engine": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "minconfidence": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "outputdict": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "smooth": {
+        "type": "float",
+        "get": true,
+        "set": true
+      },
+      "outputmode": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "adapt": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "out_name": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.hands",
+      "jit.vis.body",
+      "jit.vis.holistic",
+      "jit.vis.facemesh",
+      "jit.vis.objectdetect"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.facemesh": {
+    "name": "jit.vis.facemesh",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Track the dense face mesh (478 landmarks per face)",
+    "description": "Detects faces in the input image and outputs the full MediaPipe face mesh, 478 landmarks per face, up to 4 faces, as a matrix. Additionally a dictionary of that face's expression and head-pose values, 52 named blendshape scores and a 4x4 head transform, is output. Web engine only.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Image input",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Landmark matrix"
+      },
+      {
+        "id": 1,
+        "type": "dict",
+        "signal": false,
+        "digest": "Face pose dictionary"
+      },
+      {
+        "id": 2,
+        "type": "control",
+        "signal": false,
+        "digest": "dumpout"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "getskeleton",
+      "bang",
+      "clear",
+      "exportattrs",
+      "exportsummary",
+      "getattributes",
+      "getstate",
+      "importattrs",
+      "jit_matrix",
+      "outputmatrix",
+      "summary"
+    ],
+    "attributes": {
+      "count": {
+        "type": "int",
+        "get": true,
+        "set": false
+      },
+      "mirrored": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "async": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "debugdraw": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "drawto": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "engine": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "outputdict": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "smooth": {
+        "type": "float",
+        "get": true,
+        "set": true
+      },
+      "outputmode": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "adapt": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "out_name": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.hands",
+      "jit.vis.body",
+      "jit.vis.holistic",
+      "jit.vis.face",
+      "jit.vis.objectdetect"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.gesture": {
+    "name": "jit.vis.gesture",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Recognize static hand gestures from hand-pose landmarks",
+    "description": "Reads the hand-pose matrix produced by jit.vis.hands and turns each hand into a vector of continuous hand-shape features — finger curl, finger spread, pinch distances, palm position and normal — plus a discrete gesture label such as fist, point or peace. Connect the matrix outlet of jit.vis.hands to the input.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Hand-pose matrix",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Feature matrix"
+      },
+      {
+        "id": 1,
+        "type": "dict",
+        "signal": false,
+        "digest": "Gesture dictionary"
+      },
+      {
+        "id": 2,
+        "type": "symbol",
+        "signal": false,
+        "digest": "Gesture label, on change"
+      },
+      {
+        "id": 3,
+        "type": "control",
+        "signal": false,
+        "digest": "dumpout"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "calibrate"
+    ],
+    "attributes": {
+      "aspect": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "smooth": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "curlthresh": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "hysteresis": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "pinchthresh": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "minconf": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "hold": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "use3d": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "palmtemplate": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "outputdict": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "outputmode": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "adapt": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "out_name": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.hands",
+      "jit.vis.body",
+      "jit.vis.face",
+      "jit.vis.posemap"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.hands": {
+    "name": "jit.vis.hands",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Track hand pose (21 landmarks per hand)",
+    "description": "Detects hands in the input image and outputs 21 landmark positions for each hand (up to 2 hands). Landmark coordinates are available as a matrix out the left outlet, as an optional dictionary out the middle outlet, and as an optional drawn overlay.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Image input",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Landmark matrix"
+      },
+      {
+        "id": 1,
+        "type": "dict",
+        "signal": false,
+        "digest": "Pose dictionary"
+      },
+      {
+        "id": 2,
+        "type": "control",
+        "signal": false,
+        "digest": "dumpout"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "getskeleton",
+      "bang",
+      "clear",
+      "exportattrs",
+      "exportsummary",
+      "getattributes",
+      "getstate",
+      "importattrs",
+      "jit_matrix",
+      "outputmatrix",
+      "summary"
+    ],
+    "attributes": {
+      "count": {
+        "type": "int",
+        "get": true,
+        "set": false
+      },
+      "async": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "debugdraw": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "drawto": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "engine": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "mirrored": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "minconfidence": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "outputdict": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "smooth": {
+        "type": "float",
+        "get": true,
+        "set": true
+      },
+      "outputmode": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "adapt": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "out_name": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.body",
+      "jit.vis.holistic",
+      "jit.vis.face",
+      "jit.vis.facemesh",
+      "jit.vis.objectdetect",
+      "jit.vis.gesture"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.holistic": {
+    "name": "jit.vis.holistic",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Track body, face and both hands in one pass (73 joints)",
+    "description": "Detects one person in the input image and outputs the body skeleton, the face landmark regions and both hands together, as a single 73-joint matrix and a dictionary of named joints. The groups are the same joints, in the same order, that jit.vis.body, jit.vis.face and jit.vis.hands report on their own. Web engine only.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Image input",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Joint matrix"
+      },
+      {
+        "id": 1,
+        "type": "dict",
+        "signal": false,
+        "digest": "Pose dictionary"
+      },
+      {
+        "id": 2,
+        "type": "control",
+        "signal": false,
+        "digest": "dumpout"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "getskeleton",
+      "bang",
+      "clear",
+      "exportattrs",
+      "exportsummary",
+      "getattributes",
+      "getstate",
+      "importattrs",
+      "jit_matrix",
+      "outputmatrix",
+      "summary"
+    ],
+    "attributes": {
+      "count": {
+        "type": "int",
+        "get": true,
+        "set": false
+      },
+      "mirrored": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "async": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "debugdraw": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "drawto": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "engine": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "minconfidence": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "outputdict": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "smooth": {
+        "type": "float",
+        "get": true,
+        "set": true
+      },
+      "outputmode": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "adapt": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "out_name": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.hands",
+      "jit.vis.body",
+      "jit.vis.face",
+      "jit.vis.facemesh",
+      "jit.vis.objectdetect",
+      "jit.vis.posemap"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.objectdetect": {
+    "name": "jit.vis.objectdetect",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Detect and label objects",
+    "description": "Detects objects in the input image, outputting a normalized bounding box and confidence per object (up to 64) as a matrix, and the class labels as a dictionary.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Image input",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Bounding-box matrix"
+      },
+      {
+        "id": 1,
+        "type": "dict",
+        "signal": false,
+        "digest": "Object dictionary"
+      },
+      {
+        "id": 2,
+        "type": "control",
+        "signal": false,
+        "digest": "dumpout"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "read",
+      "bang",
+      "clear",
+      "exportattrs",
+      "exportsummary",
+      "getattributes",
+      "getstate",
+      "importattrs",
+      "jit_matrix",
+      "outputmatrix",
+      "summary"
+    ],
+    "attributes": {
+      "count": {
+        "type": "int",
+        "get": true,
+        "set": false
+      },
+      "async": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "debugdraw": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "drawto": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "engine": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "model": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "resolution": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "sparsematrix": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "minconfidence": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "outputdict": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "outputmode": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "adapt": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "out_name": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.text",
+      "jit.vis.hands",
+      "jit.vis.body",
+      "jit.vis.face"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.posemap": {
+    "name": "jit.vis.posemap",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Drive a rigged model from a tracked pose",
+    "description": "Takes one row of a pose matrix and turns it into an orientation for every bone of a rigged humanoid model. Connect a jit.vis.body or jit.vis.holistic pose matrix to the input, and the object's left outlet to a jit.gl.model.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Pose input",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "control",
+        "signal": false,
+        "digest": "Model binding"
+      },
+      {
+        "id": 1,
+        "type": "dict",
+        "signal": false,
+        "digest": "Solved orientations"
+      },
+      {
+        "id": 2,
+        "type": "control",
+        "signal": false,
+        "digest": "dumpout"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "bind",
+      "getbones",
+      "offset",
+      "getoffsets",
+      "mute",
+      "exportattrs",
+      "getattributes",
+      "getstate",
+      "importattrs",
+      "jit_matrix",
+      "summary"
+    ],
+    "attributes": {
+      "aspect": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "autonodes": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "enable": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "fov": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "instance": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "lengthrate": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "minconf": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "mirrored": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "outputdict": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "rollbleed": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "rollrelease": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "rootmotion": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "rootscale": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "smooth": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "stabilize": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "target": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "torsodepth": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.gesture",
+      "jit.vis.body",
+      "jit.vis.holistic",
+      "jit.vis.hands",
+      "jit.gl.model",
+      "jit.anim.node"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.segment": {
+    "name": "jit.vis.segment",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Label image regions by category",
+    "description": "Multi-class image segmentation. Assigns every pixel a category index (such as background, hair, skin, clothing) using a segmentation model chosen with model, and outputs either a label map or a colorized image.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Image input",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Segmentation output"
+      },
+      {
+        "id": 1,
+        "type": "control",
+        "signal": false,
+        "digest": "dumpout"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "read",
+      "bang",
+      "clear",
+      "exportattrs",
+      "exportsummary",
+      "getattributes",
+      "getstate",
+      "importattrs",
+      "jit_matrix",
+      "outputmatrix",
+      "summary"
+    ],
+    "attributes": {
+      "async": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "colorize": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "engine": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "instances": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "model": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "resolution": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "quality": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "outputmode": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "adapt": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "out_name": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.bgsubtract",
+      "jit.vis.depth",
+      "jit.vis.hands",
+      "jit.vis.body",
+      "jit.vis.face"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.text": {
+    "name": "jit.vis.text",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Recognize text in an image (OCR)",
+    "description": "Detects and reads text in the input image, outputting a normalized bounding box and confidence per text region (up to 64) as a matrix, and the recognized strings as a dictionary.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Image input",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "Bounding-box matrix"
+      },
+      {
+        "id": 1,
+        "type": "dict",
+        "signal": false,
+        "digest": "Text dictionary"
+      },
+      {
+        "id": 2,
+        "type": "control",
+        "signal": false,
+        "digest": "dumpout"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "bang",
+      "clear",
+      "exportattrs",
+      "exportsummary",
+      "getattributes",
+      "getstate",
+      "importattrs",
+      "jit_matrix",
+      "outputmatrix",
+      "summary"
+    ],
+    "attributes": {
+      "count": {
+        "type": "int",
+        "get": true,
+        "set": false
+      },
+      "debugdraw": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "drawto": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "engine": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "minconfidence": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "outputdict": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "quality": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "outputmode": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "adapt": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "out_name": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.objectdetect",
+      "jit.vis.hands",
+      "jit.vis.body",
+      "jit.vis.face"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  }
+}
