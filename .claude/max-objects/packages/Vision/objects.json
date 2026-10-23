@@ -228,6 +228,185 @@
     "package": "Vision",
     "rnbo_compatible": false
   },
+  "jit.vis.body.parts": {
+    "name": "jit.vis.body.parts",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Split a jit.vis.body matrix into its named parts",
+    "description": "Splits the jit.vis.body pose matrix into one float32 matrix per named part (head, torso, left_arm, right_arm, left_leg, right_leg), for every tracked instance, with a dump outlet on the right. Defined by the Vision package as `max define jit.vis.body.parts v8 jit.vis.parts.js body;`. @planecount 4 keeps the confidence plane; @detected 1 drops what the tracker did not find.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "body matrix (jit_matrix)",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "head (jit_matrix)"
+      },
+      {
+        "id": 1,
+        "type": "matrix",
+        "signal": false,
+        "digest": "torso (jit_matrix)"
+      },
+      {
+        "id": 2,
+        "type": "matrix",
+        "signal": false,
+        "digest": "left_arm (jit_matrix)"
+      },
+      {
+        "id": 3,
+        "type": "matrix",
+        "signal": false,
+        "digest": "right_arm (jit_matrix)"
+      },
+      {
+        "id": 4,
+        "type": "matrix",
+        "signal": false,
+        "digest": "left_leg (jit_matrix)"
+      },
+      {
+        "id": 5,
+        "type": "matrix",
+        "signal": false,
+        "digest": "right_leg (jit_matrix)"
+      },
+      {
+        "id": 6,
+        "type": "control",
+        "signal": false,
+        "digest": "dump: getparts, getjoints"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "jit_matrix",
+      "getparts",
+      "getjoints"
+    ],
+    "attributes": {
+      "row": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "detected": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "planecount": {
+        "type": "int",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.body"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.debugdraw": {
+    "name": "jit.vis.debugdraw",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Draw a jit.vis pose matrix as joints and bones in an OpenGL context",
+    "description": "Standalone v8 debug drawer for the jit.vis pose trackers: feed it the pose matrix from jit.vis.hands / body / face / facemesh and it draws joints and bones into its drawto context. Defined by the Vision package as `max define jit.vis.debugdraw v8 jit.vis.draw.js;`. Its single outlet is the unused v8 default outlet.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "pose matrix (jit_matrix)",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "control",
+        "signal": false,
+        "digest": "unused"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "jit_matrix"
+    ],
+    "attributes": {
+      "drawto": {
+        "type": "symbol",
+        "get": true,
+        "set": true
+      },
+      "layer": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "enable": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "point_size": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "line_width": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "pointcolor": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      },
+      "linecolor": {
+        "type": "float32",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.hands",
+      "jit.vis.body",
+      "jit.vis.face",
+      "jit.vis.facemesh"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
   "jit.vis.depth": {
     "name": "jit.vis.depth",
     "maxclass": "newobj",
@@ -457,6 +636,97 @@
     "package": "Vision",
     "rnbo_compatible": false
   },
+  "jit.vis.face.parts": {
+    "name": "jit.vis.face.parts",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Split a jit.vis.face matrix into its named parts",
+    "description": "Splits the jit.vis.face pose matrix into one float32 matrix per named part (left_eye, right_eye, nose, lips, contour), for every tracked instance, with a dump outlet on the right. Defined by the Vision package as `max define jit.vis.face.parts v8 jit.vis.parts.js face;`. @planecount 4 keeps the confidence plane; @detected 1 drops what the tracker did not find.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "face matrix (jit_matrix)",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "left_eye (jit_matrix)"
+      },
+      {
+        "id": 1,
+        "type": "matrix",
+        "signal": false,
+        "digest": "right_eye (jit_matrix)"
+      },
+      {
+        "id": 2,
+        "type": "matrix",
+        "signal": false,
+        "digest": "nose (jit_matrix)"
+      },
+      {
+        "id": 3,
+        "type": "matrix",
+        "signal": false,
+        "digest": "lips (jit_matrix)"
+      },
+      {
+        "id": 4,
+        "type": "matrix",
+        "signal": false,
+        "digest": "contour (jit_matrix)"
+      },
+      {
+        "id": 5,
+        "type": "control",
+        "signal": false,
+        "digest": "dump: getparts, getjoints"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "jit_matrix",
+      "getparts",
+      "getjoints"
+    ],
+    "attributes": {
+      "row": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "detected": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "planecount": {
+        "type": "int",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.face"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
   "jit.vis.facemesh": {
     "name": "jit.vis.facemesh",
     "maxclass": "newobj",
@@ -571,6 +841,115 @@
       "jit.vis.holistic",
       "jit.vis.face",
       "jit.vis.objectdetect"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.facemesh.parts": {
+    "name": "jit.vis.facemesh.parts",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Split a jit.vis.facemesh matrix into its named parts",
+    "description": "Splits the jit.vis.facemesh pose matrix into one float32 matrix per named part (lips, left_eye, left_eyebrow, right_eye, right_eyebrow, face_oval, left_iris, right_iris), for every tracked instance, with a dump outlet on the right. Defined by the Vision package as `max define jit.vis.facemesh.parts v8 jit.vis.parts.js facemesh;`. @planecount 4 keeps the confidence plane; @detected 1 drops what the tracker did not find.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "facemesh matrix (jit_matrix)",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "lips (jit_matrix)"
+      },
+      {
+        "id": 1,
+        "type": "matrix",
+        "signal": false,
+        "digest": "left_eye (jit_matrix)"
+      },
+      {
+        "id": 2,
+        "type": "matrix",
+        "signal": false,
+        "digest": "left_eyebrow (jit_matrix)"
+      },
+      {
+        "id": 3,
+        "type": "matrix",
+        "signal": false,
+        "digest": "right_eye (jit_matrix)"
+      },
+      {
+        "id": 4,
+        "type": "matrix",
+        "signal": false,
+        "digest": "right_eyebrow (jit_matrix)"
+      },
+      {
+        "id": 5,
+        "type": "matrix",
+        "signal": false,
+        "digest": "face_oval (jit_matrix)"
+      },
+      {
+        "id": 6,
+        "type": "matrix",
+        "signal": false,
+        "digest": "left_iris (jit_matrix)"
+      },
+      {
+        "id": 7,
+        "type": "matrix",
+        "signal": false,
+        "digest": "right_iris (jit_matrix)"
+      },
+      {
+        "id": 8,
+        "type": "control",
+        "signal": false,
+        "digest": "dump: getparts, getjoints"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "jit_matrix",
+      "getparts",
+      "getjoints"
+    ],
+    "attributes": {
+      "row": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "detected": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "planecount": {
+        "type": "int",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.facemesh"
     ],
     "tags": [
       "Jitter",
@@ -712,6 +1091,56 @@
     "package": "Vision",
     "rnbo_compatible": false
   },
+  "jit.vis.grab": {
+    "name": "jit.vis.grab",
+    "maxclass": "bpatcher",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Camera input UI for the Vision trackers (jit.grab bpatcher)",
+    "description": "Bpatcher camera source used throughout the Vision help: an On toggle, a Mirror toggle, device and format menus around jit.grab @unique 1 @automatic 0. 0/1 toggles capture, other messages pass to jit.grab. Defined by the Vision package as `max define jit.vis.grab bpatcher @name jit-vis-grab-ui.maxpat;`.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "control",
+        "signal": false,
+        "digest": "0/1 to toggle, messages to jit.grab",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "jit.grab output"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "int",
+      "anything"
+    ],
+    "attributes": {},
+    "seealso": [
+      "jit.grab",
+      "jit.vis.hands"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false,
+    "abstraction_file": "patchers/jit-vis-grab-ui.maxpat",
+    "bpatcher_dimensions": [
+      250.0,
+      55.0
+    ]
+  },
   "jit.vis.hands": {
     "name": "jit.vis.hands",
     "maxclass": "newobj",
@@ -843,6 +1272,297 @@
     "package": "Vision",
     "rnbo_compatible": false
   },
+  "jit.vis.hands.parts": {
+    "name": "jit.vis.hands.parts",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Split a jit.vis.hands matrix into its named parts",
+    "description": "Splits the jit.vis.hands pose matrix into one float32 matrix per named part (wrist, thumb, index, middle, ring, little), for every tracked instance, with a dump outlet on the right. Defined by the Vision package as `max define jit.vis.hands.parts v8 jit.vis.parts.js hands;`. @planecount 4 keeps the confidence plane; @detected 1 drops what the tracker did not find.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "hands matrix (jit_matrix)",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "wrist (jit_matrix)"
+      },
+      {
+        "id": 1,
+        "type": "matrix",
+        "signal": false,
+        "digest": "thumb (jit_matrix)"
+      },
+      {
+        "id": 2,
+        "type": "matrix",
+        "signal": false,
+        "digest": "index (jit_matrix)"
+      },
+      {
+        "id": 3,
+        "type": "matrix",
+        "signal": false,
+        "digest": "middle (jit_matrix)"
+      },
+      {
+        "id": 4,
+        "type": "matrix",
+        "signal": false,
+        "digest": "ring (jit_matrix)"
+      },
+      {
+        "id": 5,
+        "type": "matrix",
+        "signal": false,
+        "digest": "little (jit_matrix)"
+      },
+      {
+        "id": 6,
+        "type": "control",
+        "signal": false,
+        "digest": "dump: getparts, getjoints"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "jit_matrix",
+      "getparts",
+      "getjoints"
+    ],
+    "attributes": {
+      "row": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "detected": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "planecount": {
+        "type": "int",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.hands"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.hands.parts.left": {
+    "name": "jit.vis.hands.parts.left",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Split a jit.vis.hands matrix into its named parts",
+    "description": "Splits the jit.vis.hands pose matrix into one float32 matrix per named part (wrist, thumb, index, middle, ring, little), for the first tracked hand only (row 0), with a dump outlet on the right. Defined by the Vision package as `max define jit.vis.hands.parts.left v8 jit.vis.parts.js hands @row 0;`. @planecount 4 keeps the confidence plane; @detected 1 drops what the tracker did not find.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "hands matrix (jit_matrix)",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "wrist (jit_matrix)"
+      },
+      {
+        "id": 1,
+        "type": "matrix",
+        "signal": false,
+        "digest": "thumb (jit_matrix)"
+      },
+      {
+        "id": 2,
+        "type": "matrix",
+        "signal": false,
+        "digest": "index (jit_matrix)"
+      },
+      {
+        "id": 3,
+        "type": "matrix",
+        "signal": false,
+        "digest": "middle (jit_matrix)"
+      },
+      {
+        "id": 4,
+        "type": "matrix",
+        "signal": false,
+        "digest": "ring (jit_matrix)"
+      },
+      {
+        "id": 5,
+        "type": "matrix",
+        "signal": false,
+        "digest": "little (jit_matrix)"
+      },
+      {
+        "id": 6,
+        "type": "control",
+        "signal": false,
+        "digest": "dump: getparts, getjoints"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "jit_matrix",
+      "getparts",
+      "getjoints"
+    ],
+    "attributes": {
+      "row": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "detected": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "planecount": {
+        "type": "int",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.hands"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.hands.parts.right": {
+    "name": "jit.vis.hands.parts.right",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Split a jit.vis.hands matrix into its named parts",
+    "description": "Splits the jit.vis.hands pose matrix into one float32 matrix per named part (wrist, thumb, index, middle, ring, little), for the second tracked hand only (row 1), with a dump outlet on the right. Defined by the Vision package as `max define jit.vis.hands.parts.right v8 jit.vis.parts.js hands @row 1;`. @planecount 4 keeps the confidence plane; @detected 1 drops what the tracker did not find.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "hands matrix (jit_matrix)",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "wrist (jit_matrix)"
+      },
+      {
+        "id": 1,
+        "type": "matrix",
+        "signal": false,
+        "digest": "thumb (jit_matrix)"
+      },
+      {
+        "id": 2,
+        "type": "matrix",
+        "signal": false,
+        "digest": "index (jit_matrix)"
+      },
+      {
+        "id": 3,
+        "type": "matrix",
+        "signal": false,
+        "digest": "middle (jit_matrix)"
+      },
+      {
+        "id": 4,
+        "type": "matrix",
+        "signal": false,
+        "digest": "ring (jit_matrix)"
+      },
+      {
+        "id": 5,
+        "type": "matrix",
+        "signal": false,
+        "digest": "little (jit_matrix)"
+      },
+      {
+        "id": 6,
+        "type": "control",
+        "signal": false,
+        "digest": "dump: getparts, getjoints"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "jit_matrix",
+      "getparts",
+      "getjoints"
+    ],
+    "attributes": {
+      "row": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "detected": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "planecount": {
+        "type": "int",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.hands"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
   "jit.vis.holistic": {
     "name": "jit.vis.holistic",
     "maxclass": "newobj",
@@ -963,6 +1683,91 @@
       "jit.vis.facemesh",
       "jit.vis.objectdetect",
       "jit.vis.posemap"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false
+  },
+  "jit.vis.holistic.parts": {
+    "name": "jit.vis.holistic.parts",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Split a jit.vis.holistic matrix into its named parts",
+    "description": "Splits the jit.vis.holistic pose matrix into one float32 matrix per named part (body, face, left_hand, right_hand), for every tracked instance, with a dump outlet on the right. Defined by the Vision package as `max define jit.vis.holistic.parts v8 jit.vis.parts.js holistic;`. @planecount 4 keeps the confidence plane; @detected 1 drops what the tracker did not find.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "holistic matrix (jit_matrix)",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "body (jit_matrix)"
+      },
+      {
+        "id": 1,
+        "type": "matrix",
+        "signal": false,
+        "digest": "face (jit_matrix)"
+      },
+      {
+        "id": 2,
+        "type": "matrix",
+        "signal": false,
+        "digest": "left_hand (jit_matrix)"
+      },
+      {
+        "id": 3,
+        "type": "matrix",
+        "signal": false,
+        "digest": "right_hand (jit_matrix)"
+      },
+      {
+        "id": 4,
+        "type": "control",
+        "signal": false,
+        "digest": "dump: getparts, getjoints"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "jit_matrix",
+      "getparts",
+      "getjoints"
+    ],
+    "attributes": {
+      "row": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "detected": {
+        "type": "int",
+        "get": true,
+        "set": true
+      },
+      "planecount": {
+        "type": "int",
+        "get": true,
+        "set": true
+      }
+    },
+    "seealso": [
+      "jit.vis.holistic"
     ],
     "tags": [
       "Jitter",
@@ -1495,5 +2300,51 @@
     "variable_io": false,
     "package": "Vision",
     "rnbo_compatible": false
+  },
+  "jit.vis.tondc": {
+    "name": "jit.vis.tondc",
+    "maxclass": "newobj",
+    "module": "jit",
+    "domain": "Packages",
+    "category": "Jitter Vision",
+    "digest": "Convert a Vision tracker matrix to normalized device coordinates",
+    "description": "Abstraction (patchers/jit.vis.tondc.maxpat) that converts a vision tracker's normalized screen-coordinate matrix to 3-plane normalized device coordinates: X and Y expanded to -1..1, Y flipped, Z zeroed (jit.unpack -> jit.gen codebox -> jit.pack), passing the confidence plane through untouched. Draw the result with jit.gl objects at transform_reset 2 to align with the input image.",
+    "inlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "tracker matrix (jit_matrix)",
+        "hot": true
+      }
+    ],
+    "outlets": [
+      {
+        "id": 0,
+        "type": "matrix",
+        "signal": false,
+        "digest": "NDC matrix (jit_matrix)"
+      }
+    ],
+    "arguments": [],
+    "messages": [
+      "jit_matrix"
+    ],
+    "attributes": {},
+    "seealso": [
+      "jit.vis.hands",
+      "jit.vis.body",
+      "jit.vis.debugdraw"
+    ],
+    "tags": [
+      "Jitter",
+      "Vision"
+    ],
+    "min_version": "9.2",
+    "verified": false,
+    "variable_io": false,
+    "package": "Vision",
+    "rnbo_compatible": false,
+    "abstraction_file": "patchers/jit.vis.tondc.maxpat"
   }
 }
