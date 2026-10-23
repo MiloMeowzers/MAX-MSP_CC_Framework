@@ -950,7 +950,10 @@ class BuildersMixin:
         """
         from src.maxpat.codegen import parse_genexpr_io, reorder_genexpr_declarations
 
-        # Auto-fix declaration ordering (Param/History/Delay must precede expressions)
+        # Auto-fix ordering: functions, then Param/History/Delay/Buffer/Data,
+        # then statements (Max user guide; gen.maxhelp). A Param is never
+        # hoisted above a function definition (quick 261022-ud6 WP4, WR-03);
+        # code already in that order is left byte-identical.
         code = reorder_genexpr_declarations(code)
 
         # Auto-detect I/O from code if not specified
