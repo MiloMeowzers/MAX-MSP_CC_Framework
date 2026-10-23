@@ -79,7 +79,9 @@ class TestCheck11Constants:
         assert len(res) == 1 and "'e' (line 1)" in res[0].message
 
     @pytest.mark.parametrize("code", [
-        "TWOPI = 6.28;\nout1 = in1 * TWOPI;",
+        # TWOPI is a built-in alias since quick 261022-ud6 WP4 (WR-04):
+        # tests/test_genexpr_wp4.py::TestConstantAliases flags it.
+        "Twopi = 6.28;\nout1 = in1 * Twopi;",
         "out1 = in1 * e * pi;",
         "x = 1e5;\nout1 = in1 * x;",
         "// pi = 3;\nout1 = in1;",

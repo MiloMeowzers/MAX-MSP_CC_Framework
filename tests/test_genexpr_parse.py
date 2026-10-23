@@ -353,7 +353,17 @@ class TestReorderG1:
             "}\n"
             "out1 = myfn(x);\n"
         )
-        assert reorder_genexpr_declarations(code) == code
+        # Since quick 261022-ud6 WP4 (WR-03) a function defined after a
+        # statement moves to the top (functions before all statements); its
+        # body -- the History included -- moves with it, verbatim.
+        out = reorder_genexpr_declarations(code)
+        fn = "myfn(v) {\n  History h(0);\n  h = v;\n  return h;\n}\n"
+        assert out.startswith(fn)
+        assert out.count("History h(0);") == 1
+        assert out.index("x = in1;") < out.index("out1 = myfn(x);")
+        # Already in the documented order: byte-identical.
+        ordered = fn + "x = in1;\nout1 = myfn(x);\n"
+        assert reorder_genexpr_declarations(ordered) == ordered
 
     def test_statement_order_and_multiset_preserved(self):
         from src.maxpat.codegen import reorder_genexpr_declarations
