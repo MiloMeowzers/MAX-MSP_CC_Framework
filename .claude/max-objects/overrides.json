@@ -16949,6 +16949,16 @@
     }
   },
   "variable_io_rules": {
+    "dict.unpack": {
+      "inlet_count": "fixed:1",
+      "outlet_count": "arg_count+1",
+      "default_outlets": 2,
+      "description": "One outlet per key argument plus a rightmost unmatched/dumpout outlet.",
+      "_audit": {
+        "source": "face-tracker build 2026-10-23: shipped help boxes `dict.unpack jawOpen: eyeBlinkLeft: eyeBlinkRight: mouthSmileLeft: mouthSmileRight: browInnerUp:` = 7 outlets, `dict.unpack face_0: count:` = 3, `dict.unpack xyz:` = 2 (Vision jit.vis.facemesh/face help, Max dict.unpack.maxhelp)",
+        "confidence": "HIGH"
+      }
+    },
     "adc~": {
       "inlet_count": "fixed:1",
       "outlet_count": "arg_count_or_default",
