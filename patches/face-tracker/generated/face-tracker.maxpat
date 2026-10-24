@@ -636,7 +636,7 @@
                                     "maxclass": "comment",
                                     "numinlets": 1,
                                     "numoutlets": 0,
-                                    "patching_rect": [ 80.0, 192.0, 400.0, 20.0 ],
+                                    "patching_rect": [ 80.0, 199.0, 400.0, 20.0 ],
                                     "text": "conf plane gates out frames with no face (values hold)"
                                 }
                             },
