@@ -3532,7 +3532,7 @@
                     "numinlets": 1,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 425.0, 895.0, 114.0, 22.0 ],
+                    "patching_rect": [ 1630.0, 310.0, 114.0, 22.0 ],
                     "text": "jit.matrixinfo",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -3545,7 +3545,7 @@
                     "numinlets": 4,
                     "numoutlets": 4,
                     "outlettype": [ "", "", "", "" ],
-                    "patching_rect": [ 425.0, 985.0, 191.0, 22.0 ],
+                    "patching_rect": [ 1630.0, 340.0, 191.0, 22.0 ],
                     "text": "route planecount type dim",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -3558,7 +3558,7 @@
                     "numinlets": 2,
                     "numoutlets": 2,
                     "outlettype": [ "", "" ],
-                    "patching_rect": [ 425.0, 1015.0, 79.0, 22.0 ],
+                    "patching_rect": [ 1630.0, 370.0, 79.0, 22.0 ],
                     "text": "zl.change",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -3571,7 +3571,7 @@
                     "numinlets": 1,
                     "numoutlets": 5,
                     "outlettype": [ "", "", "", "", "" ],
-                    "patching_rect": [ 425.0, 1045.0, 135.0, 22.0 ],
+                    "patching_rect": [ 1630.0, 400.0, 135.0, 22.0 ],
                     "text": "trigger l l l l l",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -3584,7 +3584,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 725.0, 635.0, 163.0, 22.0 ],
+                    "patching_rect": [ 1820.0, 430.0, 163.0, 22.0 ],
                     "text": "dim $1 $2, size $1 $2",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -3597,7 +3597,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 425.0, 1445.0, 324.0, 22.0 ],
+                    "patching_rect": [ 1630.0, 490.0, 324.0, 22.0 ],
                     "text": "expr 16.+(480.-min(480.\\, 270.*$f1/$f2))*0.5",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -3610,7 +3610,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 425.0, 1625.0, 324.0, 22.0 ],
+                    "patching_rect": [ 1630.0, 520.0, 324.0, 22.0 ],
                     "text": "expr 40.+(270.-min(270.\\, 480.*$f2/$f1))*0.5",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -3623,7 +3623,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 425.0, 1085.0, 219.0, 22.0 ],
+                    "patching_rect": [ 1630.0, 430.0, 219.0, 22.0 ],
                     "text": "expr min(480.\\, 270.*$f1/$f2)",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -3636,7 +3636,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 425.0, 1115.0, 219.0, 22.0 ],
+                    "patching_rect": [ 1630.0, 460.0, 219.0, 22.0 ],
                     "text": "expr min(270.\\, 480.*$f2/$f1)",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -3649,7 +3649,7 @@
                     "numinlets": 4,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 425.0, 1155.0, 100.0, 22.0 ],
+                    "patching_rect": [ 1630.0, 550.0, 100.0, 22.0 ],
                     "text": "pack f f f f",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -3662,7 +3662,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 425.0, 795.0, 380.0, 22.0 ],
+                    "patching_rect": [ 1630.0, 580.0, 380.0, 22.0 ],
                     "text": "script sendbox camview presentation_rect $1 $2 $3 $4",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -3675,7 +3675,7 @@
                     "numinlets": 1,
                     "numoutlets": 2,
                     "outlettype": [ "", "" ],
-                    "patching_rect": [ 425.0, 825.0, 93.0, 22.0 ],
+                    "patching_rect": [ 1630.0, 610.0, 93.0, 22.0 ],
                     "text": "thispatcher",
                     "fontname": "Arial",
                     "fontsize": 12.0
@@ -3688,7 +3688,7 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "outlettype": [],
-                    "patching_rect": [ 725.0, 505.0, 653.0, 20.0 ],
+                    "patching_rect": [ 1630.0, 260.0, 300, 20.0 ],
                     "text": "camera dim -> world dim/size + fit the pwindow to the camera aspect (overlay stays aligned)",
                     "fontname": "Arial",
                     "fontsize": 12.0
