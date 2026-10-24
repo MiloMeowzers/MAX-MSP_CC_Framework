@@ -81,3 +81,7 @@ Files: `generated/face-tracker.maxpat` (opens in presentation), `generated/ft.fe
 4. `dict.iter` emits `key value` lists.
 5. The default input ranges are guesses; use learn ranges.
 6. Yaw/roll sign may flip with mirror.
+
+## v0.1.1 (2026-10-23): fix stretched video — pending test
+- v0.1.0 user-confirmed working, except the video was stretched (world/pwindow were hard-coded to 16:9).
+- Grab `t l l` -> `t l l l`; outlet 2 -> `jit.matrixinfo` -> `route planecount type dim` -> `zl.change` -> `dim $1 $2, size $1 $2` -> jit.world. The pwindow (varname `camview`) is fitted inside the 480x270 area at (16, 40), centred, via `script sendbox camview presentation_rect x y w h` -> thispatcher. The overlay still fills the full viewport, so it stays aligned.
