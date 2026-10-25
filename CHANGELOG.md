@@ -6,6 +6,27 @@ All notable changes to the MAX/MSP Claude Code Framework. The format follows
 that version's GitHub release (`scripts/release_notes.sh`). Releases before 6.0.0
 are summarized in the README milestone table.
 
+## [6.1.0] - 2026-10-25
+
+Object-DB additions from the face-tracker build (2026-10-23). No API changes.
+
+### Added
+
+- **Cycling '74 Vision 1.0.2 in the object DB** (`packages/Vision/objects.json`, 22
+  `jit.vis.*` entries): 12 refpage trackers/processors plus 10 helpers (7 v8-define
+  `*.parts` splitters, `jit.vis.debugdraw`, the `jit.vis.grab` bpatcher and the
+  `jit.vis.tondc` abstraction). I/O is help-box verified. Every entry has `min_version`
+  9.2 and `verified: false` until it is confirmed in MAX. Rule #1 and `validate_patch`
+  now accept `jit.vis.*` chains.
+- `db-maintenance.md` documents the user-installed package extraction path
+  (`extract_objects.py --package NAME`, then help-box curation).
+
+### Fixed
+
+- **`dict.unpack` outlet count** is one outlet per key argument plus a rightmost
+  unmatched/dumpout outlet (`variable_io_rules`, from shipped help boxes). Cords from
+  its key outlets were flagged out of bounds before.
+
 ## [6.0.0] - 2026-10-23
 
 The fix-plan Q1-Q40 round (2026-10-12 to 2026-10-22) plus its post-hoc review fixes

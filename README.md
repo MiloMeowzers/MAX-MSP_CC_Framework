@@ -259,6 +259,7 @@ Planning artifacts live in `.planning/`:
 | **v3.0.0 Milestone Archive** | 2026-04-09 | 7 | 15 | v2.0 milestone archived — 26/26 requirements verified, full PROJECT.md evolution, retrospective |
 | **v4.0 Package Integration** | 2026-04-15 | 6 | 17 | Package-aware DB (2,450 objects), bundled extraction (BEAP/Vizzie/Jitter), generation gating, agent intelligence, community stubs (10 packages), package critics |
 | **v6.0.0 Non-destructive Validation + Safe Saves** | 2026-10-23 | — | — | Fix-plan Q1-Q40 + review fixes: non-destructive `validate_patch` + `apply_fixes`, per-scope validation and critics, save gate (`PatchValidationError`, `LayoutRefusedError`), byte-identical no-op saves for every Max layout, `edit_patch` sessions + semantic diff, Q23 vocabulary checks, codebox smoke test, `/max-diagnose`, `/max-verify --live`, critic quick fixes, M4L device builder + `.amxd` export (experimental), npm trusted publishing. See [CHANGELOG.md](CHANGELOG.md) |
+| **v6.1.0 Vision Package** | 2026-10-25 | — | — | Cycling '74 Vision 1.0.2 in the object DB (22 `jit.vis.*` entries, Max 9.2+), `dict.unpack` variable outlet count. See [CHANGELOG.md](CHANGELOG.md) |
 | **v5.0 DB Schema Hardening + Validator Depth** | 2026-05-01 | 5 | 24 | `signal_role`/`domain_restricted`/`verified_installed` schema fields, deepened validation pipeline (Layers 1-5 with sub-layers), MSP outlet coverage sweep, Phase 31 layout/UX builders (labeled param banks, overlay readouts, safe box replacement, M4L gen-synth), dsp_sim pre-flight simulation |
 
 ## License
