@@ -160,6 +160,7 @@ The `patches/` directory contains example and user-created projects. It is repos
 | **disintegrate** | One-knob stereo "disintegration" effect in a single gen~ codebox — filtering, saturation, and detuning sweep the sound from bypass to silence | `.maxpat` |
 | **FDNVerb** | Feedback delay network reverb with 8 delay lines, Hadamard matrix, decay/diffusion/damping/freeze controls | `.maxpat`, `.gendsp` |
 | **gen-eq** | 5-band parametric EQ with TPT SVF filters in gen~, Neve-warm asymmetric saturation, and SSL-style horizontal UI | `.maxpat`, `.gendsp` |
+| **face-tracker** | Vision package face tracking showcase (jit.vis.face / facemesh) with normalized `face.*` sends, live feature readouts and a drone sonification demo | `.maxpat` |
 | **gong-model** | Physical model of a gong using gen~ modal synthesis with pitch/timbre control, MIDI and audio excitation, drift engine | `.maxpat`, `.gendsp`, `.js` |
 | **granularsynthtest** | Granular synthesizer with Gen~ DSP engine and MC multichannel output for flexible speaker arrays | `.maxpat`, `.gendsp` |
 | **intelligent-corpus-remixer** | Corpus-based concatenative synthesis using FluCoMa (MFCC + UMAP + k-means), EARS, and Odot; 2D plotter-triggered playback | `.maxpat`, `.js` |
